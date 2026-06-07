@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Grid Debug Agent",
-  description: "ECE 285 - Grid Debug Agent",
+  description: "Grid Debug Agent",
 };
 
 export default function RootLayout({

@@ -1,7 +1,7 @@
 # Wind Power Forecasting - Replication Study
 
 ## Overview
-Replication of ECE-285 student project on LLM-based wind power forecasting.
+Replication of student project on LLM-based wind power forecasting.
 
 ## Students' Original Work
 - **Report**: `wind.pdf`
@@ -58,28 +58,28 @@ See `QUESTIONS_FOR_STUDENTS.md` for detailed questions about:
 
 ```
 wind-forecasting/
-├── README.md                                  # This file
-├── QUESTIONS_FOR_STUDENTS.md                  # Questions for students
+├── README.md # This file
+├── QUESTIONS_FOR_STUDENTS.md # Questions for students
 │
-├── wind.pdf                                   # Students' original report (5.9 MB)
-├── wtbdata_245days.csv                        # Dataset (72 MB)
-├── students_original/                         # Original student files
+├── wind.pdf # Students' original report (5.9 MB)
+├── wtbdata_245days.csv # Dataset (72 MB)
+├── students_original/ # Original student files
 │
-├── OUR_RESULTS_COMPLETE_TABLE.tex            # Our complete results with analysis
-├── OUR_RESULTS_SIMPLEST.tex                  # Our simplified results
-├── SIMPLEST_TABLE_GEMINI3.tex                # Template: 3×3 grid
-├── SINGLE_IDEAL_TABLE.tex                    # Template: with averages
-├── IDEAL_TABLE_TEMPLATE.tex                  # Template: comprehensive
+├── OUR_RESULTS_COMPLETE_TABLE.tex # Our complete results with analysis
+├── OUR_RESULTS_SIMPLEST.tex # Our simplified results
+├── SIMPLEST_TABLE_GEMINI3.tex # Template: 3×3 grid
+├── SINGLE_IDEAL_TABLE.tex # Template: with averages
+├── IDEAL_TABLE_TEMPLATE.tex # Template: comprehensive
 │
-├── results/                                   # All experimental results (43 files)
-│   └── full_table_v2_combined_20260416_130135.csv  # Final combined data (25 experiments)
+├── results/ # All experimental results (43 files)
+│ └── full_table_v2_combined_20260416_130135.csv # Final combined data (25 experiments)
 │
-└── replication_code/                          # Experimental scripts and notebooks
-    ├── replicate_experiments.py
-    ├── run_full_table_experiments.py
-    ├── retry_failed_experiments.py
-    ├── replicate_results.ipynb
-    └── ... (other experiment files)
+└── replication_code/ # Experimental scripts and notebooks
+ ├── replicate_experiments.py
+ ├── run_full_table_experiments.py
+ ├── retry_failed_experiments.py
+ ├── replicate_results.ipynb
+ └── ... (other experiment files)
 ```
 
 ## Experimental Setup

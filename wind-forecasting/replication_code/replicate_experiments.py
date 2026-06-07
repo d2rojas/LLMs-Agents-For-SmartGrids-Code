@@ -2,7 +2,7 @@
 """
 Wind Power Forecasting with LLMs - Results Replication Script
 
-This script replicates the experiments from the ECE-285 Final Project Report.
+This script replicates the experiments from the Case Study Report.
 It runs different prompting strategies (Naive, Advanced, APBF) across
 multiple forecast horizons (3h, 6h, 48h) and saves results to CSV.
 

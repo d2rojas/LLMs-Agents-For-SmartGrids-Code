@@ -1,4 +1,4 @@
-# Midway Results — ECE 285 EV Charging Schedule Assistant
+# Midway Results — EV Charging Scheduling Case Study
 
 **Group #10**: Ryan Luo, Peter Quawas
 
@@ -90,32 +90,32 @@ rootdir: /Users/pete/Desktop/WI26/285/Project
 plugins: anyio-4.12.1
 collecting ... collected 26 items
 
-tests/test_baseline_parse.py::test_resample_exact_divisor PASSED         [  3%]
-tests/test_baseline_parse.py::test_resample_exact_match_is_identity PASSED [  7%]
+tests/test_baseline_parse.py::test_resample_exact_divisor PASSED [ 3%]
+tests/test_baseline_parse.py::test_resample_exact_match_is_identity PASSED [ 7%]
 tests/test_baseline_parse.py::test_resample_close_too_long_truncates PASSED [ 11%]
-tests/test_baseline_parse.py::test_resample_close_too_short_pads PASSED  [ 15%]
-tests/test_baseline_parse.py::test_resample_far_off_returns_none PASSED  [ 19%]
-tests/test_baseline_parse.py::test_resample_48_to_96 PASSED              [ 23%]
+tests/test_baseline_parse.py::test_resample_close_too_short_pads PASSED [ 15%]
+tests/test_baseline_parse.py::test_resample_far_off_returns_none PASSED [ 19%]
+tests/test_baseline_parse.py::test_resample_48_to_96 PASSED [ 23%]
 tests/test_baseline_parse.py::test_parse_24_values_resampled_to_96 PASSED [ 26%]
 tests/test_baseline_parse.py::test_parse_97_values_truncated_to_96 PASSED [ 30%]
-tests/test_baseline_parse.py::test_parse_94_values_padded_to_96 PASSED   [ 34%]
+tests/test_baseline_parse.py::test_parse_94_values_padded_to_96 PASSED [ 34%]
 tests/test_baseline_parse.py::test_parse_irrecoverable_length_skipped PASSED [ 38%]
 tests/test_baseline_parse.py::test_parse_mixed_good_and_resampled PASSED [ 42%]
-tests/test_constraints.py::test_check_feasible_schedule PASSED           [ 46%]
-tests/test_constraints.py::test_check_availability_violation PASSED      [ 50%]
-tests/test_constraints.py::test_check_per_charger_violation PASSED       [ 53%]
-tests/test_constraints.py::test_check_site_cap_violation PASSED          [ 57%]
-tests/test_constraints.py::test_check_energy_violation PASSED            [ 61%]
-tests/test_data_loader.py::test_raw_session_to_standard PASSED           [ 65%]
+tests/test_constraints.py::test_check_feasible_schedule PASSED [ 46%]
+tests/test_constraints.py::test_check_availability_violation PASSED [ 50%]
+tests/test_constraints.py::test_check_per_charger_violation PASSED [ 53%]
+tests/test_constraints.py::test_check_site_cap_violation PASSED [ 57%]
+tests/test_constraints.py::test_check_energy_violation PASSED [ 61%]
+tests/test_data_loader.py::test_raw_session_to_standard PASSED [ 65%]
 tests/test_data_loader.py::test_load_sessions_with_api_returns_day_sessions PASSED [ 69%]
-tests/test_faithfulness.py::test_parse_explanation_v1_template PASSED    [ 73%]
-tests/test_faithfulness.py::test_parse_explanation_without_pct PASSED    [ 76%]
+tests/test_faithfulness.py::test_parse_explanation_v1_template PASSED [ 73%]
+tests/test_faithfulness.py::test_parse_explanation_without_pct PASSED [ 76%]
 tests/test_faithfulness.py::test_parse_explanation_invalid_returns_none PASSED [ 80%]
-tests/test_faithfulness.py::test_check_faithfulness_facts_match PASSED   [ 84%]
+tests/test_faithfulness.py::test_check_faithfulness_facts_match PASSED [ 84%]
 tests/test_faithfulness.py::test_check_faithfulness_facts_mismatch PASSED [ 88%]
 tests/test_faithfulness.py::test_check_faithfulness_text_matching_ground_truth PASSED [ 92%]
 tests/test_faithfulness.py::test_check_faithfulness_text_mismatch PASSED [ 96%]
-tests/test_faithfulness.py::test_check_faithfulness_unparseable PASSED   [100%]
+tests/test_faithfulness.py::test_check_faithfulness_unparseable PASSED [100%]
 
 ============================== 26 passed in 0.42s ==============================
 ```

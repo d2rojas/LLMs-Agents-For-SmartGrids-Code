@@ -1,6 +1,6 @@
 # Wind Power Forecasting LLM - Replication Guide
 
-This guide helps you replicate the results from the ECE-285 Final Project: "LLMs for Wind Power Forecasting"
+This guide helps you replicate the results from the Case Study: "LLMs for Wind Power Forecasting"
 
 ## Quick Start
 
@@ -50,10 +50,10 @@ python replicate_experiments.py --provider gemini --api-key YOUR_KEY
 
 # Full experiment suite
 python replicate_experiments.py \
-  --provider gemini \
-  --horizons 3 6 48 \
-  --strategies naive advanced apbf \
-  --output-dir results
+ --provider gemini \
+ --horizons 3 6 48 \
+ --strategies naive advanced apbf \
+ --output-dir results
 
 # Using Claude
 python replicate_experiments.py --provider claude --api-key YOUR_KEY
@@ -89,18 +89,18 @@ From the report (Table 1, page 6):
 
 ```
 wind-forecasting/
-├── replicate_results.ipynb       # Interactive notebook
-├── replicate_experiments.py      # Command-line script
-├── REPLICATION_GUIDE.md          # This file
-├── requirements.txt              # Python dependencies
-├── wtbdata_245days.csv           # Main dataset (72 MB)
-├── students_original/            # Original student code
-│   ├── presentation.ipynb
-│   ├── experiments.ipynb
-│   └── ...
-└── results/                      # Output directory (created automatically)
-    ├── results_YYYYMMDD_HHMMSS.csv
-    └── ...
+├── replicate_results.ipynb # Interactive notebook
+├── replicate_experiments.py # Command-line script
+├── REPLICATION_GUIDE.md # This file
+├── requirements.txt # Python dependencies
+├── wtbdata_245days.csv # Main dataset (72 MB)
+├── students_original/ # Original student code
+│ ├── presentation.ipynb
+│ ├── experiments.ipynb
+│ └── ...
+└── results/ # Output directory (created automatically)
+ ├── results_YYYYMMDD_HHMMSS.csv
+ └── ...
 ```
 
 ## Understanding the Strategies
@@ -127,11 +127,11 @@ wind-forecasting/
 
 **Solutions:**
 - **Gemini Free Tier**: 20 requests/day limit
-  - Run fewer experiments at a time
-  - Wait 24 hours between runs
-  - Upgrade to paid tier
+ - Run fewer experiments at a time
+ - Wait 24 hours between runs
+ - Upgrade to paid tier
 - **Claude**: Higher limits, but still rate-limited
-  - Add pauses between calls (already included in script)
+ - Add pauses between calls (already included in script)
 
 ### Weather API Errors
 **Problem:** Open-Meteo API fails
@@ -172,7 +172,7 @@ ls -lh wtbdata_245days.csv
 ### Test Different Turbines
 ```python
 # In notebook
-TURBINE_ID = 5  # Try turbines 1-134
+TURBINE_ID = 5 # Try turbines 1-134
 
 # In script
 python replicate_experiments.py --turbine 5
@@ -181,7 +181,7 @@ python replicate_experiments.py --turbine 5
 ### Different Time Windows
 ```python
 # In notebook
-BASE_DAY = 50  # Valid range: 1-231
+BASE_DAY = 50 # Valid range: 1-231
 
 # In script
 python replicate_experiments.py --base-day 50
@@ -225,10 +225,10 @@ If you use this code, please cite the original student project:
 
 ```bibtex
 @techreport{albassam2024wind,
-  title={LLMs for Wind Power Forecasting},
-  author={Albassam, Abdulwahab and Leung, Aidan and Ngo, Jett},
-  institution={UC San Diego, ECE-285},
-  year={2024}
+ title={LLMs for Wind Power Forecasting},
+ author={Albassam, Abdulwahab and Leung, Aidan and Ngo, Jett},
+ institution={UC San Diego},
+ year={2024}
 }
 ```
 
@@ -237,7 +237,7 @@ If you use this code, please cite the original student project:
 For issues:
 1. Check this guide
 2. Review original notebooks in `students_original/`
-3. Check student GitHub: https://github.com/JettN/ECE-285-Team2
+3. Compare against the original implementation in `students_original/`
 
 ## Advanced Usage
 
@@ -245,16 +245,16 @@ For issues:
 Create `config.json`:
 ```json
 {
-  "provider": "gemini",
-  "api_key": "your_key_here",
-  "turbine_id": 1,
-  "base_day": 1,
-  "horizons": [3, 6, 48],
-  "strategies": ["naive", "advanced", "apbf"],
-  "use_weather": true,
-  "max_retries": 3,
-  "data_path": "wtbdata_245days.csv",
-  "output_dir": "results"
+ "provider": "gemini",
+ "api_key": "your_key_here",
+ "turbine_id": 1,
+ "base_day": 1,
+ "horizons": [3, 6, 48],
+ "strategies": ["naive", "advanced", "apbf"],
+ "use_weather": true,
+ "max_retries": 3,
+ "data_path": "wtbdata_245days.csv",
+ "output_dir": "results"
 }
 ```
 
@@ -267,7 +267,7 @@ python replicate_experiments.py --config config.json
 ```bash
 # Test multiple turbines
 for turb in 1 2 3 4 5; do
-  python replicate_experiments.py --turbine $turb --output-dir results/turb_$turb
+ python replicate_experiments.py --turbine $turb --output-dir results/turb_$turb
 done
 ```
 

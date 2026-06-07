@@ -10,8 +10,8 @@ To manage these large dataset files efficiently within Git, we will use Git Larg
 ### Setup Instructions: Git LFS
 - **Download and install Git LFS:** https://git-lfs.com/
 - Alternatively, using a package manager:
-    - macOS (Homebrew): `brew install git-lfs`
-    - Windows (Chocolatey): `choco install git-lfs`
+ - macOS (Homebrew): `brew install git-lfs`
+ - Windows (Chocolatey): `choco install git-lfs`
 
 - Make sure to run `git lfs install` from within your local clone of the repo
 

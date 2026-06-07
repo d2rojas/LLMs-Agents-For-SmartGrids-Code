@@ -1,6 +1,6 @@
-# Midway Meeting — ECE 285 EV Charging Schedule Assistant
+# Midway Meeting — EV Charging Scheduling Case Study
 
-**Group #10**: Ryan Luo, Peter Quawas  
+**Group #10**: Ryan Luo, Peter Quawas 
 **Use this as speaker notes / slide content.**
 
 ---
@@ -66,11 +66,11 @@
 
 ## Slide 6: Benchmark — 5 Days, 3 Pipelines
 
-| Pipeline   | Cost (typical) | Peak (kW) | % Served | Cost reduction vs uncontrolled |
+| Pipeline | Cost (typical) | Peak (kW) | % Served | Cost reduction vs uncontrolled |
 |-----------|-----------------|-----------|----------|---------------------------------|
-| Phase A   | $76–146         | 27–50     | 86–98%   | 17–35%                          |
-| Agent     | Same as Phase A | Same      | Same     | Same                            |
-| Baseline  | $3–34           | 7–28      | **0–8%** | 75–97%*                         |
+| Phase A | $76–146 | 27–50 | 86–98% | 17–35% |
+| Agent | Same as Phase A | Same | Same | Same |
+| Baseline | $3–34 | 7–28 | **0–8%** | 75–97%* |
 
 *Baseline “cost reduction” is misleading: low cost because most energy is **unmet** (schedule mostly zeros or wrong shape).
 
@@ -82,13 +82,13 @@
 
 **Example: 2019-05-01, 44 sessions**
 
-|           | Phase A / Agent | Baseline (2048 tok) |
+| | Phase A / Agent | Baseline (2048 tok) |
 |-----------|------------------|----------------------|
-| Cost      | $111.57          | $3.36                |
-| Peak      | 50.0 kW          | 28.0 kW              |
-| Unmet     | 2.59 kWh         | **452 kWh**          |
-| % served  | **97.7%**        | 4.5%                 |
-| Violations| 1 (numerical)    | 44                   |
+| Cost | $111.57 | $3.36 |
+| Peak | 50.0 kW | 28.0 kW |
+| Unmet | 2.59 kWh | **452 kWh** |
+| % served | **97.7%** | 4.5% |
+| Violations| 1 (numerical) | 44 |
 
 Agent explanation (grounded): *“Total cost: $111.57. Peak load: 50.0 kW. Unmet energy: 2.59 kWh. Cost reduction vs uncontrolled: 25.6%.”*
 
@@ -137,8 +137,8 @@ Agent explanation (grounded): *“Total cost: $111.57. Peak load: 50.0 kW. Unmet
 
 ```
 ACN-Data API → DaySessions → [ Phase A: solve() → schedule → check → metrics → plots ]
-                           → [ Baseline: prompt → LLM → parse → check → metrics ]
-                           → [ Agent: plan → optimize → validate → refine → explain → check → metrics → plots ]
+ → [ Baseline: prompt → LLM → parse → check → metrics ]
+ → [ Agent: plan → optimize → validate → refine → explain → check → metrics → plots ]
 ```
 
 Use 1–2 figures from `Midway_results/` (e.g. `phase_a_2019-06-15_schedule.png` and `phase_a_2019-06-15_load.png`) to show a concrete schedule and load profile.

@@ -271,7 +271,7 @@ def write_csv(rows: List[Dict[str, object]], path: Path) -> None:
 def write_markdown_report(rows: List[Dict[str, object]], test_output: str, path: Path) -> None:
     """Generate a human-readable markdown summary of all results."""
     lines: List[str] = []
-    lines.append("# Midway Results — ECE 285 EV Charging Schedule Assistant")
+    lines.append("# Midway Results — EV Charging Scheduling Case Study")
     lines.append("")
     lines.append("**Group #10**: Ryan Luo, Peter Quawas")
     lines.append("")

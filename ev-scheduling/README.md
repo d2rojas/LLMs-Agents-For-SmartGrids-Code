@@ -1,4 +1,4 @@
-# ECE 285 — Agentic EV Charging Schedule Assistant
+# Agentic EV Charging Schedule Assistant
 
 **Group 10**: Ryan Luo, Peter Quawas
 
@@ -39,7 +39,7 @@ The `acnportal` library is not bundled in this repo and needs to be cloned separ
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate    # Windows: .venv\Scripts\activate
+source .venv/bin/activate # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
@@ -54,7 +54,7 @@ cp .env.example .env
 ```
 
 ```
-ACN_DATA_API_TOKEN=your_caltech_acn_token   # from https://ev.caltech.edu
+ACN_DATA_API_TOKEN=your_caltech_acn_token # from https://ev.caltech.edu
 OPENAI_API_KEY=your_openai_key
 ```
 

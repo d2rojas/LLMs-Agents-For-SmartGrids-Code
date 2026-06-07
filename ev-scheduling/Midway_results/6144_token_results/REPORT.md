@@ -1,4 +1,4 @@
-# Midway Results — ECE 285 EV Charging Schedule Assistant
+# Midway Results — EV Charging Scheduling Case Study
 
 **Group #10**: Ryan Luo, Peter Quawas
 
@@ -90,12 +90,12 @@ rootdir: /Users/pete/Desktop/WI26/285/Project
 plugins: anyio-4.12.1
 collecting ... collected 7 items
 
-tests/test_constraints.py::test_check_feasible_schedule PASSED           [ 14%]
-tests/test_constraints.py::test_check_availability_violation PASSED      [ 28%]
-tests/test_constraints.py::test_check_per_charger_violation PASSED       [ 42%]
-tests/test_constraints.py::test_check_site_cap_violation PASSED          [ 57%]
-tests/test_constraints.py::test_check_energy_violation PASSED            [ 71%]
-tests/test_data_loader.py::test_raw_session_to_standard PASSED           [ 85%]
+tests/test_constraints.py::test_check_feasible_schedule PASSED [ 14%]
+tests/test_constraints.py::test_check_availability_violation PASSED [ 28%]
+tests/test_constraints.py::test_check_per_charger_violation PASSED [ 42%]
+tests/test_constraints.py::test_check_site_cap_violation PASSED [ 57%]
+tests/test_constraints.py::test_check_energy_violation PASSED [ 71%]
+tests/test_data_loader.py::test_raw_session_to_standard PASSED [ 85%]
 tests/test_data_loader.py::test_load_sessions_with_api_returns_day_sessions PASSED [100%]
 
 ============================== 7 passed in 0.56s ===============================
