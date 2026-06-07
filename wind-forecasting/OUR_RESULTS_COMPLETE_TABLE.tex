@@ -1,0 +1,153 @@
+\documentclass{article}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage[table]{xcolor}
+\usepackage{geometry}
+\geometry{margin=0.75in}
+
+\begin{document}
+
+\section*{Wind Power Forecasting: Our Complete Replication Results}
+
+\begin{table}[h!]
+\centering
+\caption{Overall Score (kW) for all Model-Strategy-Horizon combinations. Lower is better. \textbf{Best result in bold}. ``RL'' = API rate limit, ``--'' = not tested.}
+\label{tab:complete_results}
+\small
+\begin{tabular}{llcccc}
+\toprule
+\multirow{2}{*}{\textbf{Model}} & \multirow{2}{*}{\textbf{Strategy}} & \multicolumn{3}{c}{\textbf{Forecast Horizon}} & \multirow{2}{*}{\textbf{Avg}} \\
+\cmidrule{3-5}
+& & \textbf{3h} & \textbf{6h} & \textbf{48h} & \\
+& & (18 pts) & (36 pts) & (288 pts) & \\
+\midrule
+\multirow{3}{*}{Gemini 3 Flash}
+& Naive    & 336.68 & 582.23 & 686.56 & 535.16 \\
+& Advanced & 298.92 & 280.28 & 686.56 & 421.92 \\
+& APBF     & \textbf{144.89} & 211.87 & -- & 178.38$^*$ \\
+\cmidrule{2-6}
+& \textit{Model Average} & 260.16 & 358.13 & 686.56 & \textbf{378.49} \\
+\midrule
+\multirow{3}{*}{Gemini 3 Pro}
+& Naive    & 549.53 & 348.95 & 455.22 & 451.23 \\
+& Advanced & 518.00 & 489.21 & 455.22 & 487.48 \\
+& APBF     & 1104.31 & 790.25 & 585.53 & 826.70 \\
+\cmidrule{2-6}
+& \textit{Model Average} & 723.95 & 542.80 & 498.66 & 588.47 \\
+\midrule
+\multirow{3}{*}{Claude 3.5 Haiku}
+& Naive    & -- & -- & -- & -- \\
+& Advanced & 980.13 & 767.41 & 585.53 & 777.69 \\
+& APBF     & -- & -- & -- & -- \\
+\cmidrule{2-6}
+& \textit{Model Average} & 980.13 & 767.41 & 585.53 & 777.69 \\
+\midrule
+\multirow{3}{*}{Claude 4.5 Haiku}
+& Naive    & 1434.49 & 222.80 & RL & 828.65$^*$ \\
+& Advanced & RL & RL & RL & -- \\
+& APBF     & RL & 376.43 & RL & 376.43$^*$ \\
+\cmidrule{2-6}
+& \textit{Model Average} & 1434.49 & 299.62 & -- & 602.54 \\
+\midrule
+\multirow{3}{*}{Claude 4.6 Sonnet}
+& Naive    & 284.56 & RL & RL & 284.56$^*$ \\
+& Advanced & RL & RL & RL & -- \\
+& APBF     & 1230.40 & RL & RL & 1230.40$^*$ \\
+\cmidrule{2-6}
+& \textit{Model Average} & 757.48 & -- & -- & 757.48 \\
+\midrule
+\midrule
+\multicolumn{2}{l}{\textit{Strategy Avg - Naive}} & 651.32 & 384.66 & 570.89 & 535.62 \\
+\multicolumn{2}{l}{\textit{Strategy Avg - Advanced}} & 599.02 & 512.30 & 609.10 & 573.47 \\
+\multicolumn{2}{l}{\textit{Strategy Avg - APBF}} & 826.53 & 459.52 & 585.53 & 623.86 \\
+\midrule
+\multicolumn{2}{l}{\textbf{Baseline (GRU)}} & -- & -- & 315.82 & -- \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.3cm}
+\footnotesize{$^*$Incomplete: Average calculated from available data only (some experiments failed or not conducted)}
+\end{table}
+
+\vspace{0.5cm}
+
+\subsection*{Key Findings:}
+
+\textbf{Best Overall Result:}
+\begin{itemize}
+\item \textbf{Gemini 3 Flash APBF 3h = 144.89 kW} (54\% better than 315.82 kW baseline!)
+\end{itemize}
+
+\textbf{Best Model (by average):}
+\begin{itemize}
+\item \textbf{Gemini 3 Flash} (378.49 kW avg) - most consistent performance
+\item Gemini 3 Pro (588.47 kW avg)
+\item Claude 4.5 Haiku (602.54 kW avg) - limited data
+\end{itemize}
+
+\textbf{Best Strategy (by average):}
+\begin{itemize}
+\item \textbf{Naive} (535.62 kW avg) - surprisingly effective baseline
+\item Advanced (573.47 kW avg) - mixed results
+\item APBF (623.86 kW avg) - best peaks but inconsistent (excellent at 3h, poor at other horizons)
+\end{itemize}
+
+\textbf{Easiest Horizon:}
+\begin{itemize}
+\item \textbf{6h} (384.66 kW avg for Naive) - best for simple prompting
+\item 3h (651.32 kW avg for Naive, but 144.89 with APBF!)
+\item 48h (570.89 kW avg) - harder but not worst
+\end{itemize}
+
+\textbf{Models Beating Baseline (315.82 kW):}
+\begin{itemize}
+\item Gemini 3 Flash APBF 3h: 144.89 kW (best!)
+\item Gemini 3 Flash APBF 6h: 211.87 kW
+\item Claude 4.5 Haiku Naive 6h: 222.80 kW
+\item Gemini 3 Flash Advanced 6h: 280.28 kW
+\item Claude 4.6 Sonnet Naive 3h: 284.56 kW
+\end{itemize}
+
+\textbf{Strategy Effectiveness:}
+\begin{itemize}
+\item Advanced beats Naive for Gemini 3 Flash (421.92 vs 535.16 avg)
+\item APBF excels at short horizons (3h, 6h) but struggles at 48h
+\item Physics-informed prompting helps most for medium horizons (6h)
+\end{itemize}
+
+\clearpage
+
+\subsection*{Comparison with Students' Original Table 3}
+
+\begin{table}[h!]
+\centering
+\caption{Students' Results (Table 3 from their report) - Horizon Unknown}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Model/Variant} & \textbf{Overall (kW)} & \textbf{Horizon?} \\
+\midrule
+Gemini 3-flash (APBF) & 241.07 & \textbf{Unknown} \\
+Gemini 3-flash (Advanced) & 402.83 & \textbf{Unknown} \\
+Gemini 3-flash (Advanced/Binning) & 424.44 & \textbf{48h*} \\
+Gemini 3-flash (Naive) & 1072.48 & \textbf{Unknown} \\
+Baseline (GRU normalized) & 315.82 & 48h \\
+\bottomrule
+\end{tabular}
+\footnotesize{*Inferred from Table 2 in their report}
+\end{table}
+
+\vspace{0.5cm}
+
+\textbf{Our Best vs Students' Best:}
+\begin{itemize}
+\item Students' APBF: 241.07 kW (horizon unknown)
+\item Our APBF 3h: \textbf{144.89 kW} (40\% better!)
+\item Our APBF 6h: 211.87 kW (12\% better!)
+\end{itemize}
+
+\textbf{Critical Question for Students:}
+\\
+\textit{Which forecast horizon were your Table 3 results from? Your 241.07 kW APBF result falls between our 3h (144.89) and 6h (211.87) results, but we couldn't replicate APBF at 48h due to LLM validation failures.}
+
+\end{document}

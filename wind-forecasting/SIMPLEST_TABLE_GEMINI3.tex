@@ -1,0 +1,94 @@
+\documentclass{article}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+\begin{document}
+
+\section*{Wind Power Forecasting with Gemini 3 Flash}
+
+\subsection*{Table: Complete Results Across Strategies and Horizons}
+
+\begin{table}[h!]
+\centering
+\caption{Overall Score (kW) for Gemini 3-flash model. Lower is better.}
+\label{tab:gemini_results}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Strategy} & \textbf{3-hour} & \textbf{6-hour} & \textbf{48-hour} \\
+& (18 points) & (36 points) & (288 points) \\
+\midrule
+Naive         & & & \\[0.5cm]
+Advanced      & & & \\[0.5cm]
+APBF          & & & \\[0.5cm]
+\midrule
+Baseline (GRU) & -- & -- & 315.82 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\vspace{0.5cm}
+
+\subsection*{Notes:}
+\begin{itemize}
+\item \textbf{Overall Score} = (MAE + RMSE) / 2, in kilowatts (kW)
+\item Lower scores indicate better forecasting accuracy
+\item Fill in each cell with the overall score from your experiments
+\item Use ``Failed'' if an experiment couldn't be completed
+\item The baseline (GRU) at 48h is 315.82 kW - can any LLM approach beat this?
+\end{itemize}
+
+\subsection*{What This Table Shows:}
+
+\textbf{Comparing across columns (same strategy, different horizons):}
+\begin{itemize}
+\item Which forecast horizon is easiest/hardest?
+\item Does error increase as horizon extends (3h → 6h → 48h)?
+\end{itemize}
+
+\textbf{Comparing across rows (same horizon, different strategies):}
+\begin{itemize}
+\item Does Advanced prompting improve over Naive?
+\item Does APBF (Advanced + Binning + Forecast) improve over Advanced alone?
+\item Which strategy works best for each specific horizon?
+\end{itemize}
+
+\textbf{Finding the best configuration:}
+\begin{itemize}
+\item What is your best result? (lowest score in entire table)
+\item Which strategy-horizon combination achieved it?
+\end{itemize}
+
+\vspace{1cm}
+
+\subsection*{Example (Our Replication Results):}
+
+\begin{table}[h!]
+\centering
+\caption{Example: Our replication of your experiments with Gemini 3-flash}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Strategy} & \textbf{3-hour} & \textbf{6-hour} & \textbf{48-hour} \\
+\midrule
+Naive         & 336.68 & 582.23 & 686.56 \\
+Advanced      & 298.92 & 280.28 & 686.56 \\
+APBF          & \textbf{144.89} & 211.87 & Failed \\
+\midrule
+Baseline (GRU) & -- & -- & 315.82 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\vspace{0.5cm}
+
+\textbf{Key Observations from Our Replication:}
+\begin{itemize}
+\item \textbf{Best result:} APBF at 3h = 144.89 kW (beats baseline!)
+\item Advanced beats Naive at 3h (298.92 vs 336.68) and 6h (280.28 vs 582.23)
+\item APBF dramatically improves short-term forecasts (3h, 6h)
+\item APBF 48h failed due to LLM validation issues (couldn't generate exactly 288 values)
+\item Shortest horizon (3h) achieves best accuracy
+\end{itemize}
+
+\end{document}

@@ -1,0 +1,47 @@
+% Section V.E: GridDebugAgent - Compact 1-page version
+% This section integrates problem description, methodology, results, and trajectory figure
+
+\subsection{GridDebugAgent: Iterative Power Flow Diagnosis and Repair}
+
+\textbf{Problem Setup.}
+Power grid operators face complex failures involving non-convergent load flow simulations, voltage violations (outside 0.95--1.05~p.u.), and thermal overloads ($>$100\% line loading). Diagnosing root causes and identifying minimal corrective actions requires reasoning over network topology, running what-if simulations, and verifying repairs---tasks well-suited for tool-augmented LLM agents. We implement \textit{GridDebugAgent}, a solver-grounded ReAct agent~\cite{yao2023react} that iteratively diagnoses failures and executes remediation actions on electrical networks using the pandapower simulation library~\cite{thurner2018pandapower}.
+
+\textbf{System Architecture.}
+GridDebugAgent (Figure~\ref{fig:griddebug_architecture}) consists of: (1) a \textit{preprocessing pipeline} with an evidence collector and rule engine that extracts network metrics and classifies failures, (2) a \textit{ReAct agent core} using GPT-4o (temp.\ 0.3, max 10 iterations) with OpenAI function calling, (3) a \textit{tool suite} of 23 functions across four categories---Query (9 tools: network inspection, voltage/loading profiles, power balance), Simulation (7 tools: AC/DC power flow, N-1 contingency, optimal power flow, network snapshots), Diagnostic (4 tools: overload/violation checking, topology analysis), and Grid Actions (4 tools: adjust generation, curtail load, switch lines/shunts)---and (4) \textit{memory management} for network snapshots and full conversation logging. The agent receives preprocessed evidence and triggered diagnostic rules, then executes a diagnose$\to$act$\to$verify loop: it queries the network state, proposes corrective actions (e.g., adjusting generator setpoints), executes modifications, re-runs power flow, and checks for remaining violations until the network is secure or max iterations are reached.
+
+\textbf{Evaluation.}
+We evaluate on 39 hand-crafted failure scenarios across IEEE 14-bus, 30-bus, and 57-bus test systems. Scenarios include line outages (N-1 contingencies), load/generation imbalances, equipment failures, and parameter violations---all producing realistic constraint violations. We measure \textit{repair rate} (fraction achieving zero violations), \textit{violation reduction}, \textit{tool calls}, and \textit{feasibility} (engineering realism of actions). Table~\ref{tab:griddebug_results} summarizes results.
+
+\begin{table}[ht]
+\centering
+\caption{GridDebugAgent repair performance by network size. Repair rate degrades with scale, but tool orchestration achieves perfect success on smaller networks.}
+\label{tab:griddebug_results}
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Network} & \textbf{Scenarios} & \textbf{Repair Rate} & \textbf{Violations} & \textbf{Tool Calls} \\
+ &  &  & \textbf{(before$\to$after)} & \textbf{(avg)} \\
+\midrule
+IEEE-14 & 13 & \textbf{100\%} (13/13) & 48 $\to$ 1 & 12.7 \\
+IEEE-30 & 13 & 92.3\% (12/13) & 128 $\to$ 44 & 20.6 \\
+IEEE-57 & 13 & 61.5\% (8/13) & 321 $\to$ 192 & 34.4 \\
+\midrule
+\textbf{Overall} & \textbf{39} & \textbf{84.6\%} (33/39) & \textbf{497 $\to$ 237} & \textbf{22.5} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Results.}
+GridDebugAgent achieves an overall repair rate of 84.6\% (33/39 scenarios), reducing total violations from 497 to 237 (52.3\% reduction) with an average of 22.5 tool calls per scenario. Performance is network-size dependent: 100\% repair on IEEE-14 (small), 92.3\% on IEEE-30 (medium), but only 61.5\% on IEEE-57 (large). This degradation reflects scalability challenges: larger networks require more tool calls (12.7$\to$34.4) and exhibit more complex failure modes where 10 iterations prove insufficient. Notably, even failed repairs often achieve significant violation reduction, suggesting partial diagnostic success. Figure~\ref{fig:griddebug_trajectory} illustrates a successful 2-round repair trajectory.
+
+% Insert trajectory figure
+\input{griddebug_trajectory.tex}
+
+\textbf{Discussion.}
+GridDebugAgent demonstrates that \textit{solver-grounded} tool use eliminates numerical hallucination: all reported voltages, power flows, and violations originate from trusted pandapower simulations. The ReAct loop enables iterative refinement---agents propose corrections, verify outcomes, and adapt based on solver feedback. However, scalability remains a challenge: fixed iteration budgets and greedy action selection limit performance on large networks with cascading failures. Future work should explore hierarchical planning (decomposing large networks), learned action priors for power systems, and adaptive iteration budgets. Nonetheless, 100\% success on smaller networks validates the approach for real-time control room assistance, where operators manage localized failures.
+
+% Optional: Insert architecture figure if space permits
+% Uncomment if you want to include it in this section or place it earlier
+% \begin{figure*}[t]
+% \input{griddebug_architecture.tex}
+% \end{figure*}

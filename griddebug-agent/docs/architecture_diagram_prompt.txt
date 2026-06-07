@@ -1,0 +1,220 @@
+# Prompt for Generating GridDebugAgent Architecture Diagram
+
+Create a detailed architecture diagram for GridDebugAgent, a power grid debugging system implemented by students. The diagram MUST be based ONLY on their actual implementation, not on any existing examples.
+
+## System Overview
+GridDebugAgent is a ReAct-style agentic system for diagnosing and repairing power flow failures in electrical grids. It uses GPT-4o with function calling to iteratively gather evidence and take corrective actions.
+
+## Architecture Components (from actual implementation)
+
+### 1. INPUT LAYER
+- User Query (optional natural language request)
+- Pandapower Network Object (electrical grid model)
+- Network Name (e.g., "IEEE-14", "IEEE-57")
+
+### 2. PREPROCESSING PIPELINE (rule_engine/preprocessor.py)
+Components:
+- **Evidence Collector**
+  - Configuration: v_min=0.95 pu, v_max=1.05 pu, max_loading=100%
+  - Extracts: convergence status, voltage violations, thermal overloads, load/gen balance
+  - Output: EvidenceReport (structured dict)
+
+- **Rule Engine**
+  - Evaluates predefined rules against evidence
+  - Classifies failure category
+  - Outputs: Triggered rules with severity, descriptions, suggested actions
+
+- **Output**:
+  - evidence (dict)
+  - evidence_text (human-readable)
+  - triggered_rules (list)
+  - failure_category (string)
+  - network_summary (basic stats)
+
+### 3. AGENT CORE (agents/agentic_pipeline.py)
+**Configuration:**
+- Model: GPT-4o
+- Temperature: 0.3
+- Max tokens: 2000
+- Max tool calls: 10 iterations
+
+**Architecture:** ReAct Loop
+1. LLM receives: System prompt + User prompt + Evidence + Previous tool results
+2. LLM produces: Reasoning + Tool calls (via OpenAI function calling)
+3. Tools execute on pandapower network
+4. Results fed back to LLM
+5. Repeat until final report or max iterations
+
+**System Prompt includes:**
+- Role definition (expert power systems engineer)
+- Analysis strategy (5-step debugging guidelines)
+- Tool descriptions (all 23 tools listed)
+- Output requirements (structured report format)
+
+### 4. TOOL CATEGORIES (23 total tools)
+
+**QUERY TOOLS (9 tools):**
+1. get_network_summary → bus/line/gen/load counts, convergence
+2. get_bus_data → bus table (optional filtering by bus_ids)
+3. get_line_data → line table with from_bus, to_bus, in_service
+4. get_gen_data → generator table with p_mw, max_p_mw
+5. get_voltage_profile → vm_pu, va_degree for all buses
+6. get_loading_profile → loading_percent for lines and trafos
+7. get_power_balance → total load/gen P/Q, losses, load/gen ratio
+8. get_line_results → p_from_mw, p_to_mw, q flows, pl_mw losses
+9. get_bus_results → vm_pu, va_degree, p_mw, q_mvar per bus
+
+**SIMULATION TOOLS (7 tools):**
+1. run_power_flow → AC power flow (algorithms: nr, fdBX, gs)
+2. run_dc_power_flow → DC power flow (linear approximation)
+3. run_n1_contingency → outage simulation for lines/trafos
+4. run_short_circuit → fault analysis (3ph or 2ph)
+5. run_opf → optimal power flow with cost minimization
+6. save_network_snapshot → save network state with label
+7. restore_network_snapshot → restore saved state
+
+**DIAGNOSTIC TOOLS (4 tools):**
+1. run_full_diagnostics → pandapower topology/index checks
+2. check_overloads → lines/trafos above threshold_percent
+3. check_voltage_violations → buses outside [v_min, v_max]
+4. find_disconnected_areas → topology analysis for islanding
+
+**GRID ACTION TOOLS (4 tools):**
+1. adjust_generation → modify p_mw or vm_pu of gen/sgen/ext_grid
+2. curtail_load → scale load by factor (0.0-1.0)
+3. switch_line → connect/disconnect transmission line
+4. switch_shunt → connect/disconnect reactive compensation
+
+### 5. MEMORY & STATE MANAGEMENT
+**Network Snapshots:**
+- Module-level dictionary: _network_snapshots = {}
+- Stores deep copies of pandapower network
+- Keyed by user-defined labels (e.g., "base", "before_scenario2")
+- Enables rollback after modifications
+
+**Conversation History:**
+- List of message dicts with roles: system, user, assistant, tool
+- Includes tool_call_id for function calling
+- Preserved across ReAct iterations
+
+**Tool Call Logging:**
+- Each call records: iteration number, tool name, arguments, result
+- Enables reproducibility and debugging
+- Included in final output
+
+### 6. OUTPUT LAYER
+**Structured Diagnostic Report:**
+- Root Causes (initiating events, not symptoms)
+- Affected Components (buses, lines with violations)
+- Corrective Actions (engineering-feasible, specific)
+- Reasoning Trace (summary of tool findings and analysis steps)
+
+**Alternative Output (if user query specifies format):**
+- Direct answers (e.g., "Total active power loss: 30.3 MW")
+- Bulleted lists of violations
+- Custom formats as requested
+
+**Metadata:**
+- Tool call logs (all 23 tools with args/results)
+- Conversation transcript (full message history)
+- Evidence dict (preprocessor output)
+- Triggered rules (rule engine output)
+
+## Data Flow
+1. User Query + Pandapower Network → Preprocessor
+2. Preprocessor → Evidence + Rules → Agent Core
+3. Agent Core (ReAct Loop):
+   - Iteration 1: LLM → Tool Calls → Tool Results → LLM
+   - Iteration 2: LLM → Tool Calls → Tool Results → LLM
+   - ...
+   - Iteration N (≤10): LLM → Final Report
+4. Agent Core → Output Layer → User
+
+## Key Implementation Details
+- All tools operate on the SAME pandapower network object (stateful)
+- Grid actions modify network in-place
+- Snapshots enable safe experimentation
+- Temperature 0.3 ensures deterministic tool selection
+- Max 10 iterations prevents infinite loops
+- OpenAI function calling ensures structured tool invocation
+
+## Diagram Requirements
+The diagram should:
+1. Show all 6 major components (Input, Preprocessor, Agent Core, Tools, Memory, Output)
+2. List all 23 tools grouped by category (Query: 9, Simulation: 7, Diagnostic: 4, Grid Action: 4)
+3. Show ReAct loop with iteration flow
+4. Show memory/state management (snapshots, conversation, logs)
+5. Show data flow with arrows
+6. Use clear visual hierarchy
+7. Be suitable for an academic paper (IEEE format)
+8. Use professional color scheme
+
+## Suggested Formats
+- **Mermaid**: For quick generation and easy editing
+- **TikZ**: For publication-quality LaTeX figures
+- **Draw.io/Lucidchart XML**: For manual refinement
+- **Python (matplotlib/networkx)**: For programmatic generation
+
+## Example Mermaid Structure (adapt as needed)
+```mermaid
+graph TB
+    subgraph Input
+        A[User Query]
+        B[Pandapower Network]
+        C[Network Name]
+    end
+
+    subgraph Preprocessor
+        D[Evidence Collector]
+        E[Rule Engine]
+        F[Context Builder]
+    end
+
+    subgraph AgentCore[Agent Core - ReAct Loop]
+        G[GPT-4o<br/>temp=0.3]
+        H[Function Calling]
+        I[Tool Executor]
+    end
+
+    subgraph Tools[Tool Categories - 23 Tools]
+        J[Query Tools<br/>9 tools]
+        K[Simulation Tools<br/>7 tools]
+        L[Diagnostic Tools<br/>4 tools]
+        M[Grid Action Tools<br/>4 tools]
+    end
+
+    subgraph Memory[Memory & State]
+        N[Network Snapshots]
+        O[Conversation History]
+        P[Tool Call Logs]
+    end
+
+    subgraph Output
+        Q[Diagnostic Report]
+        R[Metadata]
+    end
+
+    A --> D
+    B --> D
+    C --> D
+    D --> E
+    E --> F
+    F --> G
+    G --> H
+    H --> I
+    I --> J
+    I --> K
+    I --> L
+    I --> M
+    J --> G
+    K --> G
+    L --> G
+    M --> G
+    N -.-> I
+    O -.-> G
+    P -.-> R
+    G --> Q
+    G --> R
+```
+
+Generate a publication-quality diagram based on this specification.

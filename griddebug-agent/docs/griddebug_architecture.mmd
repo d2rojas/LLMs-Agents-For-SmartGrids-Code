@@ -1,0 +1,94 @@
+graph TB
+    %% Input Layer
+    subgraph Input["📥 INPUT LAYER"]
+        UserQuery["User Query<br/>(optional)"]
+        PandaNet["Pandapower Network<br/>(grid model)"]
+        NetName["Network Name<br/>(e.g., IEEE-14)"]
+    end
+
+    %% Preprocessing Pipeline
+    subgraph Preprocess["⚙️ PREPROCESSING PIPELINE"]
+        EvidCol["Evidence Collector<br/>v_min=0.95, v_max=1.05<br/>max_loading=100%"]
+        RuleEng["Rule Engine<br/>(failure classification)"]
+        Context["Context Builder<br/>→ evidence_text<br/>→ triggered_rules<br/>→ failure_category"]
+    end
+
+    %% Agent Core
+    subgraph Agent["🤖 AGENT CORE - ReAct Loop"]
+        LLM["GPT-4o<br/>temp=0.3, max_tokens=2000<br/>MAX_TOOL_CALLS=10"]
+        FuncCall["OpenAI Function Calling<br/>(tool selection)"]
+        ToolExec["Tool Executor<br/>(dispatches to 23 tools)"]
+        ReActLoop["Iteration Loop<br/>Reason → Act → Observe"]
+    end
+
+    %% Tool Categories
+    subgraph Tools["🛠️ TOOL CATEGORIES (23 Tools)"]
+        QueryTools["📊 QUERY TOOLS (9)<br/>• get_network_summary<br/>• get_bus_data<br/>• get_line_data<br/>• get_gen_data<br/>• get_voltage_profile<br/>• get_loading_profile<br/>• get_power_balance<br/>• get_line_results<br/>• get_bus_results"]
+
+        SimTools["⚡ SIMULATION TOOLS (7)<br/>• run_power_flow (nr/fdBX/gs)<br/>• run_dc_power_flow<br/>• run_n1_contingency<br/>• run_short_circuit<br/>• run_opf<br/>• save_network_snapshot<br/>• restore_network_snapshot"]
+
+        DiagTools["🔍 DIAGNOSTIC TOOLS (4)<br/>• run_full_diagnostics<br/>• check_overloads<br/>• check_voltage_violations<br/>• find_disconnected_areas"]
+
+        ActionTools["⚡ GRID ACTION TOOLS (4)<br/>• adjust_generation<br/>• curtail_load<br/>• switch_line<br/>• switch_shunt"]
+    end
+
+    %% Memory & State
+    subgraph Memory["💾 MEMORY & STATE"]
+        Snapshots["Network Snapshots<br/>_network_snapshots: dict"]
+        ConvHist["Conversation History<br/>(system/user/assistant/tool)"]
+        ToolLogs["Tool Call Logs<br/>(iteration, tool, args, result)"]
+    end
+
+    %% Output Layer
+    subgraph Output["📤 OUTPUT LAYER"]
+        Report["Diagnostic Report<br/>• Root Causes<br/>• Affected Components<br/>• Corrective Actions<br/>• Reasoning Trace"]
+        Metadata["Metadata<br/>• Tool call logs<br/>• Conversation transcript<br/>• Evidence dict"]
+    end
+
+    %% Main Flow
+    UserQuery --> EvidCol
+    PandaNet --> EvidCol
+    NetName --> EvidCol
+
+    EvidCol --> RuleEng
+    RuleEng --> Context
+
+    Context --> LLM
+    LLM --> FuncCall
+    FuncCall --> ToolExec
+
+    ToolExec --> QueryTools
+    ToolExec --> SimTools
+    ToolExec --> DiagTools
+    ToolExec --> ActionTools
+
+    QueryTools --> ReActLoop
+    SimTools --> ReActLoop
+    DiagTools --> ReActLoop
+    ActionTools --> ReActLoop
+
+    ReActLoop --> LLM
+
+    %% Memory Interactions
+    Snapshots -.-> ToolExec
+    ConvHist -.-> LLM
+    ToolLogs -.-> Metadata
+
+    %% Final Output
+    LLM --> Report
+    LLM --> Metadata
+
+    %% Styling
+    classDef inputStyle fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef processStyle fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef agentStyle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:3px
+    classDef toolStyle fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    classDef memoryStyle fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef outputStyle fill:#e0f2f1,stroke:#00796b,stroke-width:2px
+
+    class UserQuery,PandaNet,NetName inputStyle
+    class EvidCol,RuleEng,Context processStyle
+    class LLM,FuncCall,ToolExec,ReActLoop agentStyle
+    class QueryTools,SimTools,DiagTools,ActionTools toolStyle
+    class Snapshots,ConvHist,ToolLogs memoryStyle
+    class Report,Metadata outputStyle
