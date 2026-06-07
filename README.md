@@ -2,7 +2,7 @@
 
 Dedicated code repository for the four case studies in *LLMs and Agentic AI Systems
 for Smart Grids: A Tutorial on Architectures and Applications* (Rojas et al.).
-Companion to the paper repo `interna-LLMs-Agents-For-SmartGrids-v5`.
+
 
 This repository implements the solver-grounded design rule of the paper: every
 reported numerical result originates from a trusted tool (solver/simulator) and
