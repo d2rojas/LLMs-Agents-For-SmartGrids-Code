@@ -18,10 +18,9 @@ To manage these large dataset files efficiently within Git, we will use Git Larg
 - After that, you can commit and push normally
 
 ## Quick Start (Using presentation.ipynb)
-1. Clone the Repository
+1. Open this folder (the original implementation files are included here)
 ```
-git clone https://github.com/JettN/ECE-285-Team2.git
-cd ECE-285-Team2
+cd wind-forecasting/students_original
 ```
 2. Install Dependencies
 ```
