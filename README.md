@@ -1,4 +1,4 @@
-# LLMs and Agentic AI Systems for Smart Grids — Case-Study Code (v2)
+# LLMs and Agentic AI Systems for Smart Grids — Case-Study Code
 
 Dedicated code repository for the four case studies in *LLMs and Agentic AI Systems
 for Smart Grids: A Tutorial on Architectures and Applications* (Rojas et al.).
