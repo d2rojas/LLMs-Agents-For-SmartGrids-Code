@@ -10,10 +10,9 @@ passes explicit verification before it is reported. Each case study compares an
 **LLM-only baseline** against its **solver-grounded** counterpart on identical
 data and metrics.
 
-> **Scaffold status.** This is the repository structure with per-folder reproduction
-> guides. Items marked `TODO(authors)` must be filled in with the actual scripts,
-> data paths, and exact run commands by the case-study owners. Nothing here invents
-> results; the descriptions restate the experimental setup reported in the paper.
+Each case study is a complete, runnable implementation with its own README,
+dependencies, and tests (see the verification table below). Per-case install and
+run instructions live in each subfolder.
 
 ## Layout
 
@@ -26,10 +25,14 @@ data and metrics.
 
 ## Common setup
 
+Each case study has its own pinned `requirements.txt`; install per case rather than
+globally:
+
 ```bash
 # Python 3.11+ recommended
+cd <case-folder>            # e.g. power-flow-agent/LLM, ev-scheduling, ...
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt          # TODO(authors): pin versions actually used
+pip install -r requirements.txt
 ```
 
 Set API keys for the LLM providers used in the paper (all model versions are
