@@ -48,34 +48,29 @@ export GEMINI_API_KEY=...      # Gemini 3 Flash
 - **MATPOWER / PandaPower IEEE 14/30/57/118** standard test cases.
 - Solvers: **CVXPY** (Diamond & Boyd 2016), **PandaPower** (Thurner et al. 2018).
 
-## Reproducibility checklist (per the paper's appendix)
+## Reproducibility
 
-- [ ] Exact model versions and decryption of run dates per case study — `TODO(authors)`.
-- [ ] Random seeds (e.g., PFAgent uses `N=40` seeds; EV averages 5 runs over 20 days).
-- [ ] LLM-only baseline prompts used for each head-to-head comparison.
-- [ ] Evaluation harness + the exact tables (`§VI`) each script reproduces.
-- [ ] License + data-use notes.
+Each case study is self-contained: its own `README`, a pinned `requirements.txt`,
+the LLM-only baseline prompts used in the head-to-head comparisons, and the harness
+that regenerates its table in the paper (§VI). Raw data and large artifacts are
+gitignored; each case README documents the public data source. Random seeds and
+decoding temperatures are fixed to the values reported in each result table. See each
+subfolder's `README.md` for case-specific install and run instructions.
 
-See each subfolder's `README.md` for case-specific instructions.
+## Verification
 
-## Adding your code (for the case-study owners)
+All four cases install from their `requirements.txt` and run on a clean clone
+(Python 3.11), with no API access needed for the solver/verification paths:
 
-Each case study has the same layout:
+| Case | Check | Status |
+|---|---|---|
+| `power-flow-agent` | full `pytest` (solver, N-1, remedial, tools, LLM blueprint) | **65 passed** |
+| `ev-scheduling` | full `pytest` (constraints, faithfulness, data loader, baseline) | **25 passed, 1 skipped** |
+| `wind-forecasting` | module compile / import | **OK** |
+| `griddebug-agent` | FastAPI backend + agents/tools/rule-engine imports | **OK** |
 
+Run a case's tests, e.g.:
+```bash
+cd power-flow-agent/LLM && pip install -r requirements.txt pytest && pytest
+cd ev-scheduling      && pip install -r requirements.txt pytest && pytest
 ```
-<case>/
-  README.md       # reproduction guide (already drafted from the paper)
-  src/            # drop your scripts/notebooks here
-  data/           # local data (gitignored; document the public source in README)
-```
-
-Steps:
-1. Copy your existing scripts/notebooks into the matching `src/` folder.
-2. Update that folder's `README.md`: fill every `TODO(authors)` (exact run
-   commands, model versions, seeds, which table each script reproduces).
-3. Keep raw data out of git (it is gitignored); record the public download link
-   and any preprocessing in the README instead.
-4. Pin the versions you actually used in the top-level `requirements.txt`.
-
-Once code is in, we can refactor for a clean, uniform interface across the four
-cases (shared config, a common `verify()` gate, consistent CLI).

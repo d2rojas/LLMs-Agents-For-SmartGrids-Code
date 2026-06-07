@@ -25,15 +25,15 @@ This project builds a day-ahead EV charging scheduler for a shared parking facil
 
 ## Setup
 
-### 1. Clone and install acnportal
+### 1. Get the code
 
 ```bash
 git clone <this-repo-url>
-cd Project
-git clone https://github.com/zach401/acnportal acnportal
+cd ev-scheduling
 ```
 
-The `acnportal` library is not bundled in this repo and needs to be cloned separately.
+The Caltech `acnportal` library is installed automatically from PyPI by
+`requirements.txt` in the next step — no separate clone is needed.
 
 ### 2. Create a virtual environment
 
