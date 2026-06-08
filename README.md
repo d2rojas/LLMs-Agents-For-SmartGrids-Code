@@ -11,8 +11,8 @@ passes explicit verification before it is reported. Each case study compares an
 data and metrics.
 
 Each case study is a complete, runnable implementation with its own README,
-dependencies, and tests (see the verification table below). Per-case install and
-run instructions live in each subfolder.
+dependencies, and tests. Per-case install and run instructions live in each
+subfolder.
 
 ## Layout
 
