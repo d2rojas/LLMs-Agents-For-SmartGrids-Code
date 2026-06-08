@@ -60,19 +60,10 @@ gitignored; each case README documents the public data source. Random seeds and
 decoding temperatures are fixed to the values reported in each result table. See each
 subfolder's `README.md` for case-specific install and run instructions.
 
-## Verification
+## Tests
 
-All four cases install from their `requirements.txt` and run on a clean clone
-(Python 3.11), with no API access needed for the solver/verification paths:
-
-| Case | Check | Status |
-|---|---|---|
-| `power-flow-agent` | full `pytest` (solver, N-1, remedial, tools, LLM blueprint) | **65 passed** |
-| `ev-scheduling` | full `pytest` (constraints, faithfulness, data loader, baseline) | **25 passed, 1 skipped** |
-| `wind-forecasting` | module compile / import | **OK** |
-| `griddebug-agent` | FastAPI backend + agents/tools/rule-engine imports | **OK** |
-
-Run a case's tests, e.g.:
+The `power-flow-agent` and `ev-scheduling` cases include test suites for their
+solver and verification paths; these run without API keys. For example:
 ```bash
 cd power-flow-agent/LLM && pip install -r requirements.txt pytest && pytest
 cd ev-scheduling      && pip install -r requirements.txt pytest && pytest
