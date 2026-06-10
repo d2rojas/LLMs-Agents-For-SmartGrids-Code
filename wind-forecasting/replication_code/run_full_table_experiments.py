@@ -14,7 +14,7 @@ from datetime import datetime
 
 # Configuration for all experiments
 EXPERIMENTS = [
-    # Gemini 3 Flash (same as students used)
+    # Gemini 3 Flash
     {'provider': 'gemini', 'model': 'gemini-3-flash-preview', 'model_name': 'Gemini 3 Flash'},
     # Gemini 3 Pro
     {'provider': 'gemini', 'model': 'gemini-3-pro-preview', 'model_name': 'Gemini 3 Pro'},
@@ -43,8 +43,12 @@ def setup_model_client(provider, model_id, api_key):
 
 def main():
     # API Keys
-    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '***REMOVED***')
+    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
     CLAUDE_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+
+    if not GEMINI_API_KEY:
+        print("⚠️  Warning: No Gemini API key found. Gemini experiments will be skipped.")
+        print("   Set GEMINI_API_KEY environment variable to enable.")
 
     if not CLAUDE_API_KEY:
         print("⚠️  Warning: No Claude API key found. Claude experiments will be skipped.")

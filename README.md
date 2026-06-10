@@ -30,7 +30,7 @@ globally:
 
 ```bash
 # Python 3.11+ recommended
-cd <case-folder>            # e.g. power-flow-agent/LLM, ev-scheduling, ...
+cd <case-folder>            # e.g. power-flow-agent, ev-scheduling, ...
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -65,6 +65,6 @@ subfolder's `README.md` for case-specific install and run instructions.
 The `power-flow-agent` and `ev-scheduling` cases include test suites for their
 solver and verification paths; these run without API keys. For example:
 ```bash
-cd power-flow-agent/LLM && pip install -r requirements.txt pytest && pytest
+cd power-flow-agent && pip install -r requirements.txt pytest && pytest
 cd ev-scheduling      && pip install -r requirements.txt pytest && pytest
 ```

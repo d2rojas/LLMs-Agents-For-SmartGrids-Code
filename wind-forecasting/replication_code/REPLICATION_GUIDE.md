@@ -64,7 +64,7 @@ python replicate_experiments.py --provider gemini --api-key YOUR_KEY --no-weathe
 
 ## Expected Results
 
-According to the original student report (Table 3, page 8):
+Reference results for Gemini 3 Flash on turbine 1 (see the project `README.md` for the full strategy × horizon table):
 
 | Model/Variant | MAE (kW) | RMSE (kW) | Overall (kW) |
 |---------------|----------|-----------|--------------|
@@ -76,8 +76,6 @@ According to the original student report (Table 3, page 8):
 **Key Finding:** APBF (Advanced Prompt + Binning + Forecast) significantly outperformed naive prompting (~77% improvement).
 
 ## Experimental Setup
-
-From the report (Table 1, page 6):
 
 - **Task**: 48-hour ahead wind power forecasting at 10-minute resolution
 - **Dataset**: SDWPF (Baidu KDD Cup 2022) - Gansu Guazhou wind farm, China
@@ -93,11 +91,7 @@ wind-forecasting/
 ├── replicate_experiments.py # Command-line script
 ├── REPLICATION_GUIDE.md # This file
 ├── requirements.txt # Python dependencies
-├── wtbdata_245days.csv # Main dataset (72 MB)
-├── students_original/ # Original student code
-│ ├── presentation.ipynb
-│ ├── experiments.ipynb
-│ └── ...
+├── wtbdata_245days.csv # Main dataset (72 MB, downloaded separately)
 └── results/ # Output directory (created automatically)
  ├── results_YYYYMMDD_HHMMSS.csv
  └── ...
@@ -209,35 +203,15 @@ advanced,3,gemini-3-flash,1,1,366.22,439.44,402.83,18,38.1
 - **Overall Score**: (MAE + RMSE) / 2 - Combined metric used in KDD Cup
 - **Points**: Number of valid forecast points used (should be 18 for 3h, 36 for 6h, 288 for 48h)
 
-## Comparison with Original Results
+## Run-to-Run Variability
 
 Your results may differ slightly due to:
 1. **LLM Non-Determinism**: Different runs produce different outputs
 2. **API Model Updates**: Providers update models over time
 3. **Weather Data**: ERA5 reanalysis (not true forecasts from 2020)
-4. **Temperature Settings**: Original paper doesn't specify sampling parameters
+4. **Sampling Parameters**: Decoding temperature affects output stability
 
 Expect variations of ±10-20% in MAE/RMSE.
-
-## Citation
-
-If you use this code, please cite the original student project:
-
-```bibtex
-@techreport{albassam2024wind,
- title={LLMs for Wind Power Forecasting},
- author={Albassam, Abdulwahab and Leung, Aidan and Ngo, Jett},
- institution={UC San Diego},
- year={2024}
-}
-```
-
-## Support
-
-For issues:
-1. Check this guide
-2. Review original notebooks in `students_original/`
-3. Compare against the original implementation in `students_original/`
 
 ## Advanced Usage
 

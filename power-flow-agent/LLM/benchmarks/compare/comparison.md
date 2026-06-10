@@ -1,8 +1,0 @@
-# Comparison
-
-| report | model | task | success_rate | voltage_mae_mean | flow_mae_mean | loading_rmse_mean | voltage_f1_mean | thermal_f1_mean | convergence_match_rate | prompt_tokens_mean | completion_tokens_mean | total_tokens_mean | cost_usd_mean | cost_usd_total | cases | runs | temperature | timeout_s |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| results_gemini_lite_all_cases | gemini:gemini-2.5-flash-lite | baseline_pf | 0.3 | 0.056181592747862 | 47.30290360224958 | 17.37465281943602 | 0.4358974358974359 | 0.6666666666666666 | 1.0 | 4769.666666666667 | 3551.0 | 8320.666666666666 | 0.0018973666666666667 | 0.0056921 | case14,case30,case57,case118,case300 | 2 | 0.0 | 90.0 |
-| results_gemini_lite_all_cases | gemini:gemini-2.5-flash-lite | blueprint_pf | 0.6 | 0.04932883666489984 | 38.461579719757005 | 15.646456560441313 | 0.5844155844155844 | 0.6666666666666666 | 1.0 | 4831.666666666667 | 4461.666666666667 | 9293.333333333334 | 0.0022678333333333335 | 0.013607000000000001 | case14,case30,case57,case118,case300 | 2 | 0.0 | 90.0 |
-| results_openai_all_cases | openai:gpt-4o-mini | baseline_pf | 1.0 | None | None | None | 0.2 | 0.8 | 0.0 | 11554.6 | 61.0 | 11615.6 | 0.0017697899999999998 | 0.026546849999999997 | case14,case30,case57,case118,case300 | 3 | 0.0 | 90.0 |
-| results_openai_all_cases | openai:gpt-4o-mini | blueprint_pf | 0.6666666666666666 | 0.0241266120346111 | 19.84170509938499 | 23.071310353872626 | 0.5837280366692131 | 0.7 | 0.7 | 12132.833333333334 | 1954.0833333333333 | 14086.916666666666 | 0.0029923750000000002 | 0.0359085 | case14,case30,case57,case118,case300 | 3 | 0.0 | 90.0 |

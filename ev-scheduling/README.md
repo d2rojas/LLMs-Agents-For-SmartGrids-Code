@@ -1,7 +1,5 @@
 # Agentic EV Charging Schedule Assistant
 
-**Group 10**: Ryan Luo, Peter Quawas
-
 This project builds a day-ahead EV charging scheduler for a shared parking facility and compares three approaches: a direct-prompt LLM baseline, a CVXPY optimizer, and a full agentic pipeline (Plan → Optimize → Validate → Refine → Explain). We use real session data from [Caltech ACN-Data](https://ev.caltech.edu), minimize time-of-use energy cost under per-charger and site capacity constraints, and evaluate explanation faithfulness. There's also a FastAPI web GUI for interactive natural-language scheduling.
 
 ## Layout
@@ -20,7 +18,7 @@ This project builds a day-ahead EV charging scheduler for a shared parking facil
 | `visualization/` | Schedule and load-profile plots |
 | `web/` | FastAPI server and HTML chat UI |
 | `experiments/` | Benchmark outputs (CSV, JSON, plots) — gitignored |
-| `final_report_results/` | Pre-computed results used in the final report |
+| `results/` | Pre-computed reference results (the numbers reported in the paper, §VI-B) |
 | `acnportal/` | ACN-Data/ACN-Sim client (cloned separately, see Setup) |
 
 ## Setup
@@ -150,7 +148,7 @@ Runs the optimizer, baseline, and agent on the same natural-language input for e
 
 ## Pre-computed Results
 
-`final_report_results/` has the benchmark outputs we used in the report:
+`results/` has the benchmark outputs reported in the paper (§VI-B):
 
 - `agent_vs_baseline_metrics.csv` — averaged metrics across all evaluation days
 - `average_results_table.md` — summary table
@@ -158,7 +156,3 @@ Runs the optimizer, baseline, and agent on the same natural-language input for e
 - `phase_a_schedule.png`, `phase_a_load.png` — example Phase A outputs
 - `agent_schedule.png`, `agent_load.png` — example agent outputs
 - `per_day/` — per-day schedule and load plots for all three pipelines
-
-## Report
-
-Final report: `reports/final_report.tex` (PDF: `reports/i.pdf`).

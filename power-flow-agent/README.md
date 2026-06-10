@@ -6,8 +6,8 @@ tracks network state across turns, and synthesizes operator-readable responses.
 For evaluation, an LLM-only baseline and PFAgent see the same cases and metrics; only
 PFAgent can call the PandaPower toolchain.
 
-> The full implementation, architecture notes, and detailed instructions live in
-> [`LLM/`](LLM/) — see **[`LLM/README.md`](LLM/README.md)**. This page is a summary.
+> Detailed architecture notes and a full file inventory live in
+> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). This page is a summary.
 
 ## Components
 1. **Streamlit frontend** — user interaction, session state, undo/redo snapshots.
@@ -17,7 +17,6 @@ PFAgent can call the PandaPower toolchain.
 
 ## Quick start
 ```bash
-cd LLM
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
@@ -33,8 +32,8 @@ python benchmarks/evaluate_llms.py
 ```
 
 ## Data / protocol
-MATPOWER IEEE 14/30/57/118-bus cases (bundled in [`LLM/data/`](LLM/data/) and
-`data/`). Loads and generator setpoints are perturbed around the base case to
+MATPOWER IEEE 14/30/57/118-bus cases (bundled in [`data/`](data/) and
+[`solver/cases/`](solver/cases/)). Loads and generator setpoints are perturbed around the base case to
 mitigate memorization (`k = 1`, `N = 40` seeds per system). Ground truth is the
 PandaPower Newton–Raphson solution of each perturbed case.
 
@@ -51,5 +50,5 @@ what is reported.
 
 ## Tests
 ```bash
-cd LLM && pip install pytest && pytest        # solver/N-1/remedial tests run without API keys
+pip install pytest && pytest                  # solver/N-1/remedial tests run without API keys
 ```

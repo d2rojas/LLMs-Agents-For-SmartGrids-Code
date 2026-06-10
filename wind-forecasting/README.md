@@ -60,11 +60,10 @@ wind-forecasting/
 │   ├── retry_failed_experiments.py
 │   ├── replicate_results.ipynb
 │   └── requirements.txt
-├── results/                  # experiment outputs (CSV) and result tables (.tex)
-└── students_original/        # the original implementation (reference)
+└── results/                  # experiment outputs (CSV) and result tables (.tex)
 ```
-Large artifacts (the SDWPF CSV and the original report PDF) are not committed; see
-**Data** above for how to obtain the dataset.
+The SDWPF CSV is large and is not committed; see **Data** above for how to obtain
+the dataset.
 
 ## Notes
 The 48-h horizon is the hardest setting for an LLM predictor: it must return exactly

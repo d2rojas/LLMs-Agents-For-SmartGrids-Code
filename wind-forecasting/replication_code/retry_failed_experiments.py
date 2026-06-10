@@ -76,11 +76,14 @@ def setup_model_client(provider, model_id, api_key):
 
 def main():
     # API Keys
-    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '***REMOVED***')
+    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
     CLAUDE_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 
+    if not GEMINI_API_KEY:
+        print("❌ Error: No Gemini API key found. Set the GEMINI_API_KEY environment variable.")
+        return
     if not CLAUDE_API_KEY:
-        print("❌ Error: No Claude API key found.")
+        print("❌ Error: No Claude API key found. Set the ANTHROPIC_API_KEY environment variable.")
         return
 
     # Load data
