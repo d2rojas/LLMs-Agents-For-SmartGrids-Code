@@ -1,7 +1,7 @@
-# Average Results (aligned over common benchmark days)
+# Average Results (each pipeline averaged over its available benchmark days)
 
 | Pipeline | Days | Avg Cost ($) | Avg Peak (kW) | Avg Unmet (kWh) | Avg Served (%) | Avg Violations |
 |----------|------|--------------|---------------|-----------------|----------------|----------------|
-| optimizer |    1 |       169.96 |          50.00 |            158.45 |            22.99 |            67.00 |
-| baseline  |    1 |        21.49 |          49.69 |            765.44 |            10.34 |           132.00 |
-| agent     |    1 |       169.96 |          50.00 |            158.45 |            22.99 |            67.00 |
+| optimizer |   20 |       100.83 |          47.35 |             27.82 |            71.31 |            15.80 |
+| baseline  |   20 |        80.12 |          57.93 |            283.37 |            30.24 |            86.15 |
+| agent     |   19 |        97.19 |          47.21 |             20.95 |            73.86 |            13.11 |

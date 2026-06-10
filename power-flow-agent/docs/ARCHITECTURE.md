@@ -151,7 +151,7 @@ User input (chat)
 | `scripts/fetch_matpower_cases.py` | Download/prepare MATPOWER case data |
 | `data/matpower/` | Cached MATPOWER case files |
 | `benchmarks/` | Benchmark results |
-| `docs/` | Additional documentation (e.g., `quantitative-comparison.md`) |
+| `docs/` | Additional documentation (this file) |
 
 ---
 

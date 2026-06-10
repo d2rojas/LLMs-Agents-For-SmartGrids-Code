@@ -19,7 +19,7 @@ This project builds a day-ahead EV charging scheduler for a shared parking facil
 | `web/` | FastAPI server and HTML chat UI |
 | `experiments/` | Benchmark outputs (CSV, JSON, plots) — gitignored |
 | `results/` | Pre-computed reference results (the numbers reported in the paper, §VI-B) |
-| `acnportal/` | ACN-Data/ACN-Sim client (cloned separately, see Setup) |
+| `docs/` | Architecture and module reference (`ARCHITECTURE.md`) |
 
 ## Setup
 
@@ -148,11 +148,14 @@ Runs the optimizer, baseline, and agent on the same natural-language input for e
 
 ## Pre-computed Results
 
-`results/` has the benchmark outputs reported in the paper (§VI-B):
+`results/average_results_table.md` has the averaged benchmark metrics reported in
+the paper (§VI-B): cost, peak load, unmet energy, % served, and constraint
+violations for the optimizer, the LLM-only baseline, and the agent over the
+20-day evaluation window. Re-run `scripts/run_agent_vs_baseline.py` to regenerate
+the full outputs (per-day plots, day-by-day table, bar chart) under
+`benchmark_results/`.
 
-- `agent_vs_baseline_metrics.csv` — averaged metrics across all evaluation days
-- `average_results_table.md` — summary table
-- `average_results_bar.png` — bar chart comparing all three pipelines
-- `phase_a_schedule.png`, `phase_a_load.png` — example Phase A outputs
-- `agent_schedule.png`, `agent_load.png` — example agent outputs
-- `per_day/` — per-day schedule and load plots for all three pipelines
+## Architecture
+
+Module-level documentation (data schema, loader, solver formulation, constraint
+checker, metrics) is consolidated in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
