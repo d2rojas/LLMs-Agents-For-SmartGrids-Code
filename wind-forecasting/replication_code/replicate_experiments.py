@@ -77,6 +77,13 @@ def setup_llm_client(provider, api_key):
         print(f"✅ Using Claude: {model_name}")
         return client, model_name
 
+    elif provider == "openai":
+        import openai
+        client = openai.OpenAI(api_key=api_key)
+        model_name = "gpt-5.4"
+        print(f"✅ Using OpenAI: {model_name}")
+        return client, model_name
+
     elif provider == "gemini":
         import google.generativeai as genai
         genai.configure(api_key=api_key)
@@ -270,6 +277,13 @@ Data:
             messages=[{"role": "user", "content": prompt}]
         )
         return response.content[0].text
+    elif provider == "openai":
+        response = client.chat.completions.create(
+            model=model_name,
+            max_completion_tokens=2048,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.choices[0].message.content
     else:
         response = client.generate_content(prompt)
         return response.text
@@ -337,6 +351,13 @@ Only raw JSON.
             messages=[{"role": "user", "content": prompt}]
         )
         return response.content[0].text
+    elif provider == "openai":
+        response = client.chat.completions.create(
+            model=model_name,
+            max_completion_tokens=4096,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.choices[0].message.content
     else:
         response = client.generate_content(prompt)
         return response.text
@@ -439,6 +460,13 @@ No text outside JSON. No explanations. Raw JSON only.
                     messages=[{"role": "user", "content": prompt}]
                 )
                 raw_text = response.content[0].text
+            elif provider == "openai":
+                response = client.chat.completions.create(
+                    model=model_name,
+                    max_completion_tokens=4096,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                raw_text = response.choices[0].message.content
             else:
                 response = client.generate_content(prompt)
                 raw_text = response.text
@@ -556,7 +584,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Replicate Wind Power Forecasting LLM Experiments"
     )
-    parser.add_argument('--provider', choices=['gemini', 'claude'],
+    parser.add_argument('--provider', choices=['gemini', 'claude', 'openai'],
                        default='gemini', help='LLM provider')
     parser.add_argument('--api-key', help='API key (or set via env var)')
     parser.add_argument('--config', help='Load config from JSON file')
@@ -592,6 +620,8 @@ def main():
             config.api_key = args.api_key
         elif config.provider == 'claude':
             config.api_key = os.environ.get('ANTHROPIC_API_KEY')
+        elif config.provider == 'openai':
+            config.api_key = os.environ.get('OPENAI_API_KEY')
         elif config.provider == 'gemini':
             config.api_key = os.environ.get('GEMINI_API_KEY')
 

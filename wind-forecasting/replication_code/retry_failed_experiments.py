@@ -66,6 +66,10 @@ def setup_model_client(provider, model_id, api_key):
         import anthropic
         client = anthropic.Anthropic(api_key=api_key)
         return client, model_id
+    elif provider == 'openai':
+        import openai
+        client = openai.OpenAI(api_key=api_key)
+        return client, model_id
     elif provider == 'gemini':
         import google.generativeai as genai
         genai.configure(api_key=api_key)
@@ -75,16 +79,17 @@ def setup_model_client(provider, model_id, api_key):
         raise ValueError(f"Unknown provider: {provider}")
 
 def main():
-    # API Keys
-    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
-    CLAUDE_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+    # API Keys (one per provider; retries for providers without a key are skipped)
+    API_KEYS = {
+        'gemini': os.environ.get('GEMINI_API_KEY', ''),
+        'claude': os.environ.get('ANTHROPIC_API_KEY', ''),
+        'openai': os.environ.get('OPENAI_API_KEY', ''),
+    }
+    ENV_VARS = {'gemini': 'GEMINI_API_KEY', 'claude': 'ANTHROPIC_API_KEY', 'openai': 'OPENAI_API_KEY'}
 
-    if not GEMINI_API_KEY:
-        print("❌ Error: No Gemini API key found. Set the GEMINI_API_KEY environment variable.")
-        return
-    if not CLAUDE_API_KEY:
-        print("❌ Error: No Claude API key found. Set the ANTHROPIC_API_KEY environment variable.")
-        return
+    for prov, key in API_KEYS.items():
+        if not key and any(e['provider'] == prov for e in RETRY_EXPERIMENTS):
+            print(f"⚠️  Warning: no {prov} API key ({ENV_VARS[prov]}); its retries will be skipped.")
 
     # Load data
     print("Loading dataset...")
@@ -113,7 +118,10 @@ def main():
         print("-" * 80)
 
         # Get API key
-        api_key = CLAUDE_API_KEY if provider == 'claude' else GEMINI_API_KEY
+        api_key = API_KEYS.get(provider, '')
+        if not api_key:
+            print(f"⏭️  Skipping {model_name} (no API key)")
+            continue
 
         # Setup client
         try:

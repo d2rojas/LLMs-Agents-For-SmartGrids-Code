@@ -12,16 +12,11 @@ from replicate_experiments import *
 import pandas as pd
 from datetime import datetime
 
-# Configuration for all experiments
+# The three models reported in the paper's Table (§VI-A)
 EXPERIMENTS = [
-    # Gemini 3 Flash
     {'provider': 'gemini', 'model': 'gemini-3-flash-preview', 'model_name': 'Gemini 3 Flash'},
-    # Gemini 3 Pro
-    {'provider': 'gemini', 'model': 'gemini-3-pro-preview', 'model_name': 'Gemini 3 Pro'},
-    # Claude 3.5 Haiku
-    {'provider': 'claude', 'model': 'claude-3-5-haiku-20241022', 'model_name': 'Claude 3.5 Haiku'},
-    # Claude 3.5 Sonnet
-    {'provider': 'claude', 'model': 'claude-3-5-sonnet-20241022', 'model_name': 'Claude 3.5 Sonnet'},
+    {'provider': 'openai', 'model': 'gpt-5.4', 'model_name': 'GPT 5.4'},
+    {'provider': 'claude', 'model': 'claude-sonnet-4-6', 'model_name': 'Claude Sonnet 4.6'},
 ]
 
 STRATEGIES = ['naive', 'advanced', 'apbf']
@@ -33,6 +28,10 @@ def setup_model_client(provider, model_id, api_key):
         import anthropic
         client = anthropic.Anthropic(api_key=api_key)
         return client, model_id
+    elif provider == 'openai':
+        import openai
+        client = openai.OpenAI(api_key=api_key)
+        return client, model_id
     elif provider == 'gemini':
         import google.generativeai as genai
         genai.configure(api_key=api_key)
@@ -42,17 +41,18 @@ def setup_model_client(provider, model_id, api_key):
         raise ValueError(f"Unknown provider: {provider}")
 
 def main():
-    # API Keys
-    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
-    CLAUDE_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+    # API Keys (one per provider; experiments for providers without a key are skipped)
+    API_KEYS = {
+        'gemini': os.environ.get('GEMINI_API_KEY', ''),
+        'claude': os.environ.get('ANTHROPIC_API_KEY', ''),
+        'openai': os.environ.get('OPENAI_API_KEY', ''),
+    }
+    ENV_VARS = {'gemini': 'GEMINI_API_KEY', 'claude': 'ANTHROPIC_API_KEY', 'openai': 'OPENAI_API_KEY'}
 
-    if not GEMINI_API_KEY:
-        print("⚠️  Warning: No Gemini API key found. Gemini experiments will be skipped.")
-        print("   Set GEMINI_API_KEY environment variable to enable.")
-
-    if not CLAUDE_API_KEY:
-        print("⚠️  Warning: No Claude API key found. Claude experiments will be skipped.")
-        print("   Set ANTHROPIC_API_KEY environment variable to enable.")
+    for prov, key in API_KEYS.items():
+        if not key:
+            print(f"⚠️  Warning: No {prov} API key found. {prov} experiments will be skipped.")
+            print(f"   Set {ENV_VARS[prov]} environment variable to enable.")
 
     # Load data
     print("Loading dataset...")
@@ -76,11 +76,10 @@ def main():
         model_name = exp_config['model_name']
 
         # Check API key availability
-        if provider == 'claude' and not CLAUDE_API_KEY:
+        api_key = API_KEYS.get(provider, '')
+        if not api_key:
             print(f"⏭️  Skipping {model_name} (no API key)")
             continue
-
-        api_key = CLAUDE_API_KEY if provider == 'claude' else GEMINI_API_KEY
 
         print("=" * 80)
         print(f"MODEL: {model_name} ({provider})")
@@ -107,6 +106,9 @@ def main():
                     if strategy == 'naive':
                         output = call_llm_naive(client, provider, model_full_name,
                                                df, TURBINE_ID, BASE_DAY, horizon)
+                    elif strategy == 'advanced':
+                        output = call_llm_advanced(client, provider, model_full_name,
+                                                  df, TURBINE_ID, BASE_DAY, horizon)
                     elif strategy == 'apbf':
                         output = call_llm_apbf(client, provider, model_full_name,
                                               df, TURBINE_ID, BASE_DAY, horizon,
