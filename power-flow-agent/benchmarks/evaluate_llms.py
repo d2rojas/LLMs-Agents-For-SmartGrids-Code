@@ -25,7 +25,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from config import GEMINI_API_KEY, GEMINI_MODEL, OPENAI_API_KEY, OPENAI_MODEL
+from config import ANTHROPIC_API_KEY, GEMINI_API_KEY, GEMINI_MODEL, OPENAI_API_KEY, OPENAI_MODEL
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 DEFAULT_OUT_DIR = "benchmarks/results"
@@ -311,6 +311,8 @@ def _resolve_api_key(provider: str) -> str:
         return str(OPENAI_API_KEY or os.getenv("OPENAI_API_KEY") or "").strip()
     if p == "gemini":
         return str(GEMINI_API_KEY or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip()
+    if p == "anthropic":
+        return str(ANTHROPIC_API_KEY or os.getenv("ANTHROPIC_API_KEY") or "").strip()
     raise ValueError(f"Unsupported provider: {provider}")
 
 
@@ -341,14 +343,17 @@ def _call_model(
 
 
 def _build_clients(models: list[ModelSpec]) -> dict[str, Any]:
-    from llm.engine import OpenAIChatClient
+    from llm.engine import AnthropicChatClient, OpenAIChatClient
 
     clients: dict[str, Any] = {}
     for spec in models:
-        clients[spec.key] = OpenAIChatClient(
-            api_key=_resolve_api_key(spec.provider),
-            base_url=_resolve_base_url(spec.provider),
-        )
+        if spec.provider == "anthropic":
+            clients[spec.key] = AnthropicChatClient(api_key=_resolve_api_key(spec.provider))
+        else:
+            clients[spec.key] = OpenAIChatClient(
+                api_key=_resolve_api_key(spec.provider),
+                base_url=_resolve_base_url(spec.provider),
+            )
     return clients
 
 

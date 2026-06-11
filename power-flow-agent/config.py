@@ -86,6 +86,12 @@ GEMINI_MODEL: str = _get_secret("GEMINI_MODEL", "gemini-2.5-flash-lite")  # type
 GEMINI_TEMPERATURE: float = float(_get_secret("GEMINI_TEMPERATURE", _get_secret("LLM_TEMPERATURE", "0.0")))  # type: ignore[arg-type]
 GEMINI_TIMEOUT_S: float = float(_get_secret("GEMINI_TIMEOUT_S", _get_secret("LLM_TIMEOUT_S", "60")))  # type: ignore[arg-type]
 
+ANTHROPIC_API_KEY: str | None = _get_secret("ANTHROPIC_API_KEY")
+# Default to the Claude model reported in the paper's PF table (§VI-C).
+ANTHROPIC_MODEL: str = _get_secret("ANTHROPIC_MODEL", "claude-opus-4-7")  # type: ignore[assignment]
+ANTHROPIC_TEMPERATURE: float = float(_get_secret("ANTHROPIC_TEMPERATURE", _get_secret("LLM_TEMPERATURE", "0.0")))  # type: ignore[arg-type]
+ANTHROPIC_TIMEOUT_S: float = float(_get_secret("ANTHROPIC_TIMEOUT_S", _get_secret("LLM_TIMEOUT_S", "60")))  # type: ignore[arg-type]
+
 
 def _env_bool(name: str, default: bool = False) -> bool:
     raw = str(_get_secret(name, "1" if default else "0")).strip().lower()

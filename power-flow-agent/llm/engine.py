@@ -57,6 +57,127 @@ class OpenAIChatClient(LLMClient):
         return self._client.chat.completions.create(**kwargs)
 
 
+class AnthropicChatClient(LLMClient):
+    """Anthropic Messages API adapter (official `anthropic` SDK).
+
+    Accepts the same OpenAI-format kwargs the engine produces (messages,
+    tools, tool_choice, temperature, timeout) and returns an OpenAI-shaped
+    dict response, so LLMEngine works unchanged. Used for the Claude models
+    reported in the paper (§VI-C: Claude Opus 4.7).
+    """
+
+    _DEFAULT_MAX_TOKENS = 8192
+
+    def __init__(self, api_key: Optional[str] = None):
+        import anthropic
+
+        self._client = anthropic.Anthropic(api_key=api_key)
+
+    @staticmethod
+    def _convert_tools(openai_tools: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+        tools = []
+        for t in openai_tools or []:
+            fn = t.get("function", {})
+            tools.append(
+                {
+                    "name": fn.get("name"),
+                    "description": fn.get("description", ""),
+                    "input_schema": fn.get("parameters", {"type": "object", "properties": {}}),
+                }
+            )
+        return tools
+
+    @staticmethod
+    def _convert_messages(messages: List[Dict[str, Any]]) -> tuple[Optional[str], List[Dict[str, Any]]]:
+        """Split out the system prompt and convert OpenAI history to Anthropic blocks."""
+        system: Optional[str] = None
+        converted: List[Dict[str, Any]] = []
+
+        for m in messages:
+            role = m.get("role")
+            if role == "system":
+                system = m.get("content") or system
+                continue
+
+            if role == "assistant":
+                blocks: List[Dict[str, Any]] = []
+                if m.get("content"):
+                    blocks.append({"type": "text", "text": m["content"]})
+                for tc in m.get("tool_calls") or []:
+                    fn = tc.get("function", {})
+                    blocks.append(
+                        {
+                            "type": "tool_use",
+                            "id": tc.get("id"),
+                            "name": fn.get("name"),
+                            "input": _safe_json_loads(fn.get("arguments", "{}")),
+                        }
+                    )
+                if blocks:
+                    converted.append({"role": "assistant", "content": blocks})
+                continue
+
+            if role == "tool":
+                result_block = {
+                    "type": "tool_result",
+                    "tool_use_id": m.get("tool_call_id"),
+                    "content": m.get("content") or "",
+                }
+                # Anthropic expects tool results in a user turn; merge
+                # consecutive tool messages into one user message.
+                if converted and converted[-1]["role"] == "user" and isinstance(converted[-1]["content"], list):
+                    converted[-1]["content"].append(result_block)
+                else:
+                    converted.append({"role": "user", "content": [result_block]})
+                continue
+
+            # plain user message
+            converted.append({"role": "user", "content": m.get("content") or ""})
+
+        return system, converted
+
+    def create(self, **kwargs: Any) -> Any:
+        system, messages = self._convert_messages(kwargs.get("messages") or [])
+
+        request: Dict[str, Any] = {
+            "model": kwargs["model"],
+            "max_tokens": kwargs.get("max_tokens", self._DEFAULT_MAX_TOKENS),
+            "messages": messages,
+        }
+        if system:
+            request["system"] = system
+        tools = self._convert_tools(kwargs.get("tools"))
+        if tools:
+            request["tools"] = tools
+            request["tool_choice"] = {"type": "auto"}
+        if kwargs.get("temperature") is not None:
+            request["temperature"] = kwargs["temperature"]
+        if kwargs.get("timeout") is not None:
+            request["timeout"] = kwargs["timeout"]
+
+        resp = self._client.messages.create(**request)
+
+        # Re-shape to the OpenAI dict format _extract_choice_message understands.
+        text = "".join(b.text for b in resp.content if b.type == "text") or None
+        tool_calls = [
+            {
+                "id": b.id,
+                "type": "function",
+                "function": {"name": b.name, "arguments": json.dumps(b.input)},
+            }
+            for b in resp.content
+            if b.type == "tool_use"
+        ]
+        message: Dict[str, Any] = {"role": "assistant", "content": text}
+        if tool_calls:
+            message["tool_calls"] = tool_calls
+        usage = {
+            "prompt_tokens": getattr(resp.usage, "input_tokens", None),
+            "completion_tokens": getattr(resp.usage, "output_tokens", None),
+        }
+        return {"choices": [{"message": message}], "usage": usage}
+
+
 def _trim_history(history: List[Dict[str, Any]], max_messages: int) -> List[Dict[str, Any]]:
     """保留最后 max_messages 条消息（不包含 system prompt）。"""
     if max_messages <= 0:
