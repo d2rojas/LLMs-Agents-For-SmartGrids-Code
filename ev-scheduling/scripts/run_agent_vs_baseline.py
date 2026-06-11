@@ -90,6 +90,11 @@ BASELINE_MODEL = "gpt-4o"
 BASELINE_MAX_TOKENS = 16384
 
 
+def _required_api_key(model: str) -> str:
+    """Env var holding the API key for the given model's provider."""
+    return "ANTHROPIC_API_KEY" if model.startswith("claude") else "OPENAI_API_KEY"
+
+
 def _step_to_time(step: int, dt_hours: float) -> str:
     """Convert step index to HH:MM string (step 0 = midnight)."""
     h = int(step * dt_hours) % 24
@@ -200,11 +205,12 @@ def run_phase_agent(
     tou: TOUConfig,
     nl_request: str,
     per_day_dir: Path,
+    model: str = BASELINE_MODEL,
 ) -> Optional[Tuple[Dict[str, object], np.ndarray]]:
     """Run agent pipeline. Returns (metrics_row, schedule) or None."""
-    if not os.environ.get("OPENAI_API_KEY", "").strip():
+    if not os.environ.get(_required_api_key(model), "").strip():
         return None
-    agent_result = run_agent(day, site, tou, request=nl_request)
+    agent_result = run_agent(day, site, tou, request=nl_request, model=model)
     check_result = check(agent_result.schedule, day, site)
     uc = charge_asap_schedule(day, float(site.get_P_max_at_step(0)))
     uc_cost = total_cost(uc, tou, day.dt_hours)
@@ -231,13 +237,14 @@ def run_phase_baseline(
     tou: TOUConfig,
     nl_request: str,
     per_day_dir: Path,
+    model: str = BASELINE_MODEL,
 ) -> Optional[Tuple[Dict[str, object], np.ndarray]]:
     """Run LLM baseline with same NL input as agent. Returns (metrics_row, schedule) or None."""
-    if not os.environ.get("OPENAI_API_KEY", "").strip():
+    if not os.environ.get(_required_api_key(model), "").strip():
         return None
     baseline_result = run_baseline(
         day=day, site=site, tou=tou,
-        model=BASELINE_MODEL,
+        model=model,
         max_completion_tokens=BASELINE_MAX_TOKENS,
         instruction=nl_request,
     )
@@ -363,6 +370,14 @@ def main() -> None:
         help="Skip agent to save API cost",
     )
     parser.add_argument(
+        "--model",
+        default=BASELINE_MODEL,
+        help=(
+            "LLM backend for both the baseline and the agent "
+            "(e.g. gpt-4o or claude-sonnet-4-6, the two backends in the paper)"
+        ),
+    )
+    parser.add_argument(
         "--dates",
         nargs="+",
         default=None,
@@ -379,8 +394,9 @@ def main() -> None:
     per_day_dir = out_dir / "per_day"
     per_day_dir.mkdir(parents=True, exist_ok=True)
 
-    if not os.environ.get("OPENAI_API_KEY", "").strip():
-        print("WARNING: OPENAI_API_KEY not set. Agent and baseline will be skipped.", file=sys.stderr)
+    key_var = _required_api_key(args.model)
+    if not os.environ.get(key_var, "").strip():
+        print(f"WARNING: {key_var} not set. Agent and baseline will be skipped.", file=sys.stderr)
     if not os.environ.get("ACN_DATA_API_TOKEN", "").strip():
         print("WARNING: ACN_DATA_API_TOKEN not set. Session loading may fail.", file=sys.stderr)
 
@@ -419,7 +435,7 @@ def main() -> None:
 
         if not args.skip_agent:
             try:
-                out = run_phase_agent(day_date, day, site, tou, nl_request, per_day_dir)
+                out = run_phase_agent(day_date, day, site, tou, nl_request, per_day_dir, model=args.model)
                 if out:
                     row, _ = out
                     all_rows.append(row)
@@ -432,7 +448,7 @@ def main() -> None:
 
         if not args.skip_baseline:
             try:
-                out = run_phase_baseline(day_date, day, site, tou, nl_request, per_day_dir)
+                out = run_phase_baseline(day_date, day, site, tou, nl_request, per_day_dir, model=args.model)
                 if out:
                     row, _ = out
                     all_rows.append(row)

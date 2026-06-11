@@ -70,6 +70,7 @@ def run_agent(
     tou: TOUConfig,
     request: str = "Minimize energy cost for this day.",
     max_retries: int = 1,
+    model: str = "gpt-4o",
 ) -> AgentResult:
     """Run the LLM agent with CVXPY solver tool.
 
@@ -80,6 +81,7 @@ def run_agent(
         request: Natural-language request sent to the LLM.
         max_retries: Passed through as max_tool_rounds; lets the LLM call the
             solver more than once if needed (default 1 → cap at 3 rounds).
+        model: LLM backend model ("gpt-4o" or "claude-sonnet-4-6" as in the paper).
 
     Returns:
         AgentResult with schedule, metrics, feasibility, and LLM explanation.
@@ -100,6 +102,7 @@ def run_agent(
         site,
         tou,
         request=request,
+        model=model,
         max_tool_rounds=max_tool_rounds,
     )
 

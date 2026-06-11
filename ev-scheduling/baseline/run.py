@@ -27,6 +27,16 @@ def _default_schedule(day: DaySessions) -> np.ndarray:
     return np.zeros((len(day.sessions), day.n_steps), dtype=float)
 
 
+_BASELINE_SYSTEM = (
+    "You output ONLY the schedule: one line per session, each line "
+    "'Session i: v0 v1 v2 ...' with exactly the number of space-separated "
+    "floats specified in the prompt (one per time step). No commentary, "
+    "no explanations. Follow the algorithm in the prompt. Ensure every "
+    "line has the correct number of values; zeros outside each session's "
+    "window, positive power inside until energy_kwh is delivered."
+)
+
+
 def run_baseline(
     day: DaySessions,
     site: SiteConfig,
@@ -66,6 +76,17 @@ def run_baseline(
             parse_error=None,
         )
 
+    # Build prompt text once; this is the only user message we send.
+    prompt_text = build_prompt(day, site, tou, instruction=instruction)
+
+    # Models named "claude-..." route to the Anthropic backend (paper §VI-B
+    # reports both a GPT-4o and a Claude Sonnet 4.6 baseline).
+    if model.startswith("claude"):
+        return _run_baseline_anthropic(
+            day, prompt_text, api_key=api_key, model=model,
+            max_completion_tokens=max_completion_tokens,
+        )
+
     # Resolve API key from argument or environment.
     key = api_key or os.environ.get("OPENAI_API_KEY")
     if not key:
@@ -75,9 +96,6 @@ def run_baseline(
             raw_response=None,
             parse_error="OPENAI_API_KEY is not set; cannot call the baseline LLM.",
         )
-
-    # Build prompt text once; this is the only user message we send.
-    prompt_text = build_prompt(day, site, tou, instruction=instruction)
 
     # Lazily import the OpenAI client so that tests without the package can still run.
     try:
@@ -100,21 +118,8 @@ def run_baseline(
         completion = client.chat.completions.create(
             model=model,
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You output ONLY the schedule: one line per session, each line "
-                        "'Session i: v0 v1 v2 ...' with exactly the number of space-separated "
-                        "floats specified in the prompt (one per time step). No commentary, "
-                        "no explanations. Follow the algorithm in the prompt. Ensure every "
-                        "line has the correct number of values; zeros outside each session's "
-                        "window, positive power inside until energy_kwh is delivered."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": prompt_text,
-                },
+                {"role": "system", "content": _BASELINE_SYSTEM},
+                {"role": "user", "content": prompt_text},
             ],
             max_tokens=max_completion_tokens,
             temperature=0.0,
@@ -138,6 +143,69 @@ def run_baseline(
     response_text = completion.choices[0].message.content or ""
 
     # Parse the LLM output into a schedule matrix.
+    parse_result: ParseResult = parse_llm_schedule(response_text, day)
+
+    return BaselineResult(
+        schedule=parse_result.schedule,
+        parse_success=parse_result.success,
+        raw_response=response_text,
+        parse_error=parse_result.error_message,
+    )
+
+
+def _run_baseline_anthropic(
+    day: DaySessions,
+    prompt_text: str,
+    *,
+    api_key: Optional[str],
+    model: str,
+    max_completion_tokens: int,
+) -> BaselineResult:
+    """Anthropic (Claude) backend for run_baseline — same prompt and parsing."""
+    key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        return BaselineResult(
+            schedule=_default_schedule(day),
+            parse_success=False,
+            raw_response=None,
+            parse_error="ANTHROPIC_API_KEY is not set; cannot call the baseline LLM.",
+        )
+
+    # Lazily import the Anthropic client so that tests without the package can still run.
+    try:
+        import anthropic  # type: ignore[import]
+    except ImportError as exc:  # pragma: no cover - environment-specific
+        return BaselineResult(
+            schedule=_default_schedule(day),
+            parse_success=False,
+            raw_response=None,
+            parse_error=(
+                "The 'anthropic' package is not installed. "
+                "Install it with 'pip install anthropic' to run the Claude baseline. "
+                f"Underlying error: {exc}"
+            ),
+        )
+
+    client = anthropic.Anthropic(api_key=key)
+
+    try:
+        response = client.messages.create(
+            model=model,
+            max_tokens=max_completion_tokens,
+            system=_BASELINE_SYSTEM,
+            messages=[{"role": "user", "content": prompt_text}],
+            temperature=0.0,
+        )
+    except Exception as exc:  # pragma: no cover - depends on network and external API
+        return BaselineResult(
+            schedule=_default_schedule(day),
+            parse_success=False,
+            raw_response=None,
+            parse_error=f"Error while calling the Anthropic API: {exc}",
+        )
+
+    response_text = "".join(b.text for b in response.content if b.type == "text")
+
     parse_result: ParseResult = parse_llm_schedule(response_text, day)
 
     return BaselineResult(

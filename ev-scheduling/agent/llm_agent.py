@@ -291,15 +291,23 @@ def run_agent_llm(
         site: SiteConfig with power cap.
         tou: TOUConfig with TOU rates.
         request: Natural-language request for the agent.
-        model: OpenAI model name.
-        api_key: OpenAI API key (falls back to OPENAI_API_KEY env var).
+        model: Model name. OpenAI models (e.g. "gpt-4o") use the Chat Completions
+            backend; names starting with "claude" (e.g. "claude-sonnet-4-6")
+            route to the Anthropic Messages backend.
+        api_key: API key for the selected provider (falls back to OPENAI_API_KEY
+            or ANTHROPIC_API_KEY depending on the model).
         max_tool_rounds: Maximum tool-call rounds before ending the loop.
 
     Returns:
         Tuple of (schedule, total_cost_usd, peak_load_kw, unmet_energy_kwh,
                   feasible, explanation).
     """
-    
+    if model.startswith("claude"):
+        return _run_agent_llm_anthropic(
+            day, site, tou, request,
+            model=model, api_key=api_key, max_tool_rounds=max_tool_rounds,
+        )
+
     key = api_key or os.environ.get("OPENAI_API_KEY", "").strip()
     if not key:
         raise ValueError(
@@ -383,6 +391,17 @@ def run_agent_llm(
         )
         explanation = (response.choices[0].message.content or "").strip()
 
+    return _finalize_agent_result(day, site, tou, last_solve_result, explanation)
+
+
+def _finalize_agent_result(
+    day: DaySessions,
+    site: SiteConfig,
+    tou: TOUConfig,
+    last_solve_result: Optional[SolveResult],
+    explanation: str,
+) -> tuple[np.ndarray, float, float, float, bool, str]:
+    """Turn the loop outcome into the public return tuple (shared by all backends)."""
     # If the LLM never called the tool there is no schedule — do not silently
     # run the solver. Return a zero schedule so the caller knows the tool was
     # not invoked and the result is not an optimised plan.
@@ -411,3 +430,110 @@ def run_agent_llm(
         explanation = generate_explanation(facts)
 
     return schedule, total_cost_usd, peak_load_kw, unmet_energy_kwh, feasible, explanation
+
+
+def _run_agent_llm_anthropic(
+    day: DaySessions,
+    site: SiteConfig,
+    tou: TOUConfig,
+    request: str,
+    *,
+    model: str,
+    api_key: Optional[str],
+    max_tool_rounds: int,
+) -> tuple[np.ndarray, float, float, float, bool, str]:
+    """Anthropic (Claude) backend for run_agent_llm — same tool loop, Messages API.
+
+    Used for the Claude Sonnet 4.6 results in the paper (§VI-B). Mirrors the
+    OpenAI loop: the model decides whether to call `solve_ev_schedule`; tool
+    results are fed back until it produces a final text turn.
+    """
+    key = api_key or os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if not key:
+        raise ValueError(
+            "ANTHROPIC_API_KEY is not set. Set it in .env or pass api_key to run_agent_llm."
+        )
+
+    try:
+        import anthropic  # type: ignore[import]
+    except ImportError as exc:
+        raise ImportError(
+            "The 'anthropic' package is not installed. "
+            "Install it with 'pip install anthropic'."
+        ) from exc
+
+    client = anthropic.Anthropic(api_key=key)
+
+    # Same JSON schema as the OpenAI tool, in Anthropic's tool format.
+    anthropic_tool = {
+        "name": _SOLVE_TOOL["function"]["name"],
+        "description": _SOLVE_TOOL["function"]["description"],
+        "input_schema": _SOLVE_TOOL["function"]["parameters"],
+    }
+
+    user_content = build_prompt_for_agent(day, site, tou, request)
+    messages: List[Dict[str, Any]] = [{"role": "user", "content": user_content}]
+
+    last_solve_result: Optional[SolveResult] = None
+    explanation: str = ""
+    tool_rounds = 0
+
+    while tool_rounds < max_tool_rounds:
+        response = client.messages.create(
+            model=model,
+            max_tokens=8192,
+            system=_build_system_message(),
+            tools=[anthropic_tool],
+            messages=messages,
+            temperature=0.0,
+        )
+
+        tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
+        if not tool_use_blocks:
+            # Final text turn — capture explanation and stop.
+            explanation = "".join(
+                b.text for b in response.content if b.type == "text"
+            ).strip()
+            break
+
+        # Append the assistant turn (including tool_use blocks).
+        messages.append({"role": "assistant", "content": response.content})
+
+        tool_results: List[Dict[str, Any]] = []
+        for block in tool_use_blocks:
+            tool_rounds += 1
+            if block.name != "solve_ev_schedule":
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": json.dumps({"error": f"Unknown tool: {block.name}"}),
+                    "is_error": True,
+                })
+                continue
+
+            args = block.input if isinstance(block.input, dict) else {}
+            solve_result, tool_result = _execute_solve(day, site, tou, args)
+            last_solve_result = solve_result
+
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": block.id,
+                "content": json.dumps(tool_result),
+            })
+
+        messages.append({"role": "user", "content": tool_results})
+
+    # If the model stopped without a text turn, do one more call for the explanation.
+    if not explanation and last_solve_result is not None:
+        response = client.messages.create(
+            model=model,
+            max_tokens=8192,
+            system=_build_system_message(),
+            messages=messages,
+            temperature=0.0,
+        )
+        explanation = "".join(
+            b.text for b in response.content if b.type == "text"
+        ).strip()
+
+    return _finalize_agent_result(day, site, tou, last_solve_result, explanation)
