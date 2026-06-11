@@ -115,6 +115,12 @@ The `parsedAffectedComponents` field drives graph highlighting.
 | Simulation | `run_power_flow`, `run_dc_power_flow`, `run_n1_contingency` |
 | Diagnostic | `check_overloads`, `check_voltage_violations`, `find_disconnected_areas` |
 
+## LLM model
+
+Both pipelines call OpenAI **`gpt-4o`** (set in `backend/agents/`): diagnosis runs
+at `temperature=0.3` and natural-language scenario generation at `temperature=0.2`.
+The evaluation results referenced below were produced with this configuration.
+
 ## Evaluation
 
 See [backend/eval/results/README.md](backend/eval/results/README.md) for evaluation results on IEEE 14-bus, 30-bus, and 57-bus networks.

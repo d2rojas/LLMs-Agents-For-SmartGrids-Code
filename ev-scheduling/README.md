@@ -58,6 +58,14 @@ OPENAI_API_KEY=your_openai_key
 
 `ACN_DATA_API_TOKEN` is needed for any script that fetches live session data. `OPENAI_API_KEY` is needed for the baseline, agent, and web GUI. Neither is committed — `.env` is gitignored.
 
+## LLM model
+
+All LLM calls — the direct-prompt baseline, every agent stage, and the web GUI —
+use OpenAI **`gpt-4o`** with `temperature=0.0` (deterministic decoding). The model
+is set in `scripts/run_agent_vs_baseline.py` (`BASELINE_MODEL`) and as the default
+of each entry point; the reference numbers in [`results/`](results/) (paper §VI-B)
+were generated with this configuration.
+
 ## Tests
 
 From the project root with the venv active:

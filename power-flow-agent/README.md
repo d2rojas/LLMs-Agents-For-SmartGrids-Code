@@ -37,6 +37,13 @@ MATPOWER IEEE 14/30/57/118-bus cases (bundled in [`data/`](data/) and
 mitigate memorization (`k = 1`, `N = 40` seeds per system). Ground truth is the
 PandaPower Newton–Raphson solution of each perturbed case.
 
+## LLM models
+The committed benchmark tables in [`benchmarks/`](benchmarks/) (paper §VI-C) were
+generated with **`openai:gpt-4o-mini`** and **`gemini:gemini-2.5-flash-lite`** —
+the defaults in `config.py`. Other providers can be swept with
+`benchmarks/evaluate_llms.py --model <provider:model>`; the Streamlit UI also
+exposes GPT-4.1 / GPT-4.1 Mini and the Gemini 3 Flash / 3.1 Pro previews.
+
 ## Metrics (three tiers; the paper reports one per tier)
 - **Tier I — state:** voltage-magnitude MAE (`V_MAE`, p.u.), V-RMSE, angle RMSE, max V error.
 - **Tier II — flow:** branch active-power MAE (`F_MAE`, MW), F-RMSE, P95 flow error, branch-loading RMSE (%).

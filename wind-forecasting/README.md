@@ -10,6 +10,15 @@ baseline. Because there is no solver, verification reduces to output-level check
 - **Advanced** — physics-informed prompt (power ∝ wind speed³, saturation, cut-in) + strict JSON schema with retries.
 - **APBF** — Advanced + **Binning** (16 ordinal levels, ~50% fewer tokens) + **Forecast** (48-h ERA5 100 m wind from Open-Meteo appended to the prompt).
 
+## LLM models
+The full model × strategy × horizon table (paper §VI-A) is swept by
+[`replication_code/run_full_table_experiments.py`](replication_code/run_full_table_experiments.py)
+over: **Gemini 3 Flash** (`gemini-3-flash-preview`), **Gemini 3 Pro**
+(`gemini-3-pro-preview`), **Claude 3.5 Haiku** (`claude-3-5-haiku-20241022`), and
+**Claude 3.5 Sonnet** (`claude-3-5-sonnet-20241022`). Single-configuration runs
+(`replicate_experiments.py`) default to `gemini-3-flash`, or
+`claude-3-haiku-20240307` with `--provider claude`.
+
 ## Data
 - **SDWPF** turbine dataset (Zhou et al., *Scientific Data* 2024). Download it and place the SCADA file as `wtbdata_245days.csv` in this folder (it is large and is **not** committed).
 - **ERA5** 100 m wind forecasts are fetched at run time from the free Open-Meteo API (no key required).
