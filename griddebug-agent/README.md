@@ -123,4 +123,17 @@ The evaluation results referenced below were produced with this configuration.
 
 ## Evaluation
 
-See [backend/eval/results/README.md](backend/eval/results/README.md) for evaluation results on IEEE 14-bus, 30-bus, and 57-bus networks.
+The agentic repair loop (diagnose → act → verify) was evaluated on 39 fault scenarios
+across three IEEE networks (13 each: non-convergence, voltage, thermal, contingency,
+normal). A scenario is *repaired* when the power flow converges after remediation with
+no more violations than before.
+
+| Network | Scenarios | Repair (%) | Violations (before → after) | Avg ReAct iters | Avg latency (s) |
+|---|---|---|---|---|---|
+| IEEE 14-bus | 13 | 100 | 48 → 1 | 7.5 | 83 |
+| IEEE 30-bus | 13 | 92.3 | 128 → 44 | 12.3 | 177 |
+| IEEE 57-bus | 13 | 61.5 | 321 → 192 | 14.7 | 236 |
+| **All** | **39** | **84.6** | **497 → 237** | **11.5** | **166** |
+
+Reproduce with `python -m eval.run_eval` (from `backend/`); it writes the full
+per-scenario tables, raw JSON, and figures to `backend/eval/results/`.
