@@ -11,28 +11,106 @@ LLM 调用核心引擎（意图解析 + Function Calling）。
 本模块对 Streamlit 无依赖：
 - 上层（app.py）可以把 st.session_state.session 传入这里
 - tool 的执行通过 ToolDispatcher 注入
+
+Revision R1 (reviewer-requested ablations)
+------------------------------------------
+``EngineConfig`` gained backward-compatible knobs so the *same* engine, tool set
+and interaction budget can be run under different agent architectures:
+
+* ``architecture``: ``"react"`` (default; thought -> tool calls -> observation,
+  repeated up to ``max_tool_rounds``), ``"single_call"`` (one LLM call with
+  tools, one tool round, one final LLM call without tools, no memory), or
+  ``"plan_act"`` (one LLM call without tools that must emit a JSON plan, the
+  plan is executed by the dispatcher with no LLM in between, one final LLM call
+  writes the answer).
+* ``max_rounds``: alias of the pre-existing ``max_tool_rounds`` cap (8 rounds,
+  as reported in the paper). Either name may be passed; they are kept in sync.
+* ``gate``: verification gate on tool payloads (see ``gate_verdict``).
+* ``memory``: whether prior ``conversation_history`` is sent to the LLM.
+
+``run()`` keeps its signature and behaviour; ``run_with_trace()`` additionally
+returns a structured per-round trace (LLM content, tool calls, truncated tool
+outputs, gate verdicts, token usage, wall-clock time).
+
+Where the verification gate lives
+---------------------------------
+The numerical checks themselves are computed in the solver layer:
+``solver/power_flow.py::run_power_flow`` (Newton-Raphson convergence; a
+non-converged solve yields a ``PowerFlowResult`` with ``converged=False`` and no
+numerical content) and ``solver/validators.py::validate_result`` (limit
+annotation plus the system-level power-balance / KCL residual check, which
+appends an advisory hint). The engine is the point where those payloads are
+forwarded to the LLM, so the switchable *enforcement* is here: with
+``gate=True`` (default) a non-converged payload that still carries numbers is
+withheld (numerical fields blanked) before the LLM sees it — a no-op for real
+PandaPower output, which is already blank — and with ``gate=False`` the payload
+is forwarded verbatim. In both cases the verdict is recorded in the trace so
+the ablation can count what the gate would have caught.
 """
 
 from __future__ import annotations
 
 import json
+import math
+import re
+import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from models.schemas import SessionState
 from llm.prompts import SYSTEM_PROMPT
-from llm.tools import ToolDispatcher, get_openai_tools
+from llm.tools import TOOLS, ToolDispatcher, get_openai_tools
+
+ARCHITECTURES = ("react", "single_call", "plan_act")
+
+# Same tolerance as solver/validators.py::ValidationConfig.balance_tol_mw
+GATE_BALANCE_TOL_MW = 0.01
+
+MAX_ROUNDS_EXCEEDED_TEXT = "工具调用轮次超过上限。请缩小问题范围或减少连续操作。"
+PLAN_UNPARSEABLE_TEXT = (
+    "Plan formulation failed: the model did not return a parseable JSON plan, "
+    "so no tools were executed and no numerical result is available."
+)
+GATE_WITHHELD_NOTE = (
+    "Verification gate: the solver result did not pass verification "
+    "(non-converged), so numerical fields were withheld."
+)
 
 
 @dataclass(frozen=True)
 class EngineConfig:
-    """LLM 引擎配置。"""
+    """LLM 引擎配置。
+
+    New fields (all defaults reproduce the pre-R1 behaviour exactly):
+
+    architecture: "react" | "single_call" | "plan_act"
+    max_rounds:   alias of ``max_tool_rounds`` (the ≤8-round cap used in the paper).
+                  Pass either; ``__post_init__`` keeps both in sync.
+    gate:         enforce the verification gate on tool payloads (default True).
+    memory:       send prior conversation history to the LLM (default True).
+                  ``single_call`` always behaves as ``memory=False``.
+    trace_output_chars: truncation length for tool outputs stored in the trace.
+    """
 
     model: str = "gpt-4o-mini"  # 默认值仅作为占位；实际运行可由 config.py/环境变量覆盖
     temperature: float = 0.2
     max_tool_rounds: int = 8
     max_history_messages: int = 40  # 约等于 20 轮（user+assistant）
     timeout_s: float = 60.0
+
+    architecture: str = "react"
+    max_rounds: Optional[int] = None
+    gate: bool = True
+    memory: bool = True
+    trace_output_chars: int = 400
+
+    def __post_init__(self) -> None:
+        if self.architecture not in ARCHITECTURES:
+            raise ValueError(f"architecture must be one of {ARCHITECTURES}, got {self.architecture!r}")
+        if self.max_rounds is None:
+            object.__setattr__(self, "max_rounds", int(self.max_tool_rounds))
+        else:
+            object.__setattr__(self, "max_tool_rounds", int(self.max_rounds))
 
 
 class LLMClient:
@@ -128,6 +206,205 @@ def _extract_choice_message(resp: Any) -> Dict[str, Any]:
     }
 
 
+def _extract_usage(resp: Any) -> Dict[str, Optional[int]]:
+    """Return {prompt_tokens, completion_tokens} from a dict or SDK response (None if absent)."""
+    usage = resp.get("usage") if isinstance(resp, dict) else getattr(resp, "usage", None)
+
+    def _read(name: str) -> Optional[int]:
+        if usage is None:
+            return None
+        val = usage.get(name) if isinstance(usage, dict) else getattr(usage, name, None)
+        try:
+            return int(val) if val is not None else None
+        except Exception:
+            return None
+
+    return {"prompt_tokens": _read("prompt_tokens"), "completion_tokens": _read("completion_tokens")}
+
+
+# ---------------------------------------------------------------------------
+# Verification gate (verdict + enforcement on tool payloads)
+# ---------------------------------------------------------------------------
+
+_PF_NUMERIC_KEYS = ("bus_voltages", "line_flows", "voltage_violations", "thermal_violations")
+_PF_TOTAL_KEYS = ("total_generation_mw", "total_load_mw", "total_loss_mw")
+
+
+def _find_pf_payload(obj: Any) -> Optional[Dict[str, Any]]:
+    """Locate a PowerFlowResult-shaped dict: top-level, or nested under 'result'."""
+    if not isinstance(obj, dict):
+        return None
+    if "converged" in obj and any(k in obj for k in _PF_TOTAL_KEYS):
+        return obj
+    nested = obj.get("result")
+    if isinstance(nested, dict) and "converged" in nested:
+        return nested
+    return None
+
+
+def _is_finite_number(x: Any) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(float(x))
+
+
+def gate_verdict(tool_output: str) -> Optional[Dict[str, Any]]:
+    """Compute the verification-gate verdict for one tool output.
+
+    Returns None when the output is not a power-flow result (e.g. load_case,
+    get_status, errors). Otherwise returns a dict with:
+      converged, power_balance_ok, mismatch_mw, carries_numbers, passed, reasons
+    where ``passed = converged and power_balance_ok``.
+    """
+    try:
+        obj = json.loads(tool_output or "")
+    except Exception:
+        return None
+    pf = _find_pf_payload(obj)
+    if pf is None:
+        return None
+
+    converged = bool(pf.get("converged"))
+    reasons: List[str] = []
+    if not converged:
+        reasons.append("not_converged")
+
+    gen, load, loss = (pf.get(k) for k in _PF_TOTAL_KEYS)
+    mismatch: Optional[float] = None
+    balance_ok = True
+    if all(_is_finite_number(v) for v in (gen, load, loss)):
+        mismatch = abs(float(gen) - (float(load) + float(loss)))
+        balance_ok = mismatch <= GATE_BALANCE_TOL_MW
+    elif converged:
+        balance_ok = False
+        reasons.append("totals_missing_or_nan")
+    if converged and mismatch is not None and not balance_ok:
+        reasons.append("power_balance_mismatch")
+
+    carries_numbers = any(bool(pf.get(k)) for k in _PF_NUMERIC_KEYS) or any(
+        _is_finite_number(pf.get(k)) and float(pf.get(k)) != 0.0 for k in _PF_TOTAL_KEYS
+    )
+
+    return {
+        "converged": converged,
+        "power_balance_ok": bool(balance_ok),
+        "mismatch_mw": mismatch,
+        "carries_numbers": bool(carries_numbers),
+        "passed": bool(converged and balance_ok),
+        "reasons": reasons,
+    }
+
+
+def _withhold_numbers(tool_output: str, verdict: Dict[str, Any]) -> str:
+    """Blank the numerical fields of a non-converged payload (gate enforcement)."""
+    obj = json.loads(tool_output)
+    pf = _find_pf_payload(obj)
+    assert pf is not None
+    for k in _PF_NUMERIC_KEYS:
+        if k in pf:
+            pf[k] = []
+    for k in _PF_TOTAL_KEYS:
+        if k in pf:
+            pf[k] = 0.0
+    pf["converged"] = False
+    pf["gate"] = {"passed": False, "reasons": list(verdict.get("reasons", [])), "note": GATE_WITHHELD_NOTE}
+    return json.dumps(obj, ensure_ascii=False, default=str)
+
+
+# ---------------------------------------------------------------------------
+# Plan-and-Act prompt + tolerant plan parser
+# ---------------------------------------------------------------------------
+
+
+def _tools_catalog_text() -> str:
+    lines = []
+    for t in TOOLS:
+        props = t.get("parameters", {}).get("properties", {}) or {}
+        req = t.get("parameters", {}).get("required", []) or []
+        params = ", ".join(f"{k}: {v.get('type', 'any')}{'*' if k in req else ''}" for k, v in props.items()) or "(none)"
+        lines.append(f"- {t['name']}({params}): {t.get('description', '')}")
+    return "\n".join(lines)
+
+
+PLAN_SYSTEM_PROMPT = (
+    "You are the planner of a power-system analysis agent. You cannot call tools yourself. "
+    "Given the user's request, output ONLY a JSON object of the form\n"
+    '{"plan": [{"tool": "<tool_name>", "args": {...}}, ...]}\n'
+    "listing, in execution order, every tool call needed to answer the request. "
+    "Use only the tools below with exactly these argument names (* = required). "
+    "Do not include explanations, markdown, or any text outside the JSON.\n\n"
+    "Available tools:\n" + _tools_catalog_text()
+)
+
+FINAL_ANSWER_INSTRUCTION = (
+    "Write the final answer for the user strictly from the tool outputs above. "
+    "Never invent numbers; if a tool reported an error or a non-converged result, say so."
+)
+
+
+def _strip_code_fences(text: str) -> str:
+    m = re.search(r"```(?:json)?\s*(.*?)```", text, flags=re.DOTALL | re.IGNORECASE)
+    return m.group(1).strip() if m else text.strip()
+
+
+def parse_plan(text: Optional[str]) -> Optional[List[Dict[str, Any]]]:
+    """Tolerant parser for a Plan-and-Act plan.
+
+    Accepts ``{"plan": [...]}``, ``{"steps": [...]}`` or a bare list, optionally
+    wrapped in code fences or surrounded by prose. Each step needs a string
+    ``tool``; ``args`` defaults to {}. Returns None if no valid plan is found.
+    """
+    if not text or not str(text).strip():
+        return None
+    raw = _strip_code_fences(str(text))
+
+    candidates: List[str] = [raw]
+    for open_ch, close_ch in (("{", "}"), ("[", "]")):
+        i, j = raw.find(open_ch), raw.rfind(close_ch)
+        if i != -1 and j > i:
+            candidates.append(raw[i : j + 1])
+
+    parsed: Any = None
+    for cand in candidates:
+        obj = _safe_json_loads(cand)
+        if obj:
+            parsed = obj
+            break
+    if parsed is None:
+        return None
+
+    steps: Any = parsed
+    if isinstance(parsed, dict):
+        steps = parsed.get("plan", parsed.get("steps"))
+        if steps is None and isinstance(parsed.get("tool"), str):
+            steps = [parsed]
+    if not isinstance(steps, list) or not steps:
+        return None
+
+    plan: List[Dict[str, Any]] = []
+    for step in steps:
+        if not isinstance(step, dict) or not isinstance(step.get("tool"), str) or not step["tool"].strip():
+            return None
+        args = step.get("args", step.get("arguments", {}))
+        if isinstance(args, str):
+            args = _safe_json_loads(args)
+        if args is None:
+            args = {}
+        if not isinstance(args, dict):
+            return None
+        plan.append({"tool": step["tool"].strip(), "args": args})
+    return plan
+
+
+# ---------------------------------------------------------------------------
+# Engine
+# ---------------------------------------------------------------------------
+
+
+class _LLMCallError(Exception):
+    def __init__(self, text: str):
+        super().__init__(text)
+        self.text = text
+
+
 class LLMEngine:
     """单模型工具调用引擎。"""
 
@@ -144,9 +421,46 @@ class LLMEngine:
         self.system_prompt = system_prompt
         self.config = config
         self._openai_tools = get_openai_tools()
+        self.last_trace: Dict[str, Any] = {}
+
+    # ------------------------------------------------------------------ public
 
     def run(self, user_message: str, session: SessionState) -> str:
         """处理一次用户输入，返回最终 assistant 文本。"""
+        text, _ = self.run_with_trace(user_message, session)
+        return text
+
+    def run_with_trace(self, user_message: str, session: SessionState) -> Tuple[str, Dict[str, Any]]:
+        """Same as run(), but also returns a structured trace dict.
+
+        Trace keys: architecture, gate, memory, max_rounds, status, final_text,
+        rounds (list; each has llm{content,tool_calls,usage,latency_s} and
+        tools[{name,arguments,output,gate,enforced,latency_s}]), plan (plan_act),
+        formulation_failure, n_llm_calls, n_tool_calls, n_tool_rounds,
+        gate_checked, gate_failed, gate_enforced, prompt_tokens,
+        completion_tokens, wall_time_s.
+        """
+        t0 = time.perf_counter()
+        trace: Dict[str, Any] = {
+            "architecture": self.config.architecture,
+            "gate": bool(self.config.gate),
+            "memory": bool(self.config.memory),
+            "max_rounds": int(self.config.max_tool_rounds),
+            "status": "ok",
+            "final_text": "",
+            "rounds": [],
+            "plan": None,
+            "formulation_failure": False,
+            "n_llm_calls": 0,
+            "n_tool_calls": 0,
+            "n_tool_rounds": 0,
+            "gate_checked": 0,
+            "gate_failed": 0,
+            "gate_enforced": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "wall_time_s": 0.0,
+        }
 
         if session.conversation_history is None:
             session.conversation_history = []
@@ -157,71 +471,269 @@ class LLMEngine:
 
         # 组装 messages
         messages: List[Dict[str, Any]] = [{"role": "system", "content": self.system_prompt}]
-        messages.extend(session.conversation_history)
+        use_memory = self.config.memory and self.config.architecture != "single_call"
+        if use_memory:
+            messages.extend(session.conversation_history)
         messages.append({"role": "user", "content": user_message})
 
         # 在 session 中记录 user
         session.conversation_history.append({"role": "user", "content": user_message})
 
+        arch = self.config.architecture
+        if arch == "react":
+            text = self._run_react(messages, session, trace)
+        elif arch == "single_call":
+            text = self._run_single_call(messages, session, trace)
+        else:
+            text = self._run_plan_act(user_message, messages, session, trace)
+
+        trace["final_text"] = text
+        trace["wall_time_s"] = time.perf_counter() - t0
+        self.last_trace = trace
+        return text, trace
+
+    # --------------------------------------------------------------- internals
+
+    def _call_llm(
+        self,
+        messages: List[Dict[str, Any]],
+        *,
+        with_tools: bool,
+        trace: Dict[str, Any],
+        round_rec: Dict[str, Any],
+        system_override: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        kwargs: Dict[str, Any] = dict(
+            model=self.config.model,
+            messages=messages if system_override is None else [{"role": "system", "content": system_override}] + messages[1:],
+            temperature=self.config.temperature,
+            timeout=self.config.timeout_s,
+        )
+        if with_tools:
+            kwargs["tools"] = self._openai_tools
+            kwargs["tool_choice"] = "auto"
+
+        t0 = time.perf_counter()
+        trace["n_llm_calls"] += 1
+        try:
+            resp = self.client.create(**kwargs)
+        except Exception as e:
+            round_rec["llm"] = {"error": f"{type(e).__name__}: {e}", "latency_s": time.perf_counter() - t0}
+            raise _LLMCallError(f"LLM request failed: {type(e).__name__}: {e}")
+
+        msg = _extract_choice_message(resp)
+        usage = _extract_usage(resp)
+        for k in ("prompt_tokens", "completion_tokens"):
+            if usage.get(k) is not None:
+                trace[k] += int(usage[k])
+        round_rec["llm"] = {
+            "content": msg.get("content"),
+            "tool_calls": [{"id": tc["id"], "name": tc["name"], "arguments": tc["arguments"]} for tc in msg.get("tool_calls") or []],
+            "usage": usage,
+            "with_tools": with_tools,
+            "latency_s": time.perf_counter() - t0,
+        }
+        return msg
+
+    @staticmethod
+    def _assistant_entry(msg: Dict[str, Any]) -> Dict[str, Any]:
+        entry: Dict[str, Any] = {"role": "assistant", "content": msg.get("content")}
+        # 若存在 tool_calls，需要把 tool_calls 也记录进 history（OpenAI 格式）
+        if msg.get("tool_calls"):
+            entry["tool_calls"] = [
+                {
+                    "id": tc["id"],
+                    "type": "function",
+                    "function": {"name": tc["name"], "arguments": tc["arguments"]},
+                }
+                for tc in msg["tool_calls"]
+            ]
+        return entry
+
+    def _execute_tool_calls(
+        self,
+        tool_calls: List[Dict[str, Any]],
+        messages: List[Dict[str, Any]],
+        session: SessionState,
+        trace: Dict[str, Any],
+        round_rec: Dict[str, Any],
+    ) -> None:
+        """Dispatch each tool call, apply the gate, append tool messages, record trace."""
+        tools_rec: List[Dict[str, Any]] = round_rec.setdefault("tools", [])
+        for tc in tool_calls:
+            tool_name = tc.get("name")
+            args_str = tc.get("arguments", "{}")
+            args = _safe_json_loads(args_str) if isinstance(args_str, str) else dict(args_str or {})
+
+            t0 = time.perf_counter()
+            tool_output = self.dispatcher.dispatch(tool_name, args)
+            latency = time.perf_counter() - t0
+            trace["n_tool_calls"] += 1
+
+            verdict = gate_verdict(tool_output)
+            enforced = False
+            if verdict is not None:
+                trace["gate_checked"] += 1
+                if not verdict["passed"]:
+                    trace["gate_failed"] += 1
+                if self.config.gate and not verdict["converged"] and verdict["carries_numbers"]:
+                    tool_output = _withhold_numbers(tool_output, verdict)
+                    enforced = True
+                    trace["gate_enforced"] += 1
+
+            tools_rec.append(
+                {
+                    "id": tc.get("id"),
+                    "name": tool_name,
+                    "arguments": args,
+                    "output": tool_output[: self.config.trace_output_chars],
+                    "output_chars": len(tool_output),
+                    "gate": verdict,
+                    "enforced": enforced,
+                    "latency_s": latency,
+                }
+            )
+
+            tool_msg = {
+                "role": "tool",
+                "tool_call_id": tc.get("id"),
+                "name": tool_name,
+                "content": tool_output,
+            }
+            session.conversation_history.append(tool_msg)
+            messages.append(tool_msg)
+
+    def _finish(self, text: str, session: SessionState, trace: Dict[str, Any], status: str) -> str:
+        session.conversation_history.append({"role": "assistant", "content": text})
+        trace["status"] = status
+        return text
+
+    # ---- react (identical to the pre-R1 loop) ---------------------------------
+
+    def _run_react(self, messages: List[Dict[str, Any]], session: SessionState, trace: Dict[str, Any]) -> str:
         tool_round = 0
         while True:
             if tool_round >= self.config.max_tool_rounds:
-                final_text = "工具调用轮次超过上限。请缩小问题范围或减少连续操作。"
-                session.conversation_history.append({"role": "assistant", "content": final_text})
-                return final_text
+                return self._finish(MAX_ROUNDS_EXCEEDED_TEXT, session, trace, "max_rounds")
 
+            round_rec: Dict[str, Any] = {"round": tool_round + 1}
+            trace["rounds"].append(round_rec)
             try:
-                resp = self.client.create(
-                    model=self.config.model,
-                    messages=messages,
-                    tools=self._openai_tools,
-                    tool_choice="auto",
-                    temperature=self.config.temperature,
-                    timeout=self.config.timeout_s,
-                )
-            except Exception as e:
-                err_text = f"LLM request failed: {type(e).__name__}: {e}"
-                session.conversation_history.append({"role": "assistant", "content": err_text})
-                return err_text
+                msg = self._call_llm(messages, with_tools=True, trace=trace, round_rec=round_rec)
+            except _LLMCallError as e:
+                return self._finish(e.text, session, trace, "llm_error")
 
-            msg = _extract_choice_message(resp)
-            assistant_entry: Dict[str, Any] = {
-                "role": "assistant",
-                "content": msg.get("content"),
-            }
-            # 若存在 tool_calls，需要把 tool_calls 也记录进 history（OpenAI 格式）
-            if msg.get("tool_calls"):
-                assistant_entry["tool_calls"] = [
-                    {
-                        "id": tc["id"],
-                        "type": "function",
-                        "function": {"name": tc["name"], "arguments": tc["arguments"]},
-                    }
-                    for tc in msg["tool_calls"]
-                ]
-
+            assistant_entry = self._assistant_entry(msg)
             session.conversation_history.append(assistant_entry)
             messages.append(assistant_entry)
 
             tool_calls = msg.get("tool_calls") or []
             if not tool_calls:
                 final_text = (msg.get("content") or "").strip()
+                trace["status"] = "ok"
                 return final_text
 
             # 执行工具
-            for tc in tool_calls:
-                tool_name = tc.get("name")
-                args_str = tc.get("arguments", "{}")
-                args = _safe_json_loads(args_str)
-
-                tool_output = self.dispatcher.dispatch(tool_name, args)
-                tool_msg = {
-                    "role": "tool",
-                    "tool_call_id": tc.get("id"),
-                    "name": tool_name,
-                    "content": tool_output,
-                }
-                session.conversation_history.append(tool_msg)
-                messages.append(tool_msg)
-
+            self._execute_tool_calls(tool_calls, messages, session, trace, round_rec)
             tool_round += 1
+            trace["n_tool_rounds"] = tool_round
+
+    # ---- single_call ------------------------------------------------------------
+
+    def _run_single_call(self, messages: List[Dict[str, Any]], session: SessionState, trace: Dict[str, Any]) -> str:
+        round_rec: Dict[str, Any] = {"round": 1}
+        trace["rounds"].append(round_rec)
+        try:
+            msg = self._call_llm(messages, with_tools=True, trace=trace, round_rec=round_rec)
+        except _LLMCallError as e:
+            return self._finish(e.text, session, trace, "llm_error")
+
+        assistant_entry = self._assistant_entry(msg)
+        session.conversation_history.append(assistant_entry)
+        messages.append(assistant_entry)
+
+        tool_calls = msg.get("tool_calls") or []
+        if not tool_calls:
+            # The model answered directly; nothing to ground, no second call needed.
+            trace["status"] = "ok"
+            return (msg.get("content") or "").strip()
+
+        self._execute_tool_calls(tool_calls, messages, session, trace, round_rec)
+        trace["n_tool_rounds"] = 1
+
+        # Exactly one final call, without tool definitions. Any tool_calls it
+        # returns are ignored (no further tool rounds by construction).
+        final_rec: Dict[str, Any] = {"round": 2, "final": True}
+        trace["rounds"].append(final_rec)
+        messages.append({"role": "user", "content": FINAL_ANSWER_INSTRUCTION})
+        try:
+            final_msg = self._call_llm(messages, with_tools=False, trace=trace, round_rec=final_rec)
+        except _LLMCallError as e:
+            return self._finish(e.text, session, trace, "llm_error")
+        text = (final_msg.get("content") or "").strip()
+        if not text:
+            text = "The model returned no final answer text after the tool round."
+            return self._finish(text, session, trace, "empty_final")
+        return self._finish(text, session, trace, "ok")
+
+    # ---- plan_act ---------------------------------------------------------------
+
+    def _run_plan_act(
+        self,
+        user_message: str,
+        messages: List[Dict[str, Any]],
+        session: SessionState,
+        trace: Dict[str, Any],
+    ) -> str:
+        # 1) Planning call: no tools, strict JSON plan.
+        plan_rec: Dict[str, Any] = {"round": 1, "phase": "plan"}
+        trace["rounds"].append(plan_rec)
+        try:
+            plan_msg = self._call_llm(
+                messages, with_tools=False, trace=trace, round_rec=plan_rec, system_override=PLAN_SYSTEM_PROMPT
+            )
+        except _LLMCallError as e:
+            return self._finish(e.text, session, trace, "llm_error")
+
+        plan = parse_plan(plan_msg.get("content"))
+        if plan is None:
+            trace["formulation_failure"] = True
+            trace["plan"] = None
+            plan_rec["plan_raw"] = plan_msg.get("content")
+            session.conversation_history.append({"role": "assistant", "content": plan_msg.get("content")})
+            return self._finish(PLAN_UNPARSEABLE_TEXT, session, trace, "plan_unparseable")
+
+        if len(plan) > self.config.max_tool_rounds:
+            trace["plan_truncated"] = len(plan) - self.config.max_tool_rounds
+            plan = plan[: self.config.max_tool_rounds]
+        trace["plan"] = plan
+
+        # 2) Act: execute the plan through the dispatcher, no LLM in between.
+        #    Represented as one synthetic assistant tool_calls entry so the
+        #    transcript stays valid OpenAI format for the final call.
+        synthetic_calls = [
+            {"id": f"plan_step_{i + 1}", "name": step["tool"], "arguments": json.dumps(step["args"], ensure_ascii=False)}
+            for i, step in enumerate(plan)
+        ]
+        assistant_entry = self._assistant_entry({"content": plan_msg.get("content"), "tool_calls": synthetic_calls})
+        session.conversation_history.append(assistant_entry)
+        messages.append(assistant_entry)
+
+        act_rec: Dict[str, Any] = {"round": 2, "phase": "act"}
+        trace["rounds"].append(act_rec)
+        self._execute_tool_calls(synthetic_calls, messages, session, trace, act_rec)
+        trace["n_tool_rounds"] = 1
+
+        # 3) Final call: write the answer from the outputs, no tools.
+        final_rec: Dict[str, Any] = {"round": 3, "phase": "answer", "final": True}
+        trace["rounds"].append(final_rec)
+        messages.append({"role": "user", "content": FINAL_ANSWER_INSTRUCTION})
+        try:
+            final_msg = self._call_llm(messages, with_tools=False, trace=trace, round_rec=final_rec)
+        except _LLMCallError as e:
+            return self._finish(e.text, session, trace, "llm_error")
+        text = (final_msg.get("content") or "").strip()
+        if not text:
+            text = "The model returned no final answer text after executing the plan."
+            return self._finish(text, session, trace, "empty_final")
+        return self._finish(text, session, trace, "ok")
