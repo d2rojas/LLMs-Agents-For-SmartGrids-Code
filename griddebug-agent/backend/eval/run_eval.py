@@ -5,7 +5,8 @@ Runs both baseline and agentic pipelines on all scenarios,
 capturing all metrics in one pass:
 - Latency (both pipelines)
 - Component predictions (both pipelines)
-- Fix success (agentic only)
+- Fix success (agentic only, legacy definition)
+- Repaired / improved / feasible (paper definitions, see eval/metrics.py)
 - Ground truth for comparison
 """
 import os
@@ -42,6 +43,7 @@ from scenarios import (
 )
 from agents.baseline import BaselineAgent
 from agents.iterative_debugger import IterativeDebuggerAgent
+from eval import metrics
 
 
 # Scenario definitions
@@ -203,6 +205,17 @@ def run_eval(network: str = "case14"):
                 "confidence": baseline_structured.get("confidence", "") if baseline_structured else "",
                 "response": baseline_result.get("response", ""),
             }
+            # The baseline is diagnosis-only (never mutates the network), so its
+            # repair metrics describe the untreated initial state.
+            baseline_record = {
+                "initial_converged": initial_converged,
+                "initial_violations": initial_violations["total"],
+                "final_converged": initial_converged,
+                "final_violations": initial_violations["total"],
+            }
+            result["baseline"]["repaired"] = metrics.repaired(baseline_record)
+            result["baseline"]["improved"] = metrics.improved(baseline_record)
+            result["baseline"]["feasible"] = metrics.feasible(baseline_record)
             print(f"{baseline_latency:.0f}ms")
 
             # --- AGENTIC PIPELINE ---
@@ -221,9 +234,17 @@ def run_eval(network: str = "case14"):
             tool_calls = len(fix_history)
             react_iterations = len(set(h["iteration"] for h in fix_history)) if fix_history else 0
 
-            # Determine fix success
+            # Determine fix success (legacy definition, kept for backward comparison)
             violations_decreased = final_violations["total"] <= initial_violations["total"]
             fix_success = final_converged and (violations_decreased or initial_violations["total"] == 0)
+
+            # Paper definitions (Rep. / Imp. / Feas.), see eval/metrics.py
+            agentic_record = {
+                "initial_converged": initial_converged,
+                "initial_violations": initial_violations["total"],
+                "final_converged": final_converged,
+                "final_violations": final_violations["total"],
+            }
 
             result["agentic"] = {
                 "latency_ms": round(agentic_latency, 1),
@@ -232,6 +253,9 @@ def run_eval(network: str = "case14"):
                 "final_converged": final_converged,
                 "final_violations": final_violations,
                 "fix_success": fix_success,
+                "repaired": metrics.repaired(agentic_record),
+                "improved": metrics.improved(agentic_record),
+                "feasible": metrics.feasible(agentic_record),
                 "fix_history": fix_history,
                 "initial_diagnosis": agentic_result.get("initial_diagnosis"),
                 "final_state": agentic_result.get("final_state"),
@@ -240,8 +264,16 @@ def run_eval(network: str = "case14"):
                 "failure_category": agentic_result.get("failure_category", ""),
             }
 
-            status = "FIXED" if fix_success else "NOT FIXED"
-            print(f"{agentic_latency:.0f}ms, {react_iterations} react, {tool_calls} tools, {status}")
+            if result["agentic"]["repaired"]:
+                status = "REPAIRED"
+            elif result["agentic"]["improved"]:
+                status = "IMPROVED"
+            elif result["agentic"]["feasible"]:
+                status = "FEASIBLE (converged, violations not reduced)"
+            else:
+                status = "NOT CONVERGED"
+            legacy = "fixed" if fix_success else "not fixed"
+            print(f"{agentic_latency:.0f}ms, {react_iterations} react, {tool_calls} tools, {status} [legacy: {legacy}]")
 
         except Exception as e:
             print(f"    ERROR: {e}")
@@ -257,6 +289,8 @@ def run_eval(network: str = "case14"):
     output = {
         "network": network,
         "timestamp": datetime.now().isoformat(),
+        "definitions": metrics.DEFINITIONS,
+        "summary": metrics.summarize_all(results),
         "scenarios": results,
     }
 
@@ -275,7 +309,7 @@ def run_eval(network: str = "case14"):
 
 
 def print_summary(results: list):
-    """Print evaluation summary."""
+    """Print evaluation summary (paper table layout: Method x network)."""
     print("\n" + "="*70)
     print("SUMMARY")
     print("="*70 + "\n")
@@ -291,42 +325,55 @@ def print_summary(results: list):
         print(f"Agentic Latency:   avg={sum(agentic_latencies)/len(agentic_latencies):.0f}ms, "
               f"min={min(agentic_latencies):.0f}ms, max={max(agentic_latencies):.0f}ms")
 
-    # Fix success rate
-    agentic_results = [r for r in results if "agentic" in r]
-    fix_successes = sum(1 for r in agentic_results if r["agentic"].get("fix_success", False))
-    if agentic_results:
-        print(f"\nFix Success Rate:  {fix_successes}/{len(agentic_results)} "
-              f"({fix_successes/len(agentic_results)*100:.1f}%)")
+    # Paper table: Rep. / Imp. / Feas. / violations / tool calls for both methods
+    summaries = metrics.summarize_all(results)
+    print("\nRepair metrics (paper definitions):\n")
+    print(metrics.format_table(summaries))
+
+    # Legacy fix success rate (README "Repair (%)" column)
+    agentic = summaries["agentic"]["overall"]
+    if agentic["n"]:
+        print(f"\nLegacy fix_success rate (agentic):  {agentic['fix_success']['count']}/{agentic['n']} "
+              f"({agentic['fix_success']['pct']:.1f}%)")
     else:
-        print("\nFix Success Rate:  No agentic results")
+        print("\nLegacy fix_success rate (agentic):  No agentic results")
 
-    # By category
-    categories = {}
-    for r in results:
-        cat = r.get("category", "unknown")
-        if cat not in categories:
-            categories[cat] = {"total": 0, "fix_success": 0}
-        categories[cat]["total"] += 1
-        if "agentic" in r and r["agentic"].get("fix_success", False):
-            categories[cat]["fix_success"] += 1
-
-    print("\nBy Category:")
-    for cat, stats in sorted(categories.items()):
-        rate = stats["fix_success"] / stats["total"] * 100 if stats["total"] > 0 else 0
-        print(f"  {cat}: {stats['fix_success']}/{stats['total']} ({rate:.0f}%)")
+    # By category (agentic arm)
+    print("\nBy Category (agentic): repaired / improved / feasible / n")
+    for cat, stats in sorted(summaries["agentic"]["per_category"].items()):
+        print(f"  {cat}: {stats['repaired']['count']} / {stats['improved']['count']} / "
+              f"{stats['feasible']['count']} / {stats['n']}")
 
 
-def generate_report(results_path: str = None):
-    """Generate markdown report from saved results."""
+def generate_report(results_path=None):
+    """Generate markdown report from saved results (no API calls).
+
+    ``results_path`` may be one path or a list of paths (one per network); the
+    paper table is then aggregated across all of them.
+    """
     if results_path is None:
         results_path = Path(__file__).parent / "results" / "full_eval_case14.json"
+    paths = [results_path] if isinstance(results_path, (str, Path)) else list(results_path)
 
-    with open(results_path) as f:
-        data = json.load(f)
+    scenarios = []
+    for path in paths:
+        with open(path) as f:
+            data = json.load(f)
+        print("\n# Evaluation Results\n")
+        print(f"Network: {data['network']}")
+        print(f"Timestamp: {data['timestamp']}\n")
+        _print_per_scenario_tables(data)
+        for s in data["scenarios"]:
+            s.setdefault("network", data.get("network"))
+        scenarios.extend(data["scenarios"])
 
-    print("\n# Evaluation Results\n")
-    print(f"Network: {data['network']}")
-    print(f"Timestamp: {data['timestamp']}\n")
+    # Paper table (Method x network), aggregated across all input files
+    print("\n## Repair Metrics (paper definitions)\n")
+    print(metrics.format_table(metrics.summarize_all(scenarios)))
+
+
+def _print_per_scenario_tables(data: dict):
+    """Per-scenario latency and repair tables for one network's JSON."""
 
     # Latency table
     print("## Latency Comparison\n")
@@ -341,20 +388,19 @@ def generate_report(results_path: str = None):
         speedup = f"{baseline_ms/agentic_ms:.2f}x" if agentic_ms > 0 else "N/A"
         print(f"| {r['scenario_id']} | {r['category']} | {baseline_ms:.0f} | {agentic_ms:.0f} | {speedup} |")
 
-    # Fix success table
-    print("\n## Fix Success Rate (Agentic Only)\n")
-    print("| Scenario | Category | Initial Conv | Final Conv | Violations | Success |")
-    print("|----------|----------|--------------|------------|------------|---------|")
+    # Repair table (paper definitions + legacy fix_success)
+    print("\n## Repair Outcome per Scenario (Agentic Only)\n")
+    print("| Scenario | Category | Initial Conv | Final Conv | Violations | Rep. | Imp. | Feas. | Legacy fix_success |")
+    print("|----------|----------|--------------|------------|------------|------|------|-------|--------------------|")
 
     for r in data["scenarios"]:
-        if "error" in r or "agentic" not in r or "initial_state" not in r:
+        rec = metrics.to_record(r, "agentic")
+        if rec is None:
             continue
-        init_conv = r["initial_state"]["converged"]
-        final_conv = r["agentic"].get("final_converged", False)
-        init_viol = r["initial_state"]["violations"].get("total", 0)
-        final_viol = r["agentic"].get("final_violations", {}).get("total", 0)
-        success = "Yes" if r["agentic"].get("fix_success", False) else "No"
-        print(f"| {r['scenario_id']} | {r['category']} | {init_conv} | {final_conv} | {init_viol}->{final_viol} | {success} |")
+        yn = lambda b: "Yes" if b else "No"
+        print(f"| {r['scenario_id']} | {r['category']} | {rec['initial_converged']} | {rec['final_converged']} | "
+              f"{rec['initial_violations']}->{rec['final_violations']} | {yn(metrics.repaired(rec))} | "
+              f"{yn(metrics.improved(rec))} | {yn(metrics.feasible(rec))} | {yn(rec['fix_success'])} |")
 
     # Summary stats
     results = data["scenarios"]
@@ -369,7 +415,7 @@ def generate_report(results_path: str = None):
     if agentic_latencies:
         print(f"- **Agentic avg latency:** {sum(agentic_latencies)/len(agentic_latencies):.0f}ms")
     if total > 0:
-        print(f"- **Fix success rate:** {fix_successes}/{total} ({fix_successes/total*100:.1f}%)")
+        print(f"- **Legacy fix_success rate:** {fix_successes}/{total} ({fix_successes/total*100:.1f}%)")
 
 
 if __name__ == "__main__":
@@ -377,11 +423,19 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Run full evaluation")
     parser.add_argument("--network", default="case14", help="Network to evaluate on")
-    parser.add_argument("--report", action="store_true", help="Generate report from saved results")
+    parser.add_argument("--report", action="store_true",
+                        help="Generate report from saved results for --network (no API calls)")
+    parser.add_argument("--report-only", nargs="+", metavar="PATH",
+                        help="Regenerate the paper table from one or more existing "
+                             "full_eval_<network>.json files without running anything")
 
     args = parser.parse_args()
 
-    if args.report:
-        generate_report()
+    if args.report_only:
+        generate_report(args.report_only)
+    elif args.report:
+        generate_report(Path(__file__).parent / "results" / f"full_eval_{args.network}.json")
     else:
+        # Both methods (LLM-only baseline and GridDebugAgent) run in the same
+        # pass on identical scenarios, so one table covers both.
         run_eval(network=args.network)

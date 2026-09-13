@@ -33,6 +33,17 @@ DEFAULT_FIELDS = [
     "total_tokens_mean",
     "cost_usd_mean",
     "cost_usd_total",
+    # R1 additions (None for reports written before the revision)
+    "n_items",
+    "formulation_exact_rate",
+    "faithful_numbers_mean",
+    "safe_failure_rate",
+    "claimed_success_on_failure_rate",
+    "converged_rate",
+    "n_llm_calls_mean",
+    "n_tool_calls_mean",
+    "n_tool_rounds_mean",
+    "wall_time_s_mean",
 ]
 
 
@@ -83,6 +94,9 @@ def _flatten_scoreboard(report: dict[str, Any], report_label: str) -> list[dict[
             out[k] = row.get(k)
         out["cases"] = ",".join(config.get("cases", [])) if isinstance(config.get("cases"), list) else config.get("cases")
         out["runs"] = config.get("runs")
+        out["k"] = config.get("k")
+        out["seeds"] = len(config["seeds"]) if isinstance(config.get("seeds"), list) else config.get("seeds")
+        out["max_rounds"] = config.get("max_rounds")
         out["temperature"] = config.get("temperature")
         out["timeout_s"] = config.get("timeout_s")
         rows.append(out)
