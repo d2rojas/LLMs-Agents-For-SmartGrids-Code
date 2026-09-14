@@ -67,7 +67,10 @@ ARCHITECTURES = ("react", "single_call", "plan_act")
 GATE_BALANCE_TOL_MW = 0.01          # absolute floor, MW
 GATE_BALANCE_REL_TOL = 1e-4         # relative to total load: 0.01 percent (case118 base case sits at 0.004 percent)
 
-MAX_ROUNDS_EXCEEDED_TEXT = "工具调用轮次超过上限。请缩小问题范围或减少连续操作。"
+MAX_ROUNDS_EXCEEDED_TEXT = (
+    "The tool-call round limit was reached before an answer could be verified. "
+    "No numerical result is reported. Narrow the request or split it into fewer consecutive operations."
+)
 PLAN_UNPARSEABLE_TEXT = (
     "Plan formulation failed: the model did not return a parseable JSON plan, "
     "so no tools were executed and no numerical result is available."
