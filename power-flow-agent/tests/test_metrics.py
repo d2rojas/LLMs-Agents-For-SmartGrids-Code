@@ -1,4 +1,4 @@
-"""Formulation / faithfulness / failure-reporting metrics on hand-built traces and answers.
+"""Formulation / faithfulness / failure-reporting / stale-state metrics on hand-built traces and answers.
 
 Pure functions: no network, no API keys, no solver.
 """
@@ -23,6 +23,7 @@ from benchmarks.metrics import (
     normalize_call,
     numbers_in_text,
     rate,
+    stale_state_check,
     tool_outputs_from_trace,
 )
 
@@ -232,3 +233,124 @@ def test_cost_from_trace_and_rate_helpers():
     assert rate([None, None]) == {"rate": None, "count": 0, "total": 0}
     counts = error_type_counts(["ok", "ok", "wrong_id", None, "unparsed"])
     assert counts["ok"] == 2 and counts["wrong_id"] == 1 and counts["unparsed"] == 1 and counts["missed_step"] == 0
+
+
+# ----------------------------------------------------------------------------- stale state
+
+
+def _seq_trace(*steps):
+    """Engine-like trace from ``(tool_name, arguments, output_obj)`` steps, one per round."""
+    rounds = []
+    for i, (name, args, out) in enumerate(steps):
+        rounds.append({"round": i + 1, "tools": [{"id": f"c{i}", "name": name, "arguments": args, "output": json.dumps(out)}]})
+    return {"rounds": rounds, "n_tool_calls": len(steps), "n_tool_rounds": len(steps)}
+
+
+def _pf(load, loss, vm, loading):
+    return {
+        "case_name": "case14",
+        "converged": True,
+        "total_generation_mw": round(load + loss, 3),
+        "total_load_mw": load,
+        "total_loss_mw": loss,
+        "bus_voltages": [{"bus_id": 9, "vm_pu": vm, "va_degree": -14.9}],
+        "line_flows": [{"line_id": 3, "from_bus": 4, "to_bus": 5, "p_from_mw": 61.2, "loading_percent": loading}],
+        "voltage_violations": [],
+        "thermal_violations": [],
+    }
+
+
+PF_BEFORE = _pf(259.0, 13.4, 1.0563, 72.1)
+PF_AFTER = _pf(300.0, 16.9, 1.0212, 88.4)
+CASE_INFO = {"case_name": "case14", "n_buses": 14, "n_lines": 20, "total_load_mw": 259.0}
+LOAD = ("load_case", {"case_name": "case14"}, CASE_INFO)
+BASE_SOLVE = ("run_powerflow", {}, PF_BEFORE)
+MUTATE_SOLVED = ("modify_load", {"bus_id": 9, "p_mw": 70.0}, PF_AFTER)
+MUTATE_UNSOLVED = ("modify_load", {"bus_id": 9, "p_mw": 70.0}, {"ok": True})  # no PowerFlowResult in the output
+REQUEST = "Set the load at bus 9 to 70 MW and report bus 9 voltage, total load and losses."
+ANSWER_NEW = "After the change bus 9 is at 1.0212 pu; total load 300.0 MW, losses 16.9 MW, line 4-5 at 88.4 %."
+ANSWER_OLD = "Bus 9 is at 1.0563 pu; total load 259.0 MW, losses 13.4 MW, line 4-5 at 72.1 %."
+
+
+def test_stale_state_mutation_then_rerun_quoting_latest_is_not_stale():
+    out = stale_state_check(_seq_trace(LOAD, BASE_SOLVE, MUTATE_SOLVED, ("run_powerflow", {}, PF_AFTER)), ANSWER_NEW, request_text=REQUEST)
+    assert out["has_mutation"] is True and out["n_mutations"] == 1
+    assert out["stale_state"] is False and out["stale_state_no_rerun"] is False and out["stale_state_quoted_old"] is False
+    assert out["last_mutation_index"] == 2 and out["last_mutation_tool"] == "modify_load"
+    assert out["prior_result_indices"] == [1] and out["resolve_indices_after"] == [2, 3]
+    assert out["n_numbers_new_only"] == 4 and out["n_numbers_old_only"] == 0
+    # the mutating tool re-solves itself: its own output is the post-mutation solve
+    own = stale_state_check(_seq_trace(LOAD, BASE_SOLVE, MUTATE_SOLVED), ANSWER_NEW, request_text=REQUEST)
+    assert own["stale_state"] is False and own["resolve_indices_after"] == [2]
+
+
+def test_stale_state_no_rerun_with_numeric_answer():
+    out = stale_state_check(_seq_trace(LOAD, BASE_SOLVE, MUTATE_UNSOLVED), ANSWER_OLD, request_text=REQUEST)
+    assert out["stale_state"] is True and out["stale_state_no_rerun"] is True and out["stale_state_quoted_old"] is False
+    assert out["resolve_indices_after"] == [] and out["prior_result_indices"] == [1]
+    assert out["n_answer_numbers"] == 4 and "never followed by a solve" in out["detail"]
+    # numbers that only echo the request do not count as reported results
+    echo = stale_state_check(_seq_trace(LOAD, BASE_SOLVE, MUTATE_UNSOLVED), "Load at bus 9 set to 70 MW.", request_text=REQUEST)
+    assert echo["stale_state"] is False and echo["n_answer_numbers"] == 0
+
+
+def test_stale_state_rerun_but_answer_quotes_pre_mutation_numbers():
+    trace = _seq_trace(LOAD, BASE_SOLVE, MUTATE_SOLVED, ("run_powerflow", {}, PF_AFTER))
+    out = stale_state_check(trace, ANSWER_OLD, request_text=REQUEST)
+    assert out["stale_state"] is True and out["stale_state_quoted_old"] is True and out["stale_state_no_rerun"] is False
+    assert out["n_numbers_old_only"] == 4 and out["n_numbers_new_only"] == 0
+    assert out["old_only"] == ["1.0563 pu", "259.0 MW", "13.4 MW", "72.1 %"]
+    assert out["prior_result_indices"] == [1] and out["resolve_indices_after"] == [2, 3]
+    # a before/after comparison quotes both states: not stale
+    both = stale_state_check(trace, "Bus 9 went from 1.0563 pu to 1.0212 pu; load 259.0 MW -> 300.0 MW.", request_text=REQUEST)
+    assert both["stale_state"] is False and both["n_numbers_old_only"] == 2 and both["n_numbers_new_only"] == 2
+    # within tolerance (1e-3 p.u., 1 % relative) still counts as the old value
+    tol = stale_state_check(trace, "Bus 9 at 1.0559 pu, losses 13.5 MW.", request_text=REQUEST)
+    assert tol["stale_state_quoted_old"] is True
+    # gate-withheld re-solve (numbers blanked) + quoting the pre-mutation result is stale too
+    withheld = dict(PF_AFTER, converged=False, bus_voltages=[], line_flows=[], total_generation_mw=0.0, total_load_mw=0.0, total_loss_mw=0.0)
+    gated = stale_state_check(_seq_trace(LOAD, BASE_SOLVE, ("modify_load", {"bus_id": 9, "p_mw": 70.0}, withheld)), ANSWER_OLD, request_text=REQUEST)
+    assert gated["stale_state_quoted_old"] is True and gated["resolve_indices_after"] == [2]
+
+
+def test_stale_state_no_rerun_but_answer_reports_no_numbers_is_not_stale():
+    out = stale_state_check(
+        _seq_trace(LOAD, BASE_SOLVE, MUTATE_UNSOLVED),
+        "I modified the load at bus 9 but could not compute the new power flow, so no updated voltages are available.",
+        request_text=REQUEST,
+    )
+    assert out["has_mutation"] is True
+    assert out["stale_state"] is False and out["stale_state_no_rerun"] is False and out["stale_state_quoted_old"] is False
+    assert out["n_answer_numbers"] == 0
+
+
+def test_stale_state_without_mutation_is_not_applicable():
+    out = stale_state_check(_seq_trace(LOAD, BASE_SOLVE), ANSWER_OLD, request_text=REQUEST)
+    assert out["has_mutation"] is False and out["n_mutations"] == 0
+    assert out["stale_state"] is None and out["stale_state_no_rerun"] is None and out["stale_state_quoted_old"] is None
+    assert stale_state_check(None, ANSWER_OLD)["stale_state"] is None and stale_state_check({}, "")["has_mutation"] is False
+    assert rate([out["stale_state"]]) == {"rate": None, "count": 0, "total": 0}
+
+
+def test_stale_state_ignores_failed_or_unconfirmed_mutations_and_resets_on_load_case():
+    # error / need_confirmation payloads are returned before the network is touched
+    err = ("disconnect_line", {"from_bus": 1, "to_bus": 99}, {"error": "No branch found between bus 1 and bus 99"})
+    ask = ("apply_remedial_action", {"action_index": 1}, {"need_confirmation": True, "action_index": 1})
+    out = stale_state_check(_seq_trace(LOAD, BASE_SOLVE, err, ask), ANSWER_OLD, request_text=REQUEST)
+    assert out["has_mutation"] is False and out["stale_state"] is None
+    # a confirmed apply_remedial_action nests the new result under "result" and counts as its own re-solve
+    applied = ("apply_remedial_action", {"action_index": 1, "confirmed": True}, {"applied": True, "result": PF_AFTER})
+    ok = stale_state_check(_seq_trace(LOAD, BASE_SOLVE, ("recommend_remedial_actions", {}, {"remedial_plan": {}}), applied), ANSWER_NEW)
+    assert ok["has_mutation"] and ok["last_mutation_tool"] == "apply_remedial_action" and ok["stale_state"] is False
+    stale = stale_state_check(_seq_trace(LOAD, BASE_SOLVE, ("recommend_remedial_actions", {}, {"remedial_plan": {}}), applied), ANSWER_OLD)
+    assert stale["stale_state_quoted_old"] is True
+    # reloading the case after a mutation starts from a fresh network
+    reset = stale_state_check(_seq_trace(LOAD, BASE_SOLVE, MUTATE_UNSOLVED, LOAD, BASE_SOLVE), ANSWER_OLD, request_text=REQUEST)
+    assert reset["has_mutation"] is False and reset["stale_state"] is None and reset["n_mutations"] == 1
+    # the engine's gate verdict marks a power-flow output even if the stored output was truncated
+    truncated = {"rounds": [{"round": 1, "tools": [
+        {"name": "run_powerflow", "arguments": {}, "output": json.dumps(PF_BEFORE), "gate": None},
+        {"name": "modify_load", "arguments": {"bus_id": 9, "p_mw": 70.0}, "output": json.dumps(PF_AFTER)[:60], "gate": {"converged": True, "passed": True, "carries_numbers": True}},
+    ]}]}
+    assert stale_state_check(truncated, ANSWER_OLD, request_text=REQUEST)["stale_state_quoted_old"] is True
+    assert stale_state_check(truncated, "Bus 9 now at 1.0212 pu.", request_text=REQUEST)["stale_state"] is False

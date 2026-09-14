@@ -35,6 +35,26 @@ safe_failure
 claimed_success_on_failure
     Same failure condition, but the answer asserts success or reports
     unit-bearing numbers without acknowledging the failure.
+stale_state
+    The agent changed the network (``MUTATING_TOOLS``) and then reported
+    power-flow numbers that do not come from a solve of the changed network.
+    Computed from the trace only, over the tool calls in execution order; a
+    ``load_case`` after a mutation resets the state (fresh network). Mutating
+    calls that returned an ``error`` / ``need_confirmation`` payload did not
+    change the network and are ignored. A "re-solve" is any tool output that
+    carries a PowerFlowResult payload (``RESOLVING_TOOLS``; in PFAgent every
+    mutating tool re-solves and returns the new result itself, so its own
+    output counts as the re-solve).
+    ``stale_state_no_rerun``: there is a mutation in effect, no re-solve at or
+    after the last mutation, and the answer reports numbers (numbers merely
+    echoing the request are ignored, as in ``faithful_numbers``).
+    ``stale_state_quoted_old``: a re-solve did happen after the last mutation,
+    but at least one answer number matches only a power-flow output produced
+    *before* the mutation and none matches only the post-mutation output(s),
+    with the ``faithful_numbers`` tolerances. Answers that quote both (a
+    before/after comparison) are not stale.
+    ``stale_state`` is either flag. All three are ``None`` when no mutation is
+    in effect at answer time (n/a), so rates are over items with a mutation.
 """
 
 from __future__ import annotations
@@ -58,6 +78,11 @@ FORMULATION_ERROR_TYPES: Tuple[str, ...] = (
 RECOMPUTING_TOOLS: frozenset[str] = frozenset({"modify_load", "disconnect_line", "reconnect_line", "run_powerflow"})
 # Read-only tools that never change the network state; extra calls are benign.
 BENIGN_EXTRA_TOOLS: frozenset[str] = frozenset({"run_powerflow", "get_status"})
+# Tools that change the network (stale_state); each also re-solves and returns the
+# new PowerFlowResult (apply_remedial_action nests it under "result").
+MUTATING_TOOLS: frozenset[str] = frozenset({"modify_load", "disconnect_line", "reconnect_line", "apply_remedial_action"})
+# Tools whose successful output carries a PowerFlowResult, i.e. a solve of the current network.
+RESOLVING_TOOLS: frozenset[str] = MUTATING_TOOLS | {"run_powerflow"}
 ID_ARGS: frozenset[str] = frozenset({"bus_id", "from_bus", "to_bus", "case_name"})
 
 VOLTAGE_ABS_TOL = 1e-3
@@ -454,6 +479,15 @@ def _matches(value: float, kind: str, candidates: Sequence[float]) -> bool:
     return False
 
 
+def _request_number_candidates(request_text: Optional[str]) -> List[float]:
+    """Numbers that merely echo the request (thresholds, requested setpoints, ids)."""
+    if not request_text:
+        return []
+    cands = [n["value"] for n in numbers_in_text(request_text)]
+    cands.extend(float(m.group(0)) for m in re.finditer(r"\d+(?:\.\d+)?", str(request_text)))
+    return cands
+
+
 def faithful_numbers(
     answer_text: Optional[str],
     tool_outputs: Iterable[Any],
@@ -467,9 +501,7 @@ def faithful_numbers(
     """
     numbers = numbers_in_text(answer_text)
     candidates = numbers_in_tool_outputs(tool_outputs)
-    if request_text:
-        candidates.extend(n["value"] for n in numbers_in_text(request_text))
-        candidates.extend(float(m.group(0)) for m in re.finditer(r"\d+(?:\.\d+)?", str(request_text)))
+    candidates.extend(_request_number_candidates(request_text))
     if not numbers:
         return {"faithful_numbers": None, "n_numbers": 0, "n_untraceable_numbers": 0, "untraceable": []}
     untraceable = [n for n in numbers if not _matches(n["value"], n["kind"], candidates)]
@@ -527,6 +559,184 @@ def failure_reporting(
         "claimed_success_on_failure": bool(not said_failure and (claims_success or reports_numbers)),
         "said_failure": said_failure,
     }
+
+
+# --------------------------------------------------------------------------- stale state
+
+_PF_NUMERIC_KEYS: Tuple[str, ...] = ("bus_voltages", "line_flows", "voltage_violations", "thermal_violations")
+_PF_TOTAL_KEYS: Tuple[str, ...] = ("total_generation_mw", "total_load_mw", "total_loss_mw")
+_PF_CONVERGED_RE = re.compile(r'"converged"\s*:\s*(true|false)', flags=re.IGNORECASE)
+_ERROR_HEAD_RE = re.compile(r'\s*\{\s*"(?:error|need_confirmation)"')
+
+
+def _tool_records_from_trace(trace: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Flattened tool records (name, arguments, output, gate) in execution order.
+
+    Indices into this list are the same as those of ``executed_calls_from_trace``.
+    """
+    recs: List[Dict[str, Any]] = []
+    for rnd in (trace or {}).get("rounds") or []:
+        for tc in rnd.get("tools") or []:
+            recs.append(tc)
+    return recs
+
+
+def _parse_output(output: Any) -> Any:
+    if isinstance(output, (dict, list)):
+        return output
+    if output is None:
+        return None
+    try:
+        return json.loads(str(output))
+    except Exception:
+        return None
+
+
+def _find_pf_payload(obj: Any) -> Optional[Dict[str, Any]]:
+    """PowerFlowResult-shaped dict: top level, or nested under ``result`` (apply_remedial_action)."""
+    if not isinstance(obj, dict):
+        return None
+    if "converged" in obj and any(k in obj for k in _PF_TOTAL_KEYS + _PF_NUMERIC_KEYS):
+        return obj
+    nested = obj.get("result")
+    if isinstance(nested, dict) and "converged" in nested:
+        return nested
+    return None
+
+
+def _is_resolve(record: Dict[str, Any]) -> bool:
+    """Does this tool record carry a PowerFlowResult (a solve of the network as it then was)?
+
+    Prefers the engine's gate verdict when recorded; otherwise inspects the
+    output JSON, with a regex fallback for truncated payloads of RESOLVING_TOOLS.
+    """
+    gate = record.get("gate")
+    if isinstance(gate, dict) and "converged" in gate:
+        return True
+    output = record.get("output")
+    obj = _parse_output(output)
+    if _find_pf_payload(obj) is not None:
+        return True
+    if obj is None and output is not None and str(record.get("name")) in RESOLVING_TOOLS:
+        return bool(_PF_CONVERGED_RE.search(str(output)))
+    return False
+
+
+def _mutation_applied(record: Dict[str, Any]) -> bool:
+    """A MUTATING_TOOLS call that actually changed the network.
+
+    ``error`` (unknown bus/line, disabled in LLM-only mode, ...) and
+    ``need_confirmation`` payloads are returned before the network is touched.
+    """
+    name = str(record.get("name") or "")
+    if name not in MUTATING_TOOLS:
+        return False
+    output = record.get("output")
+    obj = _parse_output(output)
+    if isinstance(obj, dict):
+        if obj.get("error") or obj.get("need_confirmation"):
+            return False
+        return True
+    if obj is None and output is not None and _ERROR_HEAD_RE.match(str(output)):
+        return False
+    return True
+
+
+def stale_state_check(
+    trace: Optional[Dict[str, Any]],
+    answer_text: Optional[str],
+    *,
+    request_text: Optional[str] = None,
+) -> Dict[str, Any]:
+    """``stale_state`` / ``stale_state_no_rerun`` / ``stale_state_quoted_old`` for one item.
+
+    See the module docstring for the definition. Indices in the result refer to
+    the flattened tool-call order (same as ``executed_calls_from_trace``).
+    ``prior_result_indices`` are the power-flow outputs before the last mutation,
+    ``resolve_indices_after`` those at/after it (the mutation's own result
+    included when it carries one).
+    """
+    records = _tool_records_from_trace(trace)
+    last_mut: Optional[int] = None
+    n_mutations = 0
+    for i, rec in enumerate(records):
+        if str(rec.get("name") or "") == "load_case":
+            last_mut = None  # fresh network: earlier mutations no longer matter
+        elif _mutation_applied(rec):
+            last_mut = i
+            n_mutations += 1
+
+    numbers = numbers_in_text(answer_text)
+    echo = _request_number_candidates(request_text)
+    if echo:
+        numbers = [n for n in numbers if not _matches(n["value"], n["kind"], echo)]
+
+    out: Dict[str, Any] = {
+        "has_mutation": last_mut is not None,
+        "n_mutations": n_mutations,
+        "stale_state": None,
+        "stale_state_no_rerun": None,
+        "stale_state_quoted_old": None,
+        "last_mutation_index": last_mut,
+        "last_mutation_tool": None,
+        "last_mutation_args": None,
+        "resolve_indices_after": [],
+        "prior_result_indices": [],
+        "n_answer_numbers": len(numbers),
+        "n_numbers_old_only": 0,
+        "n_numbers_new_only": 0,
+        "old_only": [],
+        "detail": "no network mutation in effect",
+    }
+    if last_mut is None:
+        return out
+
+    mut = records[last_mut]
+    out["last_mutation_tool"] = mut.get("name")
+    out["last_mutation_args"] = mut.get("arguments")
+    resolves_after = [i for i in range(last_mut, len(records)) if _is_resolve(records[i])]
+    prior = [i for i in range(last_mut) if _is_resolve(records[i])]
+    out["resolve_indices_after"] = resolves_after
+    out["prior_result_indices"] = prior
+
+    if not resolves_after:
+        no_rerun = bool(numbers)
+        out.update(
+            {
+                "stale_state": no_rerun,
+                "stale_state_no_rerun": no_rerun,
+                "stale_state_quoted_old": False,
+                "detail": (
+                    f"{mut.get('name')} at call {last_mut} was never followed by a solve; answer reports {len(numbers)} number(s)"
+                    if no_rerun
+                    else f"{mut.get('name')} at call {last_mut} was never followed by a solve; answer reports no numbers"
+                ),
+            }
+        )
+        return out
+
+    latest = numbers_in_tool_outputs([records[i].get("output") for i in resolves_after])
+    old = numbers_in_tool_outputs([records[i].get("output") for i in prior])
+    old_only = [n for n in numbers if _matches(n["value"], n["kind"], old) and not _matches(n["value"], n["kind"], latest)]
+    new_only = [n for n in numbers if _matches(n["value"], n["kind"], latest) and not _matches(n["value"], n["kind"], old)]
+    quoted_old = bool(old_only) and not new_only
+    out.update(
+        {
+            "stale_state": quoted_old,
+            "stale_state_no_rerun": False,
+            "stale_state_quoted_old": quoted_old,
+            "n_numbers_old_only": len(old_only),
+            "n_numbers_new_only": len(new_only),
+            "old_only": [n["text"] for n in old_only][:20],
+            "detail": (
+                f"answer quotes {len(old_only)} number(s) from pre-mutation output(s) {prior} "
+                f"and none from post-mutation solve(s) {resolves_after}"
+                if quoted_old
+                else f"re-solved at {resolves_after} after {mut.get('name')} at call {last_mut}"
+            ),
+        }
+    )
+    return out
 
 
 # --------------------------------------------------------------------------- cost

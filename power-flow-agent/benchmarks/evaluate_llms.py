@@ -26,7 +26,8 @@ Revision R1
 * Metrics per item (see ``benchmarks/metrics.py``): ``formulation_exact`` and
   ``formulation_error_type``, Tier I-III numbers vs the perturbed ground truth,
   ``faithful_numbers`` / ``n_untraceable_numbers``, ``safe_failure``,
-  ``claimed_success_on_failure`` and cost (LLM calls, tool calls, rounds, tokens,
+  ``claimed_success_on_failure``, ``stale_state`` (``_no_rerun`` / ``_quoted_old``)
+  and cost (LLM calls, tool calls, rounds, tokens,
   wall time, USD).
 
 Cost estimation is pricing-table driven. Update PRICE_BOOK_USD_PER_1M or pass
@@ -97,6 +98,15 @@ EXTENDED_SCOREBOARD_FIELDS = [
     "claimed_success_on_failure_rate",
     "claimed_success_on_failure_count",
     "claimed_success_on_failure_total",
+    "stale_state_rate",
+    "stale_state_count",
+    "stale_state_total",
+    "stale_state_no_rerun_rate",
+    "stale_state_no_rerun_count",
+    "stale_state_no_rerun_total",
+    "stale_state_quoted_old_rate",
+    "stale_state_quoted_old_count",
+    "stale_state_quoted_old_total",
     "converged_rate",
     "kcl_mean_mismatch_mw_mean",
     "power_balance_error_mean",
@@ -891,6 +901,7 @@ def evaluate_item(
         final_converged=final_converged,
         gate_failed=int((trace or {}).get("gate_failed") or 0),
     )
+    stale = bm.stale_state_check(trace, raw_text, request_text=item.text)
     cost = bm.cost_from_trace(trace)
     cost_usd = _estimate_cost_usd(model_spec.key, usage, pricing) if method.uses_llm else 0.0
 
@@ -933,6 +944,15 @@ def evaluate_item(
         "is_failure": failure["is_failure"],
         "safe_failure": failure["safe_failure"],
         "claimed_success_on_failure": failure["claimed_success_on_failure"],
+        "has_mutation": stale["has_mutation"],
+        "stale_state": stale["stale_state"],
+        "stale_state_no_rerun": stale["stale_state_no_rerun"],
+        "stale_state_quoted_old": stale["stale_state_quoted_old"],
+        "stale_state_detail": stale["detail"],
+        "stale_state_trace": {
+            k: stale[k]
+            for k in ("last_mutation_index", "last_mutation_tool", "last_mutation_args", "prior_result_indices", "resolve_indices_after", "old_only")
+        },
         **cost,
         "trace": _truncate_trace(trace, TRACE_OUTPUT_CHARS_REPORT),
     }
@@ -946,6 +966,9 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
     form = bm.rate([r.get("formulation_exact") for r in rows])
     safe = bm.rate([r.get("safe_failure") for r in rows])
     claimed = bm.rate([r.get("claimed_success_on_failure") for r in rows])
+    stale = bm.rate([r.get("stale_state") for r in rows])
+    stale_no_rerun = bm.rate([r.get("stale_state_no_rerun") for r in rows])
+    stale_quoted_old = bm.rate([r.get("stale_state_quoted_old") for r in rows])
     scoreboard = {
         "success_rate": float(len(ok_rows) / len(rows)) if rows else 0.0,
         "voltage_mae_mean": _safe_mean([(r.get("metrics") or {}).get("voltage_mae") for r in ok_rows]),
@@ -975,6 +998,15 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "claimed_success_on_failure_rate": claimed["rate"],
         "claimed_success_on_failure_count": claimed["count"],
         "claimed_success_on_failure_total": claimed["total"],
+        "stale_state_rate": stale["rate"],
+        "stale_state_count": stale["count"],
+        "stale_state_total": stale["total"],
+        "stale_state_no_rerun_rate": stale_no_rerun["rate"],
+        "stale_state_no_rerun_count": stale_no_rerun["count"],
+        "stale_state_no_rerun_total": stale_no_rerun["total"],
+        "stale_state_quoted_old_rate": stale_quoted_old["rate"],
+        "stale_state_quoted_old_count": stale_quoted_old["count"],
+        "stale_state_quoted_old_total": stale_quoted_old["total"],
         "converged_rate": bm.rate([r.get("final_converged") for r in rows])["rate"],
         "kcl_mean_mismatch_mw_mean": _safe_mean([(r.get("metrics") or {}).get("kcl_mean_mismatch_mw") for r in ok_rows]),
         "power_balance_error_mean": _safe_mean([(r.get("metrics") or {}).get("power_balance_error") for r in ok_rows]),
@@ -1036,6 +1068,9 @@ _MD_COLUMNS = [
     ("faithful_numbers", lambda r: _fmt(r.get("faithful_numbers_mean"))),
     ("safe_failure", lambda r: _rate_cell(r, "safe_failure")),
     ("claimed_success_on_failure", lambda r: _rate_cell(r, "claimed_success_on_failure")),
+    ("stale_state", lambda r: _rate_cell(r, "stale_state")),
+    ("stale_no_rerun", lambda r: _rate_cell(r, "stale_state_no_rerun")),
+    ("stale_quoted_old", lambda r: _rate_cell(r, "stale_state_quoted_old")),
     ("llm_calls", lambda r: _fmt(r.get("n_llm_calls_mean"))),
     ("tool_calls", lambda r: _fmt(r.get("n_tool_calls_mean"))),
     ("wall_s", lambda r: _fmt(r.get("wall_time_s_mean"))),

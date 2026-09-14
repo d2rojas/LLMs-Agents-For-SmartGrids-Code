@@ -96,22 +96,37 @@ class _CaseFacts:
         return tuple(sorted(b for b, p in self.base_load_mw.items() if p > 0.0))
 
 
-def _connected_without(n_nodes: int, edges: list[tuple[int, int]], skip: int) -> bool:
+def _n_components(n_nodes: int, edges: list[tuple[int, int]], skip: int = -1) -> int:
     adj: dict[int, set[int]] = {i: set() for i in range(n_nodes)}
     for j, (a, b) in enumerate(edges):
         if j == skip:
             continue
         adj[a].add(b)
         adj[b].add(a)
-    seen = {0}
-    stack = [0]
-    while stack:
-        u = stack.pop()
-        for v in adj[u]:
-            if v not in seen:
-                seen.add(v)
-                stack.append(v)
-    return len(seen) == n_nodes
+    seen: set[int] = set()
+    comps = 0
+    for start in range(n_nodes):
+        if start in seen:
+            continue
+        comps += 1
+        seen.add(start)
+        stack = [start]
+        while stack:
+            u = stack.pop()
+            for v in adj[u]:
+                if v not in seen:
+                    seen.add(v)
+                    stack.append(v)
+    return comps
+
+
+def _connected_without(n_nodes: int, edges: list[tuple[int, int]], skip: int) -> bool:
+    """True if removing edge `skip` does not split the grid further than it already is.
+
+    Some MATPOWER cases (case118 as loaded here) contain more than one connected
+    component in the base graph, so requiring full connectivity would leave no safe line.
+    """
+    return _n_components(n_nodes, edges, skip) == _n_components(n_nodes, edges)
 
 
 def _case_facts(case_name: str) -> _CaseFacts:
