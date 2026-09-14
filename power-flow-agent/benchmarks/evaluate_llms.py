@@ -57,6 +57,7 @@ from config import GEMINI_API_KEY, GEMINI_MODEL, OPENAI_API_KEY, OPENAI_MODEL
 from benchmarks import metrics as bm
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_OUT_DIR = "benchmarks/results"
 DEFAULT_MAX_ROUNDS = 8
 DEFAULT_K = 1
@@ -454,11 +455,20 @@ def _resolve_api_key(provider: str) -> str:
         return str(OPENAI_API_KEY or os.getenv("OPENAI_API_KEY") or "").strip()
     if p == "gemini":
         return str(GEMINI_API_KEY or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip()
+    if p == "openrouter":
+        # OpenRouter exposes OpenAI, Anthropic and Google models behind one OpenAI-compatible API.
+        # Model ids carry the vendor prefix, e.g. openrouter:openai/gpt-4o-mini, openrouter:anthropic/claude-sonnet-4.
+        return str(os.getenv("OPENROUTER_API_KEY") or "").strip()
     raise ValueError(f"Unsupported provider: {provider}")
 
 
 def _resolve_base_url(provider: str) -> Optional[str]:
-    return GEMINI_BASE_URL if str(provider).strip().lower() == "gemini" else None
+    p = str(provider).strip().lower()
+    if p == "gemini":
+        return GEMINI_BASE_URL
+    if p == "openrouter":
+        return os.getenv("OPENROUTER_BASE_URL") or OPENROUTER_BASE_URL
+    return None
 
 
 def _default_client_factory(spec: ModelSpec) -> Any:
