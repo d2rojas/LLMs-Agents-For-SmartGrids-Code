@@ -941,6 +941,9 @@ def evaluate_item(
         final_converged=False if item.expected_outcome != "converged" else final_converged,
         metrics=metrics,
         answer_text=raw_text,
+        truth_answer=getattr(item, "truth_answer", None) or (getattr(getattr(item, "request", None), "ground_truth", None) or {}).get("answer"),
+        expected_outcome=item.expected_outcome,
+        declared_failure=failure.get("safe_failure"),
     )
     stale = bm.stale_state_check(trace, raw_text, request_text=item.text)
     cost = bm.cost_from_trace(trace)

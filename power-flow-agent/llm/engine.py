@@ -64,7 +64,8 @@ from llm.tools import TOOLS, ToolDispatcher, get_openai_tools
 ARCHITECTURES = ("react", "single_call", "plan_act")
 
 # Same tolerance as solver/validators.py::ValidationConfig.balance_tol_mw
-GATE_BALANCE_TOL_MW = 0.01
+GATE_BALANCE_TOL_MW = 0.01          # absolute floor, MW
+GATE_BALANCE_REL_TOL = 1e-4         # relative to total load: 0.01 percent (case118 base case sits at 0.004 percent)
 
 MAX_ROUNDS_EXCEEDED_TEXT = "工具调用轮次超过上限。请缩小问题范围或减少连续操作。"
 PLAN_UNPARSEABLE_TEXT = (
@@ -272,7 +273,7 @@ def gate_verdict(tool_output: str) -> Optional[Dict[str, Any]]:
     balance_ok = True
     if all(_is_finite_number(v) for v in (gen, load, loss)):
         mismatch = abs(float(gen) - (float(load) + float(loss)))
-        balance_ok = mismatch <= GATE_BALANCE_TOL_MW
+        balance_ok = mismatch <= max(GATE_BALANCE_TOL_MW, GATE_BALANCE_REL_TOL * abs(float(load)))
     elif converged:
         balance_ok = False
         reasons.append("totals_missing_or_nan")

@@ -396,3 +396,15 @@ def test_gate_enforces_on_islanded_payload_not_only_nonconverged():
     assert (True and not v["passed"] and v["carries_numbers"]) is True
     withheld = _json.loads(_withhold_numbers(out, v))
     assert withheld["bus_voltages"] == [] and withheld["gate"]["isolated_buses"] == [8]
+
+
+def test_gate_balance_tolerance_is_relative_for_large_systems():
+    """case118-sized totals with a 0.18 MW mismatch (0.004 percent) must pass; 1 percent must fail."""
+    import json as _json
+    from llm.engine import gate_verdict
+    base = {"converged": True, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.0, "va_deg": 0.0}], "line_flows": [],
+            "total_load_mw": 4242.0, "total_loss_mw": 132.684}
+    ok = dict(base, total_generation_mw=4242.0 + 132.684 + 0.179)
+    bad = dict(base, total_generation_mw=4242.0 + 132.684 + 42.0)
+    assert gate_verdict(_json.dumps(ok))["passed"] is True
+    assert gate_verdict(_json.dumps(bad))["passed"] is False
