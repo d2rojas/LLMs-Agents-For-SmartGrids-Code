@@ -125,7 +125,9 @@ def test_missing_methods_are_dashes(reports_dir, tmp_path):
     for i, r in enumerate(_data_rows(tex)):
         by_label.setdefault((i // 4 if i < 8 else 2, r[1]), r[2:])
     llm_only_structured = _data_rows(tex)[0][2:]
-    assert llm_only_structured == [MISSING] * len(COLUMNS)
+    expected = [MISSING] * len(COLUMNS)
+    expected[[c.name for c in COLUMNS].index("Calls")] = "n/a"  # LLM-only has no tools
+    assert llm_only_structured == expected
     for label in ("ReAct", "Plan-and-Act", "PFAgent: ReAct + gate"):
         assert by_label[(2, label)] == [MISSING] * len(COLUMNS)
 
@@ -148,7 +150,7 @@ def test_number_formatting_and_weighting(reports_dir, tmp_path):
     rule = rows[8]
     assert rule[1] == "Rule-based parser, no LLM"
     assert rule[2 + 2] == "0"  # V_MAE exactly zero
-    assert rule[2 + 9] == "0"  # tokens exactly zero, as in the skeleton
+    assert rule[2 + 9] == "n/a"  # no LLM, so tokens are not applicable
     assert rule[2 + 10] == "0.1"
 
 

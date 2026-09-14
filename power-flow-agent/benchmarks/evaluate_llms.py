@@ -40,6 +40,7 @@ import argparse
 import copy
 import csv
 import json
+import re
 import os
 import sys
 import time
@@ -729,8 +730,13 @@ def evaluate_item(
     pricing: dict[str, dict[str, float]],
     solver_config: Any,
     max_rounds: int = DEFAULT_MAX_ROUNDS,
+    full_trace_dir: Optional[Path] = None,
 ) -> dict[str, Any]:
-    """Evaluate one method on one item; returns a JSON-serializable result row."""
+    """Evaluate one method on one item; returns a JSON-serializable result row.
+
+    When ``full_trace_dir`` is given, the untruncated trace, the final answer and the request are
+    also written to ``<full_trace_dir>/<method>/<case>/<request_id>_run<k>.json`` for qualitative analysis.
+    """
     from baselines.llm_only import baseline_parsed_from_result
     from llm.tools import ToolContext
     from models.schemas import SessionState
@@ -819,9 +825,9 @@ def evaluate_item(
                 msgs = build_messages(method.strategy, "single_call", item.text, ctx.net, item.case_name)
                 system_prompt, user_message = msgs[0]["content"], msgs[1]["content"]
             else:
-                from llm.prompts import SYSTEM_PROMPT
+                from llm.prompts import SYSTEM_PROMPT_EN
 
-                system_prompt, user_message = SYSTEM_PROMPT, item.text
+                system_prompt, user_message = SYSTEM_PROMPT_EN, item.text
             cfg = EngineConfig(
                 model=model_spec.model,
                 temperature=float(temperature),
@@ -914,6 +920,30 @@ def evaluate_item(
     stale = bm.stale_state_check(trace, raw_text, request_text=item.text)
     cost = bm.cost_from_trace(trace)
     cost_usd = _estimate_cost_usd(model_spec.key, usage, pricing) if method.uses_llm else 0.0
+
+    if full_trace_dir is not None:
+        try:
+            _loc = locals()
+            _tr = _loc.get("trace")
+            _payload = {
+                "method": method.name,
+                "model": model_spec.key,
+                "case_name": item.case_name,
+                "request_id": item.request_id,
+                "seed": item.seed,
+                "run": run_idx,
+                "difficulty": getattr(item, "difficulty", None),
+                "request_text": item.text,
+                "intended_calls": getattr(item, "intended_calls", None),
+                "executed_calls": _loc.get("executed"),
+                "answer": _loc.get("raw_text"),
+                "trace": _tr,
+            }
+            _dir = Path(full_trace_dir) / re.sub(r"[^A-Za-z0-9_.-]+", "_", method.name) / str(item.case_name)
+            _dir.mkdir(parents=True, exist_ok=True)
+            _write_json(_dir / f"{item.request_id or 'default'}_run{run_idx}.json", _payload)
+        except Exception as _e:  # never let logging break a run
+            print(f"[trace-dump] skipped: {_e}")
 
     return {
         "model": model_spec.key,
@@ -1137,6 +1167,7 @@ def run_benchmark(
     max_rounds: int = DEFAULT_MAX_ROUNDS,
     client_factory: Optional[Callable[[ModelSpec], Any]] = None,
     verbose: bool = True,
+    full_trace_dir: Optional[Path] = None,
 ) -> dict[str, Any]:
     """Run every (model, method, case, seed, item, run) and aggregate.
 
@@ -1190,6 +1221,7 @@ def run_benchmark(
                                     pricing=pricing,
                                     solver_config=solver_config,
                                     max_rounds=max_rounds,
+                                    full_trace_dir=full_trace_dir,
                                 )
                             )
 
@@ -1305,6 +1337,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--timeout-s", dest="timeout_s", type=float, default=90.0)
     parser.add_argument("--pricing-file", dest="pricing_file", default=None)
     parser.add_argument("--out-dir", dest="out_dir", default=DEFAULT_OUT_DIR)
+    parser.add_argument("--trace-dir", dest="trace_dir", default=None, help="directory for untruncated per-item traces (default: <out-dir>/traces)")
+    parser.add_argument("--no-traces", dest="no_traces", action="store_true", help="do not write per-item trace files")
     parser.add_argument("--quiet", dest="quiet", action="store_true")
 
     args = parser.parse_args(argv)
@@ -1356,6 +1390,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         difficulties=args.difficulties or None,
         max_rounds=int(args.max_rounds),
         verbose=not args.quiet,
+        full_trace_dir=None if args.no_traces else Path(args.trace_dir or (Path(args.out_dir) / "traces")),
     )
 
     write_report(Path(args.out_dir), report)

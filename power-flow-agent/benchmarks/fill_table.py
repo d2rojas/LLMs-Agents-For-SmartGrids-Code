@@ -290,6 +290,12 @@ def render_rows(agg: dict[str, dict[str, Any]], gated_baselines: bool = False) -
             stats = agg.get(key) if key else None
             mapping.append((setting.split(" (")[0], label, key if stats else MISSING))
             cells = [format_cell(stats.get(c.name) if stats else None, c.fmt) for c in COLUMNS]
+            # capabilities the method does not have are n/a, not 0 (LLM-only has no tools; rule-based has no LLM)
+            names = [c.name for c in COLUMNS]
+            if str(key).startswith("llm_only:"):
+                cells[names.index("Calls")] = "n/a"
+            if key == "rule_based":
+                cells[names.index("Tok.")] = "n/a"
             lead = rf"\multirow{{{len(rows)}}}{{*}}{{{setting}}}" if i == 0 else ""
             lines.append(f"{lead} & {label} & " + " & ".join(cells) + r" \\")
     return "\n".join(lines) + "\n", mapping

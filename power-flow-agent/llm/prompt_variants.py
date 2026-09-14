@@ -26,7 +26,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from baselines.llm_only import build_baseline_prompt
 from baselines.prompts_baseline import BASELINE_PROMPT_TEMPLATE, BASELINE_SYSTEM_PROMPT
-from llm.prompts import SYSTEM_PROMPT
+from llm.prompts import SYSTEM_PROMPT_EN as SYSTEM_PROMPT
 from llm.tools import TOOLS
 
 STRATEGIES: Tuple[str, ...] = ("structured", "few_shot", "cot", "rag")
