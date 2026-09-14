@@ -14,12 +14,15 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from benchmarks.metrics import (
     FORMULATION_ERROR_TYPES,
+    TOOL_SCHEMA,
     cost_from_trace,
     error_type_counts,
     executed_calls_from_trace,
     failure_reporting,
     faithful_numbers,
     formulation_check,
+    formulation_check_strict,
+    formulation_exact_strict,
     normalize_call,
     numbers_in_text,
     rate,
@@ -135,9 +138,190 @@ def test_preloaded_case_makes_leading_load_case_optional():
 def test_n1_default_arguments_are_acceptable():
     intended = [_c("load_case", case_name="case14"), _c("run_n1_contingency")]
     ok = formulation_check(intended, [_c("load_case", case_name="case14"), _c("run_n1_contingency", top_k=5, criteria="max_violations")])
-    assert ok["formulation_exact"]
-    bad = formulation_check(intended, [_c("load_case", case_name="case14"), _c("run_n1_contingency", top_k=3)])
-    assert bad["formulation_error_type"] == "wrong_unit_or_value"
+    assert ok["formulation_exact"] and ok["formulation_exact_strict"]
+    # R6: "report the worst single outage" leaves top_k unspecified -> any schema-valid value is fine
+    # (the strict comparator used to flag this as wrong_unit_or_value; that verdict is kept alongside)
+    free = formulation_check(intended, [_c("load_case", case_name="case14"), _c("run_n1_contingency", top_k=3)])
+    assert free["formulation_exact"] is True and free["formulation_error_type"] == "ok"
+    assert free["formulation_exact_strict"] is False and free["formulation_error_type_strict"] == "wrong_unit_or_value"
+    assert formulation_exact_strict(intended, [_c("load_case", case_name="case14"), _c("run_n1_contingency", top_k=3)]) is False
+
+
+# ----------------------------------------------------------------------------- calibrated comparator rules
+
+LOAD30 = _c("load_case", case_name="case30")
+N1_FREE = [LOAD30, _c("run_n1_contingency")]  # "run an N-1 analysis and report the worst single outage"
+N1_PINNED = [LOAD30, _c("run_n1_contingency", top_k=3, criteria="min_voltage")]  # "... ranked by min voltage ... 3 worst"
+
+
+def test_tool_schema_mirrors_llm_tools():
+    from llm.tools import TOOLS
+
+    assert {t["name"] for t in TOOLS} == set(TOOL_SCHEMA)
+    for t in TOOLS:
+        mine = TOOL_SCHEMA[t["name"]]
+        theirs = t["parameters"]
+        assert set(mine["properties"]) == set(theirs.get("properties", {}))
+        assert set(mine["required"]) == set(theirs.get("required", []))
+        for name, spec in theirs.get("properties", {}).items():
+            for field in ("type", "enum", "default"):
+                if field in spec:
+                    assert mine["properties"][name][field] == spec[field], (t["name"], name, field)
+
+
+def test_rule_unpinned_optional_accepts_any_schema_valid_value():
+    for k in (1, 3, "1", 2.0):
+        out = formulation_check(N1_FREE, [LOAD30, _c("run_n1_contingency", top_k=k)])
+        assert out["formulation_exact"] is True and out["formulation_error_type"] == "ok", (k, out)
+        assert out["formulation_exact_strict"] is False
+    # a named criterion or a candidate cap that the request did not pin is also free
+    out = formulation_check(N1_FREE, [LOAD30, _c("run_n1_contingency", criteria="min_voltage", max_candidates=10)])
+    assert out["formulation_exact"] is True
+    assert any("max_candidates=10" in n for n in out["benign_notes"])
+
+
+def test_rule_pinned_optional_must_match_after_normalization():
+    ok = formulation_check(N1_PINNED, [LOAD30, _c("run_n1_contingency", top_k="3", criteria="min_voltage", max_candidates=0)])
+    assert ok["formulation_exact"] is True
+    wrong_k = formulation_check(N1_PINNED, [LOAD30, _c("run_n1_contingency", top_k=5, criteria="min_voltage")])
+    assert wrong_k["formulation_exact"] is False and wrong_k["formulation_error_type"] == "wrong_unit_or_value"
+    wrong_crit = formulation_check(N1_PINNED, [LOAD30, _c("run_n1_contingency", top_k=3, criteria="max_overload")])
+    assert wrong_crit["formulation_error_type"] == "wrong_unit_or_value"
+    # omitted pinned argument is compared through the tool default: top_k=5 != 3
+    omitted = formulation_check(N1_PINNED, [LOAD30, _c("run_n1_contingency", criteria="min_voltage")])
+    assert omitted["formulation_error_type"] == "wrong_unit_or_value"
+    # ... but a pinned value that equals the default may be omitted
+    pinned_default = [LOAD30, _c("run_n1_contingency", top_k=5, criteria="max_violations")]
+    assert formulation_check(pinned_default, [LOAD30, _c("run_n1_contingency")])["formulation_exact"] is True
+    assert formulation_check(pinned_default, [LOAD30, _c("run_n1_contingency", top_k=1)])["formulation_error_type"] == "wrong_unit_or_value"
+
+
+def test_rule_extra_optional_argument_is_not_an_error_by_itself():
+    executed = [LOAD30, _c("run_n1_contingency", top_k=3, criteria="min_voltage", max_candidates=10)]
+    out = formulation_check(N1_PINNED, executed)
+    assert out["formulation_exact"] is True and out["formulation_exact_strict"] is False
+    # argument names the dispatcher never reads are ignored too
+    intended = [LOAD30, _c("modify_load", bus_id=9, p_mw=29.5)]
+    out = formulation_check(intended, [LOAD30, _c("modify_load", bus_id=9, p_mw=29.5, unit="MW")])
+    assert out["formulation_exact"] is True and any("not in schema" in n for n in out["benign_notes"])
+
+
+@pytest.mark.parametrize("criteria", ["min voltage", "worst", "MIN_VOLTAGE", "max violations", " min_voltage"])
+def test_rule_values_outside_the_schema_are_invalid_value(criteria):
+    """solver.contingency compares the criteria string verbatim, so anything but the enum silently
+    falls back to max_violations; the comparator must not normalize what the tool rejects."""
+    for intended in (N1_FREE, N1_PINNED):
+        out = formulation_check(intended, [LOAD30, _c("run_n1_contingency", top_k=3, criteria=criteria)])
+        assert out["formulation_exact"] is False and out["formulation_error_type"] == "invalid_value", (criteria, out)
+        assert "invalid_value" in FORMULATION_ERROR_TYPES
+    # non-integer / non-positive top_k and a bad plot enum are invalid as well
+    assert formulation_check(N1_FREE, [LOAD30, _c("run_n1_contingency", top_k="three")])["formulation_error_type"] == "invalid_value"
+    assert formulation_check(N1_FREE, [LOAD30, _c("run_n1_contingency", top_k=0)])["formulation_error_type"] == "invalid_value"
+    # invalid outranks a plain value mismatch within the same call
+    both = formulation_check(N1_PINNED, [LOAD30, _c("run_n1_contingency", top_k=5, criteria="worst")])
+    assert both["formulation_error_type"] == "invalid_value" and "top_k" in both["detail"]
+    # a missing required argument is a schema violation too
+    assert formulation_check([LOAD30, _c("modify_load", bus_id=9, p_mw=29.5)], [LOAD30, _c("modify_load", bus_id=9)])["formulation_error_type"] == "invalid_value"
+
+
+def test_rule_extra_q_mvar_changes_the_result():
+    intended = [LOAD30, _c("modify_load", bus_id=9, p_mw=29.5)]  # request mentions MW only
+    out = formulation_check(intended, [LOAD30, _c("modify_load", bus_id=9, p_mw=29.5, q_mvar=0)])
+    assert out["formulation_exact"] is False and out["formulation_error_type"] == "extra_arg_changes_result"
+    assert out["formulation_error_type_strict"] == "wrong_unit_or_value"
+    # q_mvar=None is "leave Q unchanged" in the dispatcher -> benign
+    assert formulation_check(intended, [LOAD30, _c("modify_load", bus_id=9, p_mw=29.5, q_mvar=None)])["formulation_exact"] is True
+    # evidence override: the method's final state is numerically identical to the ground truth
+    same = formulation_check(intended, [LOAD30, _c("modify_load", bus_id=9, p_mw=29.5, q_mvar=0)], final_state_metrics={"voltage_mae": 0.0, "flow_mae": 0.0})
+    assert same["formulation_exact"] is True and any("identical" in n for n in same["benign_notes"])
+    differs = formulation_check(intended, [LOAD30, _c("modify_load", bus_id=9, p_mw=29.5, q_mvar=0)], final_state_metrics={"voltage_mae": 1e-16, "flow_mae": 1.3})
+    assert differs["formulation_error_type"] == "extra_arg_changes_result"
+    # when the request pins Q (stress items), it is compared like any pinned value
+    pinned_q = [LOAD30, _c("modify_load", bus_id=9, p_mw=88.5, q_mvar=48.0)]
+    assert formulation_check(pinned_q, [LOAD30, _c("modify_load", bus_id=9, p_mw=88.5, q_mvar=48)])["formulation_exact"] is True
+    assert formulation_check(pinned_q, [LOAD30, _c("modify_load", bus_id=9, p_mw=88.5)])["formulation_error_type"] == "wrong_unit_or_value"
+    assert formulation_check(pinned_q, [LOAD30, _c("modify_load", bus_id=9, p_mw=88.5, q_mvar=0)])["formulation_error_type"] == "wrong_unit_or_value"
+
+
+def test_rule_identifier_normalization():
+    intended = [LOAD30, _c("modify_load", bus_id=9, p_mw=29.5), _c("disconnect_line", from_bus=6, to_bus=13)]
+    executed = [
+        {"tool": "load_case", "args": {"case_name": "IEEE 30-bus system"}},
+        {"tool": "modify_load", "args": {"bus": "9.0", "p_mw": "29.5 MW"}},
+        {"tool": "disconnect_line", "args": {"from_bus": 13.0, "to_bus": "6"}},
+    ]
+    out = formulation_check(intended, executed)
+    assert out["formulation_exact"] is True and out["formulation_error_type"] == "ok"
+    for alias in ("IEEE30", "case 30", "the 30-bus test case (case30)", 30, "IEEE 30-bus"):
+        assert formulation_check([LOAD30], [_c("load_case", case_name=alias)])["formulation_exact"] is True, alias
+    # a genuinely different case / bus is still wrong_id
+    assert formulation_check([LOAD30], [_c("load_case", case_name="IEEE 57-bus system")])["formulation_error_type"] == "wrong_id"
+    assert formulation_check(intended, [LOAD30, _c("modify_load", bus_id=8, p_mw=29.5), _c("disconnect_line", from_bus=6, to_bus=13)])["formulation_error_type"] == "wrong_id"
+    assert formulation_check(intended, [LOAD30, _c("modify_load", bus_id=9, p_mw=29.5), _c("disconnect_line", from_bus=6, to_bus=12)])["formulation_error_type"] == "wrong_id"
+
+
+def test_rule_missed_extra_and_benign_steps():
+    intended = [LOAD30, _c("modify_load", bus_id=9, p_mw=29.5), _c("disconnect_line", from_bus=6, to_bus=13), _c("run_powerflow")]
+    # read-only extras anywhere are benign: get_status, get_most_loaded_branch, generate_plot, repeated run_powerflow
+    executed = [
+        LOAD30,
+        _c("run_powerflow"),
+        _c("get_status"),
+        _c("modify_load", bus_id=9, p_mw=29.5),
+        _c("get_most_loaded_branch"),
+        _c("disconnect_line", from_bus=6, to_bus=13),
+        _c("run_powerflow"),
+        _c("run_powerflow"),
+        _c("generate_plot", plot_type="voltage_heatmap"),
+        _c("get_most_loaded_branch"),
+    ]
+    out = formulation_check(intended, executed)
+    assert out["formulation_exact"] is True and out["formulation_error_type"] == "ok"
+    assert out["formulation_exact_strict"] is False and out["formulation_error_type_strict"] == "extra_step"
+    # a missing intended step is still missed_step even with benign extras around it
+    missed = formulation_check(intended, [LOAD30, _c("modify_load", bus_id=9, p_mw=29.5), _c("get_most_loaded_branch"), _c("run_powerflow")])
+    assert missed["formulation_error_type"] == "missed_step" and "disconnect_line" in missed["detail"]
+    # a different tool in place of the intended one
+    swapped = formulation_check(intended, [LOAD30, _c("modify_load", bus_id=9, p_mw=29.5), _c("reconnect_line", from_bus=6, to_bus=13), _c("get_most_loaded_branch")])
+    assert swapped["formulation_error_type"] == "missed_step"
+    # unrelated extra calls that mutate the network or run an analysis are extra_step
+    for extra in (_c("reconnect_line", from_bus=6, to_bus=13), _c("modify_load", bus_id=2, p_mw=10.0), _c("run_n1_contingency"), _c("recommend_remedial_actions")):
+        out = formulation_check(intended, [LOAD30, _c("modify_load", bus_id=9, p_mw=29.5), _c("disconnect_line", from_bus=6, to_bus=13), extra])
+        assert out["formulation_error_type"] == "extra_step", extra
+    # re-loading the same case before any mutation is idempotent; after a mutation it resets the network
+    assert formulation_check(intended, [LOAD30, LOAD30] + executed[3:])["formulation_exact"] is True
+    reset = formulation_check(intended, [LOAD30, _c("modify_load", bus_id=9, p_mw=29.5), LOAD30, _c("disconnect_line", from_bus=6, to_bus=13)])
+    assert reset["formulation_error_type"] == "extra_step"
+    # an intended run_powerflow with no solve at all after load_case is still a missed step
+    assert formulation_check([LOAD30, _c("run_powerflow")], [LOAD30, _c("get_status")])["formulation_error_type"] == "missed_step"
+    # unparsed and the strict fields travel together
+    unparsed = formulation_check(intended, None)
+    assert unparsed["formulation_error_type"] == "unparsed" and unparsed["formulation_exact_strict"] is False
+    assert error_type_counts(["invalid_value", "extra_arg_changes_result"])["invalid_value"] == 1
+
+
+def test_strict_comparator_is_unchanged_on_real_failing_rows():
+    """Regression: the strict verdicts on the observed matrix artifacts (audit note s.3) are preserved
+    while the calibrated comparator re-classifies them."""
+    cases = [
+        # plain N-1: top_k=1 for "the worst single outage"
+        (N1_FREE, [LOAD30, _c("run_n1_contingency", top_k=1)], "wrong_unit_or_value", "ok"),
+        # plan_act: criteria with a space + extra max_candidates
+        ([LOAD30, _c("run_n1_contingency", top_k=3, criteria="max_violations")],
+         [LOAD30, _c("run_n1_contingency", top_k=3, criteria="max violations", max_candidates=10)], "wrong_unit_or_value", "invalid_value"),
+        # plan_act: q_mvar=0 when only MW was requested
+        ([LOAD30, _c("modify_load", bus_id=1, p_mw=51.0)], [LOAD30, _c("modify_load", bus_id=1, p_mw=51, q_mvar=0)], "wrong_unit_or_value", "extra_arg_changes_result"),
+        # get_most_loaded_branch after the requested steps
+        ([LOAD30, _c("modify_load", bus_id=21, p_mw=12.5), _c("run_powerflow")],
+         [LOAD30, _c("modify_load", bus_id=21, p_mw=12.5), _c("get_most_loaded_branch")], "extra_step", "ok"),
+    ]
+    for intended, executed, strict_type, calibrated_type in cases:
+        strict = formulation_check_strict(intended, executed)
+        out = formulation_check(intended, executed)
+        assert strict["formulation_error_type"] == strict_type, (executed, strict)
+        assert out["formulation_error_type_strict"] == strict_type
+        assert out["formulation_error_type"] == calibrated_type, (executed, out)
+        assert out["formulation_exact"] is (calibrated_type == "ok")
 
 
 # ----------------------------------------------------------------------------- numbers / faithfulness

@@ -1,0 +1,83 @@
+\begin{table}[!ht]
+\centering
+\caption{Per-system breakdown of the aggregated protocol table: one block per IEEE test system, 40 requests per system, gpt-4o-mini, $k=1$, same tools and an eight-round budget where rounds apply. Solved: request solved end to end (\%); Form.: formulation correctness (\%); $V_{\mathrm{MAE}}$ (p.u.), $F_{\mathrm{MAE}}$ (MW); FR: feasibility rate (\%); Faith.: traceable numbers (\%); SFR: safe-failure rate (\%); Claim: success claimed on a non-converged case (\%); Calls: mean tool calls; Tok.: mean tokens; TTV: mean time to verified answer (s). n/a: the method has no tools or no LLM; --: not measured.}
+\label{tab:pf_protocol_per_system}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{ll cc ccc ccc ccc}
+\toprule
+& & \multicolumn{2}{c}{\textbf{Task utility}} & \multicolumn{3}{c}{\textbf{Solver-grounded correctness}} & \multicolumn{3}{c}{\textbf{Faithfulness and safe failure}} & \multicolumn{3}{c}{\textbf{Cost and latency}} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}\cmidrule(lr){11-13}
+\textbf{Setting} & \textbf{Method} & \textbf{Solved} & \textbf{Form.} & $V_{\mathrm{MAE}}$ & $F_{\mathrm{MAE}}$ & \textbf{FR} & \textbf{Faith.} & \textbf{SFR} & \textbf{Claim} & \textbf{Calls} & \textbf{Tok.} & \textbf{TTV} \\
+\midrule
+\multicolumn{13}{l}{\textbf{IEEE 14-bus}} \\
+\multirow{4}{*}{LLM-only (Sec.~\ref{sec:prompting})} & Structured & 0.0 & -- & -- & -- & 0.0 & 5.0 & -- & -- & n/a & 2480 & 1.8 \\
+ & Few-shot & 0.0 & -- & -- & -- & 0.0 & 5.0 & -- & -- & n/a & 2984 & 1.9 \\
+ & Chain-of-thought & 0.0 & -- & -- & -- & 0.0 & 11.7 & -- & -- & n/a & 3046 & 5.1 \\
+ & RAG & 0.0 & -- & -- & -- & 0.0 & 5.0 & -- & -- & n/a & 845 & 1.8 \\
+\addlinespace
+\multirow{4}{*}{Single-call (Sec.~\ref{sec:prompting})} & Structured & 85.0 & 85.0 & $1.47{\times}10^{-5}$ & 0.05 & 100.0 & 99.1 & -- & -- & 2.0 & 10175 & 4.0 \\
+ & Few-shot & 75.0 & 75.0 & $1.47{\times}10^{-5}$ & 0.05 & 100.0 & 98.5 & -- & -- & 1.9 & 10017 & 3.4 \\
+ & Chain-of-thought & 80.0 & 80.0 & $1.54{\times}10^{-5}$ & 0.05 & 100.0 & 99.2 & -- & -- & 1.9 & 9631 & 3.3 \\
+ & RAG & 87.5 & 87.5 & $1.47{\times}10^{-5}$ & 0.05 & 100.0 & 99.0 & -- & -- & 1.7 & 7546 & 4.2 \\
+\addlinespace
+\multirow{5}{*}{Architectures (Sec.~\ref{sec:agents})} & Rule-based parser, no LLM & 72.5 & 72.5 & $1.89{\times}10^{-5}$ & 0.06 & 100.0 & 100.0 & -- & -- & 1.9 & n/a & 0.2 \\
+ & Single-call, best prompt & 87.5 & 87.5 & $1.47{\times}10^{-5}$ & 0.05 & 100.0 & 99.0 & -- & -- & 1.7 & 7546 & 4.2 \\
+ & ReAct & 87.5 & 87.5 & $1.90{\times}10^{-7}$ & 0.02 & 100.0 & 98.2 & -- & -- & 2.3 & 7620 & 4.2 \\
+ & Plan-and-Act & 35.0 & 35.0 & $4.36{\times}10^{-4}$ & 0.07 & 100.0 & 98.5 & -- & -- & 2.8 & 5738 & 4.2 \\
+ & PFAgent: ReAct + gate & 90.0 & 90.0 & $1.90{\times}10^{-7}$ & 0.02 & 100.0 & 98.7 & -- & -- & 2.3 & 7511 & 4.0 \\
+\midrule
+\multicolumn{13}{l}{\textbf{IEEE 30-bus}} \\
+\multirow{4}{*}{LLM-only (Sec.~\ref{sec:prompting})} & Structured & 0.0 & -- & -- & -- & 0.0 & 7.5 & -- & -- & n/a & 3785 & 1.9 \\
+ & Few-shot & 0.0 & -- & -- & -- & 0.0 & 7.5 & -- & -- & n/a & 4290 & 2.2 \\
+ & Chain-of-thought & 0.0 & -- & -- & -- & 0.0 & 15.0 & -- & -- & n/a & 4297 & 4.9 \\
+ & RAG & 0.0 & -- & -- & -- & 0.0 & 7.5 & -- & -- & n/a & 818 & 1.7 \\
+\addlinespace
+\multirow{4}{*}{Single-call (Sec.~\ref{sec:prompting})} & Structured & 82.5 & 82.5 & $1.76{\times}10^{-5}$ & 0.04 & 100.0 & 99.5 & -- & -- & 2.0 & 15058 & 4.6 \\
+ & Few-shot & 82.5 & 82.5 & $1.76{\times}10^{-5}$ & 0.04 & 100.0 & 99.6 & -- & -- & 2.0 & 15190 & 3.8 \\
+ & Chain-of-thought & 80.0 & 80.0 & $1.80{\times}10^{-5}$ & 0.04 & 100.0 & 99.6 & -- & -- & 1.9 & 14797 & 3.8 \\
+ & RAG & 77.5 & 77.5 & $1.76{\times}10^{-5}$ & 0.04 & 100.0 & 99.5 & -- & -- & 1.8 & 10028 & 4.0 \\
+\addlinespace
+\multirow{5}{*}{Architectures (Sec.~\ref{sec:agents})} & Rule-based parser, no LLM & 67.5 & 67.5 & $4.82{\times}10^{-5}$ & 0.06 & 100.0 & 100.0 & -- & -- & 1.9 & n/a & 0.1 \\
+ & Single-call, best prompt & 77.5 & 77.5 & $1.76{\times}10^{-5}$ & 0.04 & 100.0 & 99.5 & -- & -- & 1.8 & 10028 & 4.0 \\
+ & ReAct & 90.0 & 90.0 & $1.43{\times}10^{-6}$ & 0.02 & 100.0 & 100.0 & -- & -- & 2.3 & 10048 & 4.1 \\
+ & Plan-and-Act & 32.5 & 32.5 & $2.65{\times}10^{-4}$ & 0.05 & 100.0 & 100.0 & -- & -- & 2.8 & 7916 & 4.3 \\
+ & PFAgent: ReAct + gate & 90.0 & 90.0 & $8.63{\times}10^{-5}$ & 0.04 & 100.0 & 100.0 & -- & -- & 2.2 & 9235 & 4.0 \\
+\midrule
+\multicolumn{13}{l}{\textbf{IEEE 57-bus}} \\
+\multirow{4}{*}{LLM-only (Sec.~\ref{sec:prompting})} & Structured & 0.0 & -- & -- & -- & 0.0 & 5.3 & 0.0 & 0.0 & n/a & 7056 & 1.5 \\
+ & Few-shot & 0.0 & -- & -- & -- & 0.0 & 5.3 & 0.0 & 0.0 & n/a & 7560 & 1.2 \\
+ & Chain-of-thought & 0.0 & -- & -- & -- & 0.0 & 15.6 & 0.0 & 0.0 & n/a & 7611 & 3.6 \\
+ & RAG & 0.0 & -- & -- & -- & 0.0 & 5.3 & 0.0 & 0.0 & n/a & 856 & 1.9 \\
+\addlinespace
+\multirow{4}{*}{Single-call (Sec.~\ref{sec:prompting})} & Structured & 80.0 & 80.0 & $1.34{\times}10^{-5}$ & 0.10 & 100.0 & 98.2 & 0.0 & 0.0 & 1.9 & 29396 & 6.0 \\
+ & Few-shot & 72.5 & 72.5 & $1.34{\times}10^{-5}$ & 0.10 & 100.0 & 99.0 & 0.0 & 0.0 & 1.9 & 28610 & 4.6 \\
+ & Chain-of-thought & 80.0 & 80.0 & $1.34{\times}10^{-5}$ & 0.10 & 100.0 & 96.7 & 0.0 & 0.0 & 1.9 & 29979 & 7.6 \\
+ & RAG & 82.5 & 82.5 & $1.34{\times}10^{-5}$ & 0.10 & 100.0 & 99.5 & 0.0 & 0.0 & 1.7 & 19868 & 5.1 \\
+\addlinespace
+\multirow{5}{*}{Architectures (Sec.~\ref{sec:agents})} & Rule-based parser, no LLM & 62.5 & 62.5 & $4.09{\times}10^{-5}$ & 0.12 & 100.0 & 100.0 & 0.0 & 0.0 & 1.7 & n/a & 0.2 \\
+ & Single-call, best prompt & 82.5 & 82.5 & $1.34{\times}10^{-5}$ & 0.10 & 100.0 & 99.5 & 0.0 & 0.0 & 1.7 & 19868 & 5.1 \\
+ & ReAct & 85.0 & 85.0 & 0 & 0.05 & 100.0 & 97.2 & 0.0 & 0.0 & 2.2 & 18230 & 5.1 \\
+ & Plan-and-Act & 32.5 & 32.5 & $3.96{\times}10^{-4}$ & 0.11 & 100.0 & 99.2 & 0.0 & 0.0 & 2.6 & 15913 & 4.9 \\
+ & PFAgent: ReAct + gate & 85.0 & 85.0 & 0 & 0.05 & 100.0 & 97.4 & 0.0 & 0.0 & 2.2 & 18779 & 4.9 \\
+\midrule
+\multicolumn{13}{l}{\textbf{IEEE 118-bus}} \\
+\multirow{4}{*}{LLM-only (Sec.~\ref{sec:prompting})} & Structured & 0.0 & -- & -- & -- & 0.0 & 7.5 & -- & -- & n/a & 16254 & 2.8 \\
+ & Few-shot & 0.0 & -- & -- & -- & 0.0 & 7.5 & -- & -- & n/a & 16758 & 2.5 \\
+ & Chain-of-thought & 0.0 & -- & -- & -- & 0.0 & 18.2 & -- & -- & n/a & 17062 & 9.1 \\
+ & RAG & 0.0 & -- & -- & -- & 0.0 & 7.5 & -- & -- & n/a & 844 & 1.7 \\
+\addlinespace
+\multirow{4}{*}{Single-call (Sec.~\ref{sec:prompting})} & Structured & 82.5 & 82.5 & $6.98{\times}10^{-6}$ & 1.44 & 100.0 & 100.0 & -- & -- & 2.0 & 56340 & 7.3 \\
+ & Few-shot & 82.5 & 82.5 & $6.98{\times}10^{-6}$ & 1.44 & 100.0 & 100.0 & -- & -- & 2.0 & 55239 & 6.3 \\
+ & Chain-of-thought & 85.0 & 85.0 & $3.26{\times}10^{-6}$ & 1.44 & 100.0 & 100.0 & -- & -- & 2.0 & 56013 & 6.0 \\
+ & RAG & 87.5 & 87.5 & $3.26{\times}10^{-6}$ & 1.44 & 100.0 & 99.6 & -- & -- & 1.8 & 31823 & 5.9 \\
+\addlinespace
+\multirow{5}{*}{Architectures (Sec.~\ref{sec:agents})} & Rule-based parser, no LLM & 67.5 & 67.5 & $4.49{\times}10^{-6}$ & 1.47 & 100.0 & 100.0 & -- & -- & 1.7 & n/a & 0.1 \\
+ & Single-call, best prompt & 87.5 & 87.5 & $3.26{\times}10^{-6}$ & 1.44 & 100.0 & 99.6 & -- & -- & 1.8 & 31823 & 5.9 \\
+ & ReAct & 95.0 & 95.0 & 0 & 1.33 & 100.0 & 99.5 & -- & -- & 2.3 & 29816 & 5.2 \\
+ & Plan-and-Act & 35.0 & 35.0 & $3.65{\times}10^{-5}$ & 1.44 & 100.0 & 100.0 & -- & -- & 2.8 & 27040 & 5.0 \\
+ & PFAgent: ReAct + gate & 87.5 & 87.5 & 0 & 1.33 & 100.0 & 100.0 & -- & -- & 2.4 & 32365 & 5.4 \\
+\bottomrule
+\end{tabular}}
+\end{table}
