@@ -56,6 +56,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from config import GEMINI_API_KEY, GEMINI_MODEL, OPENAI_API_KEY, OPENAI_MODEL
 from benchmarks import metrics as bm
+from benchmarks import scoring as bs
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
@@ -116,6 +117,13 @@ EXTENDED_SCOREBOARD_FIELDS = [
     "n_tool_calls_mean",
     "n_tool_rounds_mean",
     "wall_time_s_mean",
+    # end-to-end verdicts (benchmarks/scoring.py); appended so older readers keep working
+    "solved_rate",
+    "solved_count",
+    "solved_total",
+    "abstained_on_solvable_rate",
+    "abstained_on_solvable_count",
+    "abstained_on_solvable_total",
 ]
 
 CASE_SCOREBOARD_FIELDS = [
@@ -589,6 +597,7 @@ class Item:
     intended_calls: list[dict[str, Any]]
     request_id: Optional[str] = None
     difficulty: Optional[str] = None
+    expected_outcome: str = "converged"
     notes: str = ""
     gen_seed: Optional[int] = None  # request-generator seed (request mode)
     truth: Any = None  # PowerFlowResult of the intended final state
@@ -672,6 +681,8 @@ def build_items(
                     intended_calls=[dict(c) for c in req.intended_calls],
                     request_id=req.id,
                     difficulty=req.difficulty,
+
+                    expected_outcome=str(getattr(req, "expected_outcome", "converged")),
                     notes=req.notes,
                     gen_seed=int(seed),
                 )
@@ -682,7 +693,7 @@ def build_items(
             item.truth, item.truth_net, item.truth_tool_errors = execute_intended(
                 item.case_name, item.intended_calls, seed=item.seed, k=item.k, solver_config=solver_config
             )
-            if item.truth is None or not item.truth.converged:
+            if item.truth is None or (not item.truth.converged and item.expected_outcome == "converged"):
                 item.truth_error = "GroundTruthNotConverged"
         except Exception as exc:  # pragma: no cover - defensive
             item.truth_error = f"{type(exc).__name__}: {exc}"
@@ -912,10 +923,24 @@ def evaluate_item(
         formulation = {"formulation_exact": None, "formulation_error_type": None, "detail": error or ""}
 
     faith = bm.faithful_numbers(raw_text, bm.tool_outputs_from_trace(trace), request_text=item.text)
-    failure = bm.failure_reporting(
+    truth_converged = bool(item.truth.converged) if item.truth is not None else None
+    has_tools = method.kind in ("engine", "rule_based")
+    # JSON-aware failure reporting and the end-to-end `solved` verdict (benchmarks/scoring.py).
+    failure = bs.failure_reporting(
         raw_text,
-        final_converged=final_converged,
+        truth_converged=truth_converged,
+        final_converged=False if item.expected_outcome != "converged" else final_converged,
         gate_failed=int((trace or {}).get("gate_failed") or 0),
+        has_tools=has_tools,
+    )
+    solved = bs.solved_check(
+        ok=ok,
+        has_tools=has_tools,
+        formulation_exact=formulation.get("formulation_exact"),
+        truth_converged=truth_converged,
+        final_converged=False if item.expected_outcome != "converged" else final_converged,
+        metrics=metrics,
+        answer_text=raw_text,
     )
     stale = bm.stale_state_check(trace, raw_text, request_text=item.text)
     cost = bm.cost_from_trace(trace)
@@ -979,11 +1004,17 @@ def evaluate_item(
         "n_untraceable_numbers": faith["n_untraceable_numbers"],
         "untraceable_numbers": faith["untraceable"],
         "final_converged": final_converged,
-        "truth_converged": bool(item.truth.converged) if item.truth is not None else None,
+        "expected_outcome": item.expected_outcome,
+        "truth_converged": truth_converged,
         "truth_tool_errors": item.truth_tool_errors,
+        "solved": solved["solved"],
+        "solved_reason": solved["solved_reason"],
         "is_failure": failure["is_failure"],
         "safe_failure": failure["safe_failure"],
         "claimed_success_on_failure": failure["claimed_success_on_failure"],
+        "abstained": failure["abstained"],
+        "abstained_on_solvable": failure["abstained_on_solvable"],
+        "failure_detection_path": failure["detection_path"],
         "has_mutation": stale["has_mutation"],
         "stale_state": stale["stale_state"],
         "stale_state_no_rerun": stale["stale_state_no_rerun"],
@@ -1009,8 +1040,15 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
     stale = bm.rate([r.get("stale_state") for r in rows])
     stale_no_rerun = bm.rate([r.get("stale_state_no_rerun") for r in rows])
     stale_quoted_old = bm.rate([r.get("stale_state_quoted_old") for r in rows])
+    solved = bm.rate([r.get("solved") for r in rows])
+    abstained = bm.rate([r.get("abstained_on_solvable") for r in rows])
     scoreboard = {
+        # `success_rate` = run completed and parsed (kept for backward compatibility);
+        # `solved_rate` = answered correctly end to end (benchmarks/scoring.py).
         "success_rate": float(len(ok_rows) / len(rows)) if rows else 0.0,
+        "solved_rate": solved["rate"],
+        "solved_count": solved["count"],
+        "solved_total": solved["total"],
         "voltage_mae_mean": _safe_mean([(r.get("metrics") or {}).get("voltage_mae") for r in ok_rows]),
         "flow_mae_mean": _safe_mean([(r.get("metrics") or {}).get("flow_mae") for r in ok_rows]),
         "loading_rmse_mean": _safe_mean([(r.get("metrics") or {}).get("loading_rmse") for r in ok_rows]),
@@ -1038,6 +1076,9 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "claimed_success_on_failure_rate": claimed["rate"],
         "claimed_success_on_failure_count": claimed["count"],
         "claimed_success_on_failure_total": claimed["total"],
+        "abstained_on_solvable_rate": abstained["rate"],
+        "abstained_on_solvable_count": abstained["count"],
+        "abstained_on_solvable_total": abstained["total"],
         "stale_state_rate": stale["rate"],
         "stale_state_count": stale["count"],
         "stale_state_total": stale["total"],
@@ -1093,6 +1134,7 @@ def _rate_cell(row: dict[str, Any], prefix: str) -> str:
 
 _MD_COLUMNS = [
     ("success_rate", lambda r: _fmt(r.get("success_rate"))),
+    ("solved", lambda r: _rate_cell(r, "solved")),
     ("voltage_mae", lambda r: _fmt(r.get("voltage_mae_mean"))),
     ("flow_mae", lambda r: _fmt(r.get("flow_mae_mean"))),
     ("loading_rmse", lambda r: _fmt(r.get("loading_rmse_mean"))),
@@ -1108,6 +1150,7 @@ _MD_COLUMNS = [
     ("faithful_numbers", lambda r: _fmt(r.get("faithful_numbers_mean"))),
     ("safe_failure", lambda r: _rate_cell(r, "safe_failure")),
     ("claimed_success_on_failure", lambda r: _rate_cell(r, "claimed_success_on_failure")),
+    ("abstained_on_solvable", lambda r: _rate_cell(r, "abstained_on_solvable")),
     ("stale_state", lambda r: _rate_cell(r, "stale_state")),
     ("stale_no_rerun", lambda r: _rate_cell(r, "stale_state_no_rerun")),
     ("stale_quoted_old", lambda r: _rate_cell(r, "stale_state_quoted_old")),

@@ -354,3 +354,28 @@ def test_stale_state_ignores_failed_or_unconfirmed_mutations_and_resets_on_load_
     ]}]}
     assert stale_state_check(truncated, ANSWER_OLD, request_text=REQUEST)["stale_state_quoted_old"] is True
     assert stale_state_check(truncated, "Bus 9 now at 1.0212 pu.", request_text=REQUEST)["stale_state"] is False
+
+
+# ----------------------------------------------------------------------------- quoted precision
+
+
+def test_number_matching_uses_the_answer_precision():
+    """An answer that quotes a solver value with fewer decimals is still traceable (0.93 vs 0.9312)."""
+    outputs = [json.dumps({"converged": True, "total_load_mw": 259.0004, "bus_voltages": [{"bus_id": 14, "vm_pu": 0.9312}]})]
+    assert numbers_in_text("0.93 pu and 259.00 MW")[0]["decimals"] == 2
+    assert faithful_numbers("Lowest voltage 0.93 pu at bus 14.", outputs)["faithful_numbers"] == 1.0
+    assert faithful_numbers("The minimum is 0.93 at bus 14.", outputs)["faithful_numbers"] == 1.0  # unit-less too
+    assert faithful_numbers("Lowest voltage 0.9 pu.", outputs)["faithful_numbers"] == 1.0  # round(0.9312, 1)
+    # not a rounding of the tool value and outside the 1e-3 p.u. tolerance: still untraceable
+    assert faithful_numbers("Lowest voltage 0.94 pu.", outputs)["faithful_numbers"] == 0.0
+    assert faithful_numbers("Lowest voltage 0.9320 pu.", outputs)["faithful_numbers"] == 1.0  # abs tolerance alternative kept
+
+    # stale_state_quoted_old regression: old solve 0.9300, new solve 0.9312, answer "0.93" was flagged as quoting
+    # the old output (0.9300 is within 1e-3, 0.9312 is not); with precision-aware matching it matches both -> not stale.
+    trace = _seq_trace(LOAD, ("run_powerflow", {}, _pf(259.0, 13.4, 0.9300, 72.1)), ("modify_load", {"bus_id": 9, "p_mw": 70.0}, _pf(300.0, 16.9, 0.9312, 88.4)))
+    out = stale_state_check(trace, "Bus 9 is now at 0.93 pu.", request_text=REQUEST)
+    assert out["stale_state_quoted_old"] is False and out["stale_state"] is False
+    assert out["n_numbers_old_only"] == 0 and out["n_numbers_new_only"] == 0
+    # a genuinely old-only quotation is still caught
+    still = stale_state_check(trace, "Bus 9 is at 0.9300 pu.", request_text=REQUEST)
+    assert still["stale_state_quoted_old"] is True

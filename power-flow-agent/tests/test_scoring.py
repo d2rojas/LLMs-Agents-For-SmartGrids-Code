@@ -1,0 +1,304 @@
+"""Offline tests for benchmarks/scoring.py and benchmarks/rescore.py (no LLM, no network)."""
+
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from benchmarks import rescore  # noqa: E402
+from benchmarks import scoring as bs  # noqa: E402
+from benchmarks.evaluate_llms import _aggregate_group  # noqa: E402
+
+ABSTENTION = json.dumps(
+    {"converged": False, "bus_voltages": [], "line_flows": [], "total_generation_mw": 0.0, "total_load_mw": 0.0, "total_loss_mw": 0.0},
+    indent=2,
+)
+
+
+def _metrics(vmae=1e-5, fmae=0.01, max_flow=50.0, pred=30, truth=30, inter=30):
+    return {
+        "voltage_mae": vmae,
+        "flow_mae": fmae,
+        "bus_coverage": {"pred": pred, "truth": truth, "intersection": inter},
+        "_raw_p_pairs": [[1, max_flow, max_flow], [2, 3.0, 3.0]],
+    }
+
+
+# ----------------------------------------------------------------------------- JSON abstention
+
+
+def test_json_abstention_detected_and_placeholders_are_not_results():
+    st = bs.json_answer_status(ABSTENTION)
+    assert st["is_json"] and st["converged"] is False and st["abstention"] is True and not st["has_results"]
+    # wrapped in prose / fences still counts
+    st2 = bs.json_answer_status("Here is my answer:\n```json\n" + ABSTENTION + "\n```")
+    assert st2["abstention"] is True
+    # converged false but numbers reported is a declared failure, not an abstention
+    st3 = bs.json_answer_status('{"converged": false, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.0, "va_deg": 0}], "total_load_mw": 0.0}')
+    assert st3["is_json"] and st3["abstention"] is False and st3["has_results"]
+    # converged true with totals is a success claim
+    st4 = bs.json_answer_status('{"converged": true, "bus_voltages": [], "total_load_mw": 259.0}')
+    assert st4["converged"] is True and st4["has_results"] and not st4["abstention"]
+    assert bs.json_answer_status("The power flow did not converge.")["is_json"] is False
+    assert bs.json_answer_status('{"foo": 1}')["is_json"] is False
+
+
+def test_llm_only_abstention_on_solvable_truth_is_neither_safe_failure_nor_claim():
+    out = bs.failure_reporting(ABSTENTION, truth_converged=True, final_converged=False, has_tools=False)
+    assert out["is_failure"] is False
+    assert out["safe_failure"] is None and out["claimed_success_on_failure"] is None
+    assert out["abstained"] is True and out["abstained_on_solvable"] is True
+    assert out["detection_path"] == "json"
+
+
+def test_llm_only_abstention_on_non_converged_truth_is_a_safe_failure():
+    out = bs.failure_reporting(ABSTENTION, truth_converged=False, final_converged=False, has_tools=False)
+    assert out["is_failure"] is True and out["safe_failure"] is True and out["claimed_success_on_failure"] is False
+    assert out["abstained_on_solvable"] is None  # not solvable -> n/a
+
+
+def test_llm_only_confident_numbers_on_non_converged_truth_is_a_claim():
+    ans = '{"converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.0, "va_deg": 0.0}], "line_flows": [], "total_generation_mw": 260.0, "total_load_mw": 259.0, "total_loss_mw": 1.0}'
+    out = bs.failure_reporting(ans, truth_converged=False, final_converged=True, has_tools=False)
+    assert out["is_failure"] and out["safe_failure"] is False and out["claimed_success_on_failure"] is True
+    # and the model's own converged=true on a solvable truth is not a failure case at all
+    fine = bs.failure_reporting(ans, truth_converged=True, final_converged=True, has_tools=False)
+    assert fine["is_failure"] is False and fine["abstained_on_solvable"] is False
+
+
+def test_text_path_matches_legacy_semantics_for_tool_methods():
+    safe = bs.failure_reporting("The power flow did not converge, so no numerical result is available.", truth_converged=True, final_converged=False)
+    assert safe["is_failure"] and safe["safe_failure"] is True and safe["claimed_success_on_failure"] is False
+    assert safe["detection_path"] == "text" and safe["abstained"] is True
+    claimed = bs.failure_reporting("Power flow converged successfully. Total load 259.0 MW.", truth_converged=True, final_converged=False)
+    assert claimed["safe_failure"] is False and claimed["claimed_success_on_failure"] is True
+    # gate failed with no final state is a failure case (tools only)
+    gate = bs.failure_reporting("Everything looks normal.", truth_converged=True, final_converged=None, gate_failed=1)
+    assert gate["is_failure"] and gate["claimed_success_on_failure"] is True
+    # a tool agent whose state converged while the requested scenario does not: claim
+    wrong = bs.failure_reporting("Converged. Total load 259.0 MW.", truth_converged=False, final_converged=True)
+    assert wrong["is_failure"] and wrong["claimed_success_on_failure"] is True
+    # not a failure case: n/a
+    ok = bs.failure_reporting("Total load 259.0 MW.", truth_converged=True, final_converged=True)
+    assert ok["is_failure"] is False and ok["safe_failure"] is None and ok["claimed_success_on_failure"] is None
+
+
+# ----------------------------------------------------------------------------- solved
+
+
+def test_solved_requires_formulation_convergence_and_tolerance():
+    base = dict(ok=True, has_tools=True, formulation_exact=True, truth_converged=True, final_converged=True, metrics=_metrics())
+    assert bs.solved_check(**base) == {"solved": True, "solved_reason": "numeric_ok"}
+    assert bs.solved_check(**{**base, "formulation_exact": False})["solved_reason"] == "formulation"
+    assert bs.solved_check(**{**base, "final_converged": False})["solved_reason"] == "convergence_mismatch"
+    assert bs.solved_check(**{**base, "ok": False})["solved_reason"] == "run_failed"
+    assert bs.solved_check(**{**base, "truth_converged": None})["solved_reason"] == "no_ground_truth"
+    # V_MAE above 1e-3 p.u.
+    assert bs.solved_check(**{**base, "metrics": _metrics(vmae=2e-3)})["solved_reason"] == "voltage_error"
+    # F_MAE above 1 % of the largest branch flow (50 MW -> 0.5 MW)
+    assert bs.solved_check(**{**base, "metrics": _metrics(fmae=0.6)})["solved_reason"] == "flow_error"
+    assert bs.solved_check(**{**base, "metrics": _metrics(fmae=0.4)})["solved"] is True
+    # both non-converged with an exact formulation: the failure was correctly identified
+    both = bs.solved_check(**{**base, "truth_converged": False, "final_converged": False, "metrics": None})
+    assert both == {"solved": True, "solved_reason": "non_converged_match"}
+
+
+def test_llm_only_empty_json_on_solvable_truth_is_not_solved():
+    out = bs.solved_check(
+        ok=True, has_tools=False, formulation_exact=None, truth_converged=True, final_converged=False,
+        metrics={"voltage_mae": None, "bus_coverage": {"pred": 0, "truth": 30, "intersection": 0}}, answer_text=ABSTENTION,
+    )
+    assert out["solved"] is False and out["solved_reason"] == "convergence_mismatch"
+    # good voltages over every bus: solved without any formulation check (no tools)
+    good = bs.solved_check(ok=True, has_tools=False, formulation_exact=None, truth_converged=True, final_converged=True, metrics=_metrics(vmae=5e-4, fmae=99.0))
+    assert good["solved"] is True  # flow error ignored for LLM-only
+    partial = bs.solved_check(ok=True, has_tools=False, formulation_exact=None, truth_converged=True, final_converged=True, metrics=_metrics(vmae=0.0, inter=5, pred=5))
+    assert partial["solved"] is False and partial["solved_reason"] == "incomplete_coverage"
+
+
+def test_answer_matches_truth_for_each_request_kind():
+    text = "The bus with the lowest voltage magnitude is bus 8, with 0.9587 pu. Range: 0.9661 pu (bus 7) to 1.0 (bus 1)."
+    assert bs.answer_matches_truth(text, {"bus_id": 8, "vm_pu": 0.958745}) is True
+    assert bs.answer_matches_truth(text, {"bus_id": 7, "vm_pu": 0.9661}) is False
+    over = {"threshold_percent": 90.0, "lines": [{"line_id": 9, "from_bus": 6, "to_bus": 8, "loading_percent": 121.2}]}
+    assert bs.answer_matches_truth("Thermal violation on line 6-8 at 121.19 %.", over) is True
+    assert bs.answer_matches_truth("Thermal violation on line 8-6 (reverse).", over) is True
+    assert bs.answer_matches_truth("No overloads above 90 %.", over) is False
+    assert bs.answer_matches_truth("There are no overloaded lines above 90 %.", {"threshold_percent": 90.0, "lines": []}) is True
+    n1 = {"criteria": "min_voltage", "top_k": 3, "worst": {"from_bus": 6, "to_bus": 8}, "ranking": []}
+    assert bs.answer_matches_truth("Worst outage: line 6-8 (Vm 0.85 pu).", n1) is True
+    summary = {"converged": True, "total_load_mw": 189.4802, "total_generation_mw": 192.434, "total_loss_mw": 2.9538}
+    assert bs.answer_matches_truth("Total load: 189.48 MW, generation 192.43 MW, losses 2.95 MW.", summary) is True
+    assert bs.answer_matches_truth("Total load: 189.48 MW, losses 5.0 MW.", summary) is False
+    assert bs.answer_matches_truth("anything", None) is None
+    assert bs.answer_matches_truth("anything", {"converged": False}) is None
+    # a wrong numeric state can still be solved through the key quantity
+    out = bs.solved_check(
+        ok=True, has_tools=True, formulation_exact=True, truth_converged=True, final_converged=True,
+        metrics=_metrics(vmae=5e-3), answer_text=text, truth_answer={"bus_id": 8, "vm_pu": 0.9587},
+    )
+    assert out == {"solved": True, "solved_reason": "answer_ok"}
+
+
+def test_score_row_and_aggregate_group_expose_solved_and_abstained():
+    abstain_row = {
+        "method": "llm_only:structured", "ok": True, "raw_response": ABSTENTION, "truth_converged": True,
+        "final_converged": False, "formulation_exact": None, "metrics": {"voltage_mae": None, "bus_coverage": {"pred": 0, "truth": 14, "intersection": 0}},
+    }
+    scored = bs.score_row(abstain_row)
+    assert scored["solved"] is False and scored["abstained_on_solvable"] is True
+    assert scored["safe_failure"] is None and scored["claimed_success_on_failure"] is None
+    good_row = {
+        "method": "react", "ok": True, "raw_response": "Converged. Total load 259.0 MW.", "truth_converged": True,
+        "final_converged": True, "formulation_exact": True, "metrics": _metrics(),
+    }
+    assert bs.score_row(good_row)["solved"] is True
+    agg = _aggregate_group([{**abstain_row, **scored}, {**good_row, **bs.score_row(good_row)}])
+    assert agg["success_rate"] == 1.0  # unchanged meaning
+    assert agg["solved_rate"] == 0.5 and agg["solved_count"] == 1 and agg["solved_total"] == 2
+    assert agg["abstained_on_solvable_rate"] == 0.5 and agg["abstained_on_solvable_total"] == 2
+    assert agg["safe_failure_total"] == 0 and agg["claimed_success_on_failure_total"] == 0
+
+
+# ----------------------------------------------------------------------------- rescore
+
+
+def _pf_trace(case_name: str) -> tuple[dict, list]:
+    """A real load_case + run_powerflow trace on the unperturbed case (offline PandaPower)."""
+    from benchmarks.evaluate_llms import perturbing_dispatcher
+    from llm.tools import ToolContext
+    from models.schemas import SessionState
+
+    ctx = ToolContext(session=SessionState())
+    dispatcher = perturbing_dispatcher(ctx, seed=0, k=0)
+    tools = []
+    for name, args in (("load_case", {"case_name": case_name}), ("run_powerflow", {})):
+        out = dispatcher.dispatch(name, args)
+        tools.append({"name": name, "arguments": args, "output": out, "gate": None})
+    trace = {
+        "architecture": "react", "status": "ok", "rounds": [{"round": 1, "tools": tools}, {"round": 2, "final": True}],
+        "formulation_failure": False, "n_llm_calls": 2, "n_tool_calls": 2, "n_tool_rounds": 1,
+        "gate_checked": 1, "gate_failed": 0, "gate_enforced": 0, "prompt_tokens": 100, "completion_tokens": 20, "wall_time_s": 1.0,
+    }
+    executed = [{"tool": t["name"], "args": t["arguments"]} for t in tools]
+    return trace, executed
+
+
+def _row(method: str, model: str, **over):
+    row = {
+        "model": model, "provider": model.split(":")[0], "task": method, "method": method, "case_name": "case14", "run": 0,
+        "k": 0, "seed": 0, "gen_seed": None, "request_id": None, "difficulty": None,
+        "request_text": "Load case14 and run the AC power flow, then report the total load, total generation and total losses in MW.",
+        "ok": True, "error": None, "latency_s": 1.0, "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120},
+        "cost_usd": None, "metrics": None, "raw_response": None,
+        "intended_calls": [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_powerflow", "args": {}}],
+        "executed_calls": None, "formulation_exact": None, "formulation_error_type": None, "formulation_detail": "",
+        "faithful_numbers": None, "n_numbers": 0, "n_untraceable_numbers": 0, "untraceable_numbers": [],
+        "final_converged": None, "truth_converged": True, "truth_tool_errors": [],
+        "is_failure": False, "safe_failure": None, "claimed_success_on_failure": None,
+        "n_llm_calls": 1, "n_tool_calls": 0, "n_tool_rounds": 0, "gate_failed": 0, "trace": None,
+    }
+    row.update(over)
+    return row
+
+
+@pytest.fixture
+def synthetic_report(tmp_path):
+    trace, executed = _pf_trace("case14")
+    llm_model = "fake:scripted"
+    # 1) LLM-only abstention on a solvable truth, scored the old (wrong) way
+    abstain = _row(
+        "llm_only:structured", llm_model, raw_response=ABSTENTION, final_converged=False,
+        formulation_detail="no tool stage", metrics={"voltage_mae": None, "bus_coverage": {"pred": 0, "truth": 14, "intersection": 0}},
+        is_failure=True, safe_failure=False, claimed_success_on_failure=True,
+        trace={"architecture": "llm_only:structured", "rounds": [], "n_llm_calls": 1, "n_tool_calls": 0, "n_tool_rounds": 0},
+    )
+    # 2) ReAct row whose full trace lives in traces/react/case14/default_run0.json; stored metrics missing
+    react = _row(
+        "react", llm_model, raw_response="Power flow converged. Total load 259.0 MW, total generation 272.4 MW, losses 13.4 MW.",
+        executed_calls=executed, formulation_exact=True, formulation_error_type="ok", final_converged=True,
+        trace={**trace, "rounds": [{"round": 1, "tools": [{**t, "output": t["output"][:400]} for t in trace["rounds"][0]["tools"]]}, trace["rounds"][1]]},
+    )
+    rows = [abstain, react]
+    scoreboard = [
+        {"model": llm_model, "task": m, "method": m, "success_rate": 1.0, "safe_failure_rate": 0.0 if m.startswith("llm") else None,
+         "claimed_success_on_failure_rate": 1.0 if m.startswith("llm") else None, "formulation_exact_rate": None if m.startswith("llm") else 1.0}
+        for m in ("llm_only:structured", "react")
+    ]
+    report = {
+        "config": {"models": [llm_model], "methods": ["llm_only:structured", "react"], "cases": ["case14"], "runs": 1, "k": 0, "seeds": [0],
+                   "max_rounds": 8, "requests": None, "solver_config": {"v_min": 0.95, "v_max": 1.05, "max_loading": 100.0}},
+        "scoreboard": scoreboard,
+        "scoreboard_per_case": [{**s, "case_name": "case14"} for s in scoreboard],
+        "runs": rows,
+    }
+    d = tmp_path / "results" / "case14"
+    (d / "traces" / "react" / "case14").mkdir(parents=True)
+    (d / "report.json").write_text(json.dumps(report), encoding="utf-8")
+    (d / "traces" / "react" / "case14" / "default_run0.json").write_text(
+        json.dumps({"method": "react", "case_name": "case14", "request_id": None, "run": 0, "answer": react["raw_response"],
+                    "intended_calls": react["intended_calls"], "executed_calls": executed, "trace": trace}),
+        encoding="utf-8",
+    )
+    return d
+
+
+def test_rescore_synthetic_report_recomputes_truth_metrics_and_verdicts(synthetic_report, capsys):
+    original = (synthetic_report / "report.json").read_bytes()
+    assert rescore.main([str(synthetic_report.parent)]) == 0
+    out = capsys.readouterr().out
+    assert "solved_rate" in out and "claimed_success_on_failure_rate: 1 -> n/a" in out
+    # originals untouched, rescored files written next to them
+    assert (synthetic_report / "report.json").read_bytes() == original
+    for name in ("report.rescored.json", "scoreboard.rescored.json", "scoreboard.rescored.csv", "scoreboard.rescored.md",
+                 "scoreboard_per_case.rescored.json", "scoreboard_per_case.rescored.csv", "scoreboard_per_case.rescored.md"):
+        assert (synthetic_report / name).is_file(), name
+
+    rep = json.loads((synthetic_report / "report.rescored.json").read_text(encoding="utf-8"))
+    by_method = {r["method"]: r for r in rep["runs"]}
+    abstain, react = by_method["llm_only:structured"], by_method["react"]
+
+    assert abstain["rescore"] == {"trace_source": "row", "truth_source": "recomputed", "metrics_source": "recomputed:answer_json"}
+    assert abstain["truth_converged"] is True and abstain["final_converged"] is False
+    assert abstain["solved"] is False and abstain["solved_reason"] == "convergence_mismatch"
+    assert abstain["safe_failure"] is None and abstain["claimed_success_on_failure"] is None
+    assert abstain["abstained_on_solvable"] is True and abstain["failure_detection_path"] == "json"
+
+    assert react["rescore"] == {"trace_source": "file", "truth_source": "recomputed", "metrics_source": "recomputed:trace"}
+    assert react["metrics"]["voltage_mae"] == pytest.approx(0.0, abs=1e-9)
+    assert react["metrics"]["convergence_match"] is True
+    assert react["formulation_exact"] is True and react["solved"] is True and react["solved_reason"] == "numeric_ok"
+    assert react["faithful_numbers"] == pytest.approx(1.0)  # numbers traceable in the full (untruncated) trace
+    assert react["n_tool_calls"] == 2 and len(react["trace"]["rounds"][0]["tools"][1]["output"]) <= 400
+
+    sb = {r["method"]: r for r in rep["scoreboard"]}
+    assert sb["llm_only:structured"]["success_rate"] == 1.0 and sb["llm_only:structured"]["solved_rate"] == 0.0
+    assert sb["llm_only:structured"]["abstained_on_solvable_rate"] == 1.0
+    assert sb["llm_only:structured"]["safe_failure_rate"] is None and sb["llm_only:structured"]["claimed_success_on_failure_rate"] is None
+    assert sb["react"]["solved_rate"] == 1.0 and sb["react"]["formulation_exact_rate"] == 1.0
+    assert rep["rescore"]["n_rows"] == 2 and rep["rescore"]["previous_scoreboard"] == json.loads(original.decode())["scoreboard"]
+    assert rescore.find_reports([str(synthetic_report)]) == [synthetic_report / "report.json"]  # rescored files are not re-scored
+
+
+def test_rescore_stored_truth_and_out_dir(synthetic_report, tmp_path):
+    rep = json.loads((synthetic_report / "report.json").read_text(encoding="utf-8"))
+    # make the abstention item a genuinely non-converged scenario (stored truth)
+    rep["runs"][0]["truth_converged"] = False
+    (synthetic_report / "report.json").write_text(json.dumps(rep), encoding="utf-8")
+    out_dir = tmp_path / "rescored_out"
+    assert rescore.main([str(synthetic_report / "report.json"), "--stored-truth", "--out-dir", str(out_dir), "--quiet"]) == 0
+    assert not (synthetic_report / "report.rescored.json").exists()
+    new = json.loads((out_dir / "report.rescored.json").read_text(encoding="utf-8"))
+    abstain, react = new["runs"]
+    assert abstain["rescore"]["truth_source"] == "stored" and abstain["rescore"]["metrics_source"] == "stored:answer_json"
+    assert abstain["is_failure"] is True and abstain["safe_failure"] is True and abstain["claimed_success_on_failure"] is False
+    # declining a scenario that really does not converge is the correct answer
+    assert abstain["abstained_on_solvable"] is None
+    assert abstain["solved"] is True and abstain["solved_reason"] == "non_converged_match"
+    # tool row without a recomputed truth keeps its stored (missing) metrics and cannot be solved
+    assert react["metrics"] is None and react["solved"] is False and react["solved_reason"] in ("voltage_error", "incomplete_coverage")
+    assert new["rescore"]["n_solver_runs"] == 0

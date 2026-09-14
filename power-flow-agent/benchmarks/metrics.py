@@ -25,7 +25,10 @@ faithful_numbers
     Fraction of the numbers in the final answer that match some number in the
     tool outputs within tolerance: 1e-3 p.u. for voltages, 1 % relative for MW,
     Mvar and percent values. Numbers without a unit are matched if either
-    tolerance holds. Bare integers with no unit (bus/line ids, counts) are not
+    tolerance holds. Additionally, an answer number written with ``k`` decimals
+    matches a tool value whose rounding to ``k`` decimals equals it (``0.93`` vs
+    ``0.9312``), so a coarser quotation of a solver value is not penalized.
+    Bare integers with no unit (bus/line ids, counts) are not
     counted. ``None`` when the answer carries no numbers.
 n_untraceable_numbers
     Count of answer numbers that match no tool-output number.
@@ -394,11 +397,12 @@ def _unit_kind(unit: Optional[str]) -> str:
 
 
 def numbers_in_text(text: Optional[str]) -> List[Dict[str, Any]]:
-    """Numbers reported in an answer, each as ``{"value", "kind", "text"}``.
+    """Numbers reported in an answer, each as ``{"value", "kind", "text", "decimals"}``.
 
-    Bare integers with no unit are skipped (ids, counts, list numbering), as are
-    numbers directly attached to id words (``bus 7``, ``line 4-5``, ``case14``,
-    ``N-1``).
+    ``decimals`` is the number of digits written after the decimal point (the
+    precision the answer quotes the value with; see ``_matches``). Bare integers
+    with no unit are skipped (ids, counts, list numbering), as are numbers directly
+    attached to id words (``bus 7``, ``line 4-5``, ``case14``, ``N-1``).
     """
     out: List[Dict[str, Any]] = []
     s = str(text or "")
@@ -418,7 +422,8 @@ def numbers_in_text(text: Optional[str]) -> List[Dict[str, Any]]:
             value = float(raw.replace(",", ""))
         except ValueError:
             continue
-        out.append({"value": value, "kind": kind, "text": m.group(0).strip()})
+        decimals = len(raw.split(".", 1)[1]) if "." in raw else 0
+        out.append({"value": value, "kind": kind, "text": m.group(0).strip(), "decimals": decimals})
     return out
 
 
@@ -466,8 +471,16 @@ def numbers_in_tool_outputs(tool_outputs: Iterable[Any]) -> List[float]:
     return acc
 
 
-def _matches(value: float, kind: str, candidates: Sequence[float]) -> bool:
+def _matches(value: float, kind: str, candidates: Sequence[float], decimals: Optional[int] = None) -> bool:
+    """Does the answer number ``value`` match any tool-output candidate?
+
+    Two alternative criteria: the kind-specific absolute/relative tolerance, or -
+    when ``decimals`` (the precision the answer used) is given - equality after
+    rounding the candidate to that many decimals, so ``0.93`` matches ``0.9312``.
+    """
     for c in candidates:
+        if decimals is not None and abs(round(c, int(decimals)) - value) <= 1e-9:
+            return True
         abs_ok = abs(value - c) <= VOLTAGE_ABS_TOL
         rel_ok = abs(value - c) <= RELATIVE_TOL * max(abs(c), 1e-9) or (abs(c) < 1e-9 and abs(value) < 1e-9)
         if kind == "voltage" and abs_ok:
@@ -477,6 +490,11 @@ def _matches(value: float, kind: str, candidates: Sequence[float]) -> bool:
         if kind == "unknown" and (abs_ok or rel_ok):
             return True
     return False
+
+
+def _num_matches(n: Dict[str, Any], candidates: Sequence[float]) -> bool:
+    """``_matches`` for one ``numbers_in_text`` entry (uses its quoted precision)."""
+    return _matches(n["value"], n["kind"], candidates, n.get("decimals"))
 
 
 def _request_number_candidates(request_text: Optional[str]) -> List[float]:
@@ -504,7 +522,7 @@ def faithful_numbers(
     candidates.extend(_request_number_candidates(request_text))
     if not numbers:
         return {"faithful_numbers": None, "n_numbers": 0, "n_untraceable_numbers": 0, "untraceable": []}
-    untraceable = [n for n in numbers if not _matches(n["value"], n["kind"], candidates)]
+    untraceable = [n for n in numbers if not _num_matches(n, candidates)]
     return {
         "faithful_numbers": float((len(numbers) - len(untraceable)) / len(numbers)),
         "n_numbers": len(numbers),
@@ -517,6 +535,7 @@ def faithful_numbers(
 
 _FAILURE_RE = re.compile(
     r"(?:\bnot\s+converge|\bnon-?\s*converge|\bno\s+convergence|\bdiverge|converged?\s*[:=]?\s*(?:false|no)\b|"
+    r"\bisolat(?:ed|ion)?\b|\bisland(?:ed|ing)?\b|"
     r"\bfail(?:ed|ure|s)?\b|\bcould\s*not\b|\bcouldn'?t\b|\bcannot\b|\bcan'?t\b|\bunable\b|\bwithheld\b|"
     r"\bno\s+(?:verified\s+|valid\s+|numerical\s+)*(?:result|numbers?|solution)\b|\berror\b|"
     r"未收敛|不收敛|失败|无法|错误)",
@@ -669,7 +688,7 @@ def stale_state_check(
     numbers = numbers_in_text(answer_text)
     echo = _request_number_candidates(request_text)
     if echo:
-        numbers = [n for n in numbers if not _matches(n["value"], n["kind"], echo)]
+        numbers = [n for n in numbers if not _num_matches(n, echo)]
 
     out: Dict[str, Any] = {
         "has_mutation": last_mut is not None,
@@ -717,8 +736,8 @@ def stale_state_check(
 
     latest = numbers_in_tool_outputs([records[i].get("output") for i in resolves_after])
     old = numbers_in_tool_outputs([records[i].get("output") for i in prior])
-    old_only = [n for n in numbers if _matches(n["value"], n["kind"], old) and not _matches(n["value"], n["kind"], latest)]
-    new_only = [n for n in numbers if _matches(n["value"], n["kind"], latest) and not _matches(n["value"], n["kind"], old)]
+    old_only = [n for n in numbers if _num_matches(n, old) and not _num_matches(n, latest)]
+    new_only = [n for n in numbers if _num_matches(n, latest) and not _num_matches(n, old)]
     quoted_old = bool(old_only) and not new_only
     out.update(
         {

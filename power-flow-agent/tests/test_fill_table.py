@@ -211,3 +211,32 @@ def test_best_single_call_prefers_highest_formulation():
     )
     assert best_single_call(agg) == "single_call:few_shot"  # tie -> skeleton order
     assert best_single_call({}) is None
+
+
+# ----------------------------------------------------------------------------- rescored reports / Solved column
+
+
+def test_solved_reads_solved_rate_and_prefers_rescored_report(tmp_path):
+    from benchmarks.fill_table import find_reports
+
+    # original: pre-scoring report (only success_rate); rescored sibling carries solved_rate
+    orig = [_case_row(MODEL, "llm_only:structured", "case14", 40, 1.0, 0.0, None, 0.0, 3000, 4.0)]
+    resc = [_case_row(MODEL, "llm_only:structured", "case14", 40, 1.0, 0.0, None, 0.0, 3000, 4.0, solved_rate=0.25, solved_count=10, solved_total=40)]
+    d = tmp_path / "results" / "case14"
+    d.mkdir(parents=True)
+    (d / "report.json").write_text(json.dumps(_report(orig, ["case14"])), encoding="utf-8")
+    (d / "report.rescored.json").write_text(json.dumps(_report(resc, ["case14"])), encoding="utf-8")
+
+    assert find_reports([str(d)]) == [d / "report.rescored.json"]
+    assert find_reports([str(d)], prefer_rescored=False) == [d / "report.json"]
+
+    out = tmp_path / "rows.tex"
+    assert main([str(d), "--out", str(out)]) == 0
+    assert _data_rows(out.read_text(encoding="utf-8"))[0][2] == "25.0"  # Solved from solved_rate
+    assert main([str(d), "--out", str(out), "--no-prefer-rescored"]) == 0
+    assert _data_rows(out.read_text(encoding="utf-8"))[0][2] == "100.0"  # fallback: success_rate
+    # a null solved_rate (report written without per-item solved) also falls back
+    null_rows = [_case_row(MODEL, "llm_only:structured", "case14", 40, 0.9, 0.0, None, 0.0, 3000, 4.0, solved_rate=None)]
+    (d / "report.rescored.json").write_text(json.dumps(_report(null_rows, ["case14"])), encoding="utf-8")
+    assert main([str(d), "--out", str(out)]) == 0
+    assert _data_rows(out.read_text(encoding="utf-8"))[0][2] == "90.0"

@@ -11,7 +11,12 @@ tabular, in the exact order and format of the skeleton in ``main.tex``.
 Usage:
   .venv/bin/python benchmarks/fill_table.py benchmarks/results_matrix_openai_gpt-4o-mini \
       [--out benchmarks/tab_pf_protocol_rows.tex] [--model openai:gpt-4o-mini] \
-      [--per-system] [--scaling-csv benchmarks/pf_scaling.csv] [--gated-baselines]
+      [--per-system] [--scaling-csv benchmarks/pf_scaling.csv] [--gated-baselines] [--no-prefer-rescored]
+
+A ``report.rescored.json`` written by ``benchmarks/rescore.py`` next to a ``report.json`` is
+preferred by default (``--no-prefer-rescored`` reads the originals). The Solved column reads
+``solved_rate`` (answered correctly end to end) and falls back to ``success_rate`` for reports
+that predate it.
 
 Row mapping (method -> table row):
   llm_only:{structured,few_shot,cot,rag}     -> LLM-only block
@@ -67,7 +72,9 @@ class Column:
 
 
 COLUMNS: tuple[Column, ...] = (
-    Column("Solved", ("success_rate",), "pct"),
+    # Solved = answered correctly end to end (benchmarks/scoring.py); success_rate (run
+    # completed and parsed) is only the fallback for reports written before R1.
+    Column("Solved", ("solved_rate", "success_rate"), "pct"),
     Column("Form.", (FORMULATION_KEY,), "pct", "formulation_exact_total"),
     Column("V_MAE", ("voltage_mae_mean",), "sci", "ok"),
     Column("F_MAE", ("flow_mae_mean",), "f2", "ok"),
@@ -157,7 +164,12 @@ def format_cell(value: Optional[float], fmt: str) -> str:
 # --------------------------------------------------------------------------- loading
 
 
-def find_reports(paths: Iterable[str]) -> list[Path]:
+RESCORED_NAME = "report.rescored.json"
+
+
+def find_reports(paths: Iterable[str], prefer_rescored: bool = True) -> list[Path]:
+    """``report.json`` files under ``paths``; with ``prefer_rescored`` a sibling
+    ``report.rescored.json`` (written by ``benchmarks/rescore.py``) replaces the original."""
     found: list[Path] = []
     for raw in paths:
         p = Path(raw)
@@ -167,6 +179,8 @@ def find_reports(paths: Iterable[str]) -> list[Path]:
             found.append(p)
         else:
             raise FileNotFoundError(f"{raw}: not a report.json or a directory")
+    if prefer_rescored:
+        found = [p.with_name(RESCORED_NAME) if p.name == "report.json" and p.with_name(RESCORED_NAME).is_file() else p for p in found]
     return found
 
 
@@ -216,8 +230,9 @@ def select_model(rows: list[dict[str, Any]], model: Optional[str]) -> tuple[str,
 
 
 def _first_key(row: dict[str, Any], keys: tuple[str, ...]) -> Optional[str]:
+    """First key present with a numeric value (a key stored as ``null`` falls through)."""
     for k in keys:
-        if k in row:
+        if k in row and _is_num(row.get(k)):
             return k
     return None
 
@@ -341,9 +356,15 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--per-system", action="store_true", help="also write <out stem>_<case>.tex per system")
     ap.add_argument("--scaling-csv", default=None, help="write formulation rate and tool calls per (method, case)")
     ap.add_argument("--gated-baselines", action="store_true", help="ReAct/Plan-and-Act rows from react/plan_act instead of *_nogate")
+    ap.add_argument(
+        "--prefer-rescored",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="use report.rescored.json (benchmarks/rescore.py) when it sits next to a report.json (default: on)",
+    )
     args = ap.parse_args(argv)
 
-    paths = find_reports(args.reports)
+    paths = find_reports(args.reports, prefer_rescored=args.prefer_rescored)
     if not paths:
         raise SystemExit("no report.json found")
     rows = load_case_rows(paths)
