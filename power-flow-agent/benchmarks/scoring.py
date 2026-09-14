@@ -334,18 +334,27 @@ def solved_check(
     metrics: Optional[Dict[str, Any]],
     answer_text: Optional[str] = None,
     truth_answer: Any = None,
+    expected_outcome: Optional[str] = None,
+    declared_failure: Optional[bool] = None,
 ) -> Dict[str, Any]:
-    """``{"solved": bool, "solved_reason": str}`` per the module docstring."""
+    """``{"solved": bool, "solved_reason": str}`` per the module docstring.
+
+    Stress items (``expected_outcome`` in {"non_converged", "islanded"}) are solved when the
+    request was formulated correctly and the answer declares the failure (safe failure); there
+    is no valid numerical answer to match in that case.
+    """
 
     def _out(solved: bool, reason: str) -> Dict[str, Any]:
         return {"solved": bool(solved), "solved_reason": reason}
 
-    if truth_converged is None:
-        return _out(False, "no_ground_truth")
     if not ok:
         return _out(False, "run_failed")
     if has_tools and formulation_exact is not True:
         return _out(False, "formulation")
+    if expected_outcome in ("non_converged", "islanded"):
+        return _out(bool(declared_failure), "declared_failure" if declared_failure else "failure_not_declared")
+    if truth_converged is None:
+        return _out(False, "no_ground_truth")
     if final_converged is None:
         return _out(False, "no_final_state")
     if bool(final_converged) != bool(truth_converged):
@@ -395,6 +404,8 @@ def score_row(row: Dict[str, Any], *, truth_answer: Any = None) -> Dict[str, Any
         metrics=row.get("metrics"),
         answer_text=row.get("raw_response"),
         truth_answer=truth_answer if truth_answer is not None else row.get("truth_answer"),
+        expected_outcome=row.get("expected_outcome"),
+        declared_failure=failure.get("safe_failure"),
     )
     return {
         "is_failure": failure["is_failure"],

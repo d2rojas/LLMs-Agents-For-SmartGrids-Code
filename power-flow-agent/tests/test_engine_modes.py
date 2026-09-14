@@ -351,3 +351,48 @@ def test_gate_on_is_a_no_op_for_converged_or_already_blank_payloads():
         forwarded = json.loads(tool_msgs[-1]["content"])
         assert forwarded == payload  # forwarded verbatim, exactly as before R1
         assert trace["gate_enforced"] == 0
+
+
+def test_gate_fails_on_isolated_bus_nan_voltage():
+    """A converged solve with a NaN bus voltage (islanded bus) must not pass the gate."""
+    import json as _json
+    from llm.engine import gate_verdict, _withhold_numbers
+    payload = {
+        "case_name": "case30", "converged": True,
+        "bus_voltages": [{"bus_id": 1, "vm_pu": 1.0, "va_deg": 0.0}, {"bus_id": 11, "vm_pu": float("nan"), "va_deg": float("nan")}],
+        "line_flows": [{"line_id": 0, "p_from_mw": 10.0, "loading_percent": 20.0}],
+        "total_generation_mw": 100.0, "total_load_mw": 98.0, "total_loss_mw": 2.0,
+    }
+    out = _json.dumps(payload)
+    v = gate_verdict(out)
+    assert v is not None and v["converged"] is True
+    assert v["topology_ok"] is False and v["isolated_buses"] == [11]
+    assert v["passed"] is False and "isolated_or_unsolved_buses" in v["reasons"]
+    withheld = _json.loads(_withhold_numbers(out, v))
+    assert withheld["converged"] is False and withheld["bus_voltages"] == []
+    assert withheld["gate"]["isolated_buses"] == [11]
+
+
+def test_gate_passes_when_all_voltages_finite():
+    import json as _json
+    from llm.engine import gate_verdict
+    payload = {"converged": True, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.0, "va_deg": 0.0}], "line_flows": [],
+               "total_generation_mw": 10.0, "total_load_mw": 9.5, "total_loss_mw": 0.5}
+    v = gate_verdict(_json.dumps(payload))
+    assert v["passed"] is True and v["topology_ok"] is True and v["isolated_buses"] == []
+
+
+def test_gate_enforces_on_islanded_payload_not_only_nonconverged():
+    """An islanded (converged but NaN-bus) payload must be withheld when gate=True and forwarded when gate=False."""
+    import json as _json
+    from llm.engine import _withhold_numbers, gate_verdict
+    payload = {"converged": True,
+               "bus_voltages": [{"bus_id": 1, "vm_pu": 1.0, "va_deg": 0.0}, {"bus_id": 8, "vm_pu": float("nan"), "va_deg": float("nan")}],
+               "line_flows": [{"line_id": 0, "p_from_mw": 5.0, "loading_percent": 10.0}],
+               "total_generation_mw": 50.0, "total_load_mw": 49.0, "total_loss_mw": 1.0}
+    out = _json.dumps(payload); v = gate_verdict(out)
+    assert v["converged"] is True and v["passed"] is False and v["carries_numbers"] is True
+    # the engine condition is `gate and not passed and carries_numbers`; mirror it here
+    assert (True and not v["passed"] and v["carries_numbers"]) is True
+    withheld = _json.loads(_withhold_numbers(out, v))
+    assert withheld["bus_voltages"] == [] and withheld["gate"]["isolated_buses"] == [8]

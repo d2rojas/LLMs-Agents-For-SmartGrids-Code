@@ -72,8 +72,8 @@ PLAN_UNPARSEABLE_TEXT = (
     "so no tools were executed and no numerical result is available."
 )
 GATE_WITHHELD_NOTE = (
-    "Verification gate: the solver result did not pass verification "
-    "(non-converged), so numerical fields were withheld."
+    "Verification gate: the solver result did not pass verification, so numerical fields were "
+    "withheld. Report the failure as stated in the gate reasons; do not describe the network as solved."
 )
 
 
@@ -283,12 +283,26 @@ def gate_verdict(tool_output: str) -> Optional[Dict[str, Any]]:
         _is_finite_number(pf.get(k)) and float(pf.get(k)) != 0.0 for k in _PF_TOTAL_KEYS
     )
 
+    # Topology / validity check (added in revision R1): a "converged" solve can still leave
+    # buses without a valid voltage, typically because a line outage isolated them. PandaPower
+    # reports NaN for those buses. Reporting "all voltages within limits" in that state is an
+    # unverified claim, so the gate fails and names the buses.
+    isolated: List[Any] = []
+    for bv in pf.get("bus_voltages") or []:
+        if isinstance(bv, dict) and not _is_finite_number(bv.get("vm_pu")):
+            isolated.append(bv.get("bus_id"))
+    topology_ok = not isolated
+    if converged and isolated:
+        reasons.append("isolated_or_unsolved_buses")
+
     return {
         "converged": converged,
         "power_balance_ok": bool(balance_ok),
         "mismatch_mw": mismatch,
+        "topology_ok": bool(topology_ok),
+        "isolated_buses": isolated,
         "carries_numbers": bool(carries_numbers),
-        "passed": bool(converged and balance_ok),
+        "passed": bool(converged and balance_ok and topology_ok),
         "reasons": reasons,
     }
 
@@ -305,7 +319,16 @@ def _withhold_numbers(tool_output: str, verdict: Dict[str, Any]) -> str:
         if k in pf:
             pf[k] = 0.0
     pf["converged"] = False
-    pf["gate"] = {"passed": False, "reasons": list(verdict.get("reasons", [])), "note": GATE_WITHHELD_NOTE}
+    gate_info: Dict[str, Any] = {"passed": False, "reasons": list(verdict.get("reasons", [])), "note": GATE_WITHHELD_NOTE}
+    if verdict.get("isolated_buses"):
+        gate_info["isolated_buses"] = list(verdict["isolated_buses"])
+        gate_info["note"] = (
+            GATE_WITHHELD_NOTE
+            + f" The topology change split the network: buses {verdict['isolated_buses']} are isolated and have no "
+            "valid solution. Tell the user the network is split (this is not a non-convergence) and do not report "
+            "voltages or flows as valid."
+        )
+    pf["gate"] = gate_info
     return json.dumps(obj, ensure_ascii=False, default=str)
 
 
@@ -576,7 +599,9 @@ class LLMEngine:
                 trace["gate_checked"] += 1
                 if not verdict["passed"]:
                     trace["gate_failed"] += 1
-                if self.config.gate and not verdict["converged"] and verdict["carries_numbers"]:
+                # Enforce on ANY failed check (convergence, power balance, isolated buses), not only on
+                # non-convergence: a converged solve with islanded buses must not reach the LLM as valid numbers.
+                if self.config.gate and not verdict["passed"] and verdict["carries_numbers"]:
                     tool_output = _withhold_numbers(tool_output, verdict)
                     enforced = True
                     trace["gate_enforced"] += 1
