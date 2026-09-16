@@ -5,10 +5,10 @@ The paper's core table aggregates IEEE 14/30/57/118; this script writes the per-
 breakdown from the same ``report.json`` files, reusing the loaders, formatters, row
 mapping and n/a rules of ``benchmarks/fill_table.py``. Two layouts:
 
-  blocks   (default) one block per IEEE system, each with the 13 method rows and the 11
-           protocol columns of the main table (Solved, Form., V_MAE, F_MAE, FR, Faith.,
-           SFR, Claim, Calls, Tok., TTV). Blocks are separated by ``\midrule`` and a
-           full-width ``\multicolumn{13}{l}{\textbf{IEEE 30-bus}}`` row.
+  blocks   (default) one block per IEEE system, each with the 13 method rows and the 10
+           protocol columns of the main table (Form., V_MAE, F_MAE, Solved, Solver status,
+           B_mean, Faith., SFR, Calls, Tok.). Blocks are separated by ``\midrule`` and a
+           full-width ``\multicolumn{12}{l}{\textbf{IEEE 30-bus}}`` row.
   compact  methods x systems for two metrics (Form. and Calls by default, ``--metrics``):
            13 rows x (n_systems x 2) columns.
 
@@ -64,13 +64,13 @@ DEFAULT_OUT = PROJECT_ROOT / "benchmarks" / "tab_pf_protocol_per_system.tex"
 NA = "n/a"
 LABELS = {"blocks": "tab:pf_protocol_per_system", "compact": "tab:pf_by_system"}
 COLUMN_NAMES = [c.name for c in COLUMNS]
-COLUMN_HEADS = {"V_MAE": r"$V_{\mathrm{MAE}}$", "F_MAE": r"$F_{\mathrm{MAE}}$"}
-# (group title, number of columns) over the 11 protocol columns, as in the main table
+COLUMN_HEADS = {"V_MAE": r"$V_{\mathrm{MAE}}$", "F_MAE": r"$F_{\mathrm{MAE}}$", "B_mean": r"$B_{\mathrm{mean}}$"}
+# (group title, number of columns) over the 10 protocol columns, as in the main table
 COLUMN_GROUPS: tuple[tuple[str, int], ...] = (
-    ("Task utility", 2),
-    ("Solver-grounded correctness", 3),
-    ("Faithfulness and safe failure", 3),
-    ("Cost and latency", 3),
+    ("Task utility", 4),
+    ("Solver-grounded correctness", 2),
+    ("Faithfulness and safe failure", 2),
+    ("Cost", 2),
 )
 DEFAULT_COMPACT_METRICS = ("Form.", "Calls")
 
@@ -78,11 +78,11 @@ CAPTIONS = {
     "blocks": (
         r"Per-system breakdown of the aggregated protocol table: one block per IEEE test system, "
         r"40 requests per system, gpt-4o-mini, $k=1$, same tools and an eight-round budget where "
-        r"rounds apply. Solved: request solved end to end (\%); Form.: formulation correctness (\%); "
-        r"$V_{\mathrm{MAE}}$ (p.u.), $F_{\mathrm{MAE}}$ (MW); FR: feasibility rate (\%); Faith.: "
-        r"traceable numbers (\%); SFR: safe-failure rate (\%); Claim: success claimed on a "
-        r"non-converged case (\%); Calls: mean tool calls; Tok.: mean tokens; TTV: mean time to "
-        r"verified answer (s). n/a: the method has no tools or no LLM; --: not measured."
+        r"rounds apply. Form.: formulation correctness (\%); $V_{\mathrm{MAE}}$ (p.u.), "
+        r"$F_{\mathrm{MAE}}$ (MW); Solved: request solved end to end (\%); Solver status: reported "
+        r"convergence matches the reference (\%); B\_mean: mean KCL residual of the reported flows "
+        r"(MW); Faith.: traceable numbers (\%); SFR: safe-failure rate (\%); Calls: mean tool calls; "
+        r"Tok.: mean tokens. n/a: the method has no tools or no LLM; --: not measured."
     ),
     "compact": (
         r"Formulation correctness (Form., \%) and mean tool calls (Calls) per IEEE test system, "

@@ -36,7 +36,8 @@ def _case_row(model, method, case, n_items, solved, form, calls, tokens, ttv):
         "formulation_exact_total": n_items,
         "voltage_mae_mean": 1.65e-5,
         "flow_mae_mean": 0.1234,
-        "converged_rate": 1.0,
+        "convergence_match_rate": 1.0,
+        "kcl_mean_mismatch_mw_mean": 0.0,
         "faithful_numbers_mean": 0.9,
         "safe_failure_rate": 1.0,
         "safe_failure_total": 2,
@@ -102,7 +103,7 @@ def _data_rows(tex):
 
 
 def _block_headers(tex):
-    return [ln for ln in tex.splitlines() if ln.startswith(r"\multicolumn{13}{l}")]
+    return [ln for ln in tex.splitlines() if ln.startswith(r"\multicolumn{12}{l}")]
 
 
 # ----------------------------------------------------------------------------- blocks layout
@@ -111,11 +112,11 @@ def _block_headers(tex):
 def test_blocks_headers_and_row_order(results_dir, tmp_path):
     tex = _run(results_dir, tmp_path)
     assert _block_headers(tex) == [
-        r"\multicolumn{13}{l}{\textbf{IEEE 14-bus}} \\",
-        r"\multicolumn{13}{l}{\textbf{IEEE 30-bus}} \\",
+        r"\multicolumn{12}{l}{\textbf{IEEE 14-bus}} \\",
+        r"\multicolumn{12}{l}{\textbf{IEEE 30-bus}} \\",
     ]
     lines = tex.splitlines()
-    assert lines[0].startswith(r"\multicolumn{13}{l}{\textbf{IEEE 14-bus}}")
+    assert lines[0].startswith(r"\multicolumn{12}{l}{\textbf{IEEE 14-bus}}")
     # blocks separated by exactly one \midrule, placed right before the second header
     assert tex.count(r"\midrule") == 1
     assert lines[lines.index(_block_headers(tex)[1]) - 1] == r"\midrule"
@@ -137,14 +138,15 @@ def test_blocks_values_na_and_missing(results_dir, tmp_path):
     names = COLUMN_NAMES
     b14, b30 = rows[:13], rows[13:]
     # single_call:structured, per system, Solved from the rescored solved_rate (0.90, not 0.10)
-    assert b14[4][1] == "Structured" and b14[4][2:] == ["90.0", "85.0", r"$1.65{\times}10^{-5}$", "0.12", "100.0", "90.0", "100.0", "0.0", "2.0", "10000", "3.0"]
-    assert b30[4][2] == "70.0" and b30[4][3] == "75.0" and b30[4][2 + names.index("Calls")] == "1.5" and b30[4][2 + names.index("Tok.")] == "12000"
+    # order: Form., V_MAE, F_MAE, Solved, Solver status, B_mean, Faith., SFR, Calls, Tok.
+    assert b14[4][1] == "Structured" and b14[4][2:] == ["85.0", r"$1.65{\times}10^{-5}$", "0.12", "90.0", "100.0", "0", "90.0", "100.0", "2.0", "10000"]
+    assert b30[4][2] == "75.0" and b30[4][2 + 3] == "70.0" and b30[4][2 + names.index("Calls")] == "1.5" and b30[4][2 + names.index("Tok.")] == "12000"
     # best single-call prompt = the only one present, copied per system
     assert b14[9][1] == "Single-call, best prompt" and b14[9][2:] == b14[4][2:] and b30[9][2:] == b30[4][2:]
     # rule-based: Tok. is n/a, numbers per system
     assert b14[8][1] == "Rule-based parser, no LLM"
     assert b14[8][2 + names.index("Tok.")] == NA and b30[8][2 + names.index("Tok.")] == NA
-    assert b14[8][2] == "60.0" and b30[8][2] == "50.0" and b30[8][3] == "55.0"
+    assert b14[8][2] == "60.0" and b30[8][2] == "55.0" and b30[8][2 + 3] == "50.0"
     # LLM-only rows are missing: all dashes except Calls = n/a
     expected_llm_only = [MISSING] * len(names)
     expected_llm_only[names.index("Calls")] = NA
@@ -160,9 +162,9 @@ def test_blocks_standalone_and_tabular_wrappers(results_dir, tmp_path):
     assert tex.startswith(r"\begin{table}[!ht]") and tex.rstrip().endswith(r"\end{table}")
     assert r"\label{tab:pf_protocol_per_system}" in tex and r"\caption{" in tex
     assert r"\scriptsize" in tex and r"\resizebox{\textwidth}{!}{%" in tex
-    assert r"\begin{tabular}{ll cc ccc ccc ccc}" in tex and r"\toprule" in tex and r"\bottomrule" in tex
-    assert r"\textbf{Setting} & \textbf{Method} & \textbf{Solved} & \textbf{Form.} & $V_{\mathrm{MAE}}$" in tex
-    assert r"\cmidrule(lr){3-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}\cmidrule(lr){11-13}" in tex
+    assert r"\begin{tabular}{ll cccc cc cc cc}" in tex and r"\toprule" in tex and r"\bottomrule" in tex
+    assert r"\textbf{Setting} & \textbf{Method} & \textbf{Form.} & $V_{\mathrm{MAE}}$" in tex
+    assert r"\cmidrule(lr){3-6}\cmidrule(lr){7-8}\cmidrule(lr){9-10}\cmidrule(lr){11-12}" in tex
     assert len(_block_headers(tex)) == 2 and [r[1] for r in _data_rows(tex)] == EXPECTED_LABELS * 2
     tab = _run(results_dir, tmp_path, "--wrap", "tabular")
     assert tab.startswith(r"\scriptsize") and r"\begin{table}" not in tab and r"\begin{tabular}" in tab
@@ -217,9 +219,9 @@ def test_csv_one_row_per_method_and_system(results_dir, tmp_path):
 
 def test_no_prefer_rescored_and_cases_filter(results_dir, tmp_path):
     tex = _run(results_dir, tmp_path, "--no-prefer-rescored")
-    assert _data_rows(tex)[4][2] == "10.0"  # original report's solved_rate
+    assert _data_rows(tex)[4][2 + 3] == "10.0"  # original report's solved_rate (Solved column)
     tex = _run(results_dir, tmp_path, "--cases", "case30")
-    assert _block_headers(tex) == [r"\multicolumn{13}{l}{\textbf{IEEE 30-bus}} \\"]
+    assert _block_headers(tex) == [r"\multicolumn{12}{l}{\textbf{IEEE 30-bus}} \\"]
     assert tex.count(r"\midrule") == 0 and len(_data_rows(tex)) == 13
     with pytest.raises(SystemExit):
         main([str(results_dir), "--out", str(tmp_path / "x.tex"), "--layout", "compact", "--metrics", "Bogus"])

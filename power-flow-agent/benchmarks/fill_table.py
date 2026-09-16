@@ -72,19 +72,24 @@ class Column:
 
 
 COLUMNS: tuple[Column, ...] = (
-    # Solved = answered correctly end to end (benchmarks/scoring.py); success_rate (run
-    # completed and parsed) is only the fallback for reports written before R1.
-    Column("Solved", ("solved_rate", "success_rate"), "pct"),
+    # Task utility (Sec.~\ref{sec:evaluation}): formulation, solver-grounded numeric
+    # error, end-to-end verdict. Solved = answered correctly end to end
+    # (benchmarks/scoring.py); success_rate (run completed and parsed) is only the
+    # fallback for reports written before R1.
     Column("Form.", (FORMULATION_KEY,), "pct", "formulation_exact_total"),
     Column("V_MAE", ("voltage_mae_mean",), "sci", "ok"),
     Column("F_MAE", ("flow_mae_mean",), "f2", "ok"),
-    Column("FR", ("feasibility_rate", "feasible_rate", "converged_rate"), "pct"),
+    Column("Solved", ("solved_rate", "success_rate"), "pct"),
+    # Solver-grounded correctness: reported convergence matches the reference, and the
+    # KCL residual (B_mean) of the reported flows against the trusted solver.
+    Column("Solver status", ("convergence_match_rate",), "pct"),
+    Column("B_mean", ("kcl_mean_mismatch_mw_mean",), "sci", "ok"),
+    # Faithfulness and safe failure.
     Column("Faith.", ("faithful_numbers_mean",), "pct"),
     Column("SFR", ("safe_failure_rate",), "pct", "safe_failure_total"),
-    Column("Claim", ("claimed_success_on_failure_rate",), "pct", "claimed_success_on_failure_total"),
+    # Cost.
     Column("Calls", ("n_tool_calls_mean",), "f1z"),
     Column("Tok.", ("total_tokens_mean",), "int"),
-    Column("TTV", ("time_to_verified_s_mean", "ttv_s_mean", "wall_time_s_mean"), "f1"),
 )
 
 

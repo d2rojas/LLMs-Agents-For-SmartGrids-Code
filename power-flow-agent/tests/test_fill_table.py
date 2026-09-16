@@ -44,7 +44,8 @@ def _case_row(model, method, case, n_items, success, form, v_mae, calls, tokens,
         "formulation_exact_total": n_items,
         "voltage_mae_mean": v_mae,
         "flow_mae_mean": 0.1234,
-        "converged_rate": 1.0,
+        "convergence_match_rate": 1.0,
+        "kcl_mean_mismatch_mw_mean": 0.0,
         "faithful_numbers_mean": 0.9,
         "safe_failure_rate": 1.0,
         "safe_failure_total": 2,
@@ -137,21 +138,19 @@ def test_number_formatting_and_weighting(reports_dir, tmp_path):
     rows = _data_rows(tex)
     structured = rows[4]
     assert structured[1] == "Structured"
-    solved, form, v_mae, f_mae, fr, faith, sfr, claim, calls, tok, ttv = structured[2:]
-    assert solved == "83.3"  # item-weighted, not 75.0
+    form, v_mae, f_mae, solved, solver_status, b_mean, faith, sfr, calls, tok = structured[2:]
     assert form == "70.0"  # (0.8*40 + 0.5*20) / 60
     # V_MAE weighted by solved items: (1e-5*40 + 4e-5*10) / 50 = 1.6e-5
     assert v_mae == r"$1.60{\times}10^{-5}$"
     assert f_mae == "0.12"
-    assert fr == "100.0" and faith == "90.0" and sfr == "100.0" and claim == "0.0"
+    assert solved == "83.3"  # item-weighted, not 75.0
+    assert solver_status == "100.0" and b_mean == "0" and faith == "90.0" and sfr == "100.0"
     assert calls == "1.3"  # (1*40 + 2*20) / 60
     assert tok == "1100"  # (1000*40 + 1300*20) / 60
-    assert ttv == "2.7"
     rule = rows[8]
     assert rule[1] == "Rule-based parser, no LLM"
-    assert rule[2 + 2] == "0"  # V_MAE exactly zero
+    assert rule[2 + 1] == "0"  # V_MAE exactly zero
     assert rule[2 + 9] == "n/a"  # no LLM, so tokens are not applicable
-    assert rule[2 + 10] == "0.1"
 
 
 def test_best_prompt_selection(reports_dir, tmp_path):
@@ -161,8 +160,8 @@ def test_best_prompt_selection(reports_dir, tmp_path):
     best = rows[9]
     assert cot[1] == "Chain-of-thought" and best[1] == "Single-call, best prompt"
     assert best[2:] == cot[2:]
-    assert best[2 + 2] == r"$1.65{\times}10^{-5}$"
-    assert best[2 + 1] == "92.5"
+    assert best[2 + 1] == r"$1.65{\times}10^{-5}$"  # V_MAE
+    assert best[2 + 0] == "92.5"  # Form.
 
 
 def test_per_system_and_scaling_csv(reports_dir, tmp_path):
@@ -174,7 +173,7 @@ def test_per_system_and_scaling_csv(reports_dir, tmp_path):
         rows = _data_rows(p.read_text(encoding="utf-8"))
         assert [r[1] for r in rows] == EXPECTED_LABELS
     case14 = _data_rows(out.with_name("rows_case14.tex").read_text(encoding="utf-8"))
-    assert case14[4][2] == "100.0"  # structured, case14 only
+    assert case14[4][2 + 3] == "100.0"  # Solved, structured, case14 only
     with csv_path.open(newline="") as fh:
         recs = list(csv.DictReader(fh))
     assert {(r["method"], r["case"]) for r in recs} == {
@@ -232,11 +231,11 @@ def test_solved_reads_solved_rate_and_prefers_rescored_report(tmp_path):
 
     out = tmp_path / "rows.tex"
     assert main([str(d), "--out", str(out)]) == 0
-    assert _data_rows(out.read_text(encoding="utf-8"))[0][2] == "25.0"  # Solved from solved_rate
+    assert _data_rows(out.read_text(encoding="utf-8"))[0][2 + 3] == "25.0"  # Solved from solved_rate
     assert main([str(d), "--out", str(out), "--no-prefer-rescored"]) == 0
-    assert _data_rows(out.read_text(encoding="utf-8"))[0][2] == "100.0"  # fallback: success_rate
+    assert _data_rows(out.read_text(encoding="utf-8"))[0][2 + 3] == "100.0"  # fallback: success_rate
     # a null solved_rate (report written without per-item solved) also falls back
     null_rows = [_case_row(MODEL, "llm_only:structured", "case14", 40, 0.9, 0.0, None, 0.0, 3000, 4.0, solved_rate=None)]
     (d / "report.rescored.json").write_text(json.dumps(_report(null_rows, ["case14"])), encoding="utf-8")
     assert main([str(d), "--out", str(out)]) == 0
-    assert _data_rows(out.read_text(encoding="utf-8"))[0][2] == "90.0"
+    assert _data_rows(out.read_text(encoding="utf-8"))[0][2 + 3] == "90.0"
