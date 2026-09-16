@@ -1,6 +1,6 @@
 # Informe de experimento: `results_stress_gpt-4o-mini_gate3`
 
-Generado el 2026-09-15 22:05 por benchmarks/experiment_report.py a partir de 3 report(s) del directorio results_stress_gpt-4o-mini_gate3 (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-16 11:39 por benchmarks/experiment_report.py a partir de 3 report(s) del directorio results_stress_gpt-4o-mini_gate3 (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -17,7 +17,7 @@ Directorio analizado:
 - Requests: generadas, N=40 por caso y seed, difficulties=['stress'] (3 reports)
 - Items por dificultad: stress=120
 - runs por item: 1; k (perturbación ±10 %·k): 1; seeds: [0]; max_rounds: 8; temperature: 0.0; timeout_s: 90.0
-- Fecha de la corrida (mtime de report.json): 2026-09-14 02:37
+- Fecha de la corrida (mtime de report.json): 2026-09-16 08:11
 - Costo total: 0.2007 USD (120 items; costo medio 0.00167 USD/item)
 - Items totales: 120; ok=120; con error=0; tokens totales=1262980
 - Solved global: 100.0 % (120/120)
@@ -33,7 +33,7 @@ Los prompts se reconstruyen offline con el mismo código del runner (`llm.prompt
 
 ### Método `pfagent`
 
-**System prompt (SYSTEM_PROMPT_EN)** — 1375 caracteres; architecture=react, gate=True, memory=True
+**System prompt (SYSTEM_PROMPT_EN)** — 1375 caracteres; architecture=react, gate=False, memory=True
 
 ````
 You are a power system power-flow analysis assistant. You help the user complete power system analysis tasks from natural-language requests.
@@ -73,21 +73,21 @@ Load the IEEE 14-bus system and disconnect the transformer branch between bus 7 
 
 ## 3. Resultados agregados
 
-Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`): Solved = respondió correctamente de extremo a extremo; Form. = formulación exacta de las tool calls; V_MAE (p.u.) y F_MAE (MW) sobre los items con resultado; FR = tasa de convergencia/feasibility; Faith. = números de la respuesta trazables a salidas de tools; SFR = fallos declarados con seguridad; Claim = éxito reclamado sobre un fallo; Abst. = abstención en items resolubles; Calls = tool calls medias; Tok. = tokens medios; TTV = tiempo medio (s); $ = costo total USD. Porcentajes en %.
+Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), en los 4 grupos de `metricas_pfagent_definiciones.md`: **utilidad de tarea** Form. (formulación exacta de las tool calls), V_MAE (p.u.) y F_MAE (MW) sobre los items con resultado, Solved (respondió correctamente de extremo a extremo); **corrección solver-grounded** Solver status (convergencia reportada = convergencia real), B_mean (residual medio de KCL de los flujos reportados, MW); **fidelidad** Faith. (números de la respuesta trazables a salidas de tools) y SFR (fallos declarados con seguridad); **costo** Calls (tool calls medias) y Tok. (tokens medios). Fuera de los 4 grupos, solo en este reporte (no en las tablas del paper): Claim (éxito reclamado sobre un fallo), Abst. (abstención en items resolubles) y $ (costo total USD). Porcentajes en %.
 
 ### Por método × caso
 
-| Method | Case | N | Solved | Form. | V_MAE | F_MAE | FR | Faith. | SFR | Claim | Abst. | Calls | Tok. | TTV | $ |
-|-------|------|----|------|-----|-----|-----|----|------|-----|-----|-----|-----|-----|----|------|
-| pfagent | case14 | 40 | 100.0 | 100.0 | -- | -- | 0.0 | 100.0 | 100.0 | 0.0 | 100.0 | 3.6 | 6629 | 3.9 | 0.0437 |
-| pfagent | case30 | 40 | 100.0 | 100.0 | 0 | 0.00 | 2.5 | 100.0 | 100.0 | 0.0 | 94.1 | 3.8 | 13242 | 4.1 | 0.0836 |
-| pfagent | case57 | 40 | 100.0 | 100.0 | -- | -- | 0.0 | 100.0 | 100.0 | 0.0 | 100.0 | 2.9 | 11704 | 3.7 | 0.0734 |
+| Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Abst. | V pass | $ |
+|-------|------|----|----------------|-----|-----|----------------|----------------|------|------|----------------|-----|-----|----------|---------|-------------|------|
+| pfagent | case14 | 40 | 100.0 (40/40) | -- | -- | 100.0 (40/40) | 60.0 (24/40) | -- | 100.0 | 100.0 (40/40) | 3.6 | 6629 | 0.0 (0/40) | -- | -- | 0.0437 |
+| pfagent | case30 | 40 | 100.0 (40/40) | 0 | 0.00 | 100.0 (40/40) | 60.0 (24/40) | 0 | 100.0 | 100.0 (39/39) | 3.8 | 13242 | 0.0 (0/39) | 0.0 (0/1) | 100.0 (1/1) | 0.0836 |
+| pfagent | case57 | 40 | 100.0 (40/40) | -- | -- | 100.0 (40/40) | 60.0 (24/40) | -- | 100.0 | 100.0 (40/40) | 2.9 | 11704 | 0.0 (0/40) | -- | -- | 0.0734 |
 
 ### Agregado por método (media ponderada por items sobre todos los casos)
 
-| Method | Case | N | Solved | Form. | V_MAE | F_MAE | FR | Faith. | SFR | Claim | Abst. | Calls | Tok. | TTV | $ |
-|-------|-------|----|------|-----|-----|-----|----|------|-----|-----|-----|-----|-----|----|------|
-| pfagent | 3 casos | 120 | 100.0 | 100.0 | 0 | 0.00 | 0.8 | 100.0 | 100.0 | 0.0 | 40.0 | 3.4 | 10525 | 3.9 | 0.2007 |
+| Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Abst. | V pass | $ |
+|-------|-------|----|------------------|-----|-----|------------------|----------------|------|------|------------------|-----|-----|-------------|---------|---------|------|
+| pfagent | 3 casos | 120 | 100.0 (120/120) | 0 | 0.00 | 100.0 (120/120) | 60.0 (72/120) | 0 | 100.0 | 100.0 (119/119) | 3.4 | 10525 | 0.0 (0/119) | 0.0 (0/1) | 0.8 (1/1) | 0.2007 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 
@@ -145,7 +145,7 @@ The IEEE 14-bus system was loaded, and the transformer branch between bus 7 and 
 3. Violations: Bus 8 is isolated, leading to a non-converged solution.
 4. Suggested next step: Consider reconnecting the line between bus 7 and bus 8 or modifying the network to restore connectivity. Would you like to reconnect the line?
 --- Scoring ---
-formulation=ok (exact=True); V_MAE=--; F_MAE=--; faithful=-- %; solved=True (declared_failure); flags=abstained,abstained_on_solvable; error=-; tokens=2039; cost_usd=0.0004; wall=3.6 s
+formulation=ok (exact=True); V_MAE=--; F_MAE=--; faithful=-- %; solved=True (declared_failure); flags=abstained; error=-; tokens=2039; cost_usd=0.0004; wall=3.6 s
 ````
 
 **Ejemplo: con bandera de fallo (claimed/stale/abstained)**
@@ -179,7 +179,7 @@ The power flow analysis could not be completed due to network isolation caused b
 3. **Violations**: None reported, but the network is isolated.
 4. **Suggested next step**: Consider reconnecting one of the disconnected lines to restore network connectivity and then rerun the power flow analysis.
 --- Scoring ---
-formulation=ok (exact=True); V_MAE=--; F_MAE=--; faithful=-- %; solved=True (declared_failure); flags=abstained,abstained_on_solvable; error=-; tokens=4648; cost_usd=0.0008; wall=4.5 s
+formulation=ok (exact=True); V_MAE=--; F_MAE=--; faithful=-- %; solved=True (declared_failure); flags=abstained; error=-; tokens=4648; cost_usd=0.0008; wall=4.5 s
 ````
 
 **Ejemplo: primer item**
@@ -214,7 +214,7 @@ The power flow analysis could not be completed due to network isolation caused b
 3. **Violations**: None reported due to non-convergence.
 4. **Suggested next step**: Consider reconnecting the line between bus 7 and bus 8 to restore network connectivity and then rerun the power flow analysis.
 --- Scoring ---
-formulation=ok (exact=True); V_MAE=--; F_MAE=--; faithful=-- %; solved=True (declared_failure); flags=abstained,abstained_on_solvable; error=-; tokens=5702; cost_usd=0.0009; wall=4.2 s
+formulation=ok (exact=True); V_MAE=--; F_MAE=--; faithful=-- %; solved=True (declared_failure); flags=abstained; error=-; tokens=5702; cost_usd=0.0009; wall=4.2 s
 ````
 
 

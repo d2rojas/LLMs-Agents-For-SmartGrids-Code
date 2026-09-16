@@ -282,7 +282,11 @@ def rescore_row(
 
     # ground truth
     truth_converged = row.get("truth_converged")
-    reference_solvable = row.get("reference_solvable", True)
+    # None (not a defaulted bool) when the row predates this field and truth isn't recomputed
+    # below: failure_reporting's own fallback (truth_converged alone) then applies, matching
+    # pre-existing behavior exactly. Only a real, freshly recomputed value should ever
+    # override truth_converged in the failure classification below.
+    reference_solvable = row.get("reference_solvable")
     truth_result = truth_net = None
     truth_source = "stored"
     truth_answer = row.get("truth_answer")
@@ -331,6 +335,11 @@ def rescore_row(
             "metrics": metrics,
             "final_converged": final_converged,
             "truth_converged": truth_converged,
+            # Stored as-is, including None for a row that predates this field and whose truth
+            # wasn't recomputed (--stored-truth): every reader treats an absent/None value as
+            # "assume solvable" (`r.get("reference_solvable") is not False`), so `score_row`'s
+            # failure classification below only overrides truth_converged when this is an
+            # actual, freshly computed bool.
             "reference_solvable": reference_solvable,
             "truth_answer": truth_answer,
         }

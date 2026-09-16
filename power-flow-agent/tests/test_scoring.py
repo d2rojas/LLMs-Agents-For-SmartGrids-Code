@@ -87,6 +87,34 @@ def test_text_path_matches_legacy_semantics_for_tool_methods():
     assert ok["is_failure"] is False and ok["safe_failure"] is None and ok["claimed_success_on_failure"] is None
 
 
+def test_islanded_reference_claiming_success_is_a_failure_not_a_converged_flag_match():
+    """Regression for case14-stress-006-s0 (react_nogate, gpt-4o-mini): pandapower reports
+    ``converged: true`` for an islanded reference too (just a NaN-voltage bus), so a failure
+    classifier that only looks at the converged flag never sees this as a failure case at
+    all -- it silently drops the item from the safe_failure/claimed_success denominator
+    instead of scoring the model's claim of success on a split network as the claim it is.
+    ``reference_solvable=False`` (computed from the reference's own isolated-bus check, same
+    as ``verify_final_answer``'s no_isolated_buses condition) is what catches it.
+    """
+    answer = (
+        "The IEEE 14-bus system has been loaded, and the transformer branch between bus 7 "
+        "and bus 8 has been successfully disconnected.\n\n"
+        "- **Key numbers**: Total load: 251.83 MW, Total generation: 264.25 MW, "
+        "Total losses: 12.42 MW, Voltage range: 1.01 to 1.07 p.u.\n"
+        "- **Violations**: There are overvoltage violations at buses 1, 6, and 12."
+    )
+    # truth_converged=True and final_converged=True alone say "not a failure case" -- exactly
+    # the trap: without reference_solvable this item would vanish from the denominator.
+    trap = bs.failure_reporting(answer, truth_converged=True, final_converged=True, has_tools=True)
+    assert trap["is_failure"] is False and trap["safe_failure"] is None and trap["claimed_success_on_failure"] is None
+
+    out = bs.failure_reporting(answer, truth_converged=True, final_converged=True, has_tools=True, reference_solvable=False)
+    assert out["is_failure"] is True
+    assert out["safe_failure"] is False
+    assert out["claimed_success_on_failure"] is True
+    assert out["abstained_on_solvable"] is None  # an islanded reference isn't "solvable" either
+
+
 # ----------------------------------------------------------------------------- solved
 
 

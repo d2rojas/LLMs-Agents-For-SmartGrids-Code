@@ -40,11 +40,15 @@ solved
     a converged ground truth is never solved.
     ``solved_rate`` = solved items / all items (denominator: every row).
 actual failure
-    The item is a failure case when the ground truth is non-converged, or, for
-    methods with a solver state, when the method's final state is non-converged
-    (or the gate failed and there is no final state). For methods without tools
-    the model's own ``converged`` flag is a *claim*, not a solver state, so it
-    never defines a failure case by itself.
+    The item is a failure case when the ground truth is unsolvable -- it does
+    not converge, or it converges with at least one bus with no solved voltage
+    (an island; pandapower reports ``converged: true`` there, so the converged
+    flag alone misses this case, see ``reference_solvable`` in
+    ``evaluate_llms.py``) -- or, for methods with a solver state, when the
+    method's final state is non-converged (or the gate failed and there is no
+    final state). For methods without tools the model's own ``converged`` flag
+    is a *claim*, not a solver state, so it never defines a failure case by
+    itself.
 SFR (safe_failure_rate)
     P(declared failure | actual failure): among failure cases, the fraction whose
     answer declares the failure (JSON ``"converged": false`` or the failure
@@ -177,6 +181,7 @@ def failure_reporting(
     final_converged: Optional[bool],
     gate_failed: int = 0,
     has_tools: bool = True,
+    reference_solvable: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """JSON-aware ``safe_failure`` / ``claimed_success_on_failure`` / ``abstained_on_solvable``.
 
@@ -185,11 +190,23 @@ def failure_reporting(
     therefore does not define a failure case. The legacy text regexes of
     ``metrics.failure_reporting`` are the second detection path
     (``detection_path == "text"``).
+
+    ``reference_solvable`` (``evaluate_llms.py``'s reference-converges-and-not-
+    islanded check) is the ground truth's real solvability; when omitted this
+    falls back to ``truth_converged`` alone, which misses islanded references
+    (pandapower reports ``converged: true`` there too, just with a NaN-voltage
+    bus) -- a model that claims success on a split network was not scored as a
+    failure at all under that fallback.
     """
     text = str(answer_text or "")
-    solvable = truth_converged is True
+    if reference_solvable is None:
+        solvable = truth_converged is True
+        reference_unsolvable = truth_converged is False
+    else:
+        solvable = bool(reference_solvable)
+        reference_unsolvable = reference_solvable is False
     actual_failure = bool(
-        truth_converged is False
+        reference_unsolvable
         or (has_tools and final_converged is False)
         or (has_tools and final_converged is None and int(gate_failed or 0) > 0)
     )
@@ -394,6 +411,7 @@ def score_row(row: Dict[str, Any], *, truth_answer: Any = None) -> Dict[str, Any
         final_converged=row.get("final_converged"),
         gate_failed=int(row.get("gate_failed") or 0),
         has_tools=has_tools,
+        reference_solvable=row.get("reference_solvable"),
     )
     solved = solved_check(
         ok=bool(row.get("ok")),

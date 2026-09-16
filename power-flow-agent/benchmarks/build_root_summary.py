@@ -73,7 +73,7 @@ def _rate_counts(items: list[dict[str, Any]], name: str) -> tuple[Optional[int],
         # evaluate_llms.py's `reference_solvable`); an unsolvable reference can never satisfy
         # verify_final_answer, so it is excluded from the denominator rather than counted as
         # a failure.
-        vals = [r.get("v_pass") for r in items if r.get("reference_solvable", True)]
+        vals = [r.get("v_pass") for r in items if r.get("reference_solvable") is not False]
         return sum(1 for v in vals if v is True), sum(1 for v in vals if v is not None)
     return None, None
 

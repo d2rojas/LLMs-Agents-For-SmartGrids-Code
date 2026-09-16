@@ -1,6 +1,6 @@
 # Informe de experimento: `results_validation_gpt-4o-mini_stress`
 
-Generado el 2026-09-16 11:20 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-4o-mini_stress (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-16 11:39 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-4o-mini_stress (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -20,7 +20,7 @@ Directorio analizado:
 - Fecha de la corrida (mtime de report.json): 2026-09-16 10:44
 - Costo total: 0.1325 USD (40 items; costo medio 0.00331 USD/item)
 - Items totales: 40; ok=40; con error=0; tokens totales=836246
-- Solved global: 60.0 % (24/40)
+- Solved global: 100.0 % (40/40)
 
 Errores por tipo:
 
@@ -78,8 +78,8 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 ### Por método × caso
 
 | Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Abst. | V pass | $ |
-|-------|------|----|----------------|-----|-----|---------------|----------------|------|------|----------------|-----|-----|----------|----------------|------|------|
-| pfagent | case14 | 40 | 100.0 (40/40) | -- | 0.00 | 60.0 (24/40) | 100.0 (40/40) | 0 | 100.0 | 100.0 (24/24) | 4.5 | 20906 | 0.0 (0/24) | 100.0 (16/16) | -- | 0.1325 |
+|-------|------|----|----------------|-----|-----|----------------|----------------|------|------|----------------|-----|-----|----------|-----|------|------|
+| pfagent | case14 | 40 | 100.0 (40/40) | -- | 0.00 | 100.0 (40/40) | 100.0 (40/40) | 0 | 100.0 | 100.0 (40/40) | 4.5 | 20906 | 0.0 (0/40) | -- | -- | 0.1325 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 
@@ -90,8 +90,8 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 ### Solved por dificultad (%, items resueltos / items)
 
 | Method | stress |
-|-------|---------------|
-| pfagent | 60.0 (24/40) |
+|-------|----------------|
+| pfagent | 100.0 (40/40) |
 
 ### Verificación final (pfagent: V(x,c,z,y) aplicado a la respuesta final)
 
@@ -124,44 +124,6 @@ Hasta 3 items por método: uno resuelto, uno con formulación fallida (si existe
 ### Método `pfagent`
 
 **Ejemplo: resuelto (solved=True)**
-
-````
-request (case14-stress-003-s0, case14, difficulty=stress, seed=1911784258): Load the 14-bus test case (case14), disconnect the line between bus 1 and bus 2, increase the load at bus 3 to 282.6 MW and 57 Mvar (three times its nominal value), and finally rerun the power flow, then report the bus with the lowest voltage magnitude.
-intended_calls: load_case({"case_name": "case14"}) -> disconnect_line({"from_bus": 1, "to_bus": 2}) -> modify_load({"bus_id": 3, "p_mw": 282.6, "q_mvar": 57.0}) -> run_powerflow({})
-executed_calls: load_case({"case_name": "case14"}) -> disconnect_line({"from_bus": 1, "to_bus": 2}) -> modify_load({"bus_id": 3, "p_mw": 282.6, "q_mvar": 57}) -> run_powerflow({})
-fuente de la traza: archivo de traza completo
---- Ronda 1 ---
-tool: load_case({"case_name": "case14"})
-  output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 253.84578240591338, "total_gen_capacity_mw": 772.4000000000001}
-  gate: n/a (no es un resultado de flujo)
---- Ronda 2 ---
-tool: disconnect_line({"from_bus": 1, "to_bus": 2})
-  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.0450000000000002, "va_deg": -34.6873802729158, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_pu …[5949 chars más]
-  gate: PASS (reasons=-, mismatch=2.27e-13 MW)
-tool: modify_load({"bus_id": 3, "p_mw": 282.6, "q_mvar": 57})
-  output: {"case_name": "case14", "converged": false, "bus_voltages": [], "line_flows": [], "total_generation_mw": 0.0, "total_load_mw": 0.0, "total_loss_mw": 0.0, "voltage_violations": [], "thermal_violations": [], "summary_text": "Power flow failed: LoadflowNotConverged: Power Flow nr did not converge after …[91 chars más]
-  gate: FAIL (reasons=not_converged, mismatch=0 MW)
---- Ronda 3 ---
-LLM: The power flow analysis did not converge after the modifications made to the system.
-
-1. **Summary**: The power flow failed to converge after disconnecting the line between bus 1 and bus 2 and increasing the load at bus 3.
-2. **Key numbers**: No numerical values can be reported due to non-convergenc …[225 chars más]
---- Ronda 3 ---
-tool: run_powerflow({})
-  output: {"case_name": "case14", "converged": false, "bus_voltages": [], "line_flows": [], "total_generation_mw": 0.0, "total_load_mw": 0.0, "total_loss_mw": 0.0, "voltage_violations": [], "thermal_violations": [], "summary_text": "Power flow failed: LoadflowNotConverged: Power Flow nr did not converge after …[91 chars más]
-  gate: FAIL (reasons=not_converged, mismatch=0 MW)
---- Ronda 4 ---
-LLM: The power flow analysis still did not converge after the modifications made to the system.
-
-1. **Summary**: The power flow failed to converge after disconnecting the line between bus 1 and bus 2 and increasing the load at bus 3.
-2. **Key numbers**: No numerical values can be reported due to non-conv …[242 chars más]
---- Respuesta final ---
-No numerical result is reported. Verification failed: the last power flow did not converge after setting the load at bus 3 to 282.6 MW. This is a declared failure of the verification step, not a claim that the network failed to converge.
---- Scoring ---
-formulation=ok (exact=True); V_MAE=--; F_MAE=--; faithful=100.0 %; solved=True (declared_failure); flags=-; error=-; tokens=13620; cost_usd=0.0022; wall=5.8 s
-````
-
-**Ejemplo: con bandera de fallo (claimed/stale/abstained)**
 
 ````
 request (case14-stress-000-s0, case14, difficulty=stress, seed=1813382119): Load the IEEE 14-bus system and disconnect the transformer branch between bus 7 and bus 8.
@@ -199,10 +161,10 @@ LLM: The IEEE 14-bus system has been loaded, and the transformer branch between 
 --- Respuesta final ---
 No numerical result is reported. Verification failed: bus 8 has no valid voltage because disconnecting the branch between bus 7 and bus 8 isolated it from the slack bus, so the network is split. Suggested next step: reconnect the branch between bus 7 and bus 8, or analyse the connected part separately. This is a declared failure of the verification step, not a claim that the network failed to converge.
 --- Scoring ---
-formulation=ok (exact=True); V_MAE=--; F_MAE=0.00; faithful=-- %; solved=False (failure_not_declared); flags=abstained,abstained_on_solvable; error=-; tokens=14022; cost_usd=0.0023; wall=6.0 s
+formulation=ok (exact=True); V_MAE=--; F_MAE=0.00; faithful=-- %; solved=True (declared_failure); flags=abstained; error=-; tokens=14022; cost_usd=0.0023; wall=6.0 s
 ````
 
-**Ejemplo: no resuelto**
+**Ejemplo: con bandera de fallo (claimed/stale/abstained)**
 
 ````
 request (case14-stress-001-s0, case14, difficulty=stress, seed=827308000): Load the 14-bus test case (case14), disconnect the line between bus 2 and bus 4, disconnect the transformer branch between bus 7 and bus 8, and finally rerun the power flow, then list every line whose loading is above 100%.
@@ -242,7 +204,50 @@ LLM: The power flow analysis has been re-evaluated after the network modificatio
 --- Respuesta final ---
 No numerical result is reported. Verification failed: bus 8 has no valid voltage because disconnecting the branch between bus 7 and bus 8 isolated it from the slack bus, so the network is split. Suggested next step: reconnect the branch between bus 7 and bus 8, or analyse the connected part separately. This is a declared failure of the verification step, not a claim that the network failed to converge.
 --- Scoring ---
-formulation=ok (exact=True); V_MAE=--; F_MAE=0.00; faithful=-- %; solved=False (failure_not_declared); flags=abstained,abstained_on_solvable; error=-; tokens=21637; cost_usd=0.0034; wall=7.3 s
+formulation=ok (exact=True); V_MAE=--; F_MAE=0.00; faithful=-- %; solved=True (declared_failure); flags=abstained; error=-; tokens=21637; cost_usd=0.0034; wall=7.3 s
+````
+
+**Ejemplo: primer item**
+
+````
+request (case14-stress-002-s0, case14, difficulty=stress, seed=1627694679): Load the 14-bus test case (case14), set the active load at bus 9 to 37.7 MW, disconnect the transformer branch between bus 7 and bus 8, and finally rerun the power flow, then list every line whose loading is above 80%.
+intended_calls: load_case({"case_name": "case14"}) -> modify_load({"bus_id": 9, "p_mw": 37.7}) -> disconnect_line({"from_bus": 7, "to_bus": 8}) -> run_powerflow({})
+executed_calls: load_case({"case_name": "case14"}) -> modify_load({"bus_id": 9, "p_mw": 37.7}) -> disconnect_line({"from_bus": 7, "to_bus": 8}) -> run_powerflow({})
+fuente de la traza: archivo de traza completo
+--- Ronda 1 ---
+tool: load_case({"case_name": "case14"})
+  output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 257.9016499664761, "total_gen_capacity_mw": 772.4000000000001}
+  gate: n/a (no es un resultado de flujo)
+--- Ronda 2 ---
+tool: modify_load({"bus_id": 9, "p_mw": 37.7})
+  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.0450000000000004, "va_deg": -5.20987075244386, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_pu …[6276 chars más]
+  gate: PASS (reasons=-, mismatch=7.12e-09 MW)
+tool: disconnect_line({"from_bus": 7, "to_bus": 8})
+  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.045, "va_deg": -5.218631984859549, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_pu": 1.0100000 …[5520 chars más]
+  gate: FAIL (reasons=isolated_or_unsolved_buses, mismatch=1.62e-08 MW)
+--- Ronda 3 ---
+LLM: The power flow analysis has been completed after modifying the load and disconnecting the transformer branch.
+
+1. **Summary**: The power flow converged successfully after the modifications.
+2. **Key numbers**: 
+   - Total Load: 264.43 MW
+   - Total Generation: 278.62 MW
+   - Total Losses: 14.19 MW …[305 chars más]
+--- Ronda 3 ---
+tool: run_powerflow({})
+  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.045, "va_deg": -5.218631984859549, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_pu": 1.0100000 …[5520 chars más]
+  gate: FAIL (reasons=isolated_or_unsolved_buses, mismatch=1.62e-08 MW)
+--- Ronda 4 ---
+LLM: The power flow analysis has been re-evaluated after the network modifications, confirming the isolated state of bus 8.
+
+1. **Summary**: The power flow converged successfully, but bus 8 remains isolated with no valid voltage.
+2. **Key numbers**: 
+   - Total Load: 264.43 MW
+   - Total Generation: 278. …[417 chars más]
+--- Respuesta final ---
+No numerical result is reported. Verification failed: bus 8 has no valid voltage because disconnecting the branch between bus 7 and bus 8 isolated it from the slack bus, so the network is split. Suggested next step: reconnect the branch between bus 7 and bus 8, or analyse the connected part separately. This is a declared failure of the verification step, not a claim that the network failed to converge.
+--- Scoring ---
+formulation=ok (exact=True); V_MAE=--; F_MAE=0.00; faithful=-- %; solved=True (declared_failure); flags=abstained; error=-; tokens=23105; cost_usd=0.0037; wall=7.5 s
 ````
 
 
@@ -252,13 +257,13 @@ Observaciones generadas automáticamente a partir de los números del report (si
 
 - El gate verificó 142 resultados de flujo, 81 fallaron la verificación y se activó (retuvo números) 0 veces en 0 items.
 - Ningún item terminó con `error`.
-- Solved de `pfagent`: 60.0 % (24/40).
+- Solved de `pfagent`: 100.0 % (40/40).
 - Formulación exacta agregada sobre métodos con tools: 100.0 % (40/40).
 - Ningún item reclamó éxito sobre un fallo (claimed_success_on_failure=0).
-- De 24 items en estado de fallo, 24 lo declararon de forma segura (SFR 100.0 % (24/24)).
+- De 40 items en estado de fallo, 40 lo declararon de forma segura (SFR 100.0 % (40/40)).
 - 0 de 40 items con mutación de red reportaron estado obsoleto (stale_state).
 - Trazabilidad de números (Faith.) media con tools: 100.0 %.
-- 40 items esperaban un resultado no convergido (non_converged=24, islanded=16); el método lo declaró correctamente (solved) en 60.0 % (24/40), con solved_reason `declared_failure`=24.
+- 40 items esperaban un resultado no convergido (non_converged=24, islanded=16); el método lo declaró correctamente (solved) en 100.0 % (40/40), con solved_reason `declared_failure`=40.
 - Costo total 0.1325 USD; el método más caro fue `pfagent` con 0.1325 USD (100 %).
 - Métodos con tools: 4.55 tool calls medias por item (máximo 7).
 

@@ -976,6 +976,7 @@ def evaluate_item(
         final_converged=False if item.expected_outcome != "converged" else final_converged,
         gate_failed=int((trace or {}).get("gate_failed") or 0),
         has_tools=has_tools,
+        reference_solvable=reference_solvable,
     )
     solved = bs.solved_check(
         ok=ok,
@@ -1110,12 +1111,13 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
     # v_pass's denominator is restricted to items whose reference actually converges with no
     # isolated bus: when the reference itself is unsolvable (e.g. under the stress condition),
     # no answer can pass the check by construction, so those items are excluded rather than
-    # counted as failures. `.get("reference_solvable", True)` keeps older report.json rows
-    # (written before this field existed) behaving exactly as before.
+    # counted as failures. `.get("reference_solvable") is not False` keeps older report.json
+    # rows (written before this field existed, or never recomputed under --stored-truth)
+    # behaving exactly as before: only an explicit False excludes an item.
     v_pass_vals = [
         r.get("v_pass")
         for r in rows
-        if r.get("v_pass") is not None and r.get("reference_solvable", True)
+        if r.get("v_pass") is not None and r.get("reference_solvable") is not False
     ]
     v_pass_total = len(v_pass_vals)
     v_pass_count = sum(1 for v in v_pass_vals if v)
