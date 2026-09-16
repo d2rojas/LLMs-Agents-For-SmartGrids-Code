@@ -124,6 +124,11 @@ EXTENDED_SCOREBOARD_FIELDS = [
     "abstained_on_solvable_rate",
     "abstained_on_solvable_count",
     "abstained_on_solvable_total",
+    # task-level verification outcome (final_gate methods only; None for the rest)
+    "verification_pass_first_rate",
+    "verification_pass_retry_rate",
+    "verification_abstained_rate",
+    "verification_total",
 ]
 
 CASE_SCOREBOARD_FIELDS = [
@@ -173,12 +178,17 @@ class TaskSpec:
 
 STRATEGIES = ("structured", "few_shot", "cot", "rag")
 ARCH_METHODS: dict[str, dict[str, Any]] = {
-    # name: (architecture, gate, memory)
+    # name: (architecture, gate, memory, final_gate)
     "react": {"architecture": "react", "gate": True, "memory": False},
     "react_nogate": {"architecture": "react", "gate": False, "memory": False},
     "plan_act": {"architecture": "plan_act", "gate": True, "memory": False},
     "plan_act_nogate": {"architecture": "plan_act", "gate": False, "memory": False},
-    "pfagent": {"architecture": "react", "gate": True, "memory": True},
+    # PFAgent = ReAct with no in-loop observation gate, plus the task-level final-answer
+    # verification V(x,c,z,y) (llm.engine.verify_final_answer). "pfagent_obsgate" keeps
+    # the old (pre-V) behaviour reachable under its own name, for the already-reported
+    # stress-set numbers (results_stress_gpt-4o-mini_gate3) that used it.
+    "pfagent": {"architecture": "react", "gate": False, "memory": True, "final_gate": True},
+    "pfagent_obsgate": {"architecture": "react", "gate": True, "memory": True, "final_gate": False},
 }
 METHOD_HELP = (
     "baseline_pf | blueprint_pf | llm_only:<strategy> | single_call:<strategy> | "
@@ -196,6 +206,7 @@ class MethodSpec:
     strategy: Optional[str] = None
     architecture: Optional[str] = None
     gate: bool = True
+    final_gate: bool = False
     memory: bool = False
     preload_case: bool = False  # the case is loaded before the method runs (single_call prompting)
     uses_llm: bool = True
@@ -848,6 +859,7 @@ def evaluate_item(
                 timeout_s=float(timeout_s),
                 architecture=method.architecture,
                 gate=bool(method.gate),
+                final_gate=bool(method.final_gate),
                 memory=bool(method.memory),
                 max_rounds=int(max_rounds),
                 trace_output_chars=TRACE_OUTPUT_CHARS_FULL,
@@ -1030,6 +1042,8 @@ def evaluate_item(
             k: stale[k]
             for k in ("last_mutation_index", "last_mutation_tool", "last_mutation_args", "prior_result_indices", "resolve_indices_after", "old_only")
         },
+        "verification_outcome": (trace or {}).get("verification_outcome"),
+        "verification_attempts": (trace or {}).get("verification_attempts"),
         **cost,
         "trace": _truncate_trace(trace, TRACE_OUTPUT_CHARS_REPORT),
     }
@@ -1048,6 +1062,11 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
     stale_quoted_old = bm.rate([r.get("stale_state_quoted_old") for r in rows])
     solved = bm.rate([r.get("solved") for r in rows])
     abstained = bm.rate([r.get("abstained_on_solvable") for r in rows])
+    verif_outcomes = [r.get("verification_outcome") for r in rows if r.get("verification_outcome") is not None]
+    verif_total = len(verif_outcomes)
+
+    def _verif_rate(name: str) -> Optional[float]:
+        return (sum(1 for v in verif_outcomes if v == name) / verif_total) if verif_total else None
     scoreboard = {
         # `success_rate` = run completed and parsed (kept for backward compatibility);
         # `solved_rate` = answered correctly end to end (benchmarks/scoring.py).
@@ -1101,6 +1120,10 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "n_tool_calls_mean": _safe_mean([r.get("n_tool_calls") for r in rows]),
         "n_tool_rounds_mean": _safe_mean([r.get("n_tool_rounds") for r in rows]),
         "wall_time_s_mean": _safe_mean([r.get("wall_time_s", r.get("latency_s")) for r in rows]),
+        "verification_pass_first_rate": _verif_rate("pass_first"),
+        "verification_pass_retry_rate": _verif_rate("pass_retry"),
+        "verification_abstained_rate": _verif_rate("abstained"),
+        "verification_total": verif_total,
     }
     return scoreboard
 

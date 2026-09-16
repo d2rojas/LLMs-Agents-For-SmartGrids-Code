@@ -94,6 +94,11 @@ class EngineConfig:
     memory:       send prior conversation history to the LLM (default True).
                   ``single_call`` always behaves as ``memory=False``.
     trace_output_chars: truncation length for tool outputs stored in the trace.
+    final_gate:   task-level verification V(x,c,z,y) applied once to the final answer
+                  of the ``react`` architecture (see ``verify_final_answer``), instead
+                  of (or in addition to) the in-loop observation ``gate``. On failure,
+                  exactly one retry with the verdict appended to the conversation; a
+                  second failure forces a declared-failure abstention. Default False.
     """
 
     model: str = "gpt-4o-mini"  # 默认值仅作为占位；实际运行可由 config.py/环境变量覆盖
@@ -107,6 +112,7 @@ class EngineConfig:
     gate: bool = True
     memory: bool = True
     trace_output_chars: int = 400
+    final_gate: bool = False
 
     def __post_init__(self) -> None:
         if self.architecture not in ARCHITECTURES:
@@ -311,6 +317,138 @@ def gate_verdict(tool_output: str) -> Optional[Dict[str, Any]]:
     }
 
 
+def _finite_or_none(x: Any) -> Optional[float]:
+    return float(x) if _is_finite_number(x) else None
+
+
+def verify_final_answer(
+    trace: Dict[str, Any],
+    final_answer_text: str,
+    *,
+    request_text: Optional[str] = None,
+    balance_tol_mw: float = GATE_BALANCE_TOL_MW,
+    balance_rel_tol: float = GATE_BALANCE_REL_TOL,
+) -> Dict[str, Any]:
+    """Task-level verification V(x, c, z, y), applied once to the final answer text.
+
+    Five conditions, all evaluated on the last ``run_powerflow``-shaped output at or
+    after the last network mutation (or the last such output in the whole trace, when
+    no mutation happened): converged, active-power balance, no isolated buses,
+    faithfulness of the answer's numbers, and currency (no stale pre-mutation numbers).
+    ``passed`` requires all five. Only ``trace`` (the agent's own observed tool calls
+    and outputs) and ``final_answer_text`` are used — never a reference solution.
+
+    Conditions 1-3 (converged, balance, no_isolated_buses) read a single-state
+    ``PowerFlowResult`` payload; requests answered from a different kind of tool
+    output entirely (e.g. ``run_n1_contingency``'s ranking, which is not one network
+    state) never produce one. When the trace carries no such payload anywhere, those
+    three conditions do not apply to this item and are reported ``passed`` with
+    ``"applicable": False`` rather than penalized as an unconverged solve.
+    """
+    from benchmarks import metrics as bm
+
+    records = bm._tool_records_from_trace(trace)
+
+    last_mut: Optional[int] = None
+    for i, rec in enumerate(records):
+        if str(rec.get("name") or "") == "load_case":
+            last_mut = None
+        elif bm._mutation_applied(rec):
+            last_mut = i
+
+    has_any_pf_payload = any(
+        bm._find_pf_payload(bm._parse_output(rec.get("output"))) is not None for rec in records
+    )
+
+    resolve_idx: Optional[int] = None
+    if has_any_pf_payload:
+        search_from = last_mut if last_mut is not None else 0
+        for i in range(len(records) - 1, search_from - 1, -1):
+            if bm._is_resolve(records[i]):
+                resolve_idx = i
+                break
+
+    pf: Optional[Dict[str, Any]] = None
+    if resolve_idx is not None:
+        pf = bm._find_pf_payload(bm._parse_output(records[resolve_idx].get("output")))
+
+    conditions: Dict[str, Dict[str, Any]] = {}
+
+    if not has_any_pf_payload:
+        conditions["converged"] = {"passed": True, "residual": 0, "applicable": False}
+        conditions["balance"] = {"passed": True, "residual": None, "applicable": False}
+        conditions["no_isolated_buses"] = {"passed": True, "residual": 0, "applicable": False}
+    else:
+        converged = bool(pf.get("converged")) if pf is not None else False
+        conditions["converged"] = {"passed": converged, "residual": 0 if converged else 1, "applicable": True}
+
+        mismatch: Optional[float] = None
+        balance_ok = False
+        if pf is not None:
+            gen, load, loss = (_finite_or_none(pf.get(k)) for k in _PF_TOTAL_KEYS)
+            if gen is not None and load is not None and loss is not None:
+                mismatch = abs(gen - (load + loss))
+                balance_ok = mismatch <= max(balance_tol_mw, balance_rel_tol * abs(load))
+        conditions["balance"] = {"passed": bool(balance_ok), "residual": mismatch, "applicable": True}
+
+        isolated = 0
+        if pf is not None:
+            isolated = sum(1 for bv in pf.get("bus_voltages") or [] if isinstance(bv, dict) and not _is_finite_number(bv.get("vm_pu")))
+        conditions["no_isolated_buses"] = {"passed": isolated == 0, "residual": isolated, "applicable": True}
+
+    tool_outputs = bm.tool_outputs_from_trace(trace)
+    faith = bm.faithful_numbers(final_answer_text, tool_outputs, request_text=request_text)
+    n_numbers = faith.get("n_numbers") or 0
+    n_untraceable = faith.get("n_untraceable_numbers") or 0
+    faith_residual = (n_untraceable / n_numbers) if n_numbers else 0.0
+    conditions["faithfulness"] = {"passed": n_untraceable == 0, "residual": faith_residual}
+
+    stale = bm.stale_state_check(trace, final_answer_text, request_text=request_text)
+    if stale.get("stale_state_no_rerun"):
+        currency_residual = int(stale.get("n_answer_numbers") or 0)
+    else:
+        currency_residual = int(stale.get("n_numbers_old_only") or 0)
+    conditions["currency"] = {"passed": not bool(stale.get("stale_state")), "residual": currency_residual}
+
+    return {"passed": all(c["passed"] for c in conditions.values()), "conditions": conditions}
+
+
+_VERIFICATION_LABELS: Dict[str, str] = {
+    "converged": "the last power-flow solve did not converge",
+    "balance": "active-power balance is off by {residual} MW, above the tolerance",
+    "no_isolated_buses": "{residual} bus(es) have no valid voltage (isolated from the slack)",
+    "faithfulness": "{residual:.0%} of the numbers in the answer do not match any tool output or the request",
+    "currency": "the answer quotes {residual} number(s) from a solve made before the last network change",
+}
+
+
+def _verification_retry_message(verdict: Dict[str, Any]) -> str:
+    lines = ["Verification failed before this answer could be accepted. Failed condition(s):"]
+    for name, cond in verdict["conditions"].items():
+        if cond["passed"]:
+            continue
+        residual = cond["residual"] if cond["residual"] is not None else "unknown"
+        try:
+            detail = _VERIFICATION_LABELS[name].format(residual=residual)
+        except (ValueError, TypeError):
+            detail = _VERIFICATION_LABELS[name].format(residual=str(residual))
+        lines.append(f"- {detail}")
+    lines.append(
+        "Produce a corrected final answer. You may call tools again if needed. Do not change a number "
+        "without a tool call to support it."
+    )
+    return "\n".join(lines)
+
+
+def _verification_abstention_text(verdict: Dict[str, Any]) -> str:
+    failed = [name for name, c in verdict["conditions"].items() if not c["passed"]]
+    return (
+        "The final answer could not be verified after one retry, so no numerical result is reported. "
+        f"Verification failed on: {', '.join(failed)}. This is a declared failure of the verification "
+        "step, not a claim that the network failed to converge."
+    )
+
+
 def _withhold_numbers(tool_output: str, verdict: Dict[str, Any]) -> str:
     """Blank the numerical fields of a non-converged payload (gate enforcement)."""
     obj = json.loads(tool_output)
@@ -471,10 +609,12 @@ class LLMEngine:
         trace: Dict[str, Any] = {
             "architecture": self.config.architecture,
             "gate": bool(self.config.gate),
+            "final_gate": bool(self.config.final_gate),
             "memory": bool(self.config.memory),
             "max_rounds": int(self.config.max_tool_rounds),
             "status": "ok",
             "final_text": "",
+            "request_text": user_message,
             "rounds": [],
             "plan": None,
             "formulation_failure": False,
@@ -487,6 +627,10 @@ class LLMEngine:
             "prompt_tokens": 0,
             "completion_tokens": 0,
             "wall_time_s": 0.0,
+            "verification": [],
+            "verification_attempts": 0,
+            "verification_outcome": None,
+            "verification_retry_messages": [],
         }
 
         if session.conversation_history is None:
@@ -641,6 +785,7 @@ class LLMEngine:
 
     def _run_react(self, messages: List[Dict[str, Any]], session: SessionState, trace: Dict[str, Any]) -> str:
         tool_round = 0
+        verify_attempts = 0
         while True:
             if tool_round >= self.config.max_tool_rounds:
                 return self._finish(MAX_ROUNDS_EXCEEDED_TEXT, session, trace, "max_rounds")
@@ -657,15 +802,35 @@ class LLMEngine:
             messages.append(assistant_entry)
 
             tool_calls = msg.get("tool_calls") or []
-            if not tool_calls:
-                final_text = (msg.get("content") or "").strip()
+            if tool_calls:
+                self._execute_tool_calls(tool_calls, messages, session, trace, round_rec)
+                tool_round += 1
+                trace["n_tool_rounds"] = tool_round
+                continue
+
+            final_text = (msg.get("content") or "").strip()
+            if not self.config.final_gate:
                 trace["status"] = "ok"
                 return final_text
 
-            # 执行工具
-            self._execute_tool_calls(tool_calls, messages, session, trace, round_rec)
-            tool_round += 1
-            trace["n_tool_rounds"] = tool_round
+            verify_attempts += 1
+            verdict = verify_final_answer(trace, final_text, request_text=trace.get("request_text"))
+            trace["verification"].append(verdict)
+            if verdict["passed"]:
+                trace["verification_attempts"] = verify_attempts
+                trace["verification_outcome"] = "pass_first" if verify_attempts == 1 else "pass_retry"
+                trace["status"] = "ok"
+                return final_text
+
+            if verify_attempts >= 2:
+                trace["verification_attempts"] = verify_attempts
+                trace["verification_outcome"] = "abstained"
+                return self._finish(_verification_abstention_text(verdict), session, trace, "verification_failed")
+
+            retry_msg = _verification_retry_message(verdict)
+            trace["verification_retry_messages"].append(retry_msg)
+            session.conversation_history.append({"role": "user", "content": retry_msg})
+            messages.append({"role": "user", "content": retry_msg})
 
     # ---- single_call ------------------------------------------------------------
 

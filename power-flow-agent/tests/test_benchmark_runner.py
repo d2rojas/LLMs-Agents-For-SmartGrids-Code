@@ -301,7 +301,9 @@ def test_parse_method_covers_all_families():
     lo = parse_method("llm_only:cot")
     assert lo.kind == "llm_only" and lo.strategy == "cot"
     assert parse_method("react_nogate").gate is False
-    assert parse_method("pfagent").memory is True and parse_method("pfagent").gate is True
+    assert parse_method("pfagent").memory is True and parse_method("pfagent").gate is False
+    assert parse_method("pfagent").final_gate is True
+    assert parse_method("pfagent_obsgate").gate is True and parse_method("pfagent_obsgate").final_gate is False
     assert parse_method("plan_act").architecture == "plan_act"
     with pytest.raises(ValueError):
         parse_method("single_call:zero_shot")

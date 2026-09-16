@@ -44,6 +44,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from benchmarks import metrics as bm  # noqa: E402
 from benchmarks.fill_table import COLUMNS, RESCORED_NAME, _is_num, aggregate_all, case_buses, find_reports  # noqa: E402
 
 DEFAULT_PDF_HEADER = Path(
@@ -644,6 +645,8 @@ _ABSTAIN_KEYS = ("abstained_on_solvable_rate",)
 
 
 def _protocol_cells(row: dict[str, Any]) -> list[str]:
+    # Claim / Abst. are not paper-table columns (metricas_pfagent_definiciones.md: they stay
+    # in the JSON and REPORT.md, not the LaTeX tables), but the report still shows them here.
     cells = []
     for name, keys, fmt in _PROTOCOL_COLUMNS:
         val = _first_key(row, keys)
@@ -653,8 +656,8 @@ def _protocol_cells(row: dict[str, Any]) -> list[str]:
             cells.append("n/a")
         else:
             cells.append(format_value(val, fmt))
-        if name == "Claim":
-            cells.append(fmt_pct(_first_key(row, _ABSTAIN_KEYS)))
+    cells.append(fmt_pct(_first_key(row, ("claimed_success_on_failure_rate",))))
+    cells.append(fmt_pct(_first_key(row, _ABSTAIN_KEYS)))
     cells.append(fmt_usd(_first_key(row, ("cost_usd_total",))))
     return cells
 
@@ -663,8 +666,8 @@ def _protocol_header(with_model: bool, with_case: bool) -> list[str]:
     head = (["Model"] if with_model else []) + ["Method"] + (["Case"] if with_case else []) + ["N"]
     for name, _, _ in _PROTOCOL_COLUMNS:
         head.append(name)
-        if name == "Claim":
-            head.append("Abst.")
+    head.append("Claim")
+    head.append("Abst.")
     head.append("$")
     return head
 
@@ -672,11 +675,15 @@ def _protocol_header(with_model: bool, with_case: bool) -> list[str]:
 def section_results(exp: Experiment) -> str:
     lines = [SECTION_TITLES[2], ""]
     lines.append(
-        "Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`): Solved = respondió correctamente de extremo "
-        "a extremo; Form. = formulación exacta de las tool calls; V_MAE (p.u.) y F_MAE (MW) sobre los items con resultado; "
-        "FR = tasa de convergencia/feasibility; Faith. = números de la respuesta trazables a salidas de tools; SFR = fallos "
-        "declarados con seguridad; Claim = éxito reclamado sobre un fallo; Abst. = abstención en items resolubles; Calls = "
-        "tool calls medias; Tok. = tokens medios; TTV = tiempo medio (s); $ = costo total USD. Porcentajes en %.\n"
+        "Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), en los 4 grupos de "
+        "`metricas_pfagent_definiciones.md`: **utilidad de tarea** Form. (formulación exacta de las tool calls), "
+        "V_MAE (p.u.) y F_MAE (MW) sobre los items con resultado, Solved (respondió correctamente de extremo a "
+        "extremo); **corrección solver-grounded** Solver status (convergencia reportada = convergencia real), "
+        "B_mean (residual medio de KCL de los flujos reportados, MW); **fidelidad** Faith. (números de la "
+        "respuesta trazables a salidas de tools) y SFR (fallos declarados con seguridad); **costo** Calls (tool "
+        "calls medias) y Tok. (tokens medios). Fuera de los 4 grupos, solo en este reporte (no en las tablas del "
+        "paper): Claim (éxito reclamado sobre un fallo), Abst. (abstención en items resolubles) y $ (costo total "
+        "USD). Porcentajes en %.\n"
     )
     per_case = exp.per_case
     rows = exp.rows
@@ -701,7 +708,8 @@ def section_results(exp: Experiment) -> str:
             mrows = [r for r in per_case if str(r.get("model")) == model and r.get("case_name")]
             for method, agg in sorted(aggregate_all(mrows).items(), key=lambda kv: _method_sort_key(kv[0])):
                 items = [r for r in rows if str(r.get("model")) == model and str(r.get("method")) == method]
-                n_abst = sum(1 for r in items if r.get("abstained_on_solvable") is True)
+                claim_rate = bm.rate([r.get("claimed_success_on_failure") for r in items])["rate"]
+                abst_rate = bm.rate([r.get("abstained_on_solvable") for r in items])["rate"]
                 cells = []
                 for name, _, fmt in _PROTOCOL_COLUMNS:
                     if name == "Calls" and method.startswith(("llm_only", "baseline_pf", "blueprint_pf")):
@@ -710,8 +718,8 @@ def section_results(exp: Experiment) -> str:
                         cells.append("n/a")
                     else:
                         cells.append(format_value(agg.get(name), fmt))
-                    if name == "Claim":
-                        cells.append(fmt_pct(n_abst / len(items)) if items else MISSING)
+                cells.append(fmt_pct(claim_rate))
+                cells.append(fmt_pct(abst_rate))
                 cost = sum(float(r.get("cost_usd_total") or 0.0) for r in mrows if str(r.get("method")) == method)
                 cells.append(fmt_usd(cost))
                 agg_rows.append(([alias.get(model, model)] if with_model else []) + [method, f"{agg['n_cases']} casos", fmt_int(agg["n_items"])] + cells)
@@ -741,6 +749,30 @@ def section_results(exp: Experiment) -> str:
                 cells.append(f"{100.0 * n_ok / len(sub):.1f} ({n_ok}/{len(sub)})" if sub else MISSING)
             srows.append(cells)
         lines.append(md_table(["Method"] + list(diffs), srows))
+
+    verif_methods = [m for m in exp.methods() if any(r.get("verification_outcome") is not None for r in rows if str(r.get("method")) == m)]
+    if verif_methods:
+        lines.append(
+            "### Verificación final (pfagent: V(x,c,z,y) aplicado a la respuesta final)\n\n"
+            "`pass_first` = pasó al primer intento; `pass_retry` = pasó tras el único reintento con el veredicto "
+            "añadido; `abstained` = falló dos veces, respuesta forzada a fallo declarado sin números. N = items con "
+            "`final_gate` activo (no todos los métodos lo tienen).\n"
+        )
+        vrows = []
+        for method in verif_methods:
+            outcomes = [str(r.get("verification_outcome")) for r in rows if str(r.get("method")) == method and r.get("verification_outcome") is not None]
+            n = len(outcomes)
+            cnt = Counter(outcomes)
+            vrows.append(
+                [
+                    method,
+                    fmt_int(n),
+                    fmt_pct(cnt.get("pass_first", 0) / n) if n else MISSING,
+                    fmt_pct(cnt.get("pass_retry", 0) / n) if n else MISSING,
+                    fmt_pct(cnt.get("abstained", 0) / n) if n else MISSING,
+                ]
+            )
+        lines.append(md_table(["Method", "N", "pass_first", "pass_retry", "abstained"], vrows))
 
     lines.append("### Tipos de error de formulación (conteo de items)\n")
     ftypes = sorted({str(r.get("formulation_error_type")) for r in rows if r.get("formulation_error_type") is not None})
