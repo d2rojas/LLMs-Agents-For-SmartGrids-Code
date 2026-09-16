@@ -391,10 +391,17 @@ def verify_final_answer(
                 balance_ok = mismatch <= max(balance_tol_mw, balance_rel_tol * abs(load))
         conditions["balance"] = {"passed": bool(balance_ok), "residual": mismatch, "applicable": True}
 
-        isolated = 0
+        isolated_buses: List[Any] = []
         if pf is not None:
-            isolated = sum(1 for bv in pf.get("bus_voltages") or [] if isinstance(bv, dict) and not _is_finite_number(bv.get("vm_pu")))
-        conditions["no_isolated_buses"] = {"passed": isolated == 0, "residual": isolated, "applicable": True}
+            isolated_buses = [
+                bv.get("bus_id") for bv in pf.get("bus_voltages") or [] if isinstance(bv, dict) and not _is_finite_number(bv.get("vm_pu"))
+            ]
+        conditions["no_isolated_buses"] = {
+            "passed": not isolated_buses,
+            "residual": len(isolated_buses),
+            "applicable": True,
+            "isolated_buses": isolated_buses,
+        }
 
     tool_outputs = bm.tool_outputs_from_trace(trace)
     faith = bm.faithful_numbers(final_answer_text, tool_outputs, request_text=request_text)
@@ -410,16 +417,71 @@ def verify_final_answer(
         currency_residual = int(stale.get("n_numbers_old_only") or 0)
     conditions["currency"] = {"passed": not bool(stale.get("stale_state")), "residual": currency_residual}
 
-    return {"passed": all(c["passed"] for c in conditions.values()), "conditions": conditions}
+    last_mutation: Optional[Dict[str, Any]] = None
+    if last_mut is not None:
+        rec = records[last_mut]
+        last_mutation = {"tool": rec.get("name"), "args": rec.get("arguments") or {}}
+
+    return {"passed": all(c["passed"] for c in conditions.values()), "conditions": conditions, "last_mutation": last_mutation}
 
 
-_VERIFICATION_LABELS: Dict[str, str] = {
-    "converged": "the last power-flow solve did not converge",
-    "balance": "active-power balance is off by {residual} MW, above the tolerance",
-    "no_isolated_buses": "{residual} bus(es) have no valid voltage (isolated from the slack)",
-    "faithfulness": "{residual:.0%} of the numbers in the answer do not match any tool output or the request",
-    "currency": "the answer quotes {residual} number(s) from a solve made before the last network change",
-}
+def _describe_mutation(mutation: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Plain-English description of the last network-changing tool call, for messages
+    that must read like an explanation and not a log line."""
+    if not mutation:
+        return None
+    tool, args = mutation.get("tool"), mutation.get("args") or {}
+    if tool == "disconnect_line":
+        return f"disconnecting the branch between bus {args.get('from_bus')} and bus {args.get('to_bus')}"
+    if tool == "reconnect_line":
+        return f"reconnecting the branch between bus {args.get('from_bus')} and bus {args.get('to_bus')}"
+    if tool == "modify_load":
+        return f"setting the load at bus {args.get('bus_id')} to {args.get('p_mw')} MW"
+    if tool == "apply_remedial_action":
+        return f"applying remedial action {args.get('action_index')}"
+    return f"the last change ({tool})" if tool else None
+
+
+def _condition_plain_text(name: str, cond: Dict[str, Any], verdict: Dict[str, Any]) -> str:
+    """Human-readable cause for one failed condition, naming buses/values instead of the
+    internal condition key -- this is what ends up in the retry message and, if the retry
+    also fails, in the user-facing abstention text."""
+    mutation = verdict.get("last_mutation")
+    mutation_desc = _describe_mutation(mutation)
+
+    if name == "converged":
+        return "the last power flow did not converge" + (f" after {mutation_desc}" if mutation_desc else "")
+
+    if name == "balance":
+        r = cond.get("residual")
+        if _is_finite_number(r):
+            return f"the last solution violates active-power balance by {r:.2f} MW"
+        return "the last solution's power balance could not be checked (missing totals)"
+
+    if name == "no_isolated_buses":
+        buses = cond.get("isolated_buses") or []
+        if not buses:
+            return "one or more buses have no valid voltage, so the network is split"
+        bus_txt = " and ".join(f"bus {b}" for b in buses)
+        verb = "has" if len(buses) == 1 else "have"
+        is_disconnect = bool(mutation) and mutation.get("tool") == "disconnect_line"
+        cause = f" because {mutation_desc} isolated it from the slack bus" if is_disconnect else " and is isolated from the slack bus"
+        text = f"{bus_txt} {verb} no valid voltage{cause}, so the network is split."
+        if is_disconnect:
+            a = mutation.get("args") or {}
+            text += f" Suggested next step: reconnect the branch between bus {a.get('from_bus')} and bus {a.get('to_bus')}, or analyse the connected part separately."
+        return text
+
+    if name == "faithfulness":
+        r = cond.get("residual") or 0.0
+        return f"{r:.0%} of the numbers in the answer do not match any tool output or the request"
+
+    if name == "currency":
+        r = cond.get("residual") or 0
+        suffix = f" ({mutation_desc})" if mutation_desc else ""
+        return f"the answer quotes {r} number(s) from a solve made before the last network change{suffix}"
+
+    return name  # pragma: no cover - defensive, all five names are handled above
 
 
 def _verification_retry_message(verdict: Dict[str, Any]) -> str:
@@ -427,12 +489,7 @@ def _verification_retry_message(verdict: Dict[str, Any]) -> str:
     for name, cond in verdict["conditions"].items():
         if cond["passed"]:
             continue
-        residual = cond["residual"] if cond["residual"] is not None else "unknown"
-        try:
-            detail = _VERIFICATION_LABELS[name].format(residual=residual)
-        except (ValueError, TypeError):
-            detail = _VERIFICATION_LABELS[name].format(residual=str(residual))
-        lines.append(f"- {detail}")
+        lines.append(f"- {_condition_plain_text(name, cond, verdict)}")
     lines.append(
         "Produce a corrected final answer. You may call tools again if needed. Do not change a number "
         "without a tool call to support it."
@@ -441,11 +498,12 @@ def _verification_retry_message(verdict: Dict[str, Any]) -> str:
 
 
 def _verification_abstention_text(verdict: Dict[str, Any]) -> str:
-    failed = [name for name, c in verdict["conditions"].items() if not c["passed"]]
+    failed = [(name, cond) for name, cond in verdict["conditions"].items() if not cond["passed"]]
+    detail = " ".join(_condition_plain_text(name, cond, verdict).rstrip(".") + "." for name, cond in failed)
     return (
-        "The final answer could not be verified after one retry, so no numerical result is reported. "
-        f"Verification failed on: {', '.join(failed)}. This is a declared failure of the verification "
-        "step, not a claim that the network failed to converge."
+        "No numerical result is reported. Verification failed: "
+        f"{detail} This is a declared failure of the verification step, not a claim that the network "
+        "failed to converge."
     )
 
 

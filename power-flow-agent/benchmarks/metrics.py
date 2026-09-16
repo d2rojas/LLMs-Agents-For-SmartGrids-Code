@@ -852,7 +852,18 @@ def _walk_numbers(obj: Any, acc: List[float]) -> None:
 
 
 def numbers_in_tool_outputs(tool_outputs: Iterable[Any]) -> List[float]:
-    """Every finite number appearing in the (JSON) tool outputs."""
+    """Every finite number appearing in the (JSON) tool outputs.
+
+    TODO(open method decision, 2026-09-16): unlike ``numbers_in_text``, this walks bus/line
+    ids (``bus_id``, ``from_bus``, ...) into the candidate pool along with real physical
+    quantities. A stale value can coincidentally fall within a small id's tolerance band
+    (observed: a stale "14.05 MW" matched case14's ``bus_id: 14`` in both the pre- and
+    post-mutation outputs, at 1% relative tolerance, and was excluded from
+    ``stale_state_check``'s ``old_only`` as a result even though it was a genuinely stale
+    number). Excluding bare-integer ids here the way ``numbers_in_text`` already does would
+    change ``faithful_numbers`` / ``stale_state_check`` results project-wide, not just for
+    this one item; flagging for Daniela/PI rather than changing unilaterally.
+    """
     acc: List[float] = []
     for out in tool_outputs:
         if isinstance(out, str):

@@ -150,6 +150,26 @@ def test_abstention_text_is_recognized_as_a_declared_failure_by_scoring():
     assert not any(n["kind"] != "unknown" for n in bm.numbers_in_text(text))
 
 
+def test_abstention_text_names_the_isolated_bus_and_the_disconnect_in_plain_words():
+    """The peer-review ask: no internal condition names in the abstention text -- name the
+    bus, the cause (which branch was disconnected), and suggest reconnecting it."""
+    pf = _pf_json(bus_voltages=[{"bus_id": 7, "vm_pu": 1.06, "va_deg": 0.0}, {"bus_id": 8, "vm_pu": None, "va_deg": None}])
+    trace = _trace(
+        _round(
+            _tool("load_case", json.dumps({"case_name": "case14"})),
+            _tool("disconnect_line", pf, arguments={"from_bus": 7, "to_bus": 8}),
+        )
+    )
+    verdict = verify_final_answer(trace, "Voltages are within limits.")
+    assert verdict["conditions"]["no_isolated_buses"]["passed"] is False
+    text = _verification_abstention_text(verdict)
+    assert "no_isolated_buses" not in text and "converged" not in text  # no internal condition keys
+    assert "bus 8 has no valid voltage" in text
+    assert "disconnecting the branch between bus 7 and bus 8 isolated it" in text
+    assert "reconnect the branch between bus 7 and bus 8" in text
+    assert "No numerical result is reported" in text
+
+
 def test_retry_message_names_failed_conditions_only():
     pf = _pf_json(converged=False, gen=0.0, load=0.0, loss=0.0)
     trace = _trace(_round(_tool("run_powerflow", pf)))
@@ -198,5 +218,5 @@ def test_final_gate_retries_once_then_abstains_on_repeated_failure():
     text, trace = engine.run_with_trace("Run the power flow.", SessionState())
     assert trace["verification_outcome"] == "abstained"
     assert trace["verification_attempts"] == 2
-    assert "could not be verified" in text
+    assert "No numerical result is reported" in text
     assert len(client.calls) == 2  # exactly one retry, no third attempt
