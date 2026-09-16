@@ -131,6 +131,9 @@ EXTENDED_SCOREBOARD_FIELDS = [
     "verification_pass_retry_rate",
     "verification_abstained_rate",
     "verification_total",
+    # "normal" (default) or "stress": disambiguates (model, method, case) collisions when
+    # the same method/case is run under different conditions (see --condition).
+    "condition",
 ]
 
 CASE_SCOREBOARD_FIELDS = [
@@ -1244,11 +1247,16 @@ def run_benchmark(
     client_factory: Optional[Callable[[ModelSpec], Any]] = None,
     verbose: bool = True,
     full_trace_dir: Optional[Path] = None,
+    condition: str = "normal",
 ) -> dict[str, Any]:
     """Run every (model, method, case, seed, item, run) and aggregate.
 
     ``tasks`` is the legacy name for ``methods``; both accept method names.
     Defaults (``k=0``, ``seeds=[0]``, no requests) reproduce the pre-R1 run.
+    ``condition`` ("normal" by default, "stress" for the stress-difficulty sets) is
+    stamped on every scoreboard row so fill_table.py can key on (model, method, case,
+    condition) instead of silently merging a stress run into a normal one that shares
+    the same (model, method, case) — see fill_table.load_case_rows.
     """
     method_names = list(methods or tasks or [])
     if not method_names:
@@ -1311,12 +1319,12 @@ def run_benchmark(
 
     for (model_key, task_name), rows in sorted(by_group.items()):
         agg = _aggregate_group(rows)
-        scoreboard_rows.append({"model": model_key, "task": task_name, "method": task_name, **agg})
+        scoreboard_rows.append({"model": model_key, "task": task_name, "method": task_name, "condition": condition, **agg})
 
     for (model_key, task_name, case_name), rows in sorted(by_case_group.items()):
         agg = _aggregate_group(rows)
         scoreboard_case_rows.append(
-            {"model": model_key, "task": task_name, "method": task_name, "case_name": case_name, **agg}
+            {"model": model_key, "task": task_name, "method": task_name, "case_name": case_name, "condition": condition, **agg}
         )
 
     return {
@@ -1325,6 +1333,7 @@ def run_benchmark(
             "tasks": method_names,
             "methods": method_names,
             "cases": cases,
+            "condition": condition,
             "runs": runs,
             "k": int(k),
             "seeds": [int(s) for s in seeds],
@@ -1416,6 +1425,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--trace-dir", dest="trace_dir", default=None, help="directory for untruncated per-item traces (default: <out-dir>/traces)")
     parser.add_argument("--no-traces", dest="no_traces", action="store_true", help="do not write per-item trace files")
     parser.add_argument("--quiet", dest="quiet", action="store_true")
+    parser.add_argument(
+        "--condition",
+        dest="condition",
+        default=None,
+        help="tag disambiguating (model, method, case) in fill_table.py when the same method/case is "
+        "run more than once under different conditions (default: 'stress' if --difficulty stress is "
+        "the only requested difficulty, else 'normal')",
+    )
 
     args = parser.parse_args(argv)
 
@@ -1450,6 +1467,10 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     solver_config = SolverConfig()
 
+    condition = args.condition
+    if condition is None:
+        condition = "stress" if list(args.difficulties or []) == ["stress"] else "normal"
+
     report = run_benchmark(
         models=models,
         methods=methods,
@@ -1467,6 +1488,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         max_rounds=int(args.max_rounds),
         verbose=not args.quiet,
         full_trace_dir=None if args.no_traces else Path(args.trace_dir or (Path(args.out_dir) / "traces")),
+        condition=condition,
     )
 
     write_report(Path(args.out_dir), report)

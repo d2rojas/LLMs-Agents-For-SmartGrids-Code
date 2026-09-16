@@ -204,25 +204,46 @@ def _case_rows(report: dict[str, Any], source: Path) -> list[dict[str, Any]]:
             rows = [{**r, "case_name": cases[0]} for r in report.get("scoreboard") or []]
         else:
             print(f"warning: {source}: no scoreboard_per_case and {len(cases)} cases; skipped", file=sys.stderr)
+    default_condition = (report.get("config") or {}).get("condition") or "normal"
     out = []
     for r in rows:
         method = r.get("method") or r.get("task")
         if not method or not r.get("case_name"):
             continue
-        out.append({**r, "method": method, "_source": str(source)})
+        condition = r.get("condition") or default_condition
+        out.append({**r, "method": method, "condition": condition, "_source": str(source)})
     return out
 
 
+class DuplicateReportRowError(ValueError):
+    """Two reports carry the same (model, method, case, condition): a merge hazard, not
+    a normal-vs-stress split, since that combination is caught via the condition tag."""
+
+
 def load_case_rows(report_paths: Iterable[Path]) -> list[dict[str, Any]]:
-    """Merge reports; a later file replaces an earlier (model, method, case) row."""
-    merged: dict[tuple[str, str, str], dict[str, Any]] = {}
+    """Merge reports, keyed by (model, method, case, condition).
+
+    Running the same method on the same case under a *different* condition (e.g.
+    "normal" vs "stress") is expected and produces two distinct rows. Two reports
+    carrying the exact same (model, method, case, condition) is a merge hazard --
+    silently keeping "the latter" previously risked a stress-condition run quietly
+    overwriting a normal-condition one in the paper table (see the R1 postmortem);
+    this now raises instead.
+    """
+    merged: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    sources: dict[tuple[str, str, str, str], str] = {}
     for path in report_paths:
         report = json.loads(Path(path).read_text(encoding="utf-8"))
         for r in _case_rows(report, Path(path)):
-            key = (str(r.get("model")), r["method"], str(r["case_name"]))
+            key = (str(r.get("model")), r["method"], str(r["case_name"]), str(r["condition"]))
             if key in merged:
-                print(f"warning: {key} found in {merged[key]['_source']} and {path}; keeping the latter", file=sys.stderr)
+                raise DuplicateReportRowError(
+                    f"{key[:3]} condition={key[3]!r} found in both {sources[key]} and {path}; "
+                    "if these are genuinely different conditions, pass --condition when generating "
+                    "the report that is missing it, otherwise remove the stale duplicate."
+                )
             merged[key] = r
+            sources[key] = str(path)
     return list(merged.values())
 
 
@@ -364,6 +385,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--out", default=str(DEFAULT_OUT), help="output .tex fragment (body rows only)")
     ap.add_argument("--model", default=None, help="provider:model to keep when reports mix models")
     ap.add_argument("--cases", default=None, help="comma-separated cases to aggregate (default: all found)")
+    ap.add_argument(
+        "--condition",
+        default="normal",
+        help="only aggregate rows tagged with this condition ('normal', 'stress', ... see "
+        "evaluate_llms.py --condition); 'all' aggregates every condition together, which mixes "
+        "conditions with different pass/fail semantics into one mean -- almost never what you want "
+        "for the main protocol table (default: normal)",
+    )
     ap.add_argument("--per-system", action="store_true", help="also write <out stem>_<case>.tex per system")
     ap.add_argument("--scaling-csv", default=None, help="write formulation rate and tool calls per (method, case)")
     ap.add_argument("--gated-baselines", action="store_true", help="ReAct/Plan-and-Act rows from react/plan_act instead of *_nogate")
@@ -379,6 +408,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     if not paths:
         raise SystemExit("no report.json found")
     rows = load_case_rows(paths)
+    if args.condition != "all":
+        rows = [r for r in rows if str(r.get("condition") or "normal") == args.condition]
     model, rows = select_model(rows, args.model)
     cases = [c.strip() for c in args.cases.split(",") if c.strip()] if args.cases else None
     if cases:

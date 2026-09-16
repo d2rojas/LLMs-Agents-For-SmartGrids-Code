@@ -311,6 +311,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--csv", default=None, help="also write one CSV row per (table row, system)")
     ap.add_argument("--model", default=None, help="provider:model to keep when reports mix models")
     ap.add_argument("--cases", default=None, help="comma-separated systems to include, in this order (default: all found, by bus count)")
+    ap.add_argument(
+        "--condition",
+        default="normal",
+        help="only aggregate rows tagged with this condition (see fill_table.py --condition); "
+        "'all' mixes every condition together (default: normal)",
+    )
     ap.add_argument("--gated-baselines", action="store_true", help="ReAct/Plan-and-Act rows from react/plan_act instead of *_nogate")
     ap.add_argument(
         "--prefer-rescored",
@@ -329,6 +335,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     if not paths:
         raise SystemExit("no report.json found")
     rows = load_case_rows(paths)
+    if args.condition != "all":
+        rows = [r for r in rows if str(r.get("condition") or "normal") == args.condition]
     model, rows = select_model(rows, args.model)
     found = sorted({str(r["case_name"]) for r in rows}, key=case_buses)
     if args.cases:

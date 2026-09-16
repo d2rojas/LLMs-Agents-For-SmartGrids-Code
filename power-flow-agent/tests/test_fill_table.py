@@ -183,6 +183,46 @@ def test_per_system_and_scaling_csv(reports_dir, tmp_path):
     assert rec["n_buses"] == "30" and float(rec["formulation_exact_rate"]) == 0.90 and float(rec["n_tool_calls_mean"]) == 1.5
 
 
+def test_duplicate_model_method_case_condition_raises(tmp_path):
+    """Two reports for the same (model, method, case) with no condition tag (both default
+    to "normal") is a merge hazard and must raise, not silently keep the latter."""
+    from benchmarks.fill_table import DuplicateReportRowError, find_reports, load_case_rows
+
+    row_a = _case_row(MODEL, "pfagent", "case14", 40, 1.0, 0.9, 1e-5, 2.0, 5000, 4.0)
+    row_b = _case_row(MODEL, "pfagent", "case14", 5, 1.0, 0.9, 1e-5, 2.0, 5000, 4.0)
+    d = tmp_path / "results"
+    (d / "normal").mkdir(parents=True)
+    (d / "also_normal").mkdir(parents=True)
+    (d / "normal" / "report.json").write_text(json.dumps(_report([row_a], ["case14"])), encoding="utf-8")
+    (d / "also_normal" / "report.json").write_text(json.dumps(_report([row_b], ["case14"])), encoding="utf-8")
+
+    with pytest.raises(DuplicateReportRowError):
+        load_case_rows(find_reports([str(d)]))
+
+
+def test_same_method_case_different_condition_does_not_raise(tmp_path):
+    """The same (model, method, case) under two different conditions (e.g. normal vs
+    stress) is expected and must produce two distinct rows, not a collision."""
+    from benchmarks.fill_table import find_reports, load_case_rows
+
+    row_normal = _case_row(MODEL, "pfagent", "case14", 40, 1.0, 0.9, 1e-5, 2.0, 5000, 4.0)
+    row_stress = _case_row(MODEL, "pfagent", "case14", 5, 0.2, 0.9, 1e-5, 2.0, 5000, 4.0)
+    d = tmp_path / "results"
+    (d / "normal").mkdir(parents=True)
+    (d / "stress").mkdir(parents=True)
+    normal_report = _report([row_normal], ["case14"])
+    normal_report["config"]["condition"] = "normal"
+    stress_report = _report([row_stress], ["case14"])
+    stress_report["config"]["condition"] = "stress"
+    (d / "normal" / "report.json").write_text(json.dumps(normal_report), encoding="utf-8")
+    (d / "stress" / "report.json").write_text(json.dumps(stress_report), encoding="utf-8")
+
+    rows = load_case_rows(find_reports([str(d)]))
+    conditions = {r["condition"] for r in rows}
+    assert conditions == {"normal", "stress"}
+    assert len(rows) == 2
+
+
 def test_gated_baselines_flag_changes_mapping():
     default = dict(table_blocks()[2][1])
     gated = dict(table_blocks(gated_baselines=True)[2][1])
