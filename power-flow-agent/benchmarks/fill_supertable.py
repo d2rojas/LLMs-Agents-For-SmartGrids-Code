@@ -135,15 +135,29 @@ def table_rows(agg_all: dict[str, dict[str, Any]], gated_baselines: bool = False
 
 
 def per_system_values(
-    rows: list[dict[str, Any]], systems: list[str], table: list[tuple[str, int, str, Optional[str]]]
+    rows: list[dict[str, Any]],
+    systems: list[str],
+    table: list[tuple[str, int, str, Optional[str]]],
+    *,
+    block_by: str = "case_name",
 ) -> dict[tuple[int, str], dict[str, Any]]:
     """{(row index, system): {column name: value or MISSING/NA, 'n_items': int, 'method_key': str}}.
 
     Rows are keyed by their index in ``table`` because prompt labels repeat across the
-    LLM-only and Single-call blocks."""
+    LLM-only and Single-call blocks. ``block_by`` selects the block dimension: "case_name"
+    (default, one block per IEEE system) or "model" (one block per model, e.g. to show two
+    models side by side with each on its own N -- see main()'s --block-by).
+
+    With ``block_by="model"``, the rule-based row has no real "model" of its own (it is not
+    an LLM run); the caller is expected to have retagged each block's rule-based copy with
+    that block's model string beforehand (see main()'s ``_retag_rule_based``) so it is picked
+    up by the plain filter below like any other row -- paired with the scenario set it was
+    actually run against, not shared verbatim across blocks with different N."""
     values: dict[tuple[int, str], dict[str, Any]] = {}
-    for system in systems:
-        agg = aggregate_all(rows, [system], columns=SUPPLEMENT_COLUMNS)
+    for block_value in systems:
+        block_rows = [r for r in rows if str(r.get(block_by)) == block_value]
+        cases = None if block_by == "model" else [block_value]
+        agg = aggregate_all(block_rows if block_by == "model" else rows, cases, columns=SUPPLEMENT_COLUMNS)
         for i, (_setting, _size, _label, key) in enumerate(table):
             stats = agg.get(key) if key else None
             cells = [stats.get(c.name) if stats else None for c in SUPPLEMENT_COLUMNS]
@@ -151,7 +165,7 @@ def per_system_values(
             rec = dict(zip(COLUMN_NAMES, cells))
             rec["n_items"] = int(stats["n_items"]) if stats else 0
             rec["method_key"] = key if stats else MISSING
-            values[(i, system)] = rec
+            values[(i, block_value)] = rec
     return values
 
 
@@ -169,13 +183,15 @@ def _multirow(setting: str, size: int) -> str:
     return rf"\multirow{{{size}}}{{*}}{{{setting}}}"
 
 
-def render_blocks_body(values: dict, systems: list[str], table: list[tuple[str, int, str, Optional[str]]]) -> str:
+def render_blocks_body(
+    values: dict, systems: list[str], table: list[tuple[str, int, str, Optional[str]]], *, label_fn=system_label
+) -> str:
     ncols = 2 + len(SUPPLEMENT_COLUMNS)
     lines: list[str] = []
     for s, system in enumerate(systems):
         if s:
             lines.append(r"\midrule")
-        lines.append(rf"\multicolumn{{{ncols}}}{{l}}{{\textbf{{{system_label(system)}}}}} \\")
+        lines.append(rf"\multicolumn{{{ncols}}}{{l}}{{\textbf{{{label_fn(system)}}}}} \\")
         prev_setting = None
         seen = 0
         for i, (setting, size, label, _key) in enumerate(table):
@@ -265,9 +281,10 @@ def render(
     wrap_level: str = "rows",
     metrics: tuple[str, ...] = DEFAULT_COMPACT_METRICS,
     caption: Optional[str] = None,
+    label_fn=system_label,
 ) -> str:
     if layout == "blocks":
-        body, header, colspec = render_blocks_body(values, systems, table), blocks_header(), blocks_colspec()
+        body, header, colspec = render_blocks_body(values, systems, table, label_fn=label_fn), blocks_header(), blocks_colspec()
     elif layout == "compact":
         body, header, colspec = render_compact_body(values, systems, table, metrics), compact_header(systems, metrics), compact_colspec(systems, metrics)
     else:
@@ -318,7 +335,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--caption", default=None, help="override the standalone caption")
     ap.add_argument("--metrics", default=",".join(DEFAULT_COMPACT_METRICS), help="compact layout: comma-separated column names (default Form.,Calls)")
     ap.add_argument("--csv", default=None, help="also write one CSV row per (table row, system)")
-    ap.add_argument("--model", default=None, help="provider:model to keep when reports mix models")
+    ap.add_argument("--model", default=None, help="provider:model to keep when reports mix models (ignored with --block-by model)")
+    ap.add_argument(
+        "--block-by",
+        choices=("system", "model"),
+        default="system",
+        help="blocks layout only: one block per IEEE system (default) or one block per model "
+        "(e.g. a GPT-5.4 N=5 block next to a gpt-4o-mini N=40 block on the same case)",
+    )
     ap.add_argument("--cases", default=None, help="comma-separated systems to include, in this order (default: all found, by bus count)")
     ap.add_argument(
         "--condition",
@@ -346,19 +370,27 @@ def main(argv: Optional[list[str]] = None) -> int:
     rows = load_case_rows(paths)
     if args.condition != "all":
         rows = [r for r in rows if str(r.get("condition") or "normal") == args.condition]
-    model, rows = select_model(rows, args.model)
-    found = sorted({str(r["case_name"]) for r in rows}, key=case_buses)
+
     if args.cases:
-        systems = [c.strip() for c in args.cases.split(",") if c.strip()]
-        rows = [r for r in rows if str(r["case_name"]) in systems]
+        cases_filter = [c.strip() for c in args.cases.split(",") if c.strip()]
+        rows = [r for r in rows if str(r["case_name"]) in cases_filter]
+
+    if args.block_by == "model":
+        model = "multiple"
+        systems = sorted({str(r["model"]) for r in rows} - {"none:rule_based"})
+        label_fn = lambda m: m  # noqa: E731 - the block label is the model key itself
     else:
-        systems = found
+        model, rows = select_model(rows, args.model)
+        found = sorted({str(r["case_name"]) for r in rows}, key=case_buses)
+        systems = found if not args.cases else [c for c in cases_filter if c in found]
+        label_fn = system_label
     if not systems:
         raise SystemExit("no systems to tabulate")
 
     table = table_rows(aggregate_all(rows), args.gated_baselines)
-    values = per_system_values(rows, systems, table)
-    tex = render(values, systems, table, args.layout, wrap_level, metrics, args.caption)
+    block_by_field = "model" if args.block_by == "model" else "case_name"
+    values = per_system_values(rows, systems, table, block_by=block_by_field)
+    tex = render(values, systems, table, args.layout, wrap_level, metrics, args.caption, label_fn=label_fn)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(tex, encoding="utf-8")
