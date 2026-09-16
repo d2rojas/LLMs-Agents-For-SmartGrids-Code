@@ -86,6 +86,21 @@ SINGLE_CALL_TASK_STATEMENT = (
     "turns, and do not fabricate numbers."
 )
 
+FORCED_ESCAPE_CLAUSE = "- If you cannot complete the calculation, set `converged` to false and output the structure you can provide (an empty array is acceptable)."
+FORCED_REPLACEMENT = (
+    "- You must compute and report your best numerical estimate for every bus voltage and every branch flow. "
+    "`converged` must be true and every array must be complete (one entry per bus and per branch). "
+    "Do not leave arrays empty and do not state that you cannot compute."
+)
+
+
+def forced_system_prompt(base: str) -> str:
+    """The baseline system prompt without the escape clause (forced best-effort variant)."""
+    if FORCED_ESCAPE_CLAUSE in base:
+        return base.replace(FORCED_ESCAPE_CLAUSE, FORCED_REPLACEMENT)
+    return base.rstrip() + "\n" + FORCED_REPLACEMENT
+
+
 COT_SYSTEM_SUFFIX = (
     "\n\nReasoning mode: you MAY write a short step-by-step reasoning in plain text before the "
     "answer. The final JSON object must be the LAST thing in the response, inside a single "
@@ -587,7 +602,7 @@ def _llm_only_role_and_context(strategy: str, request_text: str, net: Any, case_
     return _join([role, context]), ctx
 
 
-def _build_llm_only(strategy: str, request_text: str, net: Any, case_name: str, k_rows: int) -> List[Dict[str, str]]:
+def _build_llm_only(strategy: str, request_text: str, net: Any, case_name: str, k_rows: int, forced: bool = False) -> List[Dict[str, str]]:
     role_ctx, _ = _llm_only_role_and_context(strategy, request_text, net, case_name, k_rows)
     sections: List[str] = [role_ctx]
     if strategy == "few_shot":
@@ -597,7 +612,8 @@ def _build_llm_only(strategy: str, request_text: str, net: Any, case_name: str, 
         sections.append(LLM_ONLY_COT_SECTION)
     sections.append(LLM_ONLY_OUTPUT_SECTION)
 
-    system = BASELINE_SYSTEM_PROMPT.strip() + (COT_SYSTEM_SUFFIX if strategy == "cot" else "")
+    base = forced_system_prompt(BASELINE_SYSTEM_PROMPT.strip()) if forced else BASELINE_SYSTEM_PROMPT.strip()
+    system = base + (COT_SYSTEM_SUFFIX if strategy == "cot" else "")
     return [{"role": "system", "content": system}, {"role": "user", "content": _join(sections)}]
 
 
@@ -642,6 +658,7 @@ def build_messages(
     case_name: str,
     *,
     k_rows: Optional[int] = None,
+    forced: bool = False,
 ) -> List[Dict[str, str]]:
     """Build OpenAI-style chat messages for one (strategy, mode) on ``request_text``.
 
@@ -653,7 +670,7 @@ def build_messages(
         raise ValueError("request_text must be non-empty")
     k = 8 if k_rows is None else int(k_rows)
     if mode == "llm_only":
-        return _build_llm_only(strategy, request_text, net, case_name, k)
+        return _build_llm_only(strategy, request_text, net, case_name, k, forced=forced)
     return _build_single_call(strategy, request_text, net, case_name, k)
 
 

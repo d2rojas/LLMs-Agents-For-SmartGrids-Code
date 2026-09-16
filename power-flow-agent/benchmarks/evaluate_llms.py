@@ -199,6 +199,7 @@ class MethodSpec:
     memory: bool = False
     preload_case: bool = False  # the case is loaded before the method runs (single_call prompting)
     uses_llm: bool = True
+    forced: bool = False  # llm_only without the escape clause: best-effort numbers required
 
 
 def parse_method(name: str) -> MethodSpec:
@@ -210,11 +211,13 @@ def parse_method(name: str) -> MethodSpec:
     if raw in ARCH_METHODS:
         return MethodSpec(name=raw, kind="engine", **ARCH_METHODS[raw])
     head, sep, strategy = raw.partition(":")
-    if sep and head in ("llm_only", "single_call"):
+    if sep and head in ("llm_only", "llm_only_forced", "single_call"):
         if strategy not in STRATEGIES:
             raise ValueError(f"Unknown strategy {strategy!r} in method {raw!r}; expected one of {STRATEGIES}")
         if head == "llm_only":
             return MethodSpec(name=raw, kind="llm_only", strategy=strategy)
+        if head == "llm_only_forced":
+            return MethodSpec(name=raw, kind="llm_only", strategy=strategy, forced=True)
         return MethodSpec(
             name=raw, kind="engine", strategy=strategy, architecture="single_call", gate=True, memory=False, preload_case=True
         )
@@ -785,7 +788,7 @@ def evaluate_item(
             else:
                 from llm.prompt_variants import build_messages
 
-                msgs = build_messages(method.strategy, "llm_only", item.text, net, item.case_name)
+                msgs = build_messages(method.strategy, "llm_only", item.text, net, item.case_name, forced=bool(getattr(method, "forced", False)))
                 system_prompt, user_prompt = msgs[0]["content"], msgs[1]["content"]
                 parser_ctx = {}
                 parser = _baseline_parser
