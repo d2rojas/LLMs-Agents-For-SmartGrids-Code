@@ -75,7 +75,11 @@ def _df_to_text(df: Any, *, columns: Optional[List[str]] = None, max_rows: int =
 def export_case_tables(net: Any) -> Dict[str, str]:
     """导出用例关键表为文本，用于 baseline prompt。"""
 
-    bus_cols = ["name", "vn_kv", "type", "zone", "in_service"]
+    # vn_kv omitted: this case's MATPOWER file leaves baseKV at 0 for every bus, so
+    # pandapower's from_mpc converter fills it in with values (e.g. 0.208 kV) that
+    # are a conversion artifact, not real base voltages. Showing it induced LLMs to
+    # copy it as if it were a per-unit voltage (see llm_only_dive.md 7).
+    bus_cols = ["name", "type", "zone", "in_service"]
     load_cols = ["bus", "p_mw", "q_mvar", "in_service"]
     gen_cols = [
         "bus",
