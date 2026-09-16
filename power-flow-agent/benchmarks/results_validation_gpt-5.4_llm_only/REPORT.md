@@ -1,6 +1,6 @@
 # Informe de experimento: `results_validation_gpt-5.4_llm_only`
 
-Generado el 2026-09-15 23:30 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-5.4_llm_only (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-15 23:37 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-5.4_llm_only (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -571,11 +571,11 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 ### Por método × caso
 
 | Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Abst. | $ |
-|--------------------------------|------|----|-----|--------|-----|------|----------------|------|------|----|-----|----|-----|-----|------|
-| llm_only:cot | case14 | 5 | -- | -- | -- | 0.0 | 0.0 | -- | 3.3 | -- | n/a | 2944 | -- | 60.0 | 0.0635 |
-| llm_only:structured | case14 | 5 | -- | -- | -- | 0.0 | 0.0 | -- | 0.0 | -- | n/a | 2390 | -- | 80.0 | 0.0330 |
-| llm_only_forced:cot | case14 | 5 | -- | 2.18e-02 | 5.01 | 40.0 | 100.0 | -- | 0.0 | -- | n/a | 3696 | -- | 0.0 | 0.1183 |
-| llm_only_forced:structured | case14 | 5 | -- | 6.01e-03 | 4.80 | 40.0 | 100.0 | -- | 0.0 | -- | n/a | 3186 | -- | 0.0 | 0.0911 |
+|--------------------------------|------|----|-----|--------|-----|----------|----------------|------|------|----|-----|----|-----|----------|------|
+| llm_only:cot | case14 | 5 | -- | -- | -- | 0.0 (0/5) | 0.0 (0/5) | -- | 3.3 | -- | n/a | 2944 | -- | 60.0 (3/5) | 0.0635 |
+| llm_only:structured | case14 | 5 | -- | -- | -- | 0.0 (0/5) | 0.0 (0/5) | -- | 0.0 | -- | n/a | 2390 | -- | 80.0 (4/5) | 0.0330 |
+| llm_only_forced:cot | case14 | 5 | -- | 2.18e-02 | 5.01 | 40.0 (2/5) | 100.0 (5/5) | -- | 0.0 | -- | n/a | 3696 | -- | 0.0 (0/5) | 0.1183 |
+| llm_only_forced:structured | case14 | 5 | -- | 6.01e-03 | 4.80 | 40.0 (2/5) | 100.0 (5/5) | -- | 0.0 | -- | n/a | 3186 | -- | 0.0 (0/5) | 0.0911 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 

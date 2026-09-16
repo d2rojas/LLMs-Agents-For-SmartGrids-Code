@@ -644,7 +644,38 @@ _PROTOCOL_COLUMNS = [(c.name, c.keys, c.fmt) for c in COLUMNS]
 _ABSTAIN_KEYS = ("abstained_on_solvable_rate",)
 
 
-def _protocol_cells(row: dict[str, Any]) -> list[str]:
+def _rate_counts(items: list[dict[str, Any]], name: str) -> tuple[Optional[int], Optional[int]]:
+    """(count, total) an item-level rate column was computed over, so a small-N run
+    (e.g. N=5) never shows a bare "80.0" that reads as more precise than 4/5 is."""
+    if name == "Form.":
+        vals = [r.get("formulation_exact") for r in items]
+        return sum(1 for v in vals if v is True), sum(1 for v in vals if v is not None)
+    if name == "Solved":
+        return sum(1 for r in items if r.get("solved") is True), len(items)
+    if name == "Solver status":
+        vals = [(r.get("metrics") or {}).get("convergence_match") for r in items if r.get("ok")]
+        return sum(1 for v in vals if v), len(vals)
+    if name == "SFR":
+        vals = [r.get("safe_failure") for r in items]
+        return sum(1 for v in vals if v is True), sum(1 for v in vals if v is not None)
+    if name == "Claim":
+        vals = [r.get("claimed_success_on_failure") for r in items]
+        return sum(1 for v in vals if v is True), sum(1 for v in vals if v is not None)
+    if name == "Abst.":
+        vals = [r.get("abstained_on_solvable") for r in items]
+        return sum(1 for v in vals if v is True), sum(1 for v in vals if v is not None)
+    return None, None
+
+
+def _pct_cell(val: Any, items: list[dict[str, Any]], name: str) -> str:
+    text = fmt_pct(val)
+    if text == MISSING:
+        return text
+    count, total = _rate_counts(items, name)
+    return f"{text} ({count}/{total})" if total else text
+
+
+def _protocol_cells(row: dict[str, Any], items: list[dict[str, Any]]) -> list[str]:
     # Claim / Abst. are not paper-table columns (metricas_pfagent_definiciones.md: they stay
     # in the JSON and REPORT.md, not the LaTeX tables), but the report still shows them here.
     cells = []
@@ -654,10 +685,12 @@ def _protocol_cells(row: dict[str, Any]) -> list[str]:
             cells.append("n/a")
         elif name == "Tok." and str(row.get("method")) == "rule_based":
             cells.append("n/a")
+        elif fmt == "pct":
+            cells.append(_pct_cell(val, items, name))
         else:
             cells.append(format_value(val, fmt))
-    cells.append(fmt_pct(_first_key(row, ("claimed_success_on_failure_rate",))))
-    cells.append(fmt_pct(_first_key(row, _ABSTAIN_KEYS)))
+    cells.append(_pct_cell(_first_key(row, ("claimed_success_on_failure_rate",)), items, "Claim"))
+    cells.append(_pct_cell(_first_key(row, _ABSTAIN_KEYS), items, "Abst."))
     cells.append(fmt_usd(_first_key(row, ("cost_usd_total",))))
     return cells
 
@@ -695,7 +728,8 @@ def section_results(exp: Experiment) -> str:
     table_rows = []
     for r in sorted(per_case, key=lambda r: (str(r.get("model")), _method_sort_key(str(r.get("method"))), case_buses(str(r.get("case_name"))))):
         lead = ([alias.get(str(r.get("model")), str(r.get("model")))] if with_model else []) + [str(r.get("method")), str(r.get("case_name")), fmt_int(r.get("n_items"))]
-        table_rows.append(lead + _protocol_cells(r))
+        row_items = [x for x in rows if str(x.get("model")) == str(r.get("model")) and str(x.get("method")) == str(r.get("method")) and str(x.get("case_name")) == str(r.get("case_name"))]
+        table_rows.append(lead + _protocol_cells(r, row_items))
     lines.append("### Por método × caso\n")
     if legend:
         lines.append(legend)
@@ -716,10 +750,12 @@ def section_results(exp: Experiment) -> str:
                         cells.append("n/a")
                     elif name == "Tok." and method == "rule_based":
                         cells.append("n/a")
+                    elif fmt == "pct":
+                        cells.append(_pct_cell(agg.get(name), items, name))
                     else:
                         cells.append(format_value(agg.get(name), fmt))
-                cells.append(fmt_pct(claim_rate))
-                cells.append(fmt_pct(abst_rate))
+                cells.append(_pct_cell(claim_rate, items, "Claim"))
+                cells.append(_pct_cell(abst_rate, items, "Abst."))
                 cost = sum(float(r.get("cost_usd_total") or 0.0) for r in mrows if str(r.get("method")) == method)
                 cells.append(fmt_usd(cost))
                 agg_rows.append(([alias.get(model, model)] if with_model else []) + [method, f"{agg['n_cases']} casos", fmt_int(agg["n_items"])] + cells)
@@ -763,13 +799,19 @@ def section_results(exp: Experiment) -> str:
             outcomes = [str(r.get("verification_outcome")) for r in rows if str(r.get("method")) == method and r.get("verification_outcome") is not None]
             n = len(outcomes)
             cnt = Counter(outcomes)
+            def _voutcome(key: str) -> str:
+                if not n:
+                    return MISSING
+                c = cnt.get(key, 0)
+                return f"{fmt_pct(c / n)} ({c}/{n})"
+
             vrows.append(
                 [
                     method,
                     fmt_int(n),
-                    fmt_pct(cnt.get("pass_first", 0) / n) if n else MISSING,
-                    fmt_pct(cnt.get("pass_retry", 0) / n) if n else MISSING,
-                    fmt_pct(cnt.get("abstained", 0) / n) if n else MISSING,
+                    _voutcome("pass_first"),
+                    _voutcome("pass_retry"),
+                    _voutcome("abstained"),
                 ]
             )
         lines.append(md_table(["Method", "N", "pass_first", "pass_retry", "abstained"], vrows))

@@ -111,6 +111,8 @@ EXTENDED_SCOREBOARD_FIELDS = [
     "stale_state_quoted_old_count",
     "stale_state_quoted_old_total",
     "converged_rate",
+    "convergence_match_count",
+    "convergence_match_total",
     "kcl_mean_mismatch_mw_mean",
     "power_balance_error_mean",
     "n_llm_calls_mean",
@@ -1082,6 +1084,8 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "convergence_match_rate": _safe_mean([
             1.0 if (r.get("metrics") or {}).get("convergence_match") else 0.0 for r in ok_rows
         ]),
+        "convergence_match_count": sum(1 for r in ok_rows if (r.get("metrics") or {}).get("convergence_match")),
+        "convergence_match_total": len(ok_rows),
         "prompt_tokens_mean": _safe_mean([(r.get("usage") or {}).get("prompt_tokens") for r in rows]),
         "completion_tokens_mean": _safe_mean([(r.get("usage") or {}).get("completion_tokens") for r in rows]),
         "total_tokens_mean": _safe_mean([(r.get("usage") or {}).get("total_tokens") for r in rows]),
