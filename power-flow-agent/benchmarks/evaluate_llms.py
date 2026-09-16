@@ -131,6 +131,11 @@ EXTENDED_SCOREBOARD_FIELDS = [
     "verification_pass_retry_rate",
     "verification_abstained_rate",
     "verification_total",
+    # offline V(x,c,z,y) check computed for every method (llm.engine.verify_final_answer),
+    # not only the ones with final_gate on; see evaluate_item.
+    "v_pass_rate",
+    "v_pass_count",
+    "v_pass_total",
     # "normal" (default) or "stress": disambiguates (model, method, case) collisions when
     # the same method/case is run under different conditions (see --condition).
     "condition",
@@ -966,6 +971,14 @@ def evaluate_item(
         declared_failure=failure.get("safe_failure"),
     )
     stale = bm.stale_state_check(trace, raw_text, request_text=item.text)
+    # Evaluator-side V(x,c,z,y) check (llm.engine.verify_final_answer), computed for every
+    # method/row regardless of whether the method's own final_gate is on: for methods that
+    # already enforce it live (final_gate=True) this is 1.0 by construction and serves as a
+    # cross-check; for the rest it answers "would this answer have passed V" offline.
+    from llm.engine import verify_final_answer
+
+    v_verdict = verify_final_answer(trace or {}, raw_text or "", request_text=item.text)
+    v_pass = bool(v_verdict["passed"])
     cost = bm.cost_from_trace(trace)
     cost_usd = _estimate_cost_usd(model_spec.key, usage, pricing) if method.uses_llm else 0.0
 
@@ -1049,6 +1062,7 @@ def evaluate_item(
         },
         "verification_outcome": (trace or {}).get("verification_outcome"),
         "verification_attempts": (trace or {}).get("verification_attempts"),
+        "v_pass": v_pass,
         **cost,
         "trace": _truncate_trace(trace, TRACE_OUTPUT_CHARS_REPORT),
     }
@@ -1072,6 +1086,10 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
     def _verif_rate(name: str) -> Optional[float]:
         return (sum(1 for v in verif_outcomes if v == name) / verif_total) if verif_total else None
+
+    v_pass_vals = [r.get("v_pass") for r in rows if r.get("v_pass") is not None]
+    v_pass_total = len(v_pass_vals)
+    v_pass_count = sum(1 for v in v_pass_vals if v)
     scoreboard = {
         # `success_rate` = run completed and parsed (kept for backward compatibility);
         # `solved_rate` = answered correctly end to end (benchmarks/scoring.py).
@@ -1131,6 +1149,9 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "verification_pass_retry_rate": _verif_rate("pass_retry"),
         "verification_abstained_rate": _verif_rate("abstained"),
         "verification_total": verif_total,
+        "v_pass_rate": (v_pass_count / v_pass_total) if v_pass_total else None,
+        "v_pass_count": v_pass_count,
+        "v_pass_total": v_pass_total,
     }
     return scoreboard
 

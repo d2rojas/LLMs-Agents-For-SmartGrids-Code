@@ -49,6 +49,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from benchmarks.fill_table import (  # noqa: E402
     BEST_SINGLE_CALL,
     COLUMNS,
+    Column,
     MISSING,
     _is_llm_only_family,
     aggregate_all,
@@ -64,14 +65,20 @@ from benchmarks.fill_table import (  # noqa: E402
 DEFAULT_OUT = PROJECT_ROOT / "benchmarks" / "tab_pf_protocol_per_system.tex"
 NA = "n/a"
 LABELS = {"blocks": "tab:pf_protocol_per_system", "compact": "tab:pf_by_system"}
-COLUMN_NAMES = [c.name for c in COLUMNS]
+# One column beyond the paper's 10-column body table: V pass, the offline evaluator-side
+# V(x,c,z,y) check (llm.engine.verify_final_answer) computed for every method, not only the
+# ones that enforce it live. Supplement-only by design -- whether it belongs in the paper's
+# main body table is the editor's call, not decided here.
+SUPPLEMENT_COLUMNS: tuple[Column, ...] = COLUMNS + (Column("V pass", ("v_pass_rate",), "pct"),)
+COLUMN_NAMES = [c.name for c in SUPPLEMENT_COLUMNS]
 COLUMN_HEADS = {"V_MAE": r"$V_{\mathrm{MAE}}$", "F_MAE": r"$F_{\mathrm{MAE}}$", "B_mean": r"$B_{\mathrm{mean}}$"}
-# (group title, number of columns) over the 10 protocol columns, as in the main table
+# (group title, number of columns) over the 11 supplement columns (10 protocol + V pass)
 COLUMN_GROUPS: tuple[tuple[str, int], ...] = (
     ("Task utility", 4),
     ("Solver-grounded correctness", 2),
     ("Faithfulness and safe failure", 2),
     ("Cost", 2),
+    ("Verification", 1),
 )
 DEFAULT_COMPACT_METRICS = ("Form.", "Calls")
 
@@ -83,7 +90,9 @@ CAPTIONS = {
         r"$F_{\mathrm{MAE}}$ (MW); Solved: request solved end to end (\%); Solver status: reported "
         r"convergence matches the reference (\%); B\_mean: mean KCL residual of the reported flows "
         r"(MW); Faith.: traceable numbers (\%); SFR: safe-failure rate (\%); Calls: mean tool calls; "
-        r"Tok.: mean tokens. n/a: the method has no tools or no LLM; --: not measured."
+        r"Tok.: mean tokens; V pass: fraction of final answers passing the task-level "
+        r"verification V(x,c,z,y) offline (1.0 by construction for methods that already "
+        r"enforce it live). n/a: the method has no tools or no LLM; --: not measured."
     ),
     "compact": (
         r"Formulation correctness (Form., \%) and mean tool calls (Calls) per IEEE test system, "
@@ -134,10 +143,10 @@ def per_system_values(
     LLM-only and Single-call blocks."""
     values: dict[tuple[int, str], dict[str, Any]] = {}
     for system in systems:
-        agg = aggregate_all(rows, [system])
+        agg = aggregate_all(rows, [system], columns=SUPPLEMENT_COLUMNS)
         for i, (_setting, _size, _label, key) in enumerate(table):
             stats = agg.get(key) if key else None
-            cells = [stats.get(c.name) if stats else None for c in COLUMNS]
+            cells = [stats.get(c.name) if stats else None for c in SUPPLEMENT_COLUMNS]
             cells = apply_na([MISSING if v is None else v for v in cells], key)
             rec = dict(zip(COLUMN_NAMES, cells))
             rec["n_items"] = int(stats["n_items"]) if stats else 0
@@ -150,7 +159,7 @@ def _cell(rec: dict[str, Any], col_name: str) -> str:
     v = rec[col_name]
     if v in (MISSING, NA):
         return str(v)
-    return format_cell(v, COLUMNS[COLUMN_NAMES.index(col_name)].fmt)
+    return format_cell(v, SUPPLEMENT_COLUMNS[COLUMN_NAMES.index(col_name)].fmt)
 
 
 # --------------------------------------------------------------------------- rendering
@@ -161,7 +170,7 @@ def _multirow(setting: str, size: int) -> str:
 
 
 def render_blocks_body(values: dict, systems: list[str], table: list[tuple[str, int, str, Optional[str]]]) -> str:
-    ncols = 2 + len(COLUMNS)
+    ncols = 2 + len(SUPPLEMENT_COLUMNS)
     lines: list[str] = []
     for s, system in enumerate(systems):
         if s:

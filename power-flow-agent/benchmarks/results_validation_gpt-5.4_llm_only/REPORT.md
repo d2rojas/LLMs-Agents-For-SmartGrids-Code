@@ -1,6 +1,6 @@
 # Informe de experimento: `results_validation_gpt-5.4_llm_only`
 
-Generado el 2026-09-15 23:37 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-5.4_llm_only (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-16 09:26 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-5.4_llm_only (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -10,7 +10,7 @@ Directorio analizado:
 /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_llm_only
 ````
 
-- Reports leídos: 1 (`report.rescored.json` usado en 0; el resto `report.json`)
+- Reports leídos: 1 (`report.rescored.json` usado en 1; el resto `report.json`)
 - Modelos: `openrouter:openai/gpt-5.4`
 - Métodos: `llm_only:cot`, `llm_only:structured`, `llm_only_forced:cot`, `llm_only_forced:structured`
 - Casos: `case14`
@@ -570,12 +570,12 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 ### Por método × caso
 
-| Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Abst. | $ |
-|--------------------------------|------|----|-----|--------|-----|----------|----------------|------|------|----|-----|----|-----|----------|------|
-| llm_only:cot | case14 | 5 | -- | -- | -- | 0.0 (0/5) | 0.0 (0/5) | -- | 3.3 | -- | n/a | 2944 | -- | 60.0 (3/5) | 0.0635 |
-| llm_only:structured | case14 | 5 | -- | -- | -- | 0.0 (0/5) | 0.0 (0/5) | -- | 0.0 | -- | n/a | 2390 | -- | 80.0 (4/5) | 0.0330 |
-| llm_only_forced:cot | case14 | 5 | -- | 2.18e-02 | 5.01 | 40.0 (2/5) | 100.0 (5/5) | -- | 0.0 | -- | n/a | 3696 | -- | 0.0 (0/5) | 0.1183 |
-| llm_only_forced:structured | case14 | 5 | -- | 6.01e-03 | 4.80 | 40.0 (2/5) | 100.0 (5/5) | -- | 0.0 | -- | n/a | 3186 | -- | 0.0 (0/5) | 0.0911 |
+| Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Abst. | V pass | $ |
+|--------------------------------|------|----|-----|--------|-----|----------|----------------|------|------|----|-----|----|-----|----------|---------|------|
+| llm_only:cot | case14 | 5 | -- | -- | -- | 0.0 (0/5) | 0.0 (0/5) | -- | 3.3 | -- | n/a | 2944 | -- | 60.0 (3/5) | 0.0 (0/5) | 0.0635 |
+| llm_only:structured | case14 | 5 | -- | -- | -- | 0.0 (0/5) | 0.0 (0/5) | -- | 0.0 | -- | n/a | 2390 | -- | 80.0 (4/5) | 0.0 (0/5) | 0.0330 |
+| llm_only_forced:cot | case14 | 5 | -- | 2.18e-02 | 5.01 | 40.0 (2/5) | 100.0 (5/5) | -- | 0.0 | -- | n/a | 3696 | -- | 0.0 (0/5) | 0.0 (0/5) | 0.1183 |
+| llm_only_forced:structured | case14 | 5 | -- | 6.01e-03 | 4.80 | 40.0 (2/5) | 100.0 (5/5) | -- | 0.0 | -- | n/a | 3186 | -- | 0.0 (0/5) | 0.0 (0/5) | 0.0911 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 
@@ -739,7 +739,7 @@ fuente de la traza: archivo de traza completo
   ],
   "line_fl …[1405 chars más]
 --- Scoring ---
-formulation=n/a (exact=None); V_MAE=3.49e-04; F_MAE=4.00; faithful=0.0 %; solved=True (numeric_ok); flags=-; error=-; tokens=3586; cost_usd=0.0217; wall=0.0 s
+formulation=n/a (exact=None); V_MAE=3.49e-04; F_MAE=4.00; faithful=0.0 %; solved=True (numeric_ok); flags=-; error=-; tokens=3561; cost_usd=0.0217; wall=8.1 s
 ````
 
 **Ejemplo: no resuelto**
@@ -755,7 +755,7 @@ Bus ids by name are 1 to 14. Slack bus is display bus 1 and corresponds to ext_g
 
 The branch ids for lines use net.line row index 0 to 14. The requested outage is the line between bus ten and bus eleven in display numbering, which corresponds to display buses 10 and 11. In the provided net.line table there is no direct 10 to 11 line; the closest relevant line is row 12 connecting row-index buses 9 to 10, which are display buses 10 to 11. So line_id 12 is disconnected. Transformer ids use 100000 plus trafo row index, so 1000 …[3154 chars más]
 --- Scoring ---
-formulation=n/a (exact=None); V_MAE=1.16e-02; F_MAE=9.40; faithful=0.0 %; solved=False (voltage_error); flags=-; error=-; tokens=3817; cost_usd=0.0256; wall=0.0 s
+formulation=n/a (exact=None); V_MAE=1.16e-02; F_MAE=9.40; faithful=0.0 %; solved=False (voltage_error); flags=-; error=-; tokens=3967; cost_usd=0.0256; wall=26.4 s
 ````
 
 **Ejemplo: primer item**
@@ -788,7 +788,7 @@ fuente de la traza: archivo de traza completo
   ],
   "line_f …[1422 chars más]
 --- Scoring ---
-formulation=n/a (exact=None); V_MAE=2.02e-02; F_MAE=8.00; faithful=0.0 %; solved=False (voltage_error); flags=-; error=-; tokens=3561; cost_usd=0.0216; wall=0.0 s
+formulation=n/a (exact=None); V_MAE=2.02e-02; F_MAE=8.00; faithful=0.0 %; solved=False (voltage_error); flags=-; error=-; tokens=3586; cost_usd=0.0216; wall=8.1 s
 ````
 
 ### Método `llm_only_forced:structured`
@@ -804,7 +804,7 @@ fuente de la traza: archivo de traza completo
 --- Respuesta final ---
 {"converged":true,"bus_voltages":[{"bus_id":1,"vm_pu":1.06,"va_deg":0.0},{"bus_id":2,"vm_pu":1.045,"va_deg":-4.98},{"bus_id":3,"vm_pu":1.01,"va_deg":-12.72},{"bus_id":4,"vm_pu":1.017,"va_deg":-10.33},{"bus_id":5,"vm_pu":1.02,"va_deg":-8.78},{"bus_id":6,"vm_pu":1.07,"va_deg":-14.22},{"bus_id":7,"vm_pu":1.062,"va_deg":-13.37},{"bus_id":8,"vm_pu":1.09,"va_deg":-13.36},{"bus_id":9,"vm_pu":1.056,"va_deg":-14.94},{"bus_id":10,"vm_pu":1.051,"va_deg":-15.1},{"bus_id":11,"vm_pu":1.057,"va_deg":-14.79},{"bus_id":12,"vm_pu":1.055,"va_deg":-15.08},{"bus_id":13,"vm_pu":1.05,"va_deg":-15.16},{"bus_id":14,"vm_pu":1.036,"va_deg":-16.04}],"line_flows":[{"line_id":0,"p_from_mw":156.88,"loading_percent":77.4},{"line_id":1,"p_from_mw":75.51,"loading_percent":45.1},{"line_id":2,"p_from_mw":73.24,"loading_perce …[1038 chars más]
 --- Scoring ---
-formulation=n/a (exact=None); V_MAE=4.20e-04; F_MAE=2.66; faithful=0.0 %; solved=True (numeric_ok); flags=-; error=-; tokens=3166; cost_usd=0.0176; wall=0.0 s
+formulation=n/a (exact=None); V_MAE=4.20e-04; F_MAE=2.66; faithful=0.0 %; solved=True (numeric_ok); flags=-; error=-; tokens=3140; cost_usd=0.0176; wall=6.9 s
 ````
 
 **Ejemplo: no resuelto**
@@ -818,7 +818,7 @@ fuente de la traza: archivo de traza completo
 --- Respuesta final ---
 {"converged":true,"bus_voltages":[{"bus_id":1,"vm_pu":1.06,"va_deg":0.0},{"bus_id":2,"vm_pu":1.045,"va_deg":-4.98},{"bus_id":3,"vm_pu":1.01,"va_deg":-12.72},{"bus_id":4,"vm_pu":1.017,"va_deg":-10.33},{"bus_id":5,"vm_pu":1.019,"va_deg":-8.78},{"bus_id":6,"vm_pu":1.07,"va_deg":-14.22},{"bus_id":7,"vm_pu":1.062,"va_deg":-13.37},{"bus_id":8,"vm_pu":1.09,"va_deg":-13.36},{"bus_id":9,"vm_pu":1.056,"va_deg":-14.94},{"bus_id":10,"vm_pu":1.051,"va_deg":-15.1},{"bus_id":11,"vm_pu":1.057,"va_deg":-14.79},{"bus_id":12,"vm_pu":1.055,"va_deg":-15.08},{"bus_id":13,"vm_pu":1.05,"va_deg":-15.16},{"bus_id":14,"vm_pu":1.036,"va_deg":-16.04}],"line_flows":[{"line_id":0,"p_from_mw":147.2,"loading_percent":52.4},{"line_id":1,"p_from_mw":71.6,"loading_percent":27.8},{"line_id":2,"p_from_mw":70.1,"loading_percent …[1014 chars más]
 --- Scoring ---
-formulation=n/a (exact=None); V_MAE=3.14e-03; F_MAE=3.19; faithful=0.0 %; solved=False (voltage_error); flags=-; error=-; tokens=3132; cost_usd=0.0175; wall=0.0 s
+formulation=n/a (exact=None); V_MAE=3.14e-03; F_MAE=3.19; faithful=0.0 %; solved=False (voltage_error); flags=-; error=-; tokens=3125; cost_usd=0.0175; wall=6.8 s
 ````
 
 **Ejemplo: primer item**
@@ -832,7 +832,7 @@ fuente de la traza: archivo de traza completo
 --- Respuesta final ---
 {"converged":true,"bus_voltages":[{"bus_id":1,"vm_pu":1.06,"va_deg":0.0},{"bus_id":2,"vm_pu":1.045,"va_deg":-4.98},{"bus_id":3,"vm_pu":1.01,"va_deg":-12.72},{"bus_id":4,"vm_pu":1.017,"va_deg":-10.33},{"bus_id":5,"vm_pu":1.019,"va_deg":-8.78},{"bus_id":6,"vm_pu":1.07,"va_deg":-14.22},{"bus_id":7,"vm_pu":1.062,"va_deg":-13.37},{"bus_id":8,"vm_pu":1.09,"va_deg":-13.36},{"bus_id":9,"vm_pu":1.056,"va_deg":-14.94},{"bus_id":10,"vm_pu":1.051,"va_deg":-15.1},{"bus_id":11,"vm_pu":1.057,"va_deg":-14.79},{"bus_id":12,"vm_pu":1.055,"va_deg":-15.07},{"bus_id":13,"vm_pu":1.05,"va_deg":-15.16},{"bus_id":14,"vm_pu":1.036,"va_deg":-16.04}],"line_flows":[{"line_id":0,"p_from_mw":156.88,"loading_percent":100.2},{"line_id":1,"p_from_mw":75.51,"loading_percent":72.3},{"line_id":2,"p_from_mw":73.24,"loading_per …[1036 chars más]
 --- Scoring ---
-formulation=n/a (exact=None); V_MAE=2.02e-02; F_MAE=10.84; faithful=0.0 %; solved=False (voltage_error); flags=-; error=-; tokens=3140; cost_usd=0.0175; wall=0.0 s
+formulation=n/a (exact=None); V_MAE=2.02e-02; F_MAE=10.84; faithful=0.0 %; solved=False (voltage_error); flags=-; error=-; tokens=3166; cost_usd=0.0175; wall=7.4 s
 ````
 
 
@@ -855,11 +855,13 @@ Observaciones generadas automáticamente a partir de los números del report (si
 Rutas absolutas bajo `results_validation_gpt-5.4_llm_only`. `report.rescored.json` (cuando existe) es el archivo leído para las métricas.
 
 ````
-report: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_llm_only/report.json
+report: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_llm_only/report.json   [leído: report.rescored.json]
   scoreboard.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_llm_only/scoreboard.json
   scoreboard.csv: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_llm_only/scoreboard.csv
   scoreboard.md: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_llm_only/scoreboard.md
   scoreboard_per_case.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_llm_only/scoreboard_per_case.json
+  scoreboard.rescored.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_llm_only/scoreboard.rescored.json
+  scoreboard_per_case.rescored.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_llm_only/scoreboard_per_case.rescored.json
   traces (30 archivos): /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_llm_only/traces
 ````
 

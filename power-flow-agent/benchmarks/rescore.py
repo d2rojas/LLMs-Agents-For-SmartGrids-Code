@@ -350,6 +350,10 @@ def rescore_row(
     )
     if trace is not None:
         new.update(bm.cost_from_trace(trace))
+
+    from llm.engine import verify_final_answer
+
+    new["v_pass"] = bool(verify_final_answer(trace or {}, raw or "", request_text=request_text)["passed"])
     new.update(bs.score_row(new, truth_answer=truth_answer))
     new["rescore"] = {"trace_source": trace_source, "truth_source": truth_source, "metrics_source": metrics_source}
     if trace_source == "file":

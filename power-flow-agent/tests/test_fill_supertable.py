@@ -46,6 +46,7 @@ def _case_row(model, method, case, n_items, solved, form, calls, tokens, ttv):
         "n_tool_calls_mean": calls,
         "total_tokens_mean": tokens,
         "wall_time_s_mean": ttv,
+        "v_pass_rate": 1.0,
     }
 
 
@@ -103,7 +104,7 @@ def _data_rows(tex):
 
 
 def _block_headers(tex):
-    return [ln for ln in tex.splitlines() if ln.startswith(r"\multicolumn{12}{l}")]
+    return [ln for ln in tex.splitlines() if ln.startswith(r"\multicolumn{13}{l}")]
 
 
 # ----------------------------------------------------------------------------- blocks layout
@@ -112,11 +113,11 @@ def _block_headers(tex):
 def test_blocks_headers_and_row_order(results_dir, tmp_path):
     tex = _run(results_dir, tmp_path)
     assert _block_headers(tex) == [
-        r"\multicolumn{12}{l}{\textbf{IEEE 14-bus}} \\",
-        r"\multicolumn{12}{l}{\textbf{IEEE 30-bus}} \\",
+        r"\multicolumn{13}{l}{\textbf{IEEE 14-bus}} \\",
+        r"\multicolumn{13}{l}{\textbf{IEEE 30-bus}} \\",
     ]
     lines = tex.splitlines()
-    assert lines[0].startswith(r"\multicolumn{12}{l}{\textbf{IEEE 14-bus}}")
+    assert lines[0].startswith(r"\multicolumn{13}{l}{\textbf{IEEE 14-bus}}")
     # blocks separated by exactly one \midrule, placed right before the second header
     assert tex.count(r"\midrule") == 1
     assert lines[lines.index(_block_headers(tex)[1]) - 1] == r"\midrule"
@@ -139,7 +140,7 @@ def test_blocks_values_na_and_missing(results_dir, tmp_path):
     b14, b30 = rows[:13], rows[13:]
     # single_call:structured, per system, Solved from the rescored solved_rate (0.90, not 0.10)
     # order: Form., V_MAE, F_MAE, Solved, Solver status, B_mean, Faith., SFR, Calls, Tok.
-    assert b14[4][1] == "Structured" and b14[4][2:] == ["85.0", r"$1.65{\times}10^{-5}$", "0.12", "90.0", "100.0", "0", "90.0", "100.0", "2.0", "10000"]
+    assert b14[4][1] == "Structured" and b14[4][2:] == ["85.0", r"$1.65{\times}10^{-5}$", "0.12", "90.0", "100.0", "0", "90.0", "100.0", "2.0", "10000", "100.0"]
     assert b30[4][2] == "75.0" and b30[4][2 + 3] == "70.0" and b30[4][2 + names.index("Calls")] == "1.5" and b30[4][2 + names.index("Tok.")] == "12000"
     # best single-call prompt = the only one present, copied per system
     assert b14[9][1] == "Single-call, best prompt" and b14[9][2:] == b14[4][2:] and b30[9][2:] == b30[4][2:]
@@ -162,9 +163,9 @@ def test_blocks_standalone_and_tabular_wrappers(results_dir, tmp_path):
     assert tex.startswith(r"\begin{table}[!ht]") and tex.rstrip().endswith(r"\end{table}")
     assert r"\label{tab:pf_protocol_per_system}" in tex and r"\caption{" in tex
     assert r"\scriptsize" in tex and r"\resizebox{\textwidth}{!}{%" in tex
-    assert r"\begin{tabular}{ll cccc cc cc cc}" in tex and r"\toprule" in tex and r"\bottomrule" in tex
+    assert r"\begin{tabular}{ll cccc cc cc cc c}" in tex and r"\toprule" in tex and r"\bottomrule" in tex
     assert r"\textbf{Setting} & \textbf{Method} & \textbf{Form.} & $V_{\mathrm{MAE}}$" in tex
-    assert r"\cmidrule(lr){3-6}\cmidrule(lr){7-8}\cmidrule(lr){9-10}\cmidrule(lr){11-12}" in tex
+    assert r"\cmidrule(lr){3-6}\cmidrule(lr){7-8}\cmidrule(lr){9-10}\cmidrule(lr){11-12}\cmidrule(lr){13-13}" in tex
     assert len(_block_headers(tex)) == 2 and [r[1] for r in _data_rows(tex)] == EXPECTED_LABELS * 2
     tab = _run(results_dir, tmp_path, "--wrap", "tabular")
     assert tab.startswith(r"\scriptsize") and r"\begin{table}" not in tab and r"\begin{tabular}" in tab
@@ -221,7 +222,7 @@ def test_no_prefer_rescored_and_cases_filter(results_dir, tmp_path):
     tex = _run(results_dir, tmp_path, "--no-prefer-rescored")
     assert _data_rows(tex)[4][2 + 3] == "10.0"  # original report's solved_rate (Solved column)
     tex = _run(results_dir, tmp_path, "--cases", "case30")
-    assert _block_headers(tex) == [r"\multicolumn{12}{l}{\textbf{IEEE 30-bus}} \\"]
+    assert _block_headers(tex) == [r"\multicolumn{13}{l}{\textbf{IEEE 30-bus}} \\"]
     assert tex.count(r"\midrule") == 0 and len(_data_rows(tex)) == 13
     with pytest.raises(SystemExit):
         main([str(results_dir), "--out", str(tmp_path / "x.tex"), "--layout", "compact", "--metrics", "Bogus"])

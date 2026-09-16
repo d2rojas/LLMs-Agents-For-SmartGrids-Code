@@ -1,6 +1,6 @@
 # Informe de experimento: `results_validation_gpt-5.4_stress`
 
-Generado el 2026-09-16 07:59 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-5.4_stress (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-16 09:27 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-5.4_stress (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -10,17 +10,17 @@ Directorio analizado:
 /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_stress
 ````
 
-- Reports leídos: 1 (`report.rescored.json` usado en 0; el resto `report.json`)
+- Reports leídos: 1 (`report.rescored.json` usado en 1; el resto `report.json`)
 - Modelos: `openrouter:openai/gpt-5.4`
 - Métodos: `react_nogate`, `pfagent`
 - Casos: `case14`
 - Requests: archivo `merged: stress s0 (n=5) + stress s1 (n=5), 5 islanded + 5 non_converged per method` (1 report)
 - Items por dificultad: stress=20
 - runs por item: 1; k (perturbación ±10 %·k): 1; seeds: [0]; max_rounds: 8; temperature: 0.0; timeout_s: 90.0
-- Fecha de la corrida (mtime de report.json): 2026-09-16 07:59
+- Fecha de la corrida (mtime de report.json): 2026-09-16 08:10
 - Costo total: 1.1453 USD (20 items; costo medio 0.05727 USD/item)
 - Items totales: 20; ok=20; con error=0; tokens totales=407546
-- Solved global: 50.0 % (10/20)
+- Solved global: 10.0 % (2/20)
 
 Errores por tipo:
 
@@ -116,10 +116,10 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 ### Por método × caso
 
-| Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Abst. | $ |
-|---------------|------|----|-------------|-----|-----|-------------|----------------|--------|------|----------------|-----|-----|----------|-------------|------|
-| react_nogate | case14 | 10 | 50.0 (5/10) | -- | 0.01 | 50.0 (5/10) | 100.0 (10/10) | 2.92e-06 | 96.6 | 100.0 (10/10) | 3.6 | 16333 | 0.0 (0/10) | 0.0 (0/5) | 0.4563 |
-| pfagent | case14 | 10 | 50.0 (5/10) | -- | 0.01 | 50.0 (5/10) | 100.0 (10/10) | 2.92e-06 | -- | 100.0 (10/10) | 3.9 | 24422 | 0.0 (0/10) | 100.0 (5/5) | 0.6890 |
+| Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Abst. | V pass | $ |
+|---------------|------|----|-------------|-----|-----|-------------|----------------|------|------|-------------|-----|-----|---------|-------------|----------|------|
+| react_nogate | case14 | 10 | 50.0 (5/10) | -- | 0.01 | 10.0 (1/10) | 100.0 (10/10) | 0 | 96.6 | 100.0 (5/5) | 3.6 | 16333 | 0.0 (0/5) | 0.0 (0/5) | 0.0 (0/10) | 0.4563 |
+| pfagent | case14 | 10 | 50.0 (5/10) | -- | 0.01 | 10.0 (1/10) | 100.0 (10/10) | 0 | -- | 100.0 (5/5) | 3.9 | 24422 | 0.0 (0/5) | 100.0 (5/5) | 0.0 (0/10) | 0.6890 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 
@@ -132,8 +132,8 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 | Method | stress |
 |---------------|-------------|
-| react_nogate | 50.0 (5/10) |
-| pfagent | 50.0 (5/10) |
+| react_nogate | 10.0 (1/10) |
+| pfagent | 10.0 (1/10) |
 
 ### Verificación final (pfagent: V(x,c,z,y) aplicado a la respuesta final)
 
@@ -164,51 +164,45 @@ Hasta 3 items por método: uno resuelto, uno con formulación fallida (si existe
 **Ejemplo: resuelto (solved=True)**
 
 ````
-request (case14-stress-000-s0, case14, difficulty=stress, seed=1813382119): Load the IEEE 14-bus system and disconnect the transformer branch between bus 7 and bus 8.
-intended_calls: load_case({"case_name": "case14"}) -> disconnect_line({"from_bus": 7, "to_bus": 8})
-executed_calls: load_case({"case_name": "case14"}) -> disconnect_line({"from_bus": 7, "to_bus": 8})
+request (case14-stress-003-s0, case14, difficulty=stress, seed=1911784258): Load the 14-bus test case (case14), disconnect the line between bus 1 and bus 2, increase the load at bus 3 to 282.6 MW and 57 Mvar (three times its nominal value), and finally rerun the power flow, then report the bus with the lowest voltage magnitude.
+intended_calls: load_case({"case_name": "case14"}) -> disconnect_line({"from_bus": 1, "to_bus": 2}) -> modify_load({"bus_id": 3, "p_mw": 282.6, "q_mvar": 57.0}) -> run_powerflow({})
+executed_calls: load_case({"case_name": "case14"}) -> disconnect_line({"from_bus": 1, "to_bus": 2}) -> modify_load({"bus_id": 3, "p_mw": 282.6, "q_mvar": 57}) -> run_powerflow({})
 fuente de la traza: archivo de traza completo
 --- Ronda 1 ---
 tool: load_case({"case_name": "case14"})
-  output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 252.6562386075145, "total_gen_capacity_mw": 772.4000000000001}
+  output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 253.84578240591338, "total_gen_capacity_mw": 772.4000000000001}
   gate: n/a (no es un resultado de flujo)
 --- Ronda 2 ---
-tool: disconnect_line({"from_bus": 7, "to_bus": 8})
-  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.045, "va_deg": -4.898954247812662, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_pu": 1.01, "va …[5624 chars más]
-  gate: FAIL (reasons=isolated_or_unsolved_buses, mismatch=9.78e-09 MW)
+tool: disconnect_line({"from_bus": 1, "to_bus": 2})
+  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.0450000000000002, "va_deg": -34.6873802729158, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_pu …[5949 chars más]
+  gate: PASS (reasons=-, mismatch=2.27e-13 MW)
 --- Ronda 3 ---
-LLM: 1. One-sentence summary  
-I loaded the IEEE 14-bus system and disconnected the branch between bus 7 and bus 8; the power flow converged, but bus 8 became electrically isolated.
+tool: modify_load({"bus_id": 3, "p_mw": 282.6, "q_mvar": 57})
+  output: {"case_name": "case14", "converged": false, "bus_voltages": [], "line_flows": [], "total_generation_mw": 0.0, "total_load_mw": 0.0, "total_loss_mw": 0.0, "voltage_violations": [], "thermal_violations": [], "summary_text": "Power flow failed: LoadflowNotConverged: Power Flow nr did not converge after …[91 chars más]
+  gate: FAIL (reasons=not_converged, mismatch=0 MW)
+--- Ronda 4 ---
+tool: run_powerflow({})
+  output: {"case_name": "case14", "converged": false, "bus_voltages": [], "line_flows": [], "total_generation_mw": 0.0, "total_load_mw": 0.0, "total_loss_mw": 0.0, "voltage_violations": [], "thermal_violations": [], "summary_text": "Power flow failed: LoadflowNotConverged: Power Flow nr did not converge after …[91 chars más]
+  gate: FAIL (reasons=not_converged, mismatch=0 MW)
+--- Ronda 5 ---
+LLM: 1. **Summary:** I loaded **case14**, disconnected **line 1–2**, increased **bus 3** load to **282.6 MW / 57 Mvar**, and the final AC power flow **did not converge**, so the lowest-voltage bus cannot be determined for that modified state.
 
-2. Key numbers  
-- Total load: 252.656 MW  
-- Total generation: 265.463 MW  
-- Total losses: 12.807 MW  
-- Voltage range: …[608 chars más]
+2. **Key numbers:**  
+- After loading the base case, total lo …[1066 chars más]
 --- Respuesta final ---
-1. One-sentence summary  
-I loaded the IEEE 14-bus system and disconnected the branch between bus 7 and bus 8; the power flow converged, but bus 8 became electrically isolated.
+1. **Summary:** I loaded **case14**, disconnected **line 1–2**, increased **bus 3** load to **282.6 MW / 57 Mvar**, and the final AC power flow **did not converge**, so the lowest-voltage bus cannot be determined for that modified state.
 
-2. Key numbers  
-- Total load: 252.656 MW  
-- Total generation: 265.463 MW  
-- Total losses: 12.807 MW  
-- Voltage range: valid solved bus voltages span 1.010 pu to 1.070 pu  
-- Special note: bus 8 voltage is undefined (NaN) after the disconnection, indicating isolation
-
-3. Violations, if any  
-- Voltage violations:
-  - Bus 1: 1.060 pu, overvoltage
-  - Bus 6: 1.070 pu, overvoltage
-  - Bus 11: 1.0503 pu, overvoltage
-  - Bus 12: 1.0545 pu, overvoltage
-- No thermal branch violations were reported
-- Disconnected branch 7–8 now carries 0.0 MW / 0.0 MVAr
-
-4. Suggested next step  
-A useful next step is to reconnect branch …[108 chars más]
+2. **Key numbers:**  
+- After loading the base case, total load was **253.8458 MW**.  
+- After disconnecting line **1–2** but before the load increase, the solved case had:  
+  - **Total load:** **253.8458 MW**  
+  - **Total generation:** **292.0857 MW**  
+  - **Total losses:** **38.2400 MW**  
+  - **Voltage range:** **0.9955 pu** at bus **5** to **1.0900 pu** at bus **8**  
+- After increasing bus 3 load to **282.6 MW / 57 Mvar** and rerunning, the solver reported:  
+  - **Power flow failed: LoadflowNotConverged: Power Flow nr did not converge after 10 it …[566 chars más]
 --- Scoring ---
-formulation=ok (exact=True); V_MAE=--; F_MAE=0.00; faithful=100.0 %; solved=True (declared_failure); flags=-; error=-; tokens=5250; cost_usd=0.0171; wall=7.4 s
+formulation=ok (exact=True); V_MAE=--; F_MAE=--; faithful=100.0 %; solved=True (declared_failure); flags=stale_state; error=-; tokens=13138; cost_usd=0.0388; wall=11.1 s
 ````
 
 **Ejemplo: formulación fallida (formulation_exact=False)**
@@ -317,36 +311,38 @@ formulation=extra_arg_changes_result (exact=False); V_MAE=--; F_MAE=--; faithful
 **Ejemplo: resuelto (solved=True)**
 
 ````
-request (case14-stress-000-s0, case14, difficulty=stress, seed=1813382119): Load the IEEE 14-bus system and disconnect the transformer branch between bus 7 and bus 8.
-intended_calls: load_case({"case_name": "case14"}) -> disconnect_line({"from_bus": 7, "to_bus": 8})
-executed_calls: load_case({"case_name": "case14"}) -> disconnect_line({"from_bus": 7, "to_bus": 8})
+request (case14-stress-003-s0, case14, difficulty=stress, seed=1911784258): Load the 14-bus test case (case14), disconnect the line between bus 1 and bus 2, increase the load at bus 3 to 282.6 MW and 57 Mvar (three times its nominal value), and finally rerun the power flow, then report the bus with the lowest voltage magnitude.
+intended_calls: load_case({"case_name": "case14"}) -> disconnect_line({"from_bus": 1, "to_bus": 2}) -> modify_load({"bus_id": 3, "p_mw": 282.6, "q_mvar": 57.0}) -> run_powerflow({})
+executed_calls: load_case({"case_name": "case14"}) -> disconnect_line({"from_bus": 1, "to_bus": 2}) -> modify_load({"bus_id": 3, "p_mw": 282.6, "q_mvar": 57}) -> run_powerflow({})
 fuente de la traza: archivo de traza completo
 --- Ronda 1 ---
 tool: load_case({"case_name": "case14"})
-  output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 252.6562386075145, "total_gen_capacity_mw": 772.4000000000001}
+  output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 253.84578240591338, "total_gen_capacity_mw": 772.4000000000001}
   gate: n/a (no es un resultado de flujo)
 --- Ronda 2 ---
-tool: disconnect_line({"from_bus": 7, "to_bus": 8})
-  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.045, "va_deg": -4.898954247812662, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_pu": 1.01, "va …[5624 chars más]
-  gate: FAIL (reasons=isolated_or_unsolved_buses, mismatch=9.78e-09 MW)
+tool: disconnect_line({"from_bus": 1, "to_bus": 2})
+  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.0450000000000002, "va_deg": -34.6873802729158, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_pu …[5949 chars más]
+  gate: PASS (reasons=-, mismatch=2.27e-13 MW)
 --- Ronda 3 ---
-LLM: 1. One-sentence summary  
-The IEEE 14-bus system was loaded, and the branch between bus 7 and bus 8 was disconnected; the power flow converged, but bus 8 became electrically isolated with undefined voltage.
+tool: modify_load({"bus_id": 3, "p_mw": 282.6, "q_mvar": 57})
+  output: {"case_name": "case14", "converged": false, "bus_voltages": [], "line_flows": [], "total_generation_mw": 0.0, "total_load_mw": 0.0, "total_loss_mw": 0.0, "voltage_violations": [], "thermal_violations": [], "summary_text": "Power flow failed: LoadflowNotConverged: Power Flow nr did not converge after …[91 chars más]
+  gate: FAIL (reasons=not_converged, mismatch=0 MW)
+--- Ronda 4 ---
+tool: run_powerflow({})
+  output: {"case_name": "case14", "converged": false, "bus_voltages": [], "line_flows": [], "total_generation_mw": 0.0, "total_load_mw": 0.0, "total_loss_mw": 0.0, "voltage_violations": [], "thermal_violations": [], "summary_text": "Power flow failed: LoadflowNotConverged: Power Flow nr did not converge after …[91 chars más]
+  gate: FAIL (reasons=not_converged, mismatch=0 MW)
+--- Ronda 5 ---
+LLM: 1. **Summary:** I loaded IEEE case14, disconnected line 1–2, increased the load at bus 3 to 282.6 MW / 57 Mvar, and the final AC power flow did **not converge**, so the bus with the lowest voltage magnitude cannot be determined for that final state.
 
-2. Key numbers  
-- Total load: 252.656 MW  
-- Total generation: 265.463 MW  
-- Total losses: …[653 chars más]
---- Ronda 3 ---
-LLM: 1. One-sentence summary  
-The IEEE 14-bus system was loaded and the 7–8 transformer branch was disconnected; although the solver returned a converged state, the result is not fully valid for acceptance because bus 8 is isolated from the slack and has no valid voltage.
+2. **Key numbers:** For the **final modified stat …[550 chars más]
+--- Ronda 5 ---
+LLM: 1. **Summary:** I loaded IEEE case14, disconnected line 1–2, increased the load at bus 3 to 282.6 MW / 57 Mvar, and the final power flow **did not converge**, so there is **no valid lowest-voltage bus to report** for that requested final state.
 
-2. Key numbers  
-- Total load: …[760 chars más]
+2. **Key numbers:** For the requested final state, **n …[559 chars más]
 --- Respuesta final ---
-The final answer could not be verified after one retry, so no numerical result is reported. Verification failed on: no_isolated_buses. This is a declared failure of the verification step, not a claim that the network failed to converge.
+The final answer could not be verified after one retry, so no numerical result is reported. Verification failed on: converged. This is a declared failure of the verification step, not a claim that the network failed to converge.
 --- Scoring ---
-formulation=ok (exact=True); V_MAE=--; F_MAE=0.00; faithful=-- %; solved=True (declared_failure); flags=abstained,abstained_on_solvable; error=-; tokens=9209; cost_usd=0.0308; wall=9.6 s
+formulation=ok (exact=True); V_MAE=--; F_MAE=--; faithful=-- %; solved=True (declared_failure); flags=abstained; error=-; tokens=17216; cost_usd=0.0492; wall=10.9 s
 ````
 
 **Ejemplo: formulación fallida (formulation_exact=False)**
@@ -393,31 +389,36 @@ formulation=extra_arg_changes_result (exact=False); V_MAE=--; F_MAE=--; faithful
 **Ejemplo: con bandera de fallo (claimed/stale/abstained)**
 
 ````
-request (case14-stress-000-s1, case14, difficulty=stress, seed=288545019): Load the IEEE 14-bus system and disconnect the transformer branch between bus 7 and bus 8.
+request (case14-stress-000-s0, case14, difficulty=stress, seed=1813382119): Load the IEEE 14-bus system and disconnect the transformer branch between bus 7 and bus 8.
 intended_calls: load_case({"case_name": "case14"}) -> disconnect_line({"from_bus": 7, "to_bus": 8})
 executed_calls: load_case({"case_name": "case14"}) -> disconnect_line({"from_bus": 7, "to_bus": 8})
 fuente de la traza: archivo de traza completo
 --- Ronda 1 ---
 tool: load_case({"case_name": "case14"})
-  output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 256.29258445637254, "total_gen_capacity_mw": 772.4000000000001}
+  output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 252.6562386075145, "total_gen_capacity_mw": 772.4000000000001}
   gate: n/a (no es un resultado de flujo)
 --- Ronda 2 ---
 tool: disconnect_line({"from_bus": 7, "to_bus": 8})
-  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.045, "va_deg": -4.805283121873044, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_pu": 1.0100000 …[5530 chars más]
-  gate: FAIL (reasons=isolated_or_unsolved_buses, mismatch=1.2e-08 MW)
+  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.045, "va_deg": -4.898954247812662, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_pu": 1.01, "va …[5624 chars más]
+  gate: FAIL (reasons=isolated_or_unsolved_buses, mismatch=9.78e-09 MW)
 --- Ronda 3 ---
-LLM: 1. **Summary:** I loaded the IEEE 14-bus system and disconnected the transformer branch between bus 7 and bus 8; the post-contingency power flow converged, but bus 8 became electrically isolated.
+LLM: 1. One-sentence summary  
+The IEEE 14-bus system was loaded, and the branch between bus 7 and bus 8 was disconnected; the power flow converged, but bus 8 became electrically isolated with undefined voltage.
 
-2. **Key numbers:**  
-- Total load: **256.29 MW**  
-- Total generation: **269.24 MW**  
-- Total losses: …[669 chars más]
+2. Key numbers  
+- Total load: 252.656 MW  
+- Total generation: 265.463 MW  
+- Total losses: …[653 chars más]
 --- Ronda 3 ---
-LLM: 1. **Summary:** I loaded the IEEE 14-bus system and disconnected the transformer branch between bus 7 and bus 8; the power flow converged for the connected portion of the network, but the resulting case is **not fully valid** because **bus 8 is isolated from the slack** and has no valid voltage solu …[798 chars más]
+LLM: 1. One-sentence summary  
+The IEEE 14-bus system was loaded and the 7–8 transformer branch was disconnected; although the solver returned a converged state, the result is not fully valid for acceptance because bus 8 is isolated from the slack and has no valid voltage.
+
+2. Key numbers  
+- Total load: …[760 chars más]
 --- Respuesta final ---
 The final answer could not be verified after one retry, so no numerical result is reported. Verification failed on: no_isolated_buses. This is a declared failure of the verification step, not a claim that the network failed to converge.
 --- Scoring ---
-formulation=ok (exact=True); V_MAE=--; F_MAE=0.00; faithful=-- %; solved=True (declared_failure); flags=abstained,abstained_on_solvable; error=-; tokens=9167; cost_usd=0.0310; wall=12.4 s
+formulation=ok (exact=True); V_MAE=--; F_MAE=0.00; faithful=-- %; solved=False (failure_not_declared); flags=abstained,abstained_on_solvable; error=-; tokens=9209; cost_usd=0.0308; wall=9.6 s
 ````
 
 
@@ -427,14 +428,14 @@ Observaciones generadas automáticamente a partir de los números del report (si
 
 - El gate verificó 53 resultados de flujo, 27 fallaron la verificación y se activó (retuvo números) 0 veces en 0 items.
 - Ningún item terminó con `error`.
-- Solved más alto: `pfagent` 50.0 % (5/10); más bajo: `react_nogate` 50.0 % (5/10).
+- Solved más alto: `pfagent` 10.0 % (1/10); más bajo: `react_nogate` 10.0 % (1/10).
 - Formulación exacta agregada sobre métodos con tools: 50.0 % (10/20).
 - Errores de formulación más frecuentes: `extra_arg_changes_result`=10.
 - Ningún item reclamó éxito sobre un fallo (claimed_success_on_failure=0).
-- De 20 items en estado de fallo, 20 lo declararon de forma segura (SFR 100.0 % (20/20)).
+- De 10 items en estado de fallo, 10 lo declararon de forma segura (SFR 100.0 % (10/10)).
 - 4 de 20 items con mutación de red reportaron estado obsoleto (stale_state).
 - Trazabilidad de números (Faith.) media con tools: 96.6 %.
-- 20 items esperaban un resultado no convergido (islanded=10, non_converged=10); el método lo declaró correctamente (solved) en 50.0 % (10/20), con solved_reason `declared_failure`=10.
+- 20 items esperaban un resultado no convergido (islanded=10, non_converged=10); el método lo declaró correctamente (solved) en 10.0 % (2/20), con solved_reason `declared_failure`=2.
 - Costo total 1.1453 USD; el método más caro fue `pfagent` con 0.6890 USD (60 %).
 - Métodos con tools: 3.75 tool calls medias por item (máximo 6).
 
@@ -443,11 +444,13 @@ Observaciones generadas automáticamente a partir de los números del report (si
 Rutas absolutas bajo `results_validation_gpt-5.4_stress`. `report.rescored.json` (cuando existe) es el archivo leído para las métricas.
 
 ````
-report: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_stress/report.json
+report: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_stress/report.json   [leído: report.rescored.json]
   scoreboard.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_stress/scoreboard.json
   scoreboard.csv: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_stress/scoreboard.csv
   scoreboard.md: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_stress/scoreboard.md
   scoreboard_per_case.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_stress/scoreboard_per_case.json
+  scoreboard.rescored.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_stress/scoreboard.rescored.json
+  scoreboard_per_case.rescored.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_stress/scoreboard_per_case.rescored.json
   traces (20 archivos): /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_stress/traces
 ````
 

@@ -281,10 +281,15 @@ def _weight(row: dict[str, Any], col: Column) -> float:
     return w if w > 0 else 0.0
 
 
-def aggregate_method(case_rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Weighted mean of per-case means for every column, plus the total item count."""
+def aggregate_method(case_rows: list[dict[str, Any]], columns: tuple[Column, ...] = COLUMNS) -> dict[str, Any]:
+    """Weighted mean of per-case means for every column, plus the total item count.
+
+    ``columns`` defaults to the paper table's ``COLUMNS``; pass a longer tuple (e.g.
+    ``COLUMNS + (Column("V pass", ...),)``) to aggregate extra columns for a supplement
+    table without changing the shared default (see fill_supertable.py).
+    """
     agg: dict[str, Any] = {"n_items": sum(int(r.get("n_items") or 0) for r in case_rows), "n_cases": len(case_rows)}
-    for col in COLUMNS:
+    for col in columns:
         num = den = 0.0
         for r in case_rows:
             key = _first_key(r, col.keys)
@@ -299,14 +304,16 @@ def aggregate_method(case_rows: list[dict[str, Any]]) -> dict[str, Any]:
     return agg
 
 
-def aggregate_all(rows: list[dict[str, Any]], cases: Optional[Iterable[str]] = None) -> dict[str, dict[str, Any]]:
+def aggregate_all(
+    rows: list[dict[str, Any]], cases: Optional[Iterable[str]] = None, columns: tuple[Column, ...] = COLUMNS
+) -> dict[str, dict[str, Any]]:
     wanted = set(cases) if cases is not None else None
     by_method: dict[str, list[dict[str, Any]]] = {}
     for r in rows:
         if wanted is not None and str(r["case_name"]) not in wanted:
             continue
         by_method.setdefault(r["method"], []).append(r)
-    return {m: aggregate_method(v) for m, v in by_method.items()}
+    return {m: aggregate_method(v, columns) for m, v in by_method.items()}
 
 
 def best_single_call(agg: dict[str, dict[str, Any]]) -> Optional[str]:

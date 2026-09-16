@@ -31,6 +31,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from benchmarks.experiment_report import build_pdf  # noqa: E402
 from benchmarks.fill_table import (  # noqa: E402
     COLUMNS,
+    Column,
     MISSING,
     aggregate_all,
     best_single_call,
@@ -40,6 +41,11 @@ from benchmarks.fill_table import (  # noqa: E402
     select_model,
     table_blocks,
 )
+
+# One column beyond the paper's 10-column body table: the offline evaluator-side V(x,c,z,y)
+# check (llm.engine.verify_final_answer), computed for every method (see fill_supertable.py's
+# own SUPPLEMENT_COLUMNS, which this mirrors).
+TABLE_COLUMNS: tuple[Column, ...] = COLUMNS + (Column("V pass", ("v_pass_rate",), "pct"),)
 
 
 def _md_table(headers: list[str], rows: list[list[str]]) -> str:
@@ -62,13 +68,16 @@ def _rate_counts(items: list[dict[str, Any]], name: str) -> tuple[Optional[int],
     if name == "SFR":
         vals = [r.get("safe_failure") for r in items]
         return sum(1 for v in vals if v is True), sum(1 for v in vals if v is not None)
+    if name == "V pass":
+        vals = [r.get("v_pass") for r in items]
+        return sum(1 for v in vals if v is True), sum(1 for v in vals if v is not None)
     return None, None
 
 
 def _condition_table(case_rows: list[dict[str, Any]], raw_rows: list[dict[str, Any]], gated_baselines: bool = False) -> str:
-    agg = aggregate_all(case_rows)
+    agg = aggregate_all(case_rows, columns=TABLE_COLUMNS)
     best = best_single_call(agg)
-    names = [c.name for c in COLUMNS]
+    names = [c.name for c in TABLE_COLUMNS]
     lines: list[str] = []
     table_rows: list[list[str]] = []
     for setting, rows in table_blocks(gated_baselines):
@@ -76,11 +85,11 @@ def _condition_table(case_rows: list[dict[str, Any]], raw_rows: list[dict[str, A
             key = best if method == "__best_single_call__" else method
             stats = agg.get(key) if key else None
             if stats is None:
-                table_rows.append([setting.split(" (")[0], label] + [MISSING] * len(COLUMNS))
+                table_rows.append([setting.split(" (")[0], label] + [MISSING] * len(TABLE_COLUMNS))
                 continue
             items = [r for r in raw_rows if str(r.get("method") or r.get("task")) == key]
             cells = []
-            for c in COLUMNS:
+            for c in TABLE_COLUMNS:
                 val = stats.get(c.name)
                 if c.name == "Calls" and str(key).startswith(("llm_only", "baseline_pf", "blueprint_pf")):
                     cells.append("n/a")

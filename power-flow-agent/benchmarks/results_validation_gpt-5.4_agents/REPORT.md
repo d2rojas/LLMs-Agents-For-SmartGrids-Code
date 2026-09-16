@@ -1,6 +1,6 @@
 # Informe de experimento: `results_validation_gpt-5.4_agents`
 
-Generado el 2026-09-15 23:37 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-5.4_agents (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-16 09:26 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-5.4_agents (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -10,7 +10,7 @@ Directorio analizado:
 /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_agents
 ````
 
-- Reports leídos: 1 (`report.rescored.json` usado en 0; el resto `report.json`)
+- Reports leídos: 1 (`report.rescored.json` usado en 1; el resto `report.json`)
 - Modelos: `openrouter:openai/gpt-5.4`
 - Métodos: `single_call:structured`, `react_nogate`, `pfagent`
 - Casos: `case14`
@@ -221,11 +221,11 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 ### Por método × caso
 
-| Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Abst. | $ |
-|---------------------------|------|----|-------------|--------|-----|-------------|----------------|--------|------|----|-----|----|-----|---------|------|
-| single_call:structured | case14 | 5 | 20.0 (1/5) | 4.33e-03 | 1.58 | 20.0 (1/5) | 100.0 (5/5) | 4.68e-03 | 100.0 | -- | 1.0 | 4626 | -- | 0.0 (0/5) | 0.0693 |
-| react_nogate | case14 | 5 | 100.0 (5/5) | 0 | 0.00 | 100.0 (5/5) | 100.0 (5/5) | 0 | 100.0 | -- | 2.6 | 9432 | -- | 0.0 (0/5) | 0.1384 |
-| pfagent | case14 | 5 | 100.0 (5/5) | 0 | 0.00 | 100.0 (5/5) | 100.0 (5/5) | 0 | 100.0 | -- | 2.6 | 9443 | -- | 0.0 (0/5) | 0.1391 |
+| Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Abst. | V pass | $ |
+|---------------------------|------|----|-------------|--------|-----|-------------|----------------|--------|------|----|-----|----|-----|---------|-------------|------|
+| single_call:structured | case14 | 5 | 20.0 (1/5) | 4.33e-03 | 1.58 | 20.0 (1/5) | 100.0 (5/5) | 4.68e-03 | 100.0 | -- | 1.0 | 4626 | -- | 0.0 (0/5) | 100.0 (5/5) | 0.0693 |
+| react_nogate | case14 | 5 | 100.0 (5/5) | 0 | 0.00 | 100.0 (5/5) | 100.0 (5/5) | 0 | 100.0 | -- | 2.6 | 9432 | -- | 0.0 (0/5) | 100.0 (5/5) | 0.1384 |
+| pfagent | case14 | 5 | 100.0 (5/5) | 0 | 0.00 | 100.0 (5/5) | 100.0 (5/5) | 0 | 100.0 | -- | 2.6 | 9443 | -- | 0.0 (0/5) | 100.0 (5/5) | 0.1391 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 
@@ -615,11 +615,13 @@ Observaciones generadas automáticamente a partir de los números del report (si
 Rutas absolutas bajo `results_validation_gpt-5.4_agents`. `report.rescored.json` (cuando existe) es el archivo leído para las métricas.
 
 ````
-report: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_agents/report.json
+report: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_agents/report.json   [leído: report.rescored.json]
   scoreboard.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_agents/scoreboard.json
   scoreboard.csv: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_agents/scoreboard.csv
   scoreboard.md: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_agents/scoreboard.md
   scoreboard_per_case.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_agents/scoreboard_per_case.json
+  scoreboard.rescored.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_agents/scoreboard.rescored.json
+  scoreboard_per_case.rescored.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_agents/scoreboard_per_case.rescored.json
   traces (15 archivos): /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_gpt-5.4_agents/traces
 ````
 
