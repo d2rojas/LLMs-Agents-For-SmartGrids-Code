@@ -21,7 +21,8 @@ Revision R1
   ``baseline_pf`` / ``blueprint_pf`` (legacy single-prompt LLM-only tasks),
   ``llm_only:<strategy>``, ``single_call:<strategy>`` for strategy in
   structured|few_shot|cot|rag, ``react``, ``react_nogate``, ``plan_act``,
-  ``plan_act_nogate``, ``pfagent`` (react + gate + memory) and ``rule_based``
+  ``plan_act_nogate``, ``pfagent`` (react, no observation gate, task-level final
+  verification) and ``rule_based``
   (regex parser, no LLM). All agent methods share the tool set and ``--max-rounds``.
 * Metrics per item (see ``benchmarks/metrics.py``): ``formulation_exact`` and
   ``formulation_error_type``, Tier I-III numbers vs the perturbed ground truth,
@@ -205,8 +206,17 @@ ARCH_METHODS: dict[str, dict[str, Any]] = {
     # verification V(x,c,z,y) (llm.engine.verify_final_answer). "pfagent_obsgate" keeps
     # the old (pre-V) behaviour reachable under its own name, for the already-reported
     # stress-set numbers (results_stress_gpt-4o-mini_gate3) that used it.
-    "pfagent": {"architecture": "react", "gate": False, "memory": True, "final_gate": True},
-    "pfagent_obsgate": {"architecture": "react", "gate": True, "memory": True, "final_gate": False},
+    # memory=False: PFAgent's premise is "ReAct minus the in-loop observation gate,
+    # plus the task-level verification gate" -- exactly one factor changed from
+    # react_nogate/react. memory=True was inert for per-item evaluation (each item is
+    # a fresh session, conversation_history is always empty, so use_memory adds
+    # nothing) but left the row differing from react_nogate/react in two factors
+    # instead of one; verified rather than assumed (see the REPORT this landed with):
+    # identical executed_calls across all 5 GPT-5.4 items, prompt/completion token
+    # counts within 3-35 of each other (temperature-0 API non-determinism, not a
+    # prompt difference). No existing report/committed number is affected.
+    "pfagent": {"architecture": "react", "gate": False, "memory": False, "final_gate": True},
+    "pfagent_obsgate": {"architecture": "react", "gate": True, "memory": False, "final_gate": False},
 }
 METHOD_HELP = (
     "baseline_pf | blueprint_pf | llm_only:<strategy> | single_call:<strategy> | "
