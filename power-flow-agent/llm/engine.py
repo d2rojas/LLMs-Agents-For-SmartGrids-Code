@@ -442,10 +442,21 @@ def _describe_mutation(mutation: Optional[Dict[str, Any]]) -> Optional[str]:
     return f"the last change ({tool})" if tool else None
 
 
-def _condition_plain_text(name: str, cond: Dict[str, Any], verdict: Dict[str, Any]) -> str:
+def _condition_plain_text(name: str, cond: Dict[str, Any], verdict: Dict[str, Any], *, suggest_fix: bool = True) -> str:
     """Human-readable cause for one failed condition, naming buses/values instead of the
     internal condition key -- this is what ends up in the retry message and, if the retry
-    also fails, in the user-facing abstention text."""
+    also fails, in the user-facing abstention text.
+
+    ``suggest_fix`` controls whether a corrective suggestion (e.g. "reconnect the branch")
+    is appended. It must be False in the retry message: a model reading "reconnect the
+    branch" as an instruction, rather than as commentary on a terminal abstention, will
+    silently undo the very network change the request asked for (observed: given "disconnect
+    the branch between bus 7 and bus 8", the retry called reconnect_line(7, 8) and reported
+    the reconnected state as the answer -- formulation_check correctly flags this as
+    extra_step, but verify_final_answer's own conditions can no longer tell, since the
+    resulting state is genuinely converged and consistent). The suggestion is safe to keep
+    in the abstention text, which is terminal (no further tool calls follow it).
+    """
     mutation = verdict.get("last_mutation")
     mutation_desc = _describe_mutation(mutation)
 
@@ -467,7 +478,7 @@ def _condition_plain_text(name: str, cond: Dict[str, Any], verdict: Dict[str, An
         is_disconnect = bool(mutation) and mutation.get("tool") == "disconnect_line"
         cause = f" because {mutation_desc} isolated it from the slack bus" if is_disconnect else " and is isolated from the slack bus"
         text = f"{bus_txt} {verb} no valid voltage{cause}, so the network is split."
-        if is_disconnect:
+        if is_disconnect and suggest_fix:
             a = mutation.get("args") or {}
             text += f" Suggested next step: reconnect the branch between bus {a.get('from_bus')} and bus {a.get('to_bus')}, or analyse the connected part separately."
         return text
@@ -489,10 +500,14 @@ def _verification_retry_message(verdict: Dict[str, Any]) -> str:
     for name, cond in verdict["conditions"].items():
         if cond["passed"]:
             continue
-        lines.append(f"- {_condition_plain_text(name, cond, verdict)}")
+        lines.append(f"- {_condition_plain_text(name, cond, verdict, suggest_fix=False)}")
     lines.append(
-        "Produce a corrected final answer. You may call tools again if needed. Do not change a number "
-        "without a tool call to support it."
+        "Produce a corrected final answer. You may call tools again if needed, but only to inspect the "
+        "current state (e.g. re-running the power flow) -- do not undo or reverse a network change the "
+        "request asked for (do not reconnect a line it asked you to disconnect, do not revert a load "
+        "value it asked you to set) just to reach a state that passes verification. If the requested "
+        "state genuinely fails, report that failure. Do not change a number without a tool call to "
+        "support it."
     )
     return "\n".join(lines)
 

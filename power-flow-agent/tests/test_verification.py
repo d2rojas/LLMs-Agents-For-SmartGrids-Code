@@ -170,6 +170,32 @@ def test_abstention_text_names_the_isolated_bus_and_the_disconnect_in_plain_word
     assert "No numerical result is reported" in text
 
 
+def test_retry_message_never_suggests_undoing_the_requested_change():
+    """Regression test for a real gpt-4o-mini trace: the retry message used to say
+    "Suggested next step: reconnect the branch..." and the model took it literally,
+    calling reconnect_line and reporting the reconnected (converged) state as the answer
+    to a request that asked to disconnect that same branch -- formulation_check correctly
+    flagged it as extra_step, but verify_final_answer's own conditions no longer could,
+    since the resulting state was genuinely consistent. The retry message must describe
+    the failure without suggesting the specific fix; only the (terminal) abstention text
+    may suggest it."""
+    pf = _pf_json(bus_voltages=[{"bus_id": 7, "vm_pu": 1.06, "va_deg": 0.0}, {"bus_id": 8, "vm_pu": None, "va_deg": None}])
+    trace = _trace(
+        _round(
+            _tool("load_case", json.dumps({"case_name": "case14"})),
+            _tool("disconnect_line", pf, arguments={"from_bus": 7, "to_bus": 8}),
+        )
+    )
+    verdict = verify_final_answer(trace, "Voltages are within limits.")
+    retry_msg = _verification_retry_message(verdict)
+    assert "suggested next step" not in retry_msg.lower()
+    assert "reconnect the branch between bus 7 and bus 8" not in retry_msg.lower()
+    assert "do not reconnect" in retry_msg.lower()  # the generic warning is fine; the specific hint is not
+
+    abstention = _verification_abstention_text(verdict)
+    assert "reconnect the branch between bus 7 and bus 8" in abstention
+
+
 def test_retry_message_names_failed_conditions_only():
     pf = _pf_json(converged=False, gen=0.0, load=0.0, loss=0.0)
     trace = _trace(_round(_tool("run_powerflow", pf)))
