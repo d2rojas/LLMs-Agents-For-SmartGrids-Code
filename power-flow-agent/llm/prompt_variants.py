@@ -29,7 +29,7 @@ from baselines.prompts_baseline import BASELINE_PROMPT_TEMPLATE, BASELINE_SYSTEM
 from llm.prompts import SYSTEM_PROMPT_EN as SYSTEM_PROMPT
 from llm.tools import TOOLS
 
-STRATEGIES: Tuple[str, ...] = ("structured", "few_shot", "cot", "rag")
+STRATEGIES: Tuple[str, ...] = ("structured", "few_shot", "cot", "rag", "nr")
 MODES: Tuple[str, ...] = ("llm_only", "single_call")
 
 # Section headings shared by every strategy (used by ``context_stats``).
@@ -117,6 +117,29 @@ LLM_ONLY_COT_SECTION = (
     + "3. Which quantities and units are asked for (MW, Mvar, p.u., degrees, % loading)?\n"
     + "4. What changes with respect to the base case, and which power balance must hold?\n"
     + "Write the reasoning first, then the final JSON as the last part of the response."
+)
+
+LLM_ONLY_NR_SECTION = (
+    REASONING_HEADING
+    + "\n"
+    + "Solve this with the Newton-Raphson power-flow procedure, worked by hand in the "
+    "reasoning text before the final JSON:\n"
+    + "1. Build the bus admittance matrix Ybus (per unit, on the stated system base) from "
+    "the r_pu/x_pu/b_pu of every line and transformer (series admittance 1/(r_pu+j*x_pu), "
+    "plus the shunt charging b_pu split half to each end bus).\n"
+    + "2. Classify each bus as slack (ext_grid), PV (gen) or PQ (load only); PV/slack voltage "
+    "magnitudes are the given setpoints, not unknowns.\n"
+    + "3. Flat-start the unknowns: angle 0 at every non-slack bus, magnitude 1.0 p.u. at every "
+    "PQ bus.\n"
+    + "4. At each iteration: compute the power mismatch (Delta P at every non-slack bus, Delta "
+    "Q at every PQ bus) from the current voltage estimate, form the Jacobian, solve for the "
+    "angle/magnitude correction, and update the voltage estimate. Show the mismatch vector "
+    "and the updated voltages at each iteration explicitly.\n"
+    + "5. Repeat until the largest mismatch is below 1e-3 p.u. (report the iteration count), "
+    "or state explicitly that you are not iterating further and why.\n"
+    + "Do not skip straight to a final answer without showing at least one iteration's "
+    "mismatch and update; a plausible-looking answer with no shown iteration is not an "
+    "acceptable substitute."
 )
 
 SINGLE_CALL_COT_SECTION = (
@@ -610,10 +633,12 @@ def _build_llm_only(strategy: str, request_text: str, net: Any, case_name: str, 
     sections.append(_task_section(request_text))
     if strategy == "cot":
         sections.append(LLM_ONLY_COT_SECTION)
+    elif strategy == "nr":
+        sections.append(LLM_ONLY_NR_SECTION)
     sections.append(LLM_ONLY_OUTPUT_SECTION)
 
     base = forced_system_prompt(BASELINE_SYSTEM_PROMPT.strip()) if forced else BASELINE_SYSTEM_PROMPT.strip()
-    system = base + (COT_SYSTEM_SUFFIX if strategy == "cot" else "")
+    system = base + (COT_SYSTEM_SUFFIX if strategy in ("cot", "nr") else "")
     return [{"role": "system", "content": system}, {"role": "user", "content": _join(sections)}]
 
 

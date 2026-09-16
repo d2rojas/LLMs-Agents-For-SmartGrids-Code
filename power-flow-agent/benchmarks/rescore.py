@@ -201,8 +201,17 @@ class TruthCache:
 # --------------------------------------------------------------------------- final state
 
 
-def reconstruct_final_state(row: dict[str, Any], trace: Optional[dict[str, Any]], spec: ev.MethodSpec) -> tuple[Any, Optional[bool], str]:
-    """(BaselineParsed, converged, source) of the method's final power-flow state, or (None, None, reason)."""
+def reconstruct_final_state(
+    row: dict[str, Any], trace: Optional[dict[str, Any]], spec: ev.MethodSpec, *, net: Any = None
+) -> tuple[Any, Optional[bool], str]:
+    """(BaselineParsed, converged, source) of the method's final power-flow state, or (None, None, reason).
+
+    ``net`` (the recomputed reference network, when available) lets a no-tools row's
+    line_flows entries recover their from_bus/to_bus from the network's own topology via
+    the line_id convention, since the requested output schema never asks the model for
+    them -- see BaselineParsed.from_json. Without it, _compute_kcl_self_consistency's
+    B_mean never runs for any llm_only(_forced) row during rescoring.
+    """
     from baselines.llm_only import baseline_parsed_from_result
     from models.schemas import PowerFlowResult
 
@@ -210,7 +219,7 @@ def reconstruct_final_state(row: dict[str, Any], trace: Optional[dict[str, Any]]
         if spec.name == "blueprint_pf":
             return None, None, "unavailable:blueprint_parser_needs_case_file"
         try:
-            parsed = ev._baseline_parser(str(row.get("raw_response") or ""), {})
+            parsed = ev._baseline_parser(str(row.get("raw_response") or ""), {"net": net})
         except Exception:
             return None, None, "unparsed"
         return parsed, bool(parsed.converged), "answer_json"
@@ -308,7 +317,7 @@ def rescore_row(
     metrics = row.get("metrics")
     final_converged = row.get("final_converged")
     metrics_source = "stored"
-    parsed, parsed_converged, state_source = reconstruct_final_state(row, trace, spec)
+    parsed, parsed_converged, state_source = reconstruct_final_state(row, trace, spec, net=truth_net)
     if parsed is not None and truth_result is not None:
         net = truth_net if (not has_tools or formulation_exact is True) else None
         try:

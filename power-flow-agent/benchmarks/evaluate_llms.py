@@ -140,6 +140,10 @@ EXTENDED_SCOREBOARD_FIELDS = [
     "v_pass_rate",
     "v_pass_count",
     "v_pass_total",
+    # voltage MAE restricted to PQ (load-only) buses -- at a PV/slack bus vm is a
+    # setpoint the model can copy from the gen/ext_grid table, so this is the number
+    # that actually reflects whether an LLM-only method solved anything.
+    "voltage_mae_pq_mean",
     # "normal" (default) or "stress": disambiguates (model, method, case) collisions when
     # the same method/case is run under different conditions (see --condition).
     "condition",
@@ -190,7 +194,7 @@ class TaskSpec:
 
 # ---------------------------------------------------------------------------- methods
 
-STRATEGIES = ("structured", "few_shot", "cot", "rag")
+STRATEGIES = ("structured", "few_shot", "cot", "rag", "nr")  # keep in sync with llm/prompt_variants.py
 ARCH_METHODS: dict[str, dict[str, Any]] = {
     # name: (architecture, gate, memory, final_gate)
     "react": {"architecture": "react", "gate": True, "memory": False},
@@ -403,7 +407,7 @@ def _baseline_parser(raw_text: str, _ctx: dict[str, Any]) -> BaselineParsed:
     obj, err = parse_llm_baseline_json(raw_text)
     if err:
         raise ValueError(err)
-    parsed, err = BaselineParsed.from_json(obj or {})
+    parsed, err = BaselineParsed.from_json(obj or {}, net=_ctx.get("net"))
     if err or parsed is None:
         raise ValueError(err or "baseline_parse_failed")
     return parsed
@@ -815,7 +819,7 @@ def evaluate_item(
 
                 msgs = build_messages(method.strategy, "llm_only", item.text, net, item.case_name, forced=bool(getattr(method, "forced", False)))
                 system_prompt, user_prompt = msgs[0]["content"], msgs[1]["content"]
-                parser_ctx = {}
+                parser_ctx = {"net": net}
                 parser = _baseline_parser
             raw_text, usage, latency_s = _call_model(
                 client,
@@ -1129,6 +1133,11 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "solved_count": solved["count"],
         "solved_total": solved["total"],
         "voltage_mae_mean": _safe_mean([(r.get("metrics") or {}).get("voltage_mae") for r in ok_rows]),
+        # PQ-bus-only voltage error: at a PV/slack bus vm is a control setpoint the
+        # model can read straight off the gen/ext_grid table, so the all-buses MAE
+        # above is diluted by buses that don't require solving anything. See
+        # baselines/llm_only.py::_pq_bus_ids.
+        "voltage_mae_pq_mean": _safe_mean([(r.get("metrics") or {}).get("voltage_mae_pq") for r in ok_rows]),
         "flow_mae_mean": _safe_mean([(r.get("metrics") or {}).get("flow_mae") for r in ok_rows]),
         "loading_rmse_mean": _safe_mean([(r.get("metrics") or {}).get("loading_rmse") for r in ok_rows]),
         "voltage_f1_mean": _safe_mean([(r.get("metrics") or {}).get("voltage_f1") for r in ok_rows]),

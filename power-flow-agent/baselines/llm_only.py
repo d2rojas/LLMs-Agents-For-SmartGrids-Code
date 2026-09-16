@@ -72,13 +72,61 @@ def _df_to_text(df: Any, *, columns: Optional[List[str]] = None, max_rows: int =
         return f"<failed to serialize table: {type(e).__name__}: {e}>"
 
 
-def export_case_tables(net: Any) -> Dict[str, str]:
-    """导出用例关键表为文本，用于 baseline prompt。"""
+def _per_unit_branch_table(net: Any) -> Dict[Tuple[int, int], Dict[str, float]]:
+    """Per-unit (r, x, b) on the network's own MVA base, keyed by (from_bus name, to_bus name).
 
-    # vn_kv omitted: this case's MATPOWER file leaves baseKV at 0 for every bus, so
-    # pandapower's from_mpc converter fills it in with values (e.g. 0.208 kV) that
-    # are a conversion artifact, not real base voltages. Showing it induced LLMs to
-    # copy it as if it were a per-unit voltage (see llm_only_dive.md 7).
+    Read from pandapower's own internal per-unit branch matrix (``net._ppc['branch']``
+    after a solve on a *copy* of ``net`` -- the original network is never mutated), not
+    recomputed by hand from ``vn_kv``/``r_ohm_per_km``: this is the exact same per-unit
+    system the solver itself uses, so the prompt and the object it describes cannot
+    disagree. This is also why it recovers sensible per-unit values (e.g. r=0.01938,
+    x=0.05917 for the bus-1-to-bus-2 line of IEEE 14, the textbook numbers) even though
+    the underlying ``vn_kv``/impedance-in-ohms the MATPOWER converter filled in for
+    several buses (baseKV was 0 in the source file) are not real nominal voltages: the
+    line and transformer ohmic values were back-derived from those same base voltages,
+    so the per-unit system they define together is internally consistent.
+    """
+    import copy
+
+    import pandapower as pp
+    from pandapower.pypower.idx_brch import BR_B, BR_R, BR_X, F_BUS, T_BUS
+
+    net2 = copy.deepcopy(net)
+    pp.runpp(net2)
+    ppc_to_bus = {ppc_idx: orig_idx for orig_idx, ppc_idx in enumerate(net2._pd2ppc_lookups["bus"])}
+    names = net2.bus["name"]
+    out: Dict[Tuple[int, int], Dict[str, float]] = {}
+    for row in net2._ppc["branch"]:
+        fb = names.loc[ppc_to_bus[int(row[F_BUS].real)]]
+        tb = names.loc[ppc_to_bus[int(row[T_BUS].real)]]
+        out[(int(fb), int(tb))] = {"r_pu": float(row[BR_R].real), "x_pu": float(row[BR_X].real), "b_pu": float(row[BR_B].real)}
+    return out
+
+
+def _bus_name(net: Any, bus_idx: int) -> int:
+    return int(net.bus["name"].loc[bus_idx])
+
+
+def export_case_tables(net: Any) -> Dict[str, str]:
+    """导出用例关键表为文本，用于 baseline prompt。
+
+    Line and transformer impedances are shown in per unit on the network's own MVA
+    base (``r_pu``/``x_pu``/``b_pu``), computed by the solver itself (``_per_unit_
+    branch_table``) rather than from the raw ohm/vk_percent columns -- those, and the
+    ``max_i_ka``/``sn_mva`` ratings derived from the same corrupted base voltages
+    (this case's MATPOWER file leaves baseKV at 0 for several buses, so pandapower's
+    converter fills in values like 0.208 kV that are a conversion artifact, not real
+    voltages), are dropped entirely rather than shown and explained away: a header
+    sentence asking the model not to misread a column is weaker than not showing the
+    column (see llm_only_dive.md 7 for the original vn_kv-copying failure this avoids).
+
+    Every bus reference column (``bus`` in load/gen/ext_grid, ``from_bus``/``to_bus``
+    in line, ``hv_bus``/``lv_bus`` in trafo) is translated to the same 1..N display id
+    as the bus table's own ``name`` column -- pandapower's tables otherwise identify
+    a bus by two different numbers (the 0-based row index here, the 1-based name in
+    the bus table and in the requested output schema), which would silently penalize
+    the no-tools arm for a representation bug, not a reasoning failure.
+    """
     bus_cols = ["name", "type", "zone", "in_service"]
     load_cols = ["bus", "p_mw", "q_mvar", "in_service"]
     gen_cols = [
@@ -92,44 +140,45 @@ def export_case_tables(net: Any) -> Dict[str, str]:
         "in_service",
     ]
     ext_cols = ["bus", "vm_pu", "va_degree", "in_service"]
-    line_cols = [
-        "from_bus",
-        "to_bus",
-        "length_km",
-        "r_ohm_per_km",
-        "x_ohm_per_km",
-        "c_nf_per_km",
-        "max_i_ka",
-        "df",
-        "parallel",
-        "in_service",
-    ]
-    trafo_cols = [
-        "hv_bus",
-        "lv_bus",
-        "sn_mva",
-        "vn_hv_kv",
-        "vn_lv_kv",
-        "vk_percent",
-        "vkr_percent",
-        "pfe_kw",
-        "i0_percent",
-        "shift_degree",
-        "tap_side",
-        "tap_neutral",
-        "tap_min",
-        "tap_max",
-        "tap_step_percent",
-        "in_service",
-    ]
+    line_cols = ["from_bus", "to_bus", "r_pu", "x_pu", "b_pu", "parallel", "in_service"]
+    trafo_cols = ["hv_bus", "lv_bus", "r_pu", "x_pu", "shift_degree", "tap_side", "tap_neutral", "tap_min", "tap_max", "tap_step_percent", "in_service"]
+
+    def _translated(df: Any, col: str) -> Any:
+        df = df.copy()
+        if len(df):
+            df[col] = df[col].map(lambda i: _bus_name(net, i))
+        return df
+
+    load_df = _translated(net.load, "bus") if getattr(net, "load", None) is not None else None
+    gen_df = _translated(net.gen, "bus") if getattr(net, "gen", None) is not None else None
+    ext_df = _translated(net.ext_grid, "bus") if getattr(net, "ext_grid", None) is not None else None
+
+    pu = _per_unit_branch_table(net)
+    line_df = net.line.copy()
+    if len(line_df):
+        keys = list(zip(line_df["from_bus"].map(lambda i: _bus_name(net, i)), line_df["to_bus"].map(lambda i: _bus_name(net, i))))
+        line_df["from_bus"] = [k[0] for k in keys]
+        line_df["to_bus"] = [k[1] for k in keys]
+        line_df["r_pu"] = [round(pu[k]["r_pu"], 5) for k in keys]
+        line_df["x_pu"] = [round(pu[k]["x_pu"], 5) for k in keys]
+        line_df["b_pu"] = [round(pu[k]["b_pu"], 6) for k in keys]
+
+    trafo_df = getattr(net, "trafo", None)
+    trafo_df = trafo_df.copy() if trafo_df is not None else None
+    if trafo_df is not None and len(trafo_df):
+        keys = list(zip(trafo_df["hv_bus"].map(lambda i: _bus_name(net, i)), trafo_df["lv_bus"].map(lambda i: _bus_name(net, i))))
+        trafo_df["hv_bus"] = [k[0] for k in keys]
+        trafo_df["lv_bus"] = [k[1] for k in keys]
+        trafo_df["r_pu"] = [round(pu[k]["r_pu"], 5) for k in keys]
+        trafo_df["x_pu"] = [round(pu[k]["x_pu"], 5) for k in keys]
 
     return {
         "bus": _df_to_text(net.bus, columns=bus_cols),
-        "load": _df_to_text(getattr(net, "load", None), columns=load_cols),
-        "gen": _df_to_text(getattr(net, "gen", None), columns=gen_cols),
-        "ext_grid": _df_to_text(getattr(net, "ext_grid", None), columns=ext_cols),
-        "line": _df_to_text(getattr(net, "line", None), columns=line_cols),
-        "trafo": _df_to_text(getattr(net, "trafo", None), columns=trafo_cols),
+        "load": _df_to_text(load_df, columns=load_cols),
+        "gen": _df_to_text(gen_df, columns=gen_cols),
+        "ext_grid": _df_to_text(ext_df, columns=ext_cols),
+        "line": _df_to_text(line_df, columns=line_cols),
+        "trafo": _df_to_text(trafo_df, columns=trafo_cols),
     }
 
 
@@ -142,8 +191,16 @@ def build_baseline_prompt(case_name: str, net: Any) -> str:
         "\n\n[重要说明] bus_id 必须使用 net.bus 表中的 name 列（即 IEEE/MATPOWER 常见的 1..N 编号），"
         "不要使用 net.bus 的行索引。\n"
     )
+    per_unit_note = (
+        f"\nSystem base: {float(net.sn_mva):.0f} MVA. Every per-unit quantity below (r_pu, x_pu, "
+        "b_pu) is defined on this base. Line and transformer impedances (r_pu, x_pu, b_pu) are "
+        "already in per unit on this base, not ohms per km; do not convert them further. Branch "
+        "thermal ratings are not defined for this case, so branch loading is undefined: report "
+        "loading_percent as 0 for every branch.\n"
+    )
     return (
-        BASELINE_PROMPT_TEMPLATE.format(
+        per_unit_note
+        + BASELINE_PROMPT_TEMPLATE.format(
             case_name=case_name,
             bus_data_table=tables["bus"],
             load_data_table=tables["load"],
@@ -289,6 +346,9 @@ def _finite(x: Any) -> bool:
         return False
 
 
+TRAFO_LINE_ID_OFFSET = 100000  # same convention as solver/power_flow.py::_extract_line_flows
+
+
 @dataclass
 class BaselineParsed:
     converged: bool
@@ -302,7 +362,7 @@ class BaselineParsed:
     line_ends: Dict[int, Tuple[int, int]] = field(default_factory=dict)
 
     @staticmethod
-    def from_json(obj: Dict[str, Any]) -> Tuple[Optional["BaselineParsed"], Optional[str]]:
+    def from_json(obj: Dict[str, Any], net: Any = None) -> Tuple[Optional["BaselineParsed"], Optional[str]]:
         if not isinstance(obj, dict):
             return None, "json_not_object"
 
@@ -358,6 +418,27 @@ class BaselineParsed:
                 tb = item.get("to_bus")
                 if fb is not None and tb is not None:
                     line_ends[lid] = (int(fb), int(tb))
+                elif net is not None:
+                    # The requested output schema never asks for from_bus/to_bus on a
+                    # line_flows entry (only line_id, p_from_mw, loading_percent); a
+                    # model has no reason to include them and correctly doesn't. But
+                    # line_id alone already determines the branch under the documented
+                    # convention (row index into net.line, or 100000+row index into
+                    # net.trafo -- same convention solver/power_flow.py's
+                    # _extract_line_flows uses for the reference), so the endpoints
+                    # are known from the network, not something we need the model to
+                    # report. Without this, _compute_kcl_self_consistency's B_mean
+                    # never runs for any no-tools row (line_ends always empty).
+                    try:
+                        if lid >= TRAFO_LINE_ID_OFFSET:
+                            row = net.trafo.iloc[lid - TRAFO_LINE_ID_OFFSET]
+                            fb_idx, tb_idx = int(row["hv_bus"]), int(row["lv_bus"])
+                        else:
+                            row = net.line.iloc[lid]
+                            fb_idx, tb_idx = int(row["from_bus"]), int(row["to_bus"])
+                        line_ends[lid] = (_bus_idx_to_display(net, fb_idx), _bus_idx_to_display(net, tb_idx))
+                    except Exception:
+                        pass
             except Exception:
                 continue
 
@@ -529,6 +610,22 @@ def evaluate_against_truth(
         "pred_thermal_violations": sorted(pred_t),
         "truth_thermal_violations": sorted(truth_t),
     }
+
+
+def _pq_bus_ids(net: Any) -> set:
+    """Display ids (1..N) of PQ (load-only) buses: every bus without a generator or
+    external-grid connection. At a PV/slack bus the voltage magnitude is a control
+    setpoint already printed in the gen/ext_grid table, so a model can get it right by
+    copying rather than solving; restricting the voltage error to PQ buses is the
+    number that reflects whether the model actually computed anything (dropping vn_kv
+    from the prompt makes this the *only* remaining copy path for voltage magnitude).
+    """
+    non_pq = set()
+    for df, col in ((getattr(net, "gen", None), "bus"), (getattr(net, "ext_grid", None), "bus")):
+        if df is not None and len(df):
+            non_pq.update(int(_bus_name(net, i)) for i in df[col])
+    all_ids = {int(_bus_name(net, i)) for i in net.bus.index}
+    return all_ids - non_pq
 
 
 def _f1(prec: Optional[float], rec: Optional[float]) -> Optional[float]:
@@ -710,6 +807,13 @@ def evaluate_against_truth_extended(
             va_true = np.array([truth_va[i] for i in common_angles])
             angle_rmse = float(np.sqrt(np.mean((va_llm - va_true) ** 2)))
 
+    voltage_mae_pq = None
+    if net is not None and common_buses:
+        pq_ids = _pq_bus_ids(net)
+        pq_common = [i for i in common_buses if i in pq_ids]
+        if pq_common:
+            voltage_mae_pq = _mae([(parsed.bus_vm[i], truth_vm[i]) for i in pq_common])
+
     # --- Tier 2: Flow Estimation Accuracy ---
     flow_rmse = None
     flow_max_error = None
@@ -833,6 +937,7 @@ def evaluate_against_truth_extended(
         "voltage_rmse": voltage_rmse,
         "voltage_mape": voltage_mape,
         "voltage_max_error": voltage_max_error,
+        "voltage_mae_pq": voltage_mae_pq,
         "angle_rmse": angle_rmse,
         # Tier 2
         "flow_rmse": flow_rmse,
@@ -987,7 +1092,7 @@ def run_baseline_case(
             per_run.append({"run": k, "ok": False, "error": err, "llm_time_s": llm_time_s})
             continue
 
-        parsed, err2 = BaselineParsed.from_json(obj or {})
+        parsed, err2 = BaselineParsed.from_json(obj or {}, net=net)
         if err2:
             fail_modes[err2] = fail_modes.get(err2, 0) + 1
             per_run.append({"run": k, "ok": False, "error": err2, "llm_time_s": llm_time_s})
