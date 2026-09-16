@@ -69,7 +69,7 @@ LABELS = {"blocks": "tab:pf_protocol_per_system", "compact": "tab:pf_by_system"}
 # V(x,c,z,y) check (llm.engine.verify_final_answer) computed for every method, not only the
 # ones that enforce it live. Supplement-only by design -- whether it belongs in the paper's
 # main body table is the editor's call, not decided here.
-SUPPLEMENT_COLUMNS: tuple[Column, ...] = COLUMNS + (Column("V pass", ("v_pass_rate",), "pct"),)
+SUPPLEMENT_COLUMNS: tuple[Column, ...] = COLUMNS + (Column("V pass", ("v_pass_rate",), "pct", "v_pass_total"),)
 COLUMN_NAMES = [c.name for c in SUPPLEMENT_COLUMNS]
 COLUMN_HEADS = {"V_MAE": r"$V_{\mathrm{MAE}}$", "F_MAE": r"$F_{\mathrm{MAE}}$", "B_mean": r"$B_{\mathrm{mean}}$"}
 # (group title, number of columns) over the 11 supplement columns (10 protocol + V pass)

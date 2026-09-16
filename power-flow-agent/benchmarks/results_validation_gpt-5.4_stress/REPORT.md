@@ -1,6 +1,6 @@
 # Informe de experimento: `results_validation_gpt-5.4_stress`
 
-Generado el 2026-09-16 09:27 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-5.4_stress (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-16 11:21 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-5.4_stress (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -117,9 +117,9 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 ### Por método × caso
 
 | Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Abst. | V pass | $ |
-|---------------|------|----|-------------|-----|-----|-------------|----------------|------|------|-------------|-----|-----|---------|-------------|----------|------|
-| react_nogate | case14 | 10 | 50.0 (5/10) | -- | 0.01 | 10.0 (1/10) | 100.0 (10/10) | 0 | 96.6 | 100.0 (5/5) | 3.6 | 16333 | 0.0 (0/5) | 0.0 (0/5) | 0.0 (0/10) | 0.4563 |
-| pfagent | case14 | 10 | 50.0 (5/10) | -- | 0.01 | 10.0 (1/10) | 100.0 (10/10) | 0 | -- | 100.0 (5/5) | 3.9 | 24422 | 0.0 (0/5) | 100.0 (5/5) | 0.0 (0/10) | 0.6890 |
+|---------------|------|----|-------------|-----|-----|-------------|----------------|------|------|-------------|-----|-----|---------|-------------|------|------|
+| react_nogate | case14 | 10 | 50.0 (5/10) | -- | 0.01 | 10.0 (1/10) | 100.0 (10/10) | 0 | 96.6 | 100.0 (5/5) | 3.6 | 16333 | 0.0 (0/5) | 0.0 (0/5) | -- | 0.4563 |
+| pfagent | case14 | 10 | 50.0 (5/10) | -- | 0.01 | 10.0 (1/10) | 100.0 (10/10) | 0 | -- | 100.0 (5/5) | 3.9 | 24422 | 0.0 (0/5) | 100.0 (5/5) | -- | 0.6890 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 
@@ -137,11 +137,16 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 ### Verificación final (pfagent: V(x,c,z,y) aplicado a la respuesta final)
 
-`pass_first` = pasó al primer intento; `pass_retry` = pasó tras el único reintento con el veredicto añadido; `abstained` = falló dos veces, respuesta forzada a fallo declarado sin números. N = items con `final_gate` activo (no todos los métodos lo tienen).
+`pass_first` = pasó al primer intento; `pass_retry` = pasó tras el único reintento con el veredicto añadido; `abstained` = falló dos veces, respuesta forzada a fallo declarado sin números; `retry_mutation` = el reintento intentó una herramienta que muta la red (bloqueada, nunca ejecutada; cuenta como abstención) — ver "Integridad del reintento" abajo. N = items con `final_gate` activo (no todos los métodos lo tienen).
 
-| Method | N | pass_first | pass_retry | abstained |
-|-------|----|----------|----------|----------------|
-| pfagent | 10 | 0.0 (0/10) | 0.0 (0/10) | 100.0 (10/10) |
+| Method | N | pass_first | pass_retry | abstained | retry_mutation |
+|-------|----|----------|----------|----------------|-----------------|
+| pfagent | 10 | 0.0 (0/10) | 0.0 (0/10) | 100.0 (10/10) | 0.0 (0/10) |
+
+
+### Integridad del reintento
+
+De 10 ítem(s) que llegaron a un reintento, 0 intentaron una herramienta que muta la red (bloqueada) en vez de corregir el reporte; se cuentan como abstención, no como "pasó". El mensaje de reintento ya no sugiere la corrección específica (p. ej. "reconnect...") y bloquea estructuralmente `modify_load`, `disconnect_line`, `reconnect_line`, `apply_remedial_action` y `load_case` mientras el reintento está en efecto.
 
 ### Tipos de error de formulación (conteo de items)
 

@@ -1,6 +1,6 @@
 # Informe de experimento: `results_validation_gpt-4o-mini_stress`
 
-Generado el 2026-09-16 10:46 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-4o-mini_stress (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-16 11:20 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-4o-mini_stress (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -78,8 +78,8 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 ### Por método × caso
 
 | Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Abst. | V pass | $ |
-|-------|------|----|----------------|-----|-----|---------------|----------------|------|------|----------------|-----|-----|----------|----------------|----------|------|
-| pfagent | case14 | 40 | 100.0 (40/40) | -- | 0.00 | 60.0 (24/40) | 100.0 (40/40) | 0 | 100.0 | 100.0 (24/24) | 4.5 | 20906 | 0.0 (0/24) | 100.0 (16/16) | 0.0 (0/40) | 0.1325 |
+|-------|------|----|----------------|-----|-----|---------------|----------------|------|------|----------------|-----|-----|----------|----------------|------|------|
+| pfagent | case14 | 40 | 100.0 (40/40) | -- | 0.00 | 60.0 (24/40) | 100.0 (40/40) | 0 | 100.0 | 100.0 (24/24) | 4.5 | 20906 | 0.0 (0/24) | 100.0 (16/16) | -- | 0.1325 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 

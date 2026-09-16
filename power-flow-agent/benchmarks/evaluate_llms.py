@@ -953,6 +953,21 @@ def evaluate_item(
 
     faith = bm.faithful_numbers(raw_text, bm.tool_outputs_from_trace(trace), request_text=item.text)
     truth_converged = bool(item.truth.converged) if item.truth is not None else None
+    # Whether the reference (ground-truth) power flow itself converges with no isolated
+    # bus, independent of anything the method under test answered. v_pass's denominator is
+    # restricted to these items: when the reference genuinely doesn't converge or islands a
+    # bus (e.g. a stress-condition line disconnection), no final answer -- however correct --
+    # can ever satisfy verify_final_answer's converged/no_isolated_buses conditions, so
+    # counting those items as v_pass failures would penalize the check's own premise rather
+    # than the method. Same NaN-vm_pu convention `llm.engine.verify_final_answer` uses for
+    # the agent's own trace, applied here to the independently-solved reference instead.
+    from llm.engine import _is_finite_number
+
+    reference_solvable = (
+        item.truth is not None
+        and bool(item.truth.converged)
+        and all(_is_finite_number(bv.vm_pu) for bv in (item.truth.bus_voltages or []))
+    )
     has_tools = method.kind in ("engine", "rule_based")
     # JSON-aware failure reporting and the end-to-end `solved` verdict (benchmarks/scoring.py).
     failure = bs.failure_reporting(
@@ -1046,6 +1061,7 @@ def evaluate_item(
         "final_converged": final_converged,
         "expected_outcome": item.expected_outcome,
         "truth_converged": truth_converged,
+        "reference_solvable": reference_solvable,
         "truth_tool_errors": item.truth_tool_errors,
         "solved": solved["solved"],
         "solved_reason": solved["solved_reason"],
@@ -1091,7 +1107,16 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
     def _verif_rate(name: str) -> Optional[float]:
         return (sum(1 for v in verif_outcomes if v == name) / verif_total) if verif_total else None
 
-    v_pass_vals = [r.get("v_pass") for r in rows if r.get("v_pass") is not None]
+    # v_pass's denominator is restricted to items whose reference actually converges with no
+    # isolated bus: when the reference itself is unsolvable (e.g. under the stress condition),
+    # no answer can pass the check by construction, so those items are excluded rather than
+    # counted as failures. `.get("reference_solvable", True)` keeps older report.json rows
+    # (written before this field existed) behaving exactly as before.
+    v_pass_vals = [
+        r.get("v_pass")
+        for r in rows
+        if r.get("v_pass") is not None and r.get("reference_solvable", True)
+    ]
     v_pass_total = len(v_pass_vals)
     v_pass_count = sum(1 for v in v_pass_vals if v)
     scoreboard = {

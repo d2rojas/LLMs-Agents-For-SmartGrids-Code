@@ -278,8 +278,11 @@ def rescore_row(
             }
         )
 
+    from llm.engine import _is_finite_number
+
     # ground truth
     truth_converged = row.get("truth_converged")
+    reference_solvable = row.get("reference_solvable", True)
     truth_result = truth_net = None
     truth_source = "stored"
     truth_answer = row.get("truth_answer")
@@ -288,6 +291,9 @@ def rescore_row(
         if t["result"] is not None:
             truth_result, truth_net = t["result"], t["net"]
             truth_converged = bool(truth_result.converged)
+            reference_solvable = truth_converged and all(
+                _is_finite_number(bv.vm_pu) for bv in (truth_result.bus_voltages or [])
+            )
             truth_source = "recomputed"
             new["truth_tool_errors"] = t["tool_errors"]
         ans = truth_cache.answer(row)
@@ -325,6 +331,7 @@ def rescore_row(
             "metrics": metrics,
             "final_converged": final_converged,
             "truth_converged": truth_converged,
+            "reference_solvable": reference_solvable,
             "truth_answer": truth_answer,
         }
     )

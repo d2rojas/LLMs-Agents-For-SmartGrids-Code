@@ -43,7 +43,7 @@ Generado por `benchmarks/build_root_summary.py` a partir de 5 bloques. No vuelve
 | Single-call | RAG | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |
 | Architectures | Rule-based parser, no LLM | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |
 | Architectures | Single-call, best prompt | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |
-| Architectures | ReAct | 50.0 (5/10) | -- | 0.01 | 10.0 (1/10) | 100.0 (10/10) | 0 | 96.6 | 100.0 (5/5) | 3.6 | 16333 | 0.0 (0/10) |
+| Architectures | ReAct | 50.0 (5/10) | -- | 0.01 | 10.0 (1/10) | 100.0 (10/10) | 0 | 96.6 | 100.0 (5/5) | 3.6 | 16333 | -- |
 | Architectures | Plan-and-Act | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |
-| Architectures | PFAgent: ReAct + gate | 50.0 (5/10) | -- | 0.01 | 10.0 (1/10) | 100.0 (10/10) | 0 | -- | 100.0 (5/5) | 3.9 | 24422 | 0.0 (0/10) |
+| Architectures | PFAgent: ReAct + gate | 50.0 (5/10) | -- | 0.01 | 10.0 (1/10) | 100.0 (10/10) | 0 | -- | 100.0 (5/5) | 3.9 | 24422 | -- |
 

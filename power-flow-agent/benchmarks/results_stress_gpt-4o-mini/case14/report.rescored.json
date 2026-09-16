@@ -77,6 +77,8 @@
     "stale_state_quoted_old_count",
     "stale_state_quoted_old_total",
     "converged_rate",
+    "convergence_match_count",
+    "convergence_match_total",
     "kcl_mean_mismatch_mw_mean",
     "power_balance_error_mean",
     "n_llm_calls_mean",
@@ -88,7 +90,16 @@
     "solved_total",
     "abstained_on_solvable_rate",
     "abstained_on_solvable_count",
-    "abstained_on_solvable_total"
+    "abstained_on_solvable_total",
+    "verification_pass_first_rate",
+    "verification_pass_retry_rate",
+    "verification_abstained_rate",
+    "verification_abstained_retry_mutation_rate",
+    "verification_total",
+    "v_pass_rate",
+    "v_pass_count",
+    "v_pass_total",
+    "condition"
   ],
   "metric_definitions": "Per-item benchmark metrics computed from an engine trace and a request.\n\nThese metrics separate *formulation* correctness (did the method call the right\ntools with the right arguments, in the right order) from *solve* correctness\n(Tier I-III numbers vs the PandaPower ground truth, computed elsewhere with\n``baselines.llm_only.evaluate_against_truth_extended``) and from *reporting*\nfaithfulness (are the numbers in the final answer traceable to tool outputs).\n\nEvery function is pure and JSON-friendly; nothing here calls an LLM or a solver.\n\nDefinitions\n-----------\nformulation_exact\n    The executed tool-call sequence asks the solver for what ``intended_calls``\n    asks for (calibrated comparator, rules R0-R10 in ``formulation_check``):\n    argument names/types are normalized (``bus`` -> ``bus_id``, ``\"14\"`` -> ``14``,\n    unordered line endpoints, case aliases), read-only calls are ignored\n    (``run_powerflow`` repeats, ``get_status``, ``get_most_loaded_branch``,\n    ``generate_plot``), optional arguments the request does not pin accept any\n    schema-valid value, and out-of-schema values or extra arguments that change\n    the solver outcome are errors.\nformulation_exact_strict\n    The verdict of the original comparator (``formulation_check_strict``): the\n    normalized sequences must match argument-by-argument with defaults dropped.\n    Kept in the ``formulation_check`` result for before/after comparison.\nformulation_error_type\n    ``ok`` | ``wrong_id`` (bus / line / case identifier differs) |\n    ``wrong_unit_or_value`` (a pinned numeric/enum argument differs) |\n    ``invalid_value`` (a value the tool schema rejects, e.g. ``criteria=\"min\n    voltage\"``; the tool falls back to a default) | ``extra_arg_changes_result``\n    (an unrequested optional argument that changes the solver outcome, e.g.\n    ``modify_load(..., q_mvar=0)`` when only MW was asked) | ``missed_step``\n    (an intended tool was never executed or a different tool was used) |\n    ``extra_step`` (an unintended tool that mutates the network or runs an\n    analysis was executed) | ``unparsed`` (the request could not be turned into\n    any tool call).\nfaithful_numbers\n    Fraction of the numbers in the final answer that match some number in the\n    tool outputs within tolerance: 1e-3 p.u. for voltages, 1 % relative for MW,\n    Mvar and percent values. Numbers without a unit are matched if either\n    tolerance holds. Additionally, an answer number written with ``k`` decimals\n    matches a tool value whose rounding to ``k`` decimals equals it (``0.93`` vs\n    ``0.9312``), so a coarser quotation of a solver value is not penalized.\n    Bare integers with no unit (bus/line ids, counts) are not\n    counted. ``None`` when the answer carries no numbers.\nn_untraceable_numbers\n    Count of answer numbers that match no tool-output number.\nsafe_failure\n    When the final solver state is non-converged (or the gate failed and there\n    is no final state): did the answer say so rather than report a result.\nclaimed_success_on_failure\n    Same failure condition, but the answer asserts success or reports\n    unit-bearing numbers without acknowledging the failure.\nstale_state\n    The agent changed the network (``MUTATING_TOOLS``) and then reported\n    power-flow numbers that do not come from a solve of the changed network.\n    Computed from the trace only, over the tool calls in execution order; a\n    ``load_case`` after a mutation resets the state (fresh network). Mutating\n    calls that returned an ``error`` / ``need_confirmation`` payload did not\n    change the network and are ignored. A \"re-solve\" is any tool output that\n    carries a PowerFlowResult payload (``RESOLVING_TOOLS``; in PFAgent every\n    mutating tool re-solves and returns the new result itself, so its own\n    output counts as the re-solve).\n    ``stale_state_no_rerun``: there is a mutation in effect, no re-solve at or\n    after the last mutation, and the answer reports numbers (numbers merely\n    echoing the request are ignored, as in ``faithful_numbers``).\n    ``stale_state_quoted_old``: a re-solve did happen after the last mutation,\n    but at least one answer number matches only a power-flow output produced\n    *before* the mutation and none matches only the post-mutation output(s),\n    with the ``faithful_numbers`` tolerances. Answers that quote both (a\n    before/after comparison) are not stale.\n    ``stale_state`` is either flag. All three are ``None`` when no mutation is\n    in effect at answer time (n/a), so rates are over items with a mutation.\n",
   "scoreboard": [
@@ -106,6 +117,8 @@
       "voltage_f1_mean": 1.0,
       "thermal_f1_mean": 1.0,
       "convergence_match_rate": 0.8888888888888888,
+      "convergence_match_count": 16,
+      "convergence_match_total": 18,
       "prompt_tokens_mean": 0.0,
       "completion_tokens_mean": 0.0,
       "total_tokens_mean": 0.0,
@@ -151,7 +164,15 @@
       "n_llm_calls_mean": 0.0,
       "n_tool_calls_mean": 1.3,
       "n_tool_rounds_mean": 0.45,
-      "wall_time_s_mean": 0.11169406670087483
+      "wall_time_s_mean": 0.11169406670087483,
+      "verification_pass_first_rate": null,
+      "verification_pass_retry_rate": null,
+      "verification_abstained_rate": null,
+      "verification_abstained_retry_mutation_rate": null,
+      "verification_total": 0,
+      "v_pass_rate": null,
+      "v_pass_count": 0,
+      "v_pass_total": 0
     },
     {
       "model": "openrouter:openai/gpt-4o-mini",
@@ -167,6 +188,8 @@
       "voltage_f1_mean": 1.0,
       "thermal_f1_mean": 1.0,
       "convergence_match_rate": 1.0,
+      "convergence_match_count": 40,
+      "convergence_match_total": 40,
       "prompt_tokens_mean": 7216.3,
       "completion_tokens_mean": 223.625,
       "total_tokens_mean": 7439.925,
@@ -212,7 +235,15 @@
       "n_llm_calls_mean": 2.4,
       "n_tool_calls_mean": 3.575,
       "n_tool_rounds_mean": 1.4,
-      "wall_time_s_mean": 3.922257047900348
+      "wall_time_s_mean": 3.922257047900348,
+      "verification_pass_first_rate": null,
+      "verification_pass_retry_rate": null,
+      "verification_abstained_rate": null,
+      "verification_abstained_retry_mutation_rate": null,
+      "verification_total": 0,
+      "v_pass_rate": null,
+      "v_pass_count": 0,
+      "v_pass_total": 0
     },
     {
       "model": "openrouter:openai/gpt-4o-mini",
@@ -228,6 +259,8 @@
       "voltage_f1_mean": 1.0,
       "thermal_f1_mean": 1.0,
       "convergence_match_rate": 1.0,
+      "convergence_match_count": 40,
+      "convergence_match_total": 40,
       "prompt_tokens_mean": 7457.0,
       "completion_tokens_mean": 222.325,
       "total_tokens_mean": 7679.325,
@@ -273,7 +306,15 @@
       "n_llm_calls_mean": 2.45,
       "n_tool_calls_mean": 3.6,
       "n_tool_rounds_mean": 1.45,
-      "wall_time_s_mean": 3.9126186812522064
+      "wall_time_s_mean": 3.9126186812522064,
+      "verification_pass_first_rate": null,
+      "verification_pass_retry_rate": null,
+      "verification_abstained_rate": null,
+      "verification_abstained_retry_mutation_rate": null,
+      "verification_total": 0,
+      "v_pass_rate": null,
+      "v_pass_count": 0,
+      "v_pass_total": 0
     },
     {
       "model": "openrouter:openai/gpt-4o-mini",
@@ -289,6 +330,8 @@
       "voltage_f1_mean": 1.0,
       "thermal_f1_mean": 1.0,
       "convergence_match_rate": 1.0,
+      "convergence_match_count": 40,
+      "convergence_match_total": 40,
       "prompt_tokens_mean": 10343.9,
       "completion_tokens_mean": 177.9,
       "total_tokens_mean": 10521.8,
@@ -334,7 +377,15 @@
       "n_llm_calls_mean": 2.0,
       "n_tool_calls_mean": 3.1,
       "n_tool_rounds_mean": 1.0,
-      "wall_time_s_mean": 3.171903813422978
+      "wall_time_s_mean": 3.171903813422978,
+      "verification_pass_first_rate": null,
+      "verification_pass_retry_rate": null,
+      "verification_abstained_rate": null,
+      "verification_abstained_retry_mutation_rate": null,
+      "verification_total": 0,
+      "v_pass_rate": null,
+      "v_pass_count": 0,
+      "v_pass_total": 0
     }
   ],
   "scoreboard_per_case": [
@@ -353,6 +404,8 @@
       "voltage_f1_mean": 1.0,
       "thermal_f1_mean": 1.0,
       "convergence_match_rate": 0.8888888888888888,
+      "convergence_match_count": 16,
+      "convergence_match_total": 18,
       "prompt_tokens_mean": 0.0,
       "completion_tokens_mean": 0.0,
       "total_tokens_mean": 0.0,
@@ -398,7 +451,15 @@
       "n_llm_calls_mean": 0.0,
       "n_tool_calls_mean": 1.3,
       "n_tool_rounds_mean": 0.45,
-      "wall_time_s_mean": 0.11169406670087483
+      "wall_time_s_mean": 0.11169406670087483,
+      "verification_pass_first_rate": null,
+      "verification_pass_retry_rate": null,
+      "verification_abstained_rate": null,
+      "verification_abstained_retry_mutation_rate": null,
+      "verification_total": 0,
+      "v_pass_rate": null,
+      "v_pass_count": 0,
+      "v_pass_total": 0
     },
     {
       "model": "openrouter:openai/gpt-4o-mini",
@@ -415,6 +476,8 @@
       "voltage_f1_mean": 1.0,
       "thermal_f1_mean": 1.0,
       "convergence_match_rate": 1.0,
+      "convergence_match_count": 40,
+      "convergence_match_total": 40,
       "prompt_tokens_mean": 7216.3,
       "completion_tokens_mean": 223.625,
       "total_tokens_mean": 7439.925,
@@ -460,7 +523,15 @@
       "n_llm_calls_mean": 2.4,
       "n_tool_calls_mean": 3.575,
       "n_tool_rounds_mean": 1.4,
-      "wall_time_s_mean": 3.922257047900348
+      "wall_time_s_mean": 3.922257047900348,
+      "verification_pass_first_rate": null,
+      "verification_pass_retry_rate": null,
+      "verification_abstained_rate": null,
+      "verification_abstained_retry_mutation_rate": null,
+      "verification_total": 0,
+      "v_pass_rate": null,
+      "v_pass_count": 0,
+      "v_pass_total": 0
     },
     {
       "model": "openrouter:openai/gpt-4o-mini",
@@ -477,6 +548,8 @@
       "voltage_f1_mean": 1.0,
       "thermal_f1_mean": 1.0,
       "convergence_match_rate": 1.0,
+      "convergence_match_count": 40,
+      "convergence_match_total": 40,
       "prompt_tokens_mean": 7457.0,
       "completion_tokens_mean": 222.325,
       "total_tokens_mean": 7679.325,
@@ -522,7 +595,15 @@
       "n_llm_calls_mean": 2.45,
       "n_tool_calls_mean": 3.6,
       "n_tool_rounds_mean": 1.45,
-      "wall_time_s_mean": 3.9126186812522064
+      "wall_time_s_mean": 3.9126186812522064,
+      "verification_pass_first_rate": null,
+      "verification_pass_retry_rate": null,
+      "verification_abstained_rate": null,
+      "verification_abstained_retry_mutation_rate": null,
+      "verification_total": 0,
+      "v_pass_rate": null,
+      "v_pass_count": 0,
+      "v_pass_total": 0
     },
     {
       "model": "openrouter:openai/gpt-4o-mini",
@@ -539,6 +620,8 @@
       "voltage_f1_mean": 1.0,
       "thermal_f1_mean": 1.0,
       "convergence_match_rate": 1.0,
+      "convergence_match_count": 40,
+      "convergence_match_total": 40,
       "prompt_tokens_mean": 10343.9,
       "completion_tokens_mean": 177.9,
       "total_tokens_mean": 10521.8,
@@ -584,7 +667,15 @@
       "n_llm_calls_mean": 2.0,
       "n_tool_calls_mean": 3.1,
       "n_tool_rounds_mean": 1.0,
-      "wall_time_s_mean": 3.171903813422978
+      "wall_time_s_mean": 3.171903813422978,
+      "verification_pass_first_rate": null,
+      "verification_pass_retry_rate": null,
+      "verification_abstained_rate": null,
+      "verification_abstained_retry_mutation_rate": null,
+      "verification_total": 0,
+      "v_pass_rate": null,
+      "v_pass_count": 0,
+      "v_pass_total": 0
     }
   ],
   "runs": [
@@ -1056,6 +1147,7 @@
         "completion_tokens": 0,
         "wall_time_s": 0.23247625000658445
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 252.6562,
@@ -1070,6 +1162,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -1613,6 +1706,7 @@
         "completion_tokens": 0,
         "wall_time_s": 0.27288787500583567
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 100.0,
         "lines": [],
@@ -1624,6 +1718,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -2165,6 +2260,7 @@
         "completion_tokens": 0,
         "wall_time_s": 0.27104070800123736
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 80.0,
         "lines": [],
@@ -2176,6 +2272,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -2441,6 +2538,7 @@
         "completion_tokens": 0,
         "wall_time_s": 0.25896133299102075
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -2448,6 +2546,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -2568,6 +2667,7 @@
         "completion_tokens": 0,
         "wall_time_s": 7.291699876077473e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -2575,6 +2675,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -3047,6 +3148,7 @@
         "completion_tokens": 0,
         "wall_time_s": 0.24007929101935588
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 250.7875,
@@ -3061,6 +3163,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -3533,6 +3636,7 @@
         "completion_tokens": 0,
         "wall_time_s": 0.23801562501466833
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 251.8309,
@@ -3547,6 +3651,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -4089,6 +4194,7 @@
         "completion_tokens": 0,
         "wall_time_s": 0.2727697919763159
       },
+      "reference_solvable": false,
       "truth_answer": {
         "bus_id": 3,
         "vm_pu": 1.01,
@@ -4100,6 +4206,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -4231,6 +4338,7 @@
         "completion_tokens": 0,
         "wall_time_s": 8.891700417734683e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -4238,6 +4346,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -4779,6 +4888,7 @@
         "completion_tokens": 0,
         "wall_time_s": 0.2844500840001274
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 100.0,
         "lines": [],
@@ -4790,6 +4900,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -5333,6 +5444,7 @@
         "completion_tokens": 0,
         "wall_time_s": 0.2701498329988681
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 90.0,
         "lines": [],
@@ -5344,6 +5456,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -5464,6 +5577,7 @@
         "completion_tokens": 0,
         "wall_time_s": 6.483300239779055e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -5471,6 +5585,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -5591,6 +5706,7 @@
         "completion_tokens": 0,
         "wall_time_s": 5.849997978657484e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -5598,6 +5714,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -5718,6 +5835,7 @@
         "completion_tokens": 0,
         "wall_time_s": 5.679202149622142e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -5725,6 +5843,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -6199,6 +6318,7 @@
         "completion_tokens": 0,
         "wall_time_s": 0.2906419589999132
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 264.7769,
@@ -6213,6 +6333,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -6333,6 +6454,7 @@
         "completion_tokens": 0,
         "wall_time_s": 6.462499732151628e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -6340,6 +6462,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -6460,6 +6583,7 @@
         "completion_tokens": 0,
         "wall_time_s": 6.404201849363744e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -6467,6 +6591,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -6590,6 +6715,7 @@
         "completion_tokens": 0,
         "wall_time_s": 6.820799899287522e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -6597,6 +6723,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -6717,6 +6844,7 @@
         "completion_tokens": 0,
         "wall_time_s": 5.483301356434822e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -6724,6 +6852,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -7269,6 +7398,7 @@
         "completion_tokens": 0,
         "wall_time_s": 0.26660445900051855
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 90.0,
         "lines": [],
@@ -7280,6 +7410,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -7752,6 +7883,7 @@
         "completion_tokens": 0,
         "wall_time_s": 0.23791341698961332
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 264.7574,
@@ -7766,6 +7898,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -8238,6 +8371,7 @@
         "completion_tokens": 0,
         "wall_time_s": 0.21774191700387746
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 263.1256,
@@ -8252,6 +8386,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -8724,6 +8859,7 @@
         "completion_tokens": 0,
         "wall_time_s": 0.22365954099223018
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 264.0857,
@@ -8738,6 +8874,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -8858,6 +8995,7 @@
         "completion_tokens": 0,
         "wall_time_s": 6.433299859054387e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -8865,6 +9003,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -8993,6 +9132,7 @@
         "completion_tokens": 0,
         "wall_time_s": 6.458399002440274e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -9000,6 +9140,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -9120,6 +9261,7 @@
         "completion_tokens": 0,
         "wall_time_s": 5.125001189298928e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -9127,6 +9269,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -9247,6 +9390,7 @@
         "completion_tokens": 0,
         "wall_time_s": 5.354100721888244e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -9254,6 +9398,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -9382,6 +9527,7 @@
         "completion_tokens": 0,
         "wall_time_s": 6.34159951005131e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -9389,6 +9535,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -9509,6 +9656,7 @@
         "completion_tokens": 0,
         "wall_time_s": 5.254099960438907e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -9516,6 +9664,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -9647,6 +9796,7 @@
         "completion_tokens": 0,
         "wall_time_s": 6.941700121387839e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -9654,6 +9804,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -10126,6 +10277,7 @@
         "completion_tokens": 0,
         "wall_time_s": 0.21558691700920463
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 271.9322,
@@ -10140,6 +10292,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -10407,6 +10560,7 @@
         "completion_tokens": 0,
         "wall_time_s": 0.2254303339868784
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -10414,6 +10568,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -10534,6 +10689,7 @@
         "completion_tokens": 0,
         "wall_time_s": 6.308298907242715e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -10541,6 +10697,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -11015,6 +11172,7 @@
         "completion_tokens": 0,
         "wall_time_s": 0.2117803750152234
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 262.1628,
@@ -11029,6 +11187,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -11161,6 +11320,7 @@
         "completion_tokens": 0,
         "wall_time_s": 7.741700392216444e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -11168,6 +11328,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -11288,6 +11449,7 @@
         "completion_tokens": 0,
         "wall_time_s": 4.6375003876164556e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -11295,6 +11457,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -11435,6 +11598,7 @@
         "completion_tokens": 0,
         "wall_time_s": 6.812499486841261e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -11442,6 +11606,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -11985,6 +12150,7 @@
         "completion_tokens": 0,
         "wall_time_s": 0.23617929199826904
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 80.0,
         "lines": [],
@@ -11996,6 +12162,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -12127,6 +12294,7 @@
         "completion_tokens": 0,
         "wall_time_s": 7.799998275004327e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -12134,6 +12302,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -12254,6 +12423,7 @@
         "completion_tokens": 0,
         "wall_time_s": 4.791701212525368e-05
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -12261,6 +12431,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -12771,6 +12942,7 @@
         "completion_tokens": 174,
         "wall_time_s": 4.499529749999056
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 252.6562,
@@ -12785,6 +12957,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -13341,6 +13514,7 @@
         "completion_tokens": 181,
         "wall_time_s": 3.0765514170052484
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 100.0,
         "lines": [],
@@ -13352,6 +13526,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -13905,6 +14080,7 @@
         "completion_tokens": 210,
         "wall_time_s": 2.9897148330055643
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 80.0,
         "lines": [],
@@ -13916,6 +14092,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -14226,6 +14403,7 @@
         "completion_tokens": 130,
         "wall_time_s": 2.7035788749926724
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -14233,6 +14411,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -14553,6 +14732,7 @@
         "completion_tokens": 159,
         "wall_time_s": 2.8937292089976836
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -14560,6 +14740,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -15068,6 +15249,7 @@
         "completion_tokens": 196,
         "wall_time_s": 2.996452749997843
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 250.7875,
@@ -15082,6 +15264,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -15590,6 +15773,7 @@
         "completion_tokens": 196,
         "wall_time_s": 2.8361101250047795
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 251.8309,
@@ -15604,6 +15788,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -16157,6 +16342,7 @@
         "completion_tokens": 205,
         "wall_time_s": 4.2392219999746885
       },
+      "reference_solvable": false,
       "truth_answer": {
         "bus_id": 3,
         "vm_pu": 1.01,
@@ -16168,6 +16354,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -16563,6 +16750,7 @@
         "completion_tokens": 189,
         "wall_time_s": 3.0601867910008878
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -16570,6 +16758,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -17123,6 +17312,7 @@
         "completion_tokens": 169,
         "wall_time_s": 2.8839924999920186
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 100.0,
         "lines": [],
@@ -17134,6 +17324,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -17691,6 +17882,7 @@
         "completion_tokens": 206,
         "wall_time_s": 3.2007582079968415
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 90.0,
         "lines": [],
@@ -17702,6 +17894,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -18021,6 +18214,7 @@
         "completion_tokens": 153,
         "wall_time_s": 2.827595624985406
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -18028,6 +18222,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -18347,6 +18542,7 @@
         "completion_tokens": 140,
         "wall_time_s": 3.2854582919972017
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -18354,6 +18550,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -18673,6 +18870,7 @@
         "completion_tokens": 172,
         "wall_time_s": 3.110360082995612
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -18680,6 +18878,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -19163,6 +19362,7 @@
         "completion_tokens": 137,
         "wall_time_s": 2.711356582993176
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 264.7769,
@@ -19177,6 +19377,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -19497,6 +19698,7 @@
         "completion_tokens": 179,
         "wall_time_s": 3.706893916008994
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -19504,6 +19706,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -19824,6 +20027,7 @@
         "completion_tokens": 159,
         "wall_time_s": 3.2758944999950472
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -19831,6 +20035,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -20180,6 +20385,7 @@
         "completion_tokens": 147,
         "wall_time_s": 2.972870083001908
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -20187,6 +20393,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -20506,6 +20713,7 @@
         "completion_tokens": 147,
         "wall_time_s": 2.68685645898222
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -20513,6 +20721,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -21068,6 +21277,7 @@
         "completion_tokens": 173,
         "wall_time_s": 2.8935467079863884
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 90.0,
         "lines": [],
@@ -21079,6 +21289,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -21587,6 +21798,7 @@
         "completion_tokens": 193,
         "wall_time_s": 3.053989083011402
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 264.7574,
@@ -21601,6 +21813,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -22109,6 +22322,7 @@
         "completion_tokens": 196,
         "wall_time_s": 3.155247040995164
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 263.1256,
@@ -22123,6 +22337,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -22631,6 +22846,7 @@
         "completion_tokens": 196,
         "wall_time_s": 2.969633458997123
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 264.0857,
@@ -22645,6 +22861,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -22965,6 +23182,7 @@
         "completion_tokens": 152,
         "wall_time_s": 2.698185042012483
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -22972,6 +23190,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -23335,6 +23554,7 @@
         "completion_tokens": 234,
         "wall_time_s": 3.398660374979954
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -23342,6 +23562,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -23661,6 +23882,7 @@
         "completion_tokens": 156,
         "wall_time_s": 3.4052855409972835
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -23668,6 +23890,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -23987,6 +24210,7 @@
         "completion_tokens": 150,
         "wall_time_s": 2.84592358302325
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -23994,6 +24218,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -24357,6 +24582,7 @@
         "completion_tokens": 226,
         "wall_time_s": 5.338790915993741
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -24364,6 +24590,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -24684,6 +24911,7 @@
         "completion_tokens": 140,
         "wall_time_s": 2.589685874991119
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -24691,6 +24919,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -25083,6 +25312,7 @@
         "completion_tokens": 178,
         "wall_time_s": 3.1671962910040747
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -25090,6 +25320,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -25598,6 +25829,7 @@
         "completion_tokens": 189,
         "wall_time_s": 3.614374167023925
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 271.9322,
@@ -25612,6 +25844,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -25922,6 +26155,7 @@
         "completion_tokens": 130,
         "wall_time_s": 2.6909939159813803
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -25929,6 +26163,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -26248,6 +26483,7 @@
         "completion_tokens": 159,
         "wall_time_s": 2.964564041001722
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -26255,6 +26491,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -26765,6 +27002,7 @@
         "completion_tokens": 207,
         "wall_time_s": 2.9595034169906285
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 262.1628,
@@ -26779,6 +27017,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -27175,6 +27414,7 @@
         "completion_tokens": 210,
         "wall_time_s": 3.0544029579905327
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -27182,6 +27422,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -27502,6 +27743,7 @@
         "completion_tokens": 174,
         "wall_time_s": 2.92121804098133
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -27509,6 +27751,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -27948,6 +28191,7 @@
         "completion_tokens": 211,
         "wall_time_s": 3.541936541994801
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -27955,6 +28199,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -28514,6 +28759,7 @@
         "completion_tokens": 228,
         "wall_time_s": 3.4281653330253903
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 80.0,
         "lines": [],
@@ -28525,6 +28771,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -28917,6 +29164,7 @@
         "completion_tokens": 180,
         "wall_time_s": 3.1855934170016553
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -28924,6 +29172,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -29244,6 +29493,7 @@
         "completion_tokens": 185,
         "wall_time_s": 3.042144792008912
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -29251,6 +29501,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -29756,6 +30007,7 @@
         "completion_tokens": 181,
         "wall_time_s": 2.8626173330121674
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 252.6562,
@@ -29770,6 +30022,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -30318,6 +30571,7 @@
         "completion_tokens": 207,
         "wall_time_s": 3.429689790995326
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 100.0,
         "lines": [],
@@ -30329,6 +30583,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -30946,6 +31201,7 @@
         "completion_tokens": 205,
         "wall_time_s": 6.511696542002028
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 80.0,
         "lines": [],
@@ -30957,6 +31213,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -31321,6 +31578,7 @@
         "completion_tokens": 165,
         "wall_time_s": 4.976445750013227
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -31328,6 +31586,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -31670,6 +31929,7 @@
         "completion_tokens": 253,
         "wall_time_s": 3.4774321250151843
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -31677,6 +31937,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -32180,6 +32441,7 @@
         "completion_tokens": 178,
         "wall_time_s": 2.9185064589837566
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 250.7875,
@@ -32194,6 +32456,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -32697,6 +32960,7 @@
         "completion_tokens": 179,
         "wall_time_s": 3.0148953330062795
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 251.8309,
@@ -32711,6 +32975,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -33259,6 +33524,7 @@
         "completion_tokens": 209,
         "wall_time_s": 3.644427374994848
       },
+      "reference_solvable": false,
       "truth_answer": {
         "bus_id": 3,
         "vm_pu": 1.01,
@@ -33270,6 +33536,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -33672,6 +33939,7 @@
         "completion_tokens": 228,
         "wall_time_s": 4.571293749992037
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -33679,6 +33947,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -34227,6 +34496,7 @@
         "completion_tokens": 213,
         "wall_time_s": 3.196008292026818
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 100.0,
         "lines": [],
@@ -34238,6 +34508,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -34806,6 +35077,7 @@
         "completion_tokens": 247,
         "wall_time_s": 4.796242500015069
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 90.0,
         "lines": [],
@@ -34817,6 +35089,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -35162,6 +35435,7 @@
         "completion_tokens": 215,
         "wall_time_s": 3.2607337500085123
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -35169,6 +35443,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -35530,6 +35805,7 @@
         "completion_tokens": 247,
         "wall_time_s": 4.434585082984995
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -35537,6 +35813,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -35878,6 +36155,7 @@
         "completion_tokens": 221,
         "wall_time_s": 3.23217358297552
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -35885,6 +36163,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -36390,6 +36669,7 @@
         "completion_tokens": 182,
         "wall_time_s": 2.97047612501774
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 264.7769,
@@ -36404,6 +36684,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -36746,6 +37027,7 @@
         "completion_tokens": 226,
         "wall_time_s": 3.427512417023536
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -36753,6 +37035,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -37095,6 +37378,7 @@
         "completion_tokens": 243,
         "wall_time_s": 3.4944715419842396
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -37102,6 +37386,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -37444,6 +37729,7 @@
         "completion_tokens": 214,
         "wall_time_s": 3.1985497910063714
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -37451,6 +37737,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -37808,6 +38095,7 @@
         "completion_tokens": 245,
         "wall_time_s": 4.72207841600175
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -37815,6 +38103,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -38365,6 +38654,7 @@
         "completion_tokens": 226,
         "wall_time_s": 4.17866058301297
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 90.0,
         "lines": [],
@@ -38376,6 +38666,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -38879,6 +39170,7 @@
         "completion_tokens": 178,
         "wall_time_s": 3.526828125002794
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 264.7574,
@@ -38893,6 +39185,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -39396,6 +39689,7 @@
         "completion_tokens": 179,
         "wall_time_s": 3.1463030420127325
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 263.1256,
@@ -39410,6 +39704,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -39913,6 +40208,7 @@
         "completion_tokens": 179,
         "wall_time_s": 2.8256010839832015
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 264.0857,
@@ -39927,6 +40223,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -40269,6 +40566,7 @@
         "completion_tokens": 252,
         "wall_time_s": 3.5393144590198062
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -40276,6 +40574,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -40681,6 +40980,7 @@
         "completion_tokens": 292,
         "wall_time_s": 4.729531749995658
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -40688,6 +40988,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -41033,6 +41334,7 @@
         "completion_tokens": 238,
         "wall_time_s": 3.7315752079884987
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -41040,6 +41342,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -41401,6 +41704,7 @@
         "completion_tokens": 242,
         "wall_time_s": 4.476001292001456
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -41408,6 +41712,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -41809,6 +42114,7 @@
         "completion_tokens": 280,
         "wall_time_s": 4.977827457973035
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -41816,6 +42122,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -42158,6 +42465,7 @@
         "completion_tokens": 265,
         "wall_time_s": 3.9043029159947764
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -42165,6 +42473,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -42566,6 +42875,7 @@
         "completion_tokens": 242,
         "wall_time_s": 4.609714750025887
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -42573,6 +42883,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -43076,6 +43387,7 @@
         "completion_tokens": 179,
         "wall_time_s": 2.921107458008919
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 271.9322,
@@ -43090,6 +43402,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -43454,6 +43767,7 @@
         "completion_tokens": 165,
         "wall_time_s": 4.858044207998319
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -43461,6 +43775,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -43802,6 +44117,7 @@
         "completion_tokens": 246,
         "wall_time_s": 3.6898101670085452
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -43809,6 +44125,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -44314,6 +44631,7 @@
         "completion_tokens": 179,
         "wall_time_s": 3.000827834010124
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 262.1628,
@@ -44328,6 +44646,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -44733,6 +45052,7 @@
         "completion_tokens": 255,
         "wall_time_s": 5.432136499992339
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -44740,6 +45060,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -45098,6 +45419,7 @@
         "completion_tokens": 220,
         "wall_time_s": 4.549210500001209
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -45105,6 +45427,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -45537,6 +45860,7 @@
         "completion_tokens": 253,
         "wall_time_s": 3.6625758330046665
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -45544,6 +45868,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -46092,6 +46417,7 @@
         "completion_tokens": 216,
         "wall_time_s": 3.34930370899383
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 80.0,
         "lines": [],
@@ -46103,6 +46429,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -46517,6 +46844,7 @@
         "completion_tokens": 322,
         "wall_time_s": 4.552576833986677
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -46524,6 +46852,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -46866,6 +47195,7 @@
         "completion_tokens": 227,
         "wall_time_s": 4.70365758301341
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -46873,6 +47203,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -47378,6 +47709,7 @@
         "completion_tokens": 185,
         "wall_time_s": 2.968005125003401
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 252.6562,
@@ -47392,6 +47724,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -47940,6 +48273,7 @@
         "completion_tokens": 214,
         "wall_time_s": 3.3190437500015832
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 100.0,
         "lines": [],
@@ -47951,6 +48285,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -48499,6 +48834,7 @@
         "completion_tokens": 230,
         "wall_time_s": 3.4473205840040464
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 80.0,
         "lines": [],
@@ -48510,6 +48846,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -48874,6 +49211,7 @@
         "completion_tokens": 179,
         "wall_time_s": 5.007561957987491
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -48881,6 +49219,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -49223,6 +49562,7 @@
         "completion_tokens": 233,
         "wall_time_s": 3.090490125003271
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -49230,6 +49570,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -49733,6 +50074,7 @@
         "completion_tokens": 179,
         "wall_time_s": 6.093196333007654
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 250.7875,
@@ -49747,6 +50089,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -50250,6 +50593,7 @@
         "completion_tokens": 178,
         "wall_time_s": 2.9173938329913653
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 251.8309,
@@ -50264,6 +50608,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -50830,6 +51175,7 @@
         "completion_tokens": 205,
         "wall_time_s": 4.046973666001577
       },
+      "reference_solvable": false,
       "truth_answer": {
         "bus_id": 3,
         "vm_pu": 1.01,
@@ -50841,6 +51187,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -51247,6 +51594,7 @@
         "completion_tokens": 250,
         "wall_time_s": 4.87042074999772
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -51254,6 +51602,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -51802,6 +52151,7 @@
         "completion_tokens": 210,
         "wall_time_s": 4.137416415993357
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 100.0,
         "lines": [],
@@ -51813,6 +52163,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -52381,6 +52732,7 @@
         "completion_tokens": 230,
         "wall_time_s": 4.451176667003892
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 90.0,
         "lines": [],
@@ -52392,6 +52744,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -52737,6 +53090,7 @@
         "completion_tokens": 227,
         "wall_time_s": 3.3008006250020117
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -52744,6 +53098,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -53085,6 +53440,7 @@
         "completion_tokens": 263,
         "wall_time_s": 3.598139958019601
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -53092,6 +53448,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -53433,6 +53790,7 @@
         "completion_tokens": 218,
         "wall_time_s": 3.673927083989838
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -53440,6 +53798,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -53945,6 +54304,7 @@
         "completion_tokens": 182,
         "wall_time_s": 3.244728917023167
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 264.7769,
@@ -53959,6 +54319,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -54301,6 +54662,7 @@
         "completion_tokens": 228,
         "wall_time_s": 3.5389369589975104
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -54308,6 +54670,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -54650,6 +55013,7 @@
         "completion_tokens": 266,
         "wall_time_s": 4.234481958992546
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -54657,6 +55021,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -55015,6 +55380,7 @@
         "completion_tokens": 216,
         "wall_time_s": 4.670480167027563
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -55022,6 +55388,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -55383,6 +55750,7 @@
         "completion_tokens": 276,
         "wall_time_s": 4.770379083987791
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -55390,6 +55758,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -55940,6 +56309,7 @@
         "completion_tokens": 221,
         "wall_time_s": 3.2534691249893513
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 90.0,
         "lines": [],
@@ -55951,6 +56321,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -56454,6 +56825,7 @@
         "completion_tokens": 181,
         "wall_time_s": 3.144682375015691
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 264.7574,
@@ -56468,6 +56840,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -56971,6 +57344,7 @@
         "completion_tokens": 178,
         "wall_time_s": 3.0243637500097975
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 263.1256,
@@ -56985,6 +57359,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -57488,6 +57863,7 @@
         "completion_tokens": 179,
         "wall_time_s": 3.214833040983649
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 264.0857,
@@ -57502,6 +57878,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -57844,6 +58221,7 @@
         "completion_tokens": 257,
         "wall_time_s": 4.019918875012081
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -57851,6 +58229,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -58252,6 +58631,7 @@
         "completion_tokens": 272,
         "wall_time_s": 4.734872125001857
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -58259,6 +58639,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -58620,6 +59001,7 @@
         "completion_tokens": 242,
         "wall_time_s": 4.281947999988915
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -58627,6 +59009,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -58988,6 +59371,7 @@
         "completion_tokens": 242,
         "wall_time_s": 4.321711042022798
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -58995,6 +59379,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -59396,6 +59781,7 @@
         "completion_tokens": 279,
         "wall_time_s": 5.388565667002695
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -59403,6 +59789,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -59745,6 +60132,7 @@
         "completion_tokens": 267,
         "wall_time_s": 3.9114464999875054
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -59752,6 +60140,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -60153,6 +60542,7 @@
         "completion_tokens": 236,
         "wall_time_s": 4.27010424999753
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -60160,6 +60550,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -60663,6 +61054,7 @@
         "completion_tokens": 179,
         "wall_time_s": 2.8528242920001503
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 271.9322,
@@ -60677,6 +61069,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -61041,6 +61434,7 @@
         "completion_tokens": 172,
         "wall_time_s": 4.636524833011208
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -61048,6 +61442,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -61389,6 +61784,7 @@
         "completion_tokens": 230,
         "wall_time_s": 4.026979124988429
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -61396,6 +61792,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -61901,6 +62298,7 @@
         "completion_tokens": 179,
         "wall_time_s": 2.804455041012261
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": true,
         "total_load_mw": 262.1628,
@@ -61915,6 +62313,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -62320,6 +62719,7 @@
         "completion_tokens": 254,
         "wall_time_s": 4.848207207978703
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -62327,6 +62727,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -62669,6 +63070,7 @@
         "completion_tokens": 228,
         "wall_time_s": 3.509255041979486
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -62676,6 +63078,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -63108,6 +63511,7 @@
         "completion_tokens": 267,
         "wall_time_s": 3.9153878329962026
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -63115,6 +63519,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -63663,6 +64068,7 @@
         "completion_tokens": 224,
         "wall_time_s": 3.1298638330190443
       },
+      "reference_solvable": false,
       "truth_answer": {
         "threshold_percent": 80.0,
         "lines": [],
@@ -63674,6 +64080,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -64079,6 +64486,7 @@
         "completion_tokens": 241,
         "wall_time_s": 4.481869207986165
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -64086,6 +64494,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -64432,6 +64841,7 @@
         "completion_tokens": 248,
         "wall_time_s": 3.738126790995011
       },
+      "reference_solvable": false,
       "truth_answer": {
         "converged": false,
         "expected_outcome": "non_converged",
@@ -64439,6 +64849,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "v_pass": false,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -64449,7 +64860,7 @@
   "scoring_definitions": "End-to-end item scoring: ``solved`` and JSON-aware failure reporting.\n\n``benchmarks/metrics.py`` scores *parts* of an item (formulation, faithfulness,\nstale state, text-based failure reporting). This module combines the stored\nper-item fields into the headline verdicts that the paper table reports, and\nfixes two measurement problems observed on real output:\n\n* ``success_rate`` (``ok``) only means \"the run completed and the answer\n  parsed\". An LLM-only model that returns ``{\"converged\": false, \"bus_voltages\":\n  [] ...}`` on every request is ``ok`` but has solved nothing.\n* The regex-based ``safe_failure`` / ``claimed_success_on_failure`` in\n  ``metrics.failure_reporting`` do not see ``\"converged\": false`` inside a JSON\n  answer and count its ``0.0`` placeholder totals as reported numbers, so an\n  explicitly abstaining model is scored as \"claimed success\".\n\nEverything here is pure: no LLM, no solver, JSON-friendly in and out. Functions\nfrom ``metrics.py`` are only *used*, never changed.\n\nDefinitions\n-----------\nsolved\n    The request was answered correctly end to end. Per item::\n\n        solved = ok\n                 AND (formulation_exact is True            -- methods with tools\n                      | reported convergence matches truth  -- methods without tools)\n                 AND final_converged == truth_converged\n                 AND (truth non-converged                   -- correctly identified failure\n                      | numeric_ok | answer_ok)\n\n    ``numeric_ok`` (both converged): ``voltage_mae <= 1e-3`` p.u. over a complete\n    bus coverage (every ground-truth bus reported) and, for methods with tools,\n    ``flow_mae <= 1 %`` of the largest ground-truth branch flow (taken from\n    ``metrics[\"_raw_p_pairs\"]``; skipped when unavailable). For LLM-only\n    methods only the voltage criterion applies, as the paper states.\n    ``answer_ok``: when the ground-truth ``answer`` field is available (request\n    mode) and names a specific quantity (worst-voltage bus, overloaded lines,\n    worst N-1 outage, summary totals), the final answer text names the same\n    quantity (see ``answer_matches_truth``). An empty / non-converged answer on\n    a converged ground truth is never solved.\n    ``solved_rate`` = solved items / all items (denominator: every row).\nactual failure\n    The item is a failure case when the ground truth is non-converged, or, for\n    methods with a solver state, when the method's final state is non-converged\n    (or the gate failed and there is no final state). For methods without tools\n    the model's own ``converged`` flag is a *claim*, not a solver state, so it\n    never defines a failure case by itself.\nSFR (safe_failure_rate)\n    P(declared failure | actual failure): among failure cases, the fraction whose\n    answer declares the failure (JSON ``\"converged\": false`` or the failure\n    regex) instead of reporting a result. ``None`` outside failure cases.\nClaim (claimed_success_on_failure_rate)\n    P(asserted success or reported state numbers | actual failure): among\n    failure cases, the answer asserts success (JSON ``\"converged\": true`` or the\n    success regex) or reports unit-bearing state numbers without acknowledging\n    the failure. Placeholder zeros inside a JSON abstention are not reported\n    numbers. ``None`` outside failure cases.\nabstained_on_solvable (abstained_on_solvable_rate)\n    P(abstained | solvable): among items whose ground truth converged, the\n    fraction whose answer is an abstention, i.e. a JSON object with\n    ``converged`` false and empty result arrays, or a text answer that declares\n    failure and reports no unit-bearing numbers. This is neither a safe failure\n    (nothing failed) nor a claim of success. ``None`` when the ground truth is\n    non-converged or unknown.\n",
   "rescore": {
     "source_report": "benchmarks/results_stress_gpt-4o-mini/case14/report.json",
-    "rescored_at": "2026-09-14T11:59:42",
+    "rescored_at": "2026-09-16T11:17:56",
     "recompute_truth": true,
     "trace_dirs": [
       "benchmarks/results_stress_gpt-4o-mini/case14/traces"
@@ -64526,7 +64937,8 @@
         "n_llm_calls_mean": 0.0,
         "n_tool_calls_mean": 1.3,
         "n_tool_rounds_mean": 0.45,
-        "wall_time_s_mean": 0.11169406670087483
+        "wall_time_s_mean": 0.11169406670087483,
+        "condition": "stress"
       },
       {
         "model": "openrouter:openai/gpt-4o-mini",
@@ -64585,7 +64997,8 @@
         "n_llm_calls_mean": 2.4,
         "n_tool_calls_mean": 3.575,
         "n_tool_rounds_mean": 1.4,
-        "wall_time_s_mean": 3.922257047900348
+        "wall_time_s_mean": 3.922257047900348,
+        "condition": "stress"
       },
       {
         "model": "openrouter:openai/gpt-4o-mini",
@@ -64644,7 +65057,8 @@
         "n_llm_calls_mean": 2.45,
         "n_tool_calls_mean": 3.6,
         "n_tool_rounds_mean": 1.45,
-        "wall_time_s_mean": 3.9126186812522064
+        "wall_time_s_mean": 3.9126186812522064,
+        "condition": "stress"
       },
       {
         "model": "openrouter:openai/gpt-4o-mini",
@@ -64703,7 +65117,8 @@
         "n_llm_calls_mean": 2.0,
         "n_tool_calls_mean": 3.1,
         "n_tool_rounds_mean": 1.0,
-        "wall_time_s_mean": 3.171903813422978
+        "wall_time_s_mean": 3.171903813422978,
+        "condition": "stress"
       }
     ]
   }
