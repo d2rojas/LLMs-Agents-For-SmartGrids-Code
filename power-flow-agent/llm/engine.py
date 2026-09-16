@@ -67,6 +67,19 @@ ARCHITECTURES = ("react", "single_call", "plan_act")
 GATE_BALANCE_TOL_MW = 0.01          # absolute floor, MW
 GATE_BALANCE_REL_TOL = 1e-4         # relative to total load: 0.01 percent (case118 base case sits at 0.004 percent)
 
+# Paper/notes labels for verify_final_answer's five conditions -- same order as V(x,c,z,y)
+# is described there: V1 the last power flow converged, V2 active-power balance, V3 no
+# isolated bus, V4 faithfulness, V5 currency. Use these labels wherever a condition is
+# named for a human reader (REPORT prose, notes); the internal keys below are what code
+# reads and are never replaced by them.
+CONDITION_LABELS: Dict[str, str] = {
+    "converged": "V1",
+    "balance": "V2",
+    "no_isolated_buses": "V3",
+    "faithfulness": "V4",
+    "currency": "V5",
+}
+
 MAX_ROUNDS_EXCEEDED_TEXT = (
     "The tool-call round limit was reached before an answer could be verified. "
     "No numerical result is reported. Narrow the request or split it into fewer consecutive operations."
@@ -422,6 +435,14 @@ def verify_final_answer(
     else:
         currency_residual = int(stale.get("n_numbers_old_only") or 0)
     conditions["currency"] = {"passed": not bool(stale.get("stale_state")), "residual": currency_residual}
+
+    # V1-V5 (paper/notes labels for the same five conditions), recorded alongside the
+    # existing keys as a "label" field on each condition's own dict -- not as extra
+    # top-level dict entries, which would double-count/double-list every condition for
+    # the code that already iterates conditions.items() (the retry message and
+    # abstention text builders below).
+    for key, label in CONDITION_LABELS.items():
+        conditions[key]["label"] = label
 
     last_mutation: Optional[Dict[str, Any]] = None
     if last_mut is not None:
