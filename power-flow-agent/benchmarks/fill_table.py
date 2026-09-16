@@ -120,6 +120,12 @@ def _is_num(x: Any) -> bool:
     return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
 
 
+def _is_llm_only_family(key: Optional[str]) -> bool:
+    """``llm_only:<strategy>`` and ``llm_only_forced:<strategy>`` (no tools)."""
+    k = str(key)
+    return k.startswith("llm_only:") or k.startswith("llm_only_forced:")
+
+
 def fmt_pct(x: Optional[float]) -> str:
     return f"{100.0 * x:.1f}" if _is_num(x) else MISSING
 
@@ -312,7 +318,7 @@ def render_rows(agg: dict[str, dict[str, Any]], gated_baselines: bool = False) -
             cells = [format_cell(stats.get(c.name) if stats else None, c.fmt) for c in COLUMNS]
             # capabilities the method does not have are n/a, not 0 (LLM-only has no tools; rule-based has no LLM)
             names = [c.name for c in COLUMNS]
-            if str(key).startswith("llm_only:"):
+            if _is_llm_only_family(key):
                 cells[names.index("Calls")] = "n/a"
             if key == "rule_based":
                 cells[names.index("Tok.")] = "n/a"

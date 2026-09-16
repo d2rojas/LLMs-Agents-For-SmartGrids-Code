@@ -50,6 +50,7 @@ from benchmarks.fill_table import (  # noqa: E402
     BEST_SINGLE_CALL,
     COLUMNS,
     MISSING,
+    _is_llm_only_family,
     aggregate_all,
     best_single_call,
     case_buses,
@@ -106,7 +107,7 @@ def system_short(case_name: str) -> str:
 
 def apply_na(cells: list[Any], key: Optional[str]) -> list[Any]:
     """Capabilities the method does not have are n/a, not 0 (same rule as fill_table)."""
-    if str(key).startswith("llm_only:"):
+    if _is_llm_only_family(key):
         cells[COLUMN_NAMES.index("Calls")] = NA
     if key == "rule_based":
         cells[COLUMN_NAMES.index("Tok.")] = NA
