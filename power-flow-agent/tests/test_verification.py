@@ -246,3 +246,63 @@ def test_final_gate_retries_once_then_abstains_on_repeated_failure():
     assert trace["verification_attempts"] == 2
     assert "No numerical result is reported" in text
     assert len(client.calls) == 2  # exactly one retry, no third attempt
+
+
+class _ScriptedToolClient:
+    """Returns a scripted (content, tool_calls) pair per turn; ignores tool schemas."""
+
+    def __init__(self, turns):
+        self._turns = list(turns)
+        self.calls = []
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        content, tool_calls = self._turns.pop(0)
+        return {
+            "choices": [{"message": {"role": "assistant", "content": content, "tool_calls": tool_calls}}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+        }
+
+
+class _RecordingDispatcher:
+    """Routes by tool name; records every call so the test can assert a tool was never reached."""
+
+    def __init__(self, outputs):
+        self._outputs = outputs
+        self.calls = []
+
+    def dispatch(self, name, args):
+        self.calls.append(name)
+        return self._outputs[name]
+
+
+def test_mutating_tool_during_retry_is_blocked_not_executed():
+    """Structural counterpart to the message-wording fix: even if the model tries to call
+    reconnect_line during a retry (e.g. ignoring the instruction not to), the dispatcher must
+    never see that call -- it is blocked and treated as a verification failure in itself."""
+    from models.schemas import SessionState
+
+    isolated_pf = _pf_json(bus_voltages=[{"bus_id": 7, "vm_pu": 1.06, "va_deg": 0.0}, {"bus_id": 8, "vm_pu": None, "va_deg": None}])
+    reconnected_pf = _pf_json()  # would "pass" if it were ever allowed to run
+    dispatcher = _RecordingDispatcher({"disconnect_line": isolated_pf, "reconnect_line": reconnected_pf})
+
+    def _call(id_, name, args_json):
+        return {"id": id_, "type": "function", "function": {"name": name, "arguments": args_json}}
+
+    disconnect_call = [_call("1", "disconnect_line", '{"from_bus": 7, "to_bus": 8}')]
+    reconnect_call = [_call("2", "reconnect_line", '{"from_bus": 7, "to_bus": 8}')]
+    client = _ScriptedToolClient(
+        [
+            (None, disconnect_call),
+            ("Voltages are within limits.", []),  # fails no_isolated_buses -> retry injected
+            (None, reconnect_call),  # attempts to undo the disconnection instead of reporting it
+        ]
+    )
+    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True))
+    text, trace = engine.run_with_trace("Disconnect the branch between bus 7 and bus 8.", SessionState())
+
+    assert "reconnect_line" not in dispatcher.calls  # never executed
+    assert dispatcher.calls == ["disconnect_line"]
+    assert trace["verification_outcome"] == "abstained_retry_mutation"
+    assert "attempted to change the network" in text
+    assert "reconnect_line" in text

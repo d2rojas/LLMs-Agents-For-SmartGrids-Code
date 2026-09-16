@@ -798,8 +798,10 @@ def section_results(exp: Experiment) -> str:
         lines.append(
             "### Verificación final (pfagent: V(x,c,z,y) aplicado a la respuesta final)\n\n"
             "`pass_first` = pasó al primer intento; `pass_retry` = pasó tras el único reintento con el veredicto "
-            "añadido; `abstained` = falló dos veces, respuesta forzada a fallo declarado sin números. N = items con "
-            "`final_gate` activo (no todos los métodos lo tienen).\n"
+            "añadido; `abstained` = falló dos veces, respuesta forzada a fallo declarado sin números; "
+            "`retry_mutation` = el reintento intentó una herramienta que muta la red (bloqueada, nunca ejecutada; "
+            "cuenta como abstención) — ver \"Integridad del reintento\" abajo. N = items con `final_gate` activo "
+            "(no todos los métodos lo tienen).\n"
         )
         vrows = []
         for method in verif_methods:
@@ -819,9 +821,22 @@ def section_results(exp: Experiment) -> str:
                     _voutcome("pass_first"),
                     _voutcome("pass_retry"),
                     _voutcome("abstained"),
+                    _voutcome("abstained_retry_mutation"),
                 ]
             )
-        lines.append(md_table(["Method", "N", "pass_first", "pass_retry", "abstained"], vrows))
+        lines.append(md_table(["Method", "N", "pass_first", "pass_retry", "abstained", "retry_mutation"], vrows))
+
+        n_mutation_attempts = sum(1 for r in rows if r.get("verification_outcome") == "abstained_retry_mutation")
+        if n_mutation_attempts or any(r.get("verification_attempts") == 2 for r in rows):
+            n_retried = sum(1 for r in rows if (r.get("verification_attempts") or 0) >= 2)
+            lines.append(
+                "\n### Integridad del reintento\n\n"
+                f"De {n_retried} ítem(s) que llegaron a un reintento, {n_mutation_attempts} intentaron una "
+                "herramienta que muta la red (bloqueada) en vez de corregir el reporte; se cuentan como "
+                "abstención, no como \"pasó\". El mensaje de reintento ya no sugiere la corrección específica "
+                "(p. ej. \"reconnect...\") y bloquea estructuralmente `modify_load`, `disconnect_line`, "
+                "`reconnect_line`, `apply_remedial_action` y `load_case` mientras el reintento está en efecto.\n"
+            )
 
     lines.append("### Tipos de error de formulación (conteo de items)\n")
     ftypes = sorted({str(r.get("formulation_error_type")) for r in rows if r.get("formulation_error_type") is not None})

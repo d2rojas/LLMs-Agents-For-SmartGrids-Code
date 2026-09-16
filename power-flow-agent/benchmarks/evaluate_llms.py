@@ -130,6 +130,10 @@ EXTENDED_SCOREBOARD_FIELDS = [
     "verification_pass_first_rate",
     "verification_pass_retry_rate",
     "verification_abstained_rate",
+    # the model attempted a mutating tool call during a retry (blocked, not executed --
+    # see llm.engine._RETRY_BLOCKED_TOOLS); a subset of "abstained" worth tracking on its own
+    # since it is verification gaming, not an honest failure to converge/balance/etc.
+    "verification_abstained_retry_mutation_rate",
     "verification_total",
     # offline V(x,c,z,y) check computed for every method (llm.engine.verify_final_answer),
     # not only the ones with final_gate on; see evaluate_item.
@@ -1148,6 +1152,7 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "verification_pass_first_rate": _verif_rate("pass_first"),
         "verification_pass_retry_rate": _verif_rate("pass_retry"),
         "verification_abstained_rate": _verif_rate("abstained"),
+        "verification_abstained_retry_mutation_rate": _verif_rate("abstained_retry_mutation"),
         "verification_total": verif_total,
         "v_pass_rate": (v_pass_count / v_pass_total) if v_pass_total else None,
         "v_pass_count": v_pass_count,

@@ -75,6 +75,12 @@ PLAN_UNPARSEABLE_TEXT = (
     "Plan formulation failed: the model did not return a parseable JSON plan, "
     "so no tools were executed and no numerical result is available."
 )
+# Tools that mutate the network (or reload it, discarding the current state). Blocked once a
+# verification retry is in effect: the model may inspect the current state (run_powerflow,
+# get_status, ...) but must not undo or replace the network change the request asked for just
+# to reach a state that happens to pass verification (see _run_react's retry_active).
+_RETRY_BLOCKED_TOOLS = frozenset({"modify_load", "disconnect_line", "reconnect_line", "apply_remedial_action", "load_case"})
+
 GATE_WITHHELD_NOTE = (
     "Verification gate: the solver result did not pass verification, so numerical fields were "
     "withheld. Report the failure as stated in the gate reasons; do not describe the network as solved."
@@ -859,6 +865,7 @@ class LLMEngine:
     def _run_react(self, messages: List[Dict[str, Any]], session: SessionState, trace: Dict[str, Any]) -> str:
         tool_round = 0
         verify_attempts = 0
+        retry_active = False  # True from the first retry message onward: no more mutations allowed
         while True:
             if tool_round >= self.config.max_tool_rounds:
                 return self._finish(MAX_ROUNDS_EXCEEDED_TEXT, session, trace, "max_rounds")
@@ -876,6 +883,18 @@ class LLMEngine:
 
             tool_calls = msg.get("tool_calls") or []
             if tool_calls:
+                if retry_active:
+                    attempted = [tc.get("name") for tc in tool_calls if tc.get("name") in _RETRY_BLOCKED_TOOLS]
+                    if attempted:
+                        trace["verification_attempts"] = verify_attempts
+                        trace["verification_outcome"] = "abstained_retry_mutation"
+                        last_verdict = trace["verification"][-1]
+                        text = (
+                            _verification_abstention_text(last_verdict)
+                            + " The answer attempted to change the network instead of correcting the report "
+                            f"(blocked tool call(s): {', '.join(attempted)})."
+                        )
+                        return self._finish(text, session, trace, "verification_failed")
                 self._execute_tool_calls(tool_calls, messages, session, trace, round_rec)
                 tool_round += 1
                 trace["n_tool_rounds"] = tool_round
@@ -904,6 +923,7 @@ class LLMEngine:
             trace["verification_retry_messages"].append(retry_msg)
             session.conversation_history.append({"role": "user", "content": retry_msg})
             messages.append({"role": "user", "content": retry_msg})
+            retry_active = True
 
     # ---- single_call ------------------------------------------------------------
 
