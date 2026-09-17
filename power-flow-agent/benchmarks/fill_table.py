@@ -84,8 +84,13 @@ COLUMNS: tuple[Column, ...] = (
     # KCL residual (B_mean) of the reported flows against the trusted solver.
     Column("Solver status", ("convergence_match_rate",), "pct"),
     Column("B_mean", ("kcl_mean_mismatch_mw_mean",), "sci", "ok"),
-    # Faithfulness and safe failure.
-    Column("Faith.", ("faithful_numbers_mean",), "pct"),
+    # Faithfulness and safe failure. Per-answer (V4 faithfulness AND V5 currency
+    # together): share of answers where every number traces to a tool output and comes
+    # from the solve after the last network change -- not the mean of each answer's own
+    # traceable-number share (faithful_numbers_mean), which lets a handful of partially-
+    # contaminated answers barely move the aggregate (falls back to that older per-
+    # number rate for reports written before this field existed).
+    Column("Faith.", ("faithful_answers_rate", "faithful_numbers_mean"), "pct", "faithful_answers_total"),
     Column("SFR", ("safe_failure_rate",), "pct", "safe_failure_total"),
     # Cost.
     Column("Calls", ("n_tool_calls_mean",), "f1z"),

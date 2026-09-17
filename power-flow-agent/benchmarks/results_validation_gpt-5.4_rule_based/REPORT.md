@@ -1,6 +1,6 @@
 # Informe de experimento: `results_validation_gpt-5.4_rule_based`
 
-Generado el 2026-09-16 09:27 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-5.4_rule_based (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-16 17:47 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-5.4_rule_based (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -44,13 +44,13 @@ Load case14 and disconnect the line between bus ten and bus eleven.
 
 ## 3. Resultados agregados
 
-Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), en los 4 grupos de `metricas_pfagent_definiciones.md`: **utilidad de tarea** Form. (formulación exacta de las tool calls), V_MAE (p.u.) y F_MAE (MW) sobre los items con resultado, Solved (respondió correctamente de extremo a extremo); **corrección solver-grounded** Solver status (convergencia reportada = convergencia real), B_mean (residual medio de KCL de los flujos reportados, MW); **fidelidad** Faith. (números de la respuesta trazables a salidas de tools) y SFR (fallos declarados con seguridad); **costo** Calls (tool calls medias) y Tok. (tokens medios). Fuera de los 4 grupos, solo en este reporte (no en las tablas del paper): Claim (éxito reclamado sobre un fallo), Abst. (abstención en items resolubles) y $ (costo total USD). Porcentajes en %.
+Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), en los 4 grupos de `metricas_pfagent_definiciones.md`: **utilidad de tarea** Form. (formulación exacta de las tool calls), V_MAE (p.u.) y F_MAE (MW) sobre los items con resultado, Solved (respondió correctamente de extremo a extremo); **corrección solver-grounded** Solver status (convergencia reportada = convergencia real), B_mean (residual medio de KCL de los flujos reportados, MW); **fidelidad** Faith. (por respuesta, no por número: fracción de respuestas donde todo número es trazable a una salida de tool Y viene del solve posterior al último cambio de red) y SFR (fallos declarados con seguridad); **costo** Calls (tool calls medias) y Tok. (tokens medios). Fuera de los 4 grupos, solo en este reporte (no en las tablas del paper): Claim (éxito reclamado sobre un fallo), Abst. (abstención en items resolubles) y $ (costo total USD). Porcentajes en %.
 
 ### Por método × caso
 
-| Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Abst. | V pass | $ |
-|----------|------|----|----------|-----|-----|----------|----------------|------|------|----|-----|----|-----|----------|-------------|------|
-| rule_based | case14 | 5 | 60.0 (3/5) | 0 | 0.00 | 60.0 (3/5) | 100.0 (3/3) | 0 | 100.0 | -- | 1.6 | n/a | -- | 40.0 (2/5) | 100.0 (5/5) | 0.0000 |
+| Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Abst. | $ |
+|----------|------|----|----------|-----|-----|----------|----------------|------|-------------|----|-----|----|-----|----------|------|
+| rule_based | case14 | 5 | 60.0 (3/5) | 0 | 0.00 | 60.0 (3/5) | 100.0 (3/3) | 0 | 100.0 (5/5) | -- | 1.6 | n/a | -- | 40.0 (2/5) | 0.0000 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 

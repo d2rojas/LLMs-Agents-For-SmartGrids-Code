@@ -65,20 +65,28 @@ from benchmarks.fill_table import (  # noqa: E402
 DEFAULT_OUT = PROJECT_ROOT / "benchmarks" / "tab_pf_protocol_per_system.tex"
 NA = "n/a"
 LABELS = {"blocks": "tab:pf_protocol_per_system", "compact": "tab:pf_by_system"}
-# One column beyond the paper's 10-column body table: V pass, the offline evaluator-side
-# V(x,c,z,y) check (llm.engine.verify_final_answer) computed for every method, not only the
-# ones that enforce it live. Supplement-only by design -- whether it belongs in the paper's
-# main body table is the editor's call, not decided here.
-SUPPLEMENT_COLUMNS: tuple[Column, ...] = COLUMNS + (Column("V pass", ("v_pass_rate",), "pct", "v_pass_total"),)
+# Two columns beyond the paper's 10-column body table (whose "Faith." is now per-answer,
+# over both faithfulness and currency -- see fill_table.py::COLUMNS): the older per-number
+# faithfulness rate the body table used before, and the separate staleness rate, kept here
+# for the supplement per Daniela's decision (2026-09-16) since the per-number rate is what
+# obscured how many answers were actually contaminated (three out of forty read as ~99% under
+# it). The offline V(x,c,z,y) pass rate ("V pass") is not a separate supplement column any
+# more: once restricted to items whose reference is solvable, it is identical to the new
+# per-answer Faith. in every row checked, since conditions 1-3 already pass wherever they are
+# applicable there -- it was never carrying information beyond conditions 4 and 5.
+SUPPLEMENT_COLUMNS: tuple[Column, ...] = COLUMNS + (
+    Column("Faith. (per-number)", ("faithful_numbers_mean",), "pct"),
+    Column("Stale", ("stale_state_rate",), "pct", "stale_state_total"),
+)
 COLUMN_NAMES = [c.name for c in SUPPLEMENT_COLUMNS]
 COLUMN_HEADS = {"V_MAE": r"$V_{\mathrm{MAE}}$", "F_MAE": r"$F_{\mathrm{MAE}}$", "B_mean": r"$B_{\mathrm{mean}}$"}
-# (group title, number of columns) over the 11 supplement columns (10 protocol + V pass)
+# (group title, number of columns) over the 12 supplement columns (10 protocol + 2 here)
 COLUMN_GROUPS: tuple[tuple[str, int], ...] = (
     ("Task utility", 4),
     ("Solver-grounded correctness", 2),
     ("Faithfulness and safe failure", 2),
     ("Cost", 2),
-    ("Verification", 1),
+    ("Faithfulness detail", 2),
 )
 DEFAULT_COMPACT_METRICS = ("Form.", "Calls")
 
@@ -89,10 +97,14 @@ CAPTIONS = {
         r"rounds apply. Form.: formulation correctness (\%); $V_{\mathrm{MAE}}$ (p.u.), "
         r"$F_{\mathrm{MAE}}$ (MW); Solved: request solved end to end (\%); Solver status: reported "
         r"convergence matches the reference (\%); B\_mean: mean KCL residual of the reported flows "
-        r"(MW); Faith.: traceable numbers (\%); SFR: safe-failure rate (\%); Calls: mean tool calls; "
-        r"Tok.: mean tokens; V pass: fraction of final answers passing the task-level "
-        r"verification V(x,c,z,y) offline (1.0 by construction for methods that already "
-        r"enforce it live). n/a: the method has no tools or no LLM; --: not measured."
+        r"(MW); Faith.: share of answers where every number is traceable to a tool output and "
+        r"comes from the solve after the last network change (\%; per answer, not per number); "
+        r"SFR: safe-failure rate (\%); Calls: mean tool calls; Tok.: mean tokens; "
+        r"Faith. (per-number): mean, over answers, of the share of that answer's own numbers "
+        r"that are traceable (\%) -- kept here since it can read much higher than the per-answer "
+        r"Faith. when a few answers are each partially contaminated; Stale: share of answers "
+        r"quoting a number from before the last network change (\%). "
+        r"n/a: the method has no tools or no LLM; --: not measured."
     ),
     "compact": (
         r"Formulation correctness (Form., \%) and mean tool calls (Calls) per IEEE test system, "

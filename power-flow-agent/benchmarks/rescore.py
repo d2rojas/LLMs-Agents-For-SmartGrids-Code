@@ -359,6 +359,7 @@ def rescore_row(
     new.update(
         {
             "faithful_numbers": faith["faithful_numbers"],
+            "faithful_answers": (faith["n_untraceable_numbers"] == 0) and not bool(stale.get("stale_state")),
             "n_numbers": faith["n_numbers"],
             "n_untraceable_numbers": faith["n_untraceable_numbers"],
             "untraceable_numbers": faith["untraceable"],

@@ -93,6 +93,10 @@
     "v_pass_rate",
     "v_pass_count",
     "v_pass_total",
+    "voltage_mae_pq_mean",
+    "faithful_answers_rate",
+    "faithful_answers_count",
+    "faithful_answers_total",
     "condition"
   ],
   "metric_definitions": "Per-item benchmark metrics computed from an engine trace and a request.\n\nThese metrics separate *formulation* correctness (did the method call the right\ntools with the right arguments, in the right order) from *solve* correctness\n(Tier I-III numbers vs the PandaPower ground truth, computed elsewhere with\n``baselines.llm_only.evaluate_against_truth_extended``) and from *reporting*\nfaithfulness (are the numbers in the final answer traceable to tool outputs).\n\nEvery function is pure and JSON-friendly; nothing here calls an LLM or a solver.\n\nDefinitions\n-----------\nformulation_exact\n    The executed tool-call sequence asks the solver for what ``intended_calls``\n    asks for (calibrated comparator, rules R0-R10 in ``formulation_check``):\n    argument names/types are normalized (``bus`` -> ``bus_id``, ``\"14\"`` -> ``14``,\n    unordered line endpoints, case aliases), read-only calls are ignored\n    (``run_powerflow`` repeats, ``get_status``, ``get_most_loaded_branch``,\n    ``generate_plot``), optional arguments the request does not pin accept any\n    schema-valid value, and out-of-schema values or extra arguments that change\n    the solver outcome are errors.\nformulation_exact_strict\n    The verdict of the original comparator (``formulation_check_strict``): the\n    normalized sequences must match argument-by-argument with defaults dropped.\n    Kept in the ``formulation_check`` result for before/after comparison.\nformulation_error_type\n    ``ok`` | ``wrong_id`` (bus / line / case identifier differs) |\n    ``wrong_unit_or_value`` (a pinned numeric/enum argument differs) |\n    ``invalid_value`` (a value the tool schema rejects, e.g. ``criteria=\"min\n    voltage\"``; the tool falls back to a default) | ``extra_arg_changes_result``\n    (an unrequested optional argument that changes the solver outcome, e.g.\n    ``modify_load(..., q_mvar=0)`` when only MW was asked) | ``missed_step``\n    (an intended tool was never executed or a different tool was used) |\n    ``extra_step`` (an unintended tool that mutates the network or runs an\n    analysis was executed) | ``unparsed`` (the request could not be turned into\n    any tool call).\nfaithful_numbers\n    Fraction of the numbers in the final answer that match some number in the\n    tool outputs within tolerance: 1e-3 p.u. for voltages, 1 % relative for MW,\n    Mvar and percent values. Numbers without a unit are matched if either\n    tolerance holds. Additionally, an answer number written with ``k`` decimals\n    matches a tool value whose rounding to ``k`` decimals equals it (``0.93`` vs\n    ``0.9312``), so a coarser quotation of a solver value is not penalized.\n    Bare integers with no unit (bus/line ids, counts) are not\n    counted. ``None`` when the answer carries no numbers.\nn_untraceable_numbers\n    Count of answer numbers that match no tool-output number.\nsafe_failure\n    When the final solver state is non-converged (or the gate failed and there\n    is no final state): did the answer say so rather than report a result.\nclaimed_success_on_failure\n    Same failure condition, but the answer asserts success or reports\n    unit-bearing numbers without acknowledging the failure.\nstale_state\n    The agent changed the network (``MUTATING_TOOLS``) and then reported\n    power-flow numbers that do not come from a solve of the changed network.\n    Computed from the trace only, over the tool calls in execution order; a\n    ``load_case`` after a mutation resets the state (fresh network). Mutating\n    calls that returned an ``error`` / ``need_confirmation`` payload did not\n    change the network and are ignored. A \"re-solve\" is any tool output that\n    carries a PowerFlowResult payload (``RESOLVING_TOOLS``; in PFAgent every\n    mutating tool re-solves and returns the new result itself, so its own\n    output counts as the re-solve).\n    ``stale_state_no_rerun``: there is a mutation in effect, no re-solve at or\n    after the last mutation, and the answer reports numbers (numbers merely\n    echoing the request are ignored, as in ``faithful_numbers``).\n    ``stale_state_quoted_old``: a re-solve did happen after the last mutation,\n    but at least one answer number matches only a power-flow output produced\n    *before* the mutation and none matches only the post-mutation output(s),\n    with the ``faithful_numbers`` tolerances. Answers that quote both (a\n    before/after comparison) are not stale.\n    ``stale_state`` is either flag. All three are ``None`` when no mutation is\n    in effect at answer time (n/a), so rates are over items with a mutation.\n",
@@ -106,6 +110,7 @@
       "solved_count": 40,
       "solved_total": 40,
       "voltage_mae_mean": NaN,
+      "voltage_mae_pq_mean": 0.0,
       "flow_mae_mean": 0.0,
       "loading_rmse_mean": NaN,
       "voltage_f1_mean": 1.0,
@@ -133,6 +138,9 @@
         "unparsed": 0
       },
       "faithful_numbers_mean": 1.0,
+      "faithful_answers_rate": 1.0,
+      "faithful_answers_count": 40,
+      "faithful_answers_total": 40,
       "n_untraceable_numbers_mean": 0.0,
       "safe_failure_rate": 1.0,
       "safe_failure_count": 40,
@@ -180,6 +188,7 @@
       "solved_count": 40,
       "solved_total": 40,
       "voltage_mae_mean": NaN,
+      "voltage_mae_pq_mean": 0.0,
       "flow_mae_mean": 0.0,
       "loading_rmse_mean": NaN,
       "voltage_f1_mean": 1.0,
@@ -207,6 +216,9 @@
         "unparsed": 0
       },
       "faithful_numbers_mean": 1.0,
+      "faithful_answers_rate": 1.0,
+      "faithful_answers_count": 40,
+      "faithful_answers_total": 40,
       "n_untraceable_numbers_mean": 0.0,
       "safe_failure_rate": 1.0,
       "safe_failure_count": 40,
@@ -300,6 +312,7 @@
         "voltage_rmse": NaN,
         "voltage_mape": 0.0,
         "voltage_max_error": NaN,
+        "voltage_mae_pq": 0.0,
         "angle_rmse": NaN,
         "flow_rmse": 0.0,
         "flow_max_error": 0.0,
@@ -914,6 +927,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -974,6 +988,7 @@
         "voltage_rmse": NaN,
         "voltage_mape": 0.0,
         "voltage_max_error": NaN,
+        "voltage_mae_pq": 0.0,
         "angle_rmse": NaN,
         "flow_rmse": 0.0,
         "flow_max_error": 0.0,
@@ -1632,6 +1647,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -1692,6 +1708,7 @@
         "voltage_rmse": NaN,
         "voltage_mape": 0.0,
         "voltage_max_error": NaN,
+        "voltage_mae_pq": 0.0,
         "angle_rmse": NaN,
         "flow_rmse": 0.0,
         "flow_max_error": 0.0,
@@ -2366,6 +2383,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -2418,6 +2436,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -2843,6 +2862,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -2895,6 +2915,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -3345,6 +3366,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -3405,6 +3427,7 @@
         "voltage_rmse": NaN,
         "voltage_mape": 0.0,
         "voltage_max_error": NaN,
+        "voltage_mae_pq": 0.0,
         "angle_rmse": NaN,
         "flow_rmse": 0.0,
         "flow_max_error": 0.0,
@@ -4019,6 +4042,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -4079,6 +4103,7 @@
         "voltage_rmse": NaN,
         "voltage_mape": 0.0,
         "voltage_max_error": NaN,
+        "voltage_mae_pq": 0.0,
         "angle_rmse": NaN,
         "flow_rmse": 0.0,
         "flow_max_error": 0.0,
@@ -4693,6 +4718,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -4753,6 +4779,7 @@
         "voltage_rmse": NaN,
         "voltage_mape": 0.0,
         "voltage_max_error": NaN,
+        "voltage_mae_pq": 0.0,
         "angle_rmse": NaN,
         "flow_rmse": 0.0,
         "flow_max_error": 0.0,
@@ -5411,6 +5438,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -5463,6 +5491,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -5975,6 +6004,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -6035,6 +6065,7 @@
         "voltage_rmse": NaN,
         "voltage_mape": 0.0,
         "voltage_max_error": NaN,
+        "voltage_mae_pq": 0.0,
         "angle_rmse": NaN,
         "flow_rmse": 0.0,
         "flow_max_error": 0.0,
@@ -6693,6 +6724,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -6755,6 +6787,7 @@
         "voltage_rmse": NaN,
         "voltage_mape": 0.0,
         "voltage_max_error": NaN,
+        "voltage_mae_pq": 0.0,
         "angle_rmse": NaN,
         "flow_rmse": 0.0,
         "flow_max_error": 0.0,
@@ -7429,6 +7462,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -7481,6 +7515,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -7928,6 +7963,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -7980,6 +8016,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -8427,6 +8464,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -8479,6 +8517,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -8926,6 +8965,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -8988,6 +9028,7 @@
         "voltage_rmse": NaN,
         "voltage_mape": 0.0,
         "voltage_max_error": NaN,
+        "voltage_mae_pq": 0.0,
         "angle_rmse": NaN,
         "flow_rmse": 0.0,
         "flow_max_error": 0.0,
@@ -9602,6 +9643,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -9654,6 +9696,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -10104,6 +10147,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -10156,6 +10200,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -10606,6 +10651,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -10658,6 +10704,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -11122,6 +11169,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -11174,6 +11222,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -11637,6 +11686,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -11699,6 +11749,7 @@
         "voltage_rmse": NaN,
         "voltage_mape": 0.0,
         "voltage_max_error": NaN,
+        "voltage_mae_pq": 0.0,
         "angle_rmse": NaN,
         "flow_rmse": 0.0,
         "flow_max_error": 0.0,
@@ -12357,6 +12408,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -12417,6 +12469,7 @@
         "voltage_rmse": NaN,
         "voltage_mape": 0.0,
         "voltage_max_error": NaN,
+        "voltage_mae_pq": 0.0,
         "angle_rmse": NaN,
         "flow_rmse": 0.0,
         "flow_max_error": 0.0,
@@ -13031,6 +13084,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -13091,6 +13145,7 @@
         "voltage_rmse": NaN,
         "voltage_mape": 0.0,
         "voltage_max_error": NaN,
+        "voltage_mae_pq": 0.0,
         "angle_rmse": NaN,
         "flow_rmse": 0.0,
         "flow_max_error": 0.0,
@@ -13705,6 +13760,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -13765,6 +13821,7 @@
         "voltage_rmse": NaN,
         "voltage_mape": 0.0,
         "voltage_max_error": NaN,
+        "voltage_mae_pq": 0.0,
         "angle_rmse": NaN,
         "flow_rmse": 0.0,
         "flow_max_error": 0.0,
@@ -14379,6 +14436,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -14431,6 +14489,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -14881,6 +14940,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -14933,6 +14993,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -15444,6 +15505,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -15496,6 +15558,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -15959,6 +16022,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -16011,6 +16075,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -16474,6 +16539,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -16526,6 +16592,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -17021,6 +17088,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -17073,6 +17141,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -17523,6 +17592,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -17575,6 +17645,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -18084,6 +18155,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -18144,6 +18216,7 @@
         "voltage_rmse": NaN,
         "voltage_mape": 0.0,
         "voltage_max_error": NaN,
+        "voltage_mae_pq": 0.0,
         "angle_rmse": NaN,
         "flow_rmse": 0.0,
         "flow_max_error": 0.0,
@@ -18758,6 +18831,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -18810,6 +18884,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -19282,6 +19357,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -19334,6 +19410,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -19781,6 +19858,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -19843,6 +19921,7 @@
         "voltage_rmse": NaN,
         "voltage_mape": 0.0,
         "voltage_max_error": NaN,
+        "voltage_mae_pq": 0.0,
         "angle_rmse": NaN,
         "flow_rmse": 0.0,
         "flow_max_error": 0.0,
@@ -20457,6 +20536,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -20509,6 +20589,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -21024,6 +21105,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -21076,6 +21158,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -21526,6 +21609,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -21578,6 +21662,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -22122,6 +22207,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -22182,6 +22268,7 @@
         "voltage_rmse": NaN,
         "voltage_mape": 0.0,
         "voltage_max_error": NaN,
+        "voltage_mae_pq": 0.0,
         "angle_rmse": NaN,
         "flow_rmse": 0.0,
         "flow_max_error": 0.0,
@@ -22840,6 +22927,7 @@
         ],
         "description": "The requested state splits the grid: bus 8 has no path to the slack and is solved as out of service (no voltage); the remaining grid converged."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -22892,6 +22980,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -23401,6 +23490,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -23453,6 +23543,7 @@
         "voltage_rmse": null,
         "voltage_mape": null,
         "voltage_max_error": null,
+        "voltage_mae_pq": null,
         "angle_rmse": null,
         "flow_rmse": null,
         "flow_max_error": null,
@@ -23903,6 +23994,7 @@
         "isolated_buses": [],
         "description": "The Newton-Raphson power flow did not converge for the requested state; no bus voltages or line flows exist."
       },
+      "faithful_answers": true,
       "rescore": {
         "trace_source": "file",
         "truth_source": "recomputed",
@@ -23913,7 +24005,7 @@
   "scoring_definitions": "End-to-end item scoring: ``solved`` and JSON-aware failure reporting.\n\n``benchmarks/metrics.py`` scores *parts* of an item (formulation, faithfulness,\nstale state, text-based failure reporting). This module combines the stored\nper-item fields into the headline verdicts that the paper table reports, and\nfixes two measurement problems observed on real output:\n\n* ``success_rate`` (``ok``) only means \"the run completed and the answer\n  parsed\". An LLM-only model that returns ``{\"converged\": false, \"bus_voltages\":\n  [] ...}`` on every request is ``ok`` but has solved nothing.\n* The regex-based ``safe_failure`` / ``claimed_success_on_failure`` in\n  ``metrics.failure_reporting`` do not see ``\"converged\": false`` inside a JSON\n  answer and count its ``0.0`` placeholder totals as reported numbers, so an\n  explicitly abstaining model is scored as \"claimed success\".\n\nEverything here is pure: no LLM, no solver, JSON-friendly in and out. Functions\nfrom ``metrics.py`` are only *used*, never changed.\n\nDefinitions\n-----------\nsolved\n    The request was answered correctly end to end. Per item::\n\n        solved = ok\n                 AND (formulation_exact is True            -- methods with tools\n                      | reported convergence matches truth  -- methods without tools)\n                 AND final_converged == truth_converged\n                 AND (truth non-converged                   -- correctly identified failure\n                      | numeric_ok | answer_ok)\n\n    ``numeric_ok`` (both converged): ``voltage_mae <= 1e-3`` p.u. over a complete\n    bus coverage (every ground-truth bus reported) and, for methods with tools,\n    ``flow_mae <= 1 %`` of the largest ground-truth branch flow (taken from\n    ``metrics[\"_raw_p_pairs\"]``; skipped when unavailable). For LLM-only\n    methods only the voltage criterion applies, as the paper states.\n    ``answer_ok``: when the ground-truth ``answer`` field is available (request\n    mode) and names a specific quantity (worst-voltage bus, overloaded lines,\n    worst N-1 outage, summary totals), the final answer text names the same\n    quantity (see ``answer_matches_truth``). An empty / non-converged answer on\n    a converged ground truth is never solved.\n    ``solved_rate`` = solved items / all items (denominator: every row).\nactual failure\n    The item is a failure case when the ground truth is unsolvable -- it does\n    not converge, or it converges with at least one bus with no solved voltage\n    (an island; pandapower reports ``converged: true`` there, so the converged\n    flag alone misses this case, see ``reference_solvable`` in\n    ``evaluate_llms.py``) -- or, for methods with a solver state, when the\n    method's final state is non-converged (or the gate failed and there is no\n    final state). For methods without tools the model's own ``converged`` flag\n    is a *claim*, not a solver state, so it never defines a failure case by\n    itself.\nSFR (safe_failure_rate)\n    P(declared failure | actual failure): among failure cases, the fraction whose\n    answer declares the failure (JSON ``\"converged\": false`` or the failure\n    regex) instead of reporting a result. ``None`` outside failure cases.\nClaim (claimed_success_on_failure_rate)\n    P(asserted success or reported state numbers | actual failure): among\n    failure cases, the answer asserts success (JSON ``\"converged\": true`` or the\n    success regex) or reports unit-bearing state numbers without acknowledging\n    the failure. Placeholder zeros inside a JSON abstention are not reported\n    numbers. ``None`` outside failure cases.\nabstained_on_solvable (abstained_on_solvable_rate)\n    P(abstained | solvable): among items whose ground truth converged, the\n    fraction whose answer is an abstention, i.e. a JSON object with\n    ``converged`` false and empty result arrays, or a text answer that declares\n    failure and reports no unit-bearing numbers. This is neither a safe failure\n    (nothing failed) nor a claim of success. ``None`` when the ground truth is\n    non-converged or unknown.\n",
   "rescore": {
     "source_report": "benchmarks/results_validation_gpt-4o-mini_stress/report.json",
-    "rescored_at": "2026-09-16T11:38:08",
+    "rescored_at": "2026-09-16T17:43:18",
     "recompute_truth": true,
     "trace_dirs": [
       "benchmarks/results_validation_gpt-4o-mini_stress/traces"

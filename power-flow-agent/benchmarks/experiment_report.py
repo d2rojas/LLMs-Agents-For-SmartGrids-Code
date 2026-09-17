@@ -658,18 +658,16 @@ def _rate_counts(items: list[dict[str, Any]], name: str) -> tuple[Optional[int],
     if name == "SFR":
         vals = [r.get("safe_failure") for r in items]
         return sum(1 for v in vals if v is True), sum(1 for v in vals if v is not None)
+    if name == "Faith.":
+        # Per-answer (V4 and V5 together), not the per-number mean this used to be --
+        # every item counts (an answer with no numbers, or no mutation, passes vacuously).
+        vals = [r.get("faithful_answers") for r in items]
+        return sum(1 for v in vals if v is True), sum(1 for v in vals if v is not None)
     if name == "Claim":
         vals = [r.get("claimed_success_on_failure") for r in items]
         return sum(1 for v in vals if v is True), sum(1 for v in vals if v is not None)
     if name == "Abst.":
         vals = [r.get("abstained_on_solvable") for r in items]
-        return sum(1 for v in vals if v is True), sum(1 for v in vals if v is not None)
-    if name == "V pass":
-        # Restricted to items whose reference actually converges with no isolated bus (see
-        # evaluate_llms.py's `reference_solvable`); an unsolvable reference can never satisfy
-        # verify_final_answer, so it is excluded from the denominator rather than counted as
-        # a failure.
-        vals = [r.get("v_pass") for r in items if r.get("reference_solvable") is not False]
         return sum(1 for v in vals if v is True), sum(1 for v in vals if v is not None)
     return None, None
 
@@ -698,7 +696,6 @@ def _protocol_cells(row: dict[str, Any], items: list[dict[str, Any]]) -> list[st
             cells.append(format_value(val, fmt))
     cells.append(_pct_cell(_first_key(row, ("claimed_success_on_failure_rate",)), items, "Claim"))
     cells.append(_pct_cell(_first_key(row, _ABSTAIN_KEYS), items, "Abst."))
-    cells.append(_pct_cell(_first_key(row, ("v_pass_rate",)), items, "V pass"))
     cells.append(fmt_usd(_first_key(row, ("cost_usd_total",))))
     return cells
 
@@ -709,7 +706,6 @@ def _protocol_header(with_model: bool, with_case: bool) -> list[str]:
         head.append(name)
     head.append("Claim")
     head.append("Abst.")
-    head.append("V pass")
     head.append("$")
     return head
 
@@ -721,8 +717,9 @@ def section_results(exp: Experiment) -> str:
         "`metricas_pfagent_definiciones.md`: **utilidad de tarea** Form. (formulación exacta de las tool calls), "
         "V_MAE (p.u.) y F_MAE (MW) sobre los items con resultado, Solved (respondió correctamente de extremo a "
         "extremo); **corrección solver-grounded** Solver status (convergencia reportada = convergencia real), "
-        "B_mean (residual medio de KCL de los flujos reportados, MW); **fidelidad** Faith. (números de la "
-        "respuesta trazables a salidas de tools) y SFR (fallos declarados con seguridad); **costo** Calls (tool "
+        "B_mean (residual medio de KCL de los flujos reportados, MW); **fidelidad** Faith. (por respuesta, no "
+        "por número: fracción de respuestas donde todo número es trazable a una salida de tool Y viene del "
+        "solve posterior al último cambio de red) y SFR (fallos declarados con seguridad); **costo** Calls (tool "
         "calls medias) y Tok. (tokens medios). Fuera de los 4 grupos, solo en este reporte (no en las tablas del "
         "paper): Claim (éxito reclamado sobre un fallo), Abst. (abstención en items resolubles) y $ (costo total "
         "USD). Porcentajes en %.\n"
@@ -753,7 +750,6 @@ def section_results(exp: Experiment) -> str:
                 items = [r for r in rows if str(r.get("model")) == model and str(r.get("method")) == method]
                 claim_rate = bm.rate([r.get("claimed_success_on_failure") for r in items])["rate"]
                 abst_rate = bm.rate([r.get("abstained_on_solvable") for r in items])["rate"]
-                v_pass_rate = bm.rate([r.get("v_pass") for r in items])["rate"]
                 cells = []
                 for name, _, fmt in _PROTOCOL_COLUMNS:
                     if name == "Calls" and method.startswith(("llm_only", "baseline_pf", "blueprint_pf")):
@@ -766,7 +762,6 @@ def section_results(exp: Experiment) -> str:
                         cells.append(format_value(agg.get(name), fmt))
                 cells.append(_pct_cell(claim_rate, items, "Claim"))
                 cells.append(_pct_cell(abst_rate, items, "Abst."))
-                cells.append(_pct_cell(v_pass_rate, items, "V pass"))
                 cost = sum(float(r.get("cost_usd_total") or 0.0) for r in mrows if str(r.get("method")) == method)
                 cells.append(fmt_usd(cost))
                 agg_rows.append(([alias.get(model, model)] if with_model else []) + [method, f"{agg['n_cases']} casos", fmt_int(agg["n_items"])] + cells)

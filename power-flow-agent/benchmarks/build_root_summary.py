@@ -42,10 +42,12 @@ from benchmarks.fill_table import (  # noqa: E402
     table_blocks,
 )
 
-# One column beyond the paper's 10-column body table: the offline evaluator-side V(x,c,z,y)
-# check (llm.engine.verify_final_answer), computed for every method (see fill_supertable.py's
-# own SUPPLEMENT_COLUMNS, which this mirrors).
-TABLE_COLUMNS: tuple[Column, ...] = COLUMNS + (Column("V pass", ("v_pass_rate",), "pct"),)
+# fill_table.py's own 10-column body table; no extra column here any more. "Faith." is now
+# per-answer (V4 faithfulness and V5 currency together), which -- restricted to items whose
+# reference is solvable -- is identical to the offline V(x,c,z,y) pass rate this used to add
+# as a separate "V pass" column, so that column never carried information beyond what "Faith."
+# now shows directly (2026-09-16).
+TABLE_COLUMNS: tuple[Column, ...] = COLUMNS
 
 
 def _md_table(headers: list[str], rows: list[list[str]]) -> str:
@@ -68,12 +70,8 @@ def _rate_counts(items: list[dict[str, Any]], name: str) -> tuple[Optional[int],
     if name == "SFR":
         vals = [r.get("safe_failure") for r in items]
         return sum(1 for v in vals if v is True), sum(1 for v in vals if v is not None)
-    if name == "V pass":
-        # Restricted to items whose reference actually converges with no isolated bus (see
-        # evaluate_llms.py's `reference_solvable`); an unsolvable reference can never satisfy
-        # verify_final_answer, so it is excluded from the denominator rather than counted as
-        # a failure.
-        vals = [r.get("v_pass") for r in items if r.get("reference_solvable") is not False]
+    if name == "Faith.":
+        vals = [r.get("faithful_answers") for r in items]
         return sum(1 for v in vals if v is True), sum(1 for v in vals if v is not None)
     return None, None
 

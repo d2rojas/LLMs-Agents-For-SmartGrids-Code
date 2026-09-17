@@ -145,6 +145,11 @@ EXTENDED_SCOREBOARD_FIELDS = [
     # setpoint the model can copy from the gen/ext_grid table, so this is the number
     # that actually reflects whether an LLM-only method solved anything.
     "voltage_mae_pq_mean",
+    # per-answer faithfulness+currency (V4 and V5 together), next to the pre-existing
+    # per-number faithful_numbers_mean above.
+    "faithful_answers_rate",
+    "faithful_answers_count",
+    "faithful_answers_total",
     # "normal" (default) or "stress": disambiguates (model, method, case) collisions when
     # the same method/case is run under different conditions (see --condition).
     "condition",
@@ -1005,6 +1010,14 @@ def evaluate_item(
         declared_failure=failure.get("safe_failure"),
     )
     stale = bm.stale_state_check(trace, raw_text, request_text=item.text)
+    # Per-answer, over both faithfulness (V4) and currency (V5): every number in this
+    # answer traces to a tool output AND comes from the solve that follows the last
+    # network change. A binary per item, not the mean of each answer's own traceable-
+    # number share -- see "faithful_answer" below for why those diverge. An answer with
+    # no numbers, or no network mutation in effect, passes vacuously (both underlying
+    # checks are None/inapplicable), so the denominator is every item, not just the ones
+    # with a mutation or a number.
+    faithful_answers = (faith["n_untraceable_numbers"] == 0) and not bool(stale.get("stale_state"))
     # Evaluator-side V(x,c,z,y) check (llm.engine.verify_final_answer), computed for every
     # method/row regardless of whether the method's own final_gate is on: for methods that
     # already enforce it live (final_gate=True) this is 1.0 by construction and serves as a
@@ -1070,6 +1083,7 @@ def evaluate_item(
         "formulation_error_type": formulation.get("formulation_error_type"),
         "formulation_detail": formulation.get("detail"),
         "faithful_numbers": faith["faithful_numbers"],
+        "faithful_answers": faithful_answers,
         "n_numbers": faith["n_numbers"],
         "n_untraceable_numbers": faith["n_untraceable_numbers"],
         "untraceable_numbers": faith["untraceable"],
@@ -1116,6 +1130,7 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
     stale_quoted_old = bm.rate([r.get("stale_state_quoted_old") for r in rows])
     solved = bm.rate([r.get("solved") for r in rows])
     abstained = bm.rate([r.get("abstained_on_solvable") for r in rows])
+    faithful_answers = bm.rate([r.get("faithful_answers") for r in rows])
     verif_outcomes = [r.get("verification_outcome") for r in rows if r.get("verification_outcome") is not None]
     verif_total = len(verif_outcomes)
 
@@ -1169,6 +1184,13 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "formulation_exact_total": form["total"],
         "formulation_error_counts": bm.error_type_counts([r.get("formulation_error_type") for r in rows]),
         "faithful_numbers_mean": _safe_mean([r.get("faithful_numbers") for r in rows]),
+        # Per-answer, over both faithfulness (V4) and currency (V5): share of answers
+        # where every number traces to a tool output and comes from the solve after the
+        # last network change. Not the mean of each answer's own traceable-number share
+        # (faithful_numbers_mean above) -- see evaluate_item's "faithful_answers" field.
+        "faithful_answers_rate": faithful_answers["rate"],
+        "faithful_answers_count": faithful_answers["count"],
+        "faithful_answers_total": faithful_answers["total"],
         "n_untraceable_numbers_mean": _safe_mean([r.get("n_untraceable_numbers") for r in rows if r.get("n_numbers")]),
         "safe_failure_rate": safe["rate"],
         "safe_failure_count": safe["count"],
