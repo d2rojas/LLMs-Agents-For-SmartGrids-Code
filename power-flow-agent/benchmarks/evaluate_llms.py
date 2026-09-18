@@ -1027,6 +1027,11 @@ def evaluate_item(
         has_tools=has_tools,
         reference_solvable=reference_solvable,
     )
+    # The harness computes this (compute_ground_truth's "answer" field) and used to discard
+    # it right after solved_check -- persisted below so a numeric_ok item (whose Solved verdict
+    # never actually reaches answer_matches_truth, see solved_check) can still be checked
+    # offline against what the request asked for, without recomputing ground truth.
+    truth_answer = getattr(item, "truth_answer", None) or (getattr(getattr(item, "request", None), "ground_truth", None) or {}).get("answer")
     solved = bs.solved_check(
         ok=ok,
         has_tools=has_tools,
@@ -1035,7 +1040,7 @@ def evaluate_item(
         final_converged=False if item.expected_outcome != "converged" else final_converged,
         metrics=metrics,
         answer_text=raw_text,
-        truth_answer=getattr(item, "truth_answer", None) or (getattr(getattr(item, "request", None), "ground_truth", None) or {}).get("answer"),
+        truth_answer=truth_answer,
         expected_outcome=item.expected_outcome,
         declared_failure=failure.get("safe_failure"),
     )
@@ -1135,6 +1140,7 @@ def evaluate_item(
         "truth_converged": truth_converged,
         "reference_solvable": reference_solvable,
         "truth_tool_errors": item.truth_tool_errors,
+        "truth_answer": truth_answer,
         "solved": solved["solved"],
         "solved_reason": solved["solved_reason"],
         "escalated": escalated,

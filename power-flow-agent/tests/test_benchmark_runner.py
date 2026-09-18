@@ -330,6 +330,12 @@ def test_agent_methods_run_end_to_end_with_scripted_client(method):
     # wording change (e.g. the 2026-09-17 bus-indexing fix) doesn't silently make two runs
     # of the "same" method incomparable.
     assert row["system_prompt_hash"] and isinstance(row["system_prompt_hash"], str)
+    # The harness computes compute_ground_truth's "answer" for solved_check and used to
+    # discard it right after -- persisted (as its own key, even though it's None here: this
+    # test's default request text isn't from the generator, so there's no ground_truth
+    # object to pull an answer from) so a numeric_ok row from a generated request (whose
+    # Solved verdict never reaches answer_matches_truth) can still be checked offline.
+    assert "truth_answer" in row
     if method.startswith("single_call"):
         assert "tools" in client.calls[0] and client.calls[0]["tools"]
         assert row["executed_calls"][0]["tool"] != "load_case"  # preloaded
@@ -407,6 +413,7 @@ def test_rule_based_end_to_end_on_generated_case14_requests(tmp_path):
         assert row["formulation_error_type"] in ("ok", "wrong_id", "wrong_unit_or_value", "missed_step", "extra_step", "unparsed")
         assert row["intended_calls"][0]["tool"] == "load_case"
         assert row["system_prompt_hash"] is None  # rule_based has no LLM system prompt
+        assert "truth_answer" in row  # persisted for every row from a generated request, not just numeric_ok ones
     sb = report["scoreboard"][0]
     assert sb["n_items"] == 2 and sb["formulation_exact_total"] == 2
     assert sum(sb["formulation_error_counts"].values()) == 2
