@@ -66,6 +66,17 @@ abstained_on_solvable (abstained_on_solvable_rate)
     failure and reports no unit-bearing numbers. This is neither a safe failure
     (nothing failed) nor a claim of success. ``None`` when the ground truth is
     non-converged or unknown.
+escalated / wrong_silently (escalated_rate / wrong_silently_rate)
+    Every item lands in exactly one of three outcomes (they sum to 100%):
+    ``solved`` (autonomous and correct), ``escalated`` (the method explicitly
+    handed the item to a person -- see ``escalation_check``: only the task-level
+    verification gate's abstention and the deterministic parser's cannot-parse
+    refusal count; a method with no handoff mechanism is always False here, even
+    when its free text happens to read as uncertain), or ``wrong_silently`` (the
+    complement: autonomous and wrong, with nothing flagging it -- the outcome an
+    operator most needs to see). Unconditioned on solvability, unlike
+    ``abstained_on_solvable``: this is about where every request in the run
+    ends up, not just the solvable ones.
 """
 
 from __future__ import annotations
@@ -397,12 +408,47 @@ def method_has_tools(method_name: Optional[str]) -> bool:
     return not (name.startswith("llm_only") or name in ("baseline_pf", "blueprint_pf"))
 
 
+_ESCALATION_VERIFICATION_OUTCOMES = ("abstained", "abstained_retry_mutation")
+
+
+def escalation_check(
+    *,
+    method_name: Optional[str],
+    verification_outcome: Optional[str],
+    formulation_error_type: Optional[str],
+) -> bool:
+    """Whether this row ended in an explicit handoff to a person, as opposed to an
+    autonomous answer (right or wrong). Every request lands in exactly one of three
+    outcomes the paper reports: solved autonomously (``solved``), escalated (this),
+    or wrong with nothing flagging it (the complement, ``not solved and not
+    escalated``) -- see notes/tabla_objetivo_pfagent.md.
+
+    Only architectures with a built-in escalation path can produce True here: the
+    task-level verification gate's abstention (``final_gate=True``, see
+    ``llm.engine.verify_final_answer`` / its ``verification_outcome``) and the
+    deterministic parser's refusal when it cannot map the request to any tool call.
+    Every other method has nowhere to route an "I don't know" -- so it is False by
+    construction, not derived from free text a model happened to write. "I cannot
+    determine..." trips the regex/JSON abstention heuristic in ``failure_reporting``
+    (see its ``abstained`` field) for a method with no handoff mechanism too, but
+    that is the model being uncertain, not the system escalating; those rows belong
+    in "wrong, unflagged" instead. This is why ``escalated`` is its own check rather
+    than reusing ``abstained``.
+    """
+    if verification_outcome in _ESCALATION_VERIFICATION_OUTCOMES:
+        return True
+    if str(method_name or "") == "rule_based" and formulation_error_type == "unparsed":
+        return True
+    return False
+
+
 def score_row(row: Dict[str, Any], *, truth_answer: Any = None) -> Dict[str, Any]:
     """Recompute the fields owned by this module from a stored result row.
 
     Returns the new values of ``is_failure``, ``safe_failure``,
     ``claimed_success_on_failure``, ``abstained``, ``abstained_on_solvable``,
-    ``failure_detection_path``, ``solved`` and ``solved_reason``.
+    ``failure_detection_path``, ``solved``, ``solved_reason``, ``escalated`` and
+    ``wrong_silently``.
     """
     has_tools = method_has_tools(row.get("method") or row.get("task"))
     failure = failure_reporting(
@@ -425,6 +471,11 @@ def score_row(row: Dict[str, Any], *, truth_answer: Any = None) -> Dict[str, Any
         expected_outcome=row.get("expected_outcome"),
         declared_failure=failure.get("safe_failure"),
     )
+    escalated = escalation_check(
+        method_name=row.get("method") or row.get("task"),
+        verification_outcome=row.get("verification_outcome"),
+        formulation_error_type=row.get("formulation_error_type"),
+    )
     return {
         "is_failure": failure["is_failure"],
         "safe_failure": failure["safe_failure"],
@@ -433,4 +484,6 @@ def score_row(row: Dict[str, Any], *, truth_answer: Any = None) -> Dict[str, Any
         "abstained_on_solvable": failure["abstained_on_solvable"],
         "failure_detection_path": failure["detection_path"],
         **solved,
+        "escalated": escalated,
+        "wrong_silently": (not solved["solved"]) and not escalated,
     }

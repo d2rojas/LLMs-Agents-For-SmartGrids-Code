@@ -74,19 +74,28 @@ LABELS = {"blocks": "tab:pf_protocol_per_system", "compact": "tab:pf_by_system"}
 # more: once restricted to items whose reference is solvable, it is identical to the new
 # per-answer Faith. in every row checked, since conditions 1-3 already pass wherever they are
 # applicable there -- it was never carrying information beyond conditions 4 and 5.
+# Escalated / Wrong (silent), with the body table's own Solved, are where every request
+# ends up (they sum to 100%): an explicit handoff to a person, vs. an autonomous wrong
+# answer nothing flags. Only architectures with a real handoff mechanism can score
+# Escalated > 0 -- see benchmarks.scoring.escalation_check -- so it reads 0 rather than
+# a dash for every method without one, per Daniela's decision (2026-09-17,
+# notes/tabla_objetivo_pfagent.md).
 SUPPLEMENT_COLUMNS: tuple[Column, ...] = COLUMNS + (
     Column("Faith. (per-number)", ("faithful_numbers_mean",), "pct"),
     Column("Stale", ("stale_state_rate",), "pct", "stale_state_total"),
+    Column("Escalated", ("escalated_rate",), "pct"),
+    Column("Wrong (silent)", ("wrong_silently_rate",), "pct"),
 )
 COLUMN_NAMES = [c.name for c in SUPPLEMENT_COLUMNS]
 COLUMN_HEADS = {"V_MAE": r"$V_{\mathrm{MAE}}$", "F_MAE": r"$F_{\mathrm{MAE}}$", "B_mean": r"$B_{\mathrm{mean}}$"}
-# (group title, number of columns) over the 12 supplement columns (10 protocol + 2 here)
+# (group title, number of columns) over the 14 supplement columns (10 protocol + 4 here)
 COLUMN_GROUPS: tuple[tuple[str, int], ...] = (
     ("Task utility", 4),
     ("Solver-grounded correctness", 2),
     ("Faithfulness and safe failure", 2),
     ("Cost", 2),
     ("Faithfulness detail", 2),
+    ("Outcome breakdown", 2),
 )
 DEFAULT_COMPACT_METRICS = ("Form.", "Calls")
 
@@ -104,6 +113,11 @@ CAPTIONS = {
         r"that are traceable (\%) -- kept here since it can read much higher than the per-answer "
         r"Faith. when a few answers are each partially contaminated; Stale: share of answers "
         r"quoting a number from before the last network change (\%). "
+        r"Escalated and Wrong (silent), together with Solved above, sum to 100\%: where every "
+        r"request ends up -- solved autonomously, explicitly handed to a person (only the "
+        r"task-level verification gate's abstention and the deterministic parser's cannot-parse "
+        r"refusal count; every other method reads 0, not a dash), or answered wrong with "
+        r"nothing flagging it. "
         r"n/a: the method has no tools or no LLM; --: not measured."
     ),
     "compact": (

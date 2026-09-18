@@ -153,6 +153,20 @@ EXTENDED_SCOREBOARD_FIELDS = [
     # "normal" (default) or "stress": disambiguates (model, method, case) collisions when
     # the same method/case is run under different conditions (see --condition).
     "condition",
+    # voltage MAE restricted to items whose formulation was exact (or n/a for LLM-only
+    # methods, which have no formulation step) -- see benchmarks.scoring's module
+    # docstring on why the unconditioned voltage_mae_mean mixes two different failures
+    # for any tool-using row. voltage_mae_mean above stays as-is for the supplement.
+    "voltage_mae_formulation_exact_mean",
+    # where every request ends, as three outcomes summing to 100%: solved_rate (above)
+    # is one of them; escalated_rate/wrong_silently_rate are the other two -- see
+    # benchmarks.scoring.escalation_check.
+    "escalated_rate",
+    "escalated_count",
+    "escalated_total",
+    "wrong_silently_rate",
+    "wrong_silently_count",
+    "wrong_silently_total",
 ]
 
 CASE_SCOREBOARD_FIELDS = [
@@ -1039,6 +1053,15 @@ def evaluate_item(
 
     v_verdict = verify_final_answer(trace or {}, raw_text or "", request_text=item.text)
     v_pass = bool(v_verdict["passed"])
+    # Where this request ends, as one of three outcomes that sum to 100% across a run:
+    # solved (above), escalated (an explicit handoff -- see escalation_check), or wrong
+    # with nothing flagging it (the complement).
+    escalated = bs.escalation_check(
+        method_name=method.name,
+        verification_outcome=(trace or {}).get("verification_outcome"),
+        formulation_error_type=formulation.get("formulation_error_type"),
+    )
+    wrong_silently = (not solved["solved"]) and not escalated
     cost = bm.cost_from_trace(trace)
     cost_usd = _estimate_cost_usd(model_spec.key, usage, pricing) if method.uses_llm else 0.0
 
@@ -1107,6 +1130,8 @@ def evaluate_item(
         "truth_tool_errors": item.truth_tool_errors,
         "solved": solved["solved"],
         "solved_reason": solved["solved_reason"],
+        "escalated": escalated,
+        "wrong_silently": wrong_silently,
         "is_failure": failure["is_failure"],
         "safe_failure": failure["safe_failure"],
         "claimed_success_on_failure": failure["claimed_success_on_failure"],
@@ -1136,7 +1161,13 @@ def evaluate_item(
 
 def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
     ok_rows = [r for r in rows if r.get("ok")]
+    # Rows whose formulation was exact, or n/a (LLM-only methods have no formulation
+    # step, so "not False" -- True or None -- keeps them, matching voltage_mae_mean's
+    # existing behavior for those methods; see benchmarks.scoring's module docstring.
+    form_exact_ok_rows = [r for r in ok_rows if r.get("formulation_exact") is not False]
     form = bm.rate([r.get("formulation_exact") for r in rows])
+    escalated = bm.rate([r.get("escalated") for r in rows])
+    wrong_silently = bm.rate([r.get("wrong_silently") for r in rows])
     safe = bm.rate([r.get("safe_failure") for r in rows])
     claimed = bm.rate([r.get("claimed_success_on_failure") for r in rows])
     stale = bm.rate([r.get("stale_state") for r in rows])
@@ -1172,6 +1203,14 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "solved_count": solved["count"],
         "solved_total": solved["total"],
         "voltage_mae_mean": _safe_mean([(r.get("metrics") or {}).get("voltage_mae") for r in ok_rows]),
+        # See benchmarks.scoring's module docstring: unconditioned, this column mixes
+        # solving the wrong problem with computing badly. Conditioned, every tool-using
+        # row that reaches the solver with the right formulation reads exactly zero (the
+        # reference runs the same calls on the same solver), so a nonzero value only
+        # ever means a wrong-formulation row leaked in.
+        "voltage_mae_formulation_exact_mean": _safe_mean(
+            [(r.get("metrics") or {}).get("voltage_mae") for r in form_exact_ok_rows]
+        ),
         # PQ-bus-only voltage error: at a PV/slack bus vm is a control setpoint the
         # model can read straight off the gen/ext_grid table, so the all-buses MAE
         # above is diluted by buses that don't require solving anything. See
@@ -1215,6 +1254,15 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "abstained_on_solvable_rate": abstained["rate"],
         "abstained_on_solvable_count": abstained["count"],
         "abstained_on_solvable_total": abstained["total"],
+        # Where every request ends, unconditioned on solvability (unlike
+        # abstained_on_solvable above): solved (already reported), escalated (an
+        # explicit handoff), or wrong with nothing flagging it. Sum to 100%.
+        "escalated_rate": escalated["rate"],
+        "escalated_count": escalated["count"],
+        "escalated_total": escalated["total"],
+        "wrong_silently_rate": wrong_silently["rate"],
+        "wrong_silently_count": wrong_silently["count"],
+        "wrong_silently_total": wrong_silently["total"],
         "stale_state_rate": stale["rate"],
         "stale_state_count": stale["count"],
         "stale_state_total": stale["total"],

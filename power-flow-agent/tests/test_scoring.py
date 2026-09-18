@@ -192,6 +192,58 @@ def test_score_row_and_aggregate_group_expose_solved_and_abstained():
     assert agg["safe_failure_total"] == 0 and agg["claimed_success_on_failure_total"] == 0
 
 
+def test_escalation_check_only_fires_for_a_real_handoff_mechanism():
+    """Pinned against benchmarks/results_validation_n40/gpt-5.4 (2026-09-17, N=40 case14):
+    rule_based 72.5/22.5/5.0, Structured 52.5/0/47.5, react_nogate 62.5/0/37.5, pfagent
+    62.5/2.5/35.0 (solved/escalated/wrong_silently, %) -- see notes/tabla_objetivo_pfagent.md.
+    The point of this check: a method with no handoff mechanism must read 0 even when its
+    free text happens to trip the unrelated ``abstained`` text/JSON heuristic.
+    """
+    # rule_based: only its own "cannot parse this request" refusal counts.
+    assert bs.escalation_check(method_name="rule_based", verification_outcome=None, formulation_error_type="unparsed") is True
+    assert bs.escalation_check(method_name="rule_based", verification_outcome=None, formulation_error_type="wrong_id") is False
+    assert bs.escalation_check(method_name="rule_based", verification_outcome=None, formulation_error_type="ok") is False
+    # final_gate methods: only a genuine verification abstention counts.
+    assert bs.escalation_check(method_name="pfagent", verification_outcome="abstained", formulation_error_type=None) is True
+    assert bs.escalation_check(method_name="pfagent", verification_outcome="abstained_retry_mutation", formulation_error_type=None) is True
+    assert bs.escalation_check(method_name="pfagent", verification_outcome="pass_first", formulation_error_type=None) is False
+    # No handoff mechanism at all (react_nogate, llm_only:structured, single_call, ...):
+    # always False, regardless of formulation_error_type -- unlike rule_based, "unparsed"
+    # here means the model's own answer didn't parse, not a designed refusal.
+    assert bs.escalation_check(method_name="react_nogate", verification_outcome=None, formulation_error_type="unparsed") is False
+    assert bs.escalation_check(method_name="llm_only:structured", verification_outcome=None, formulation_error_type="unparsed") is False
+
+
+def test_escalated_and_wrong_silently_partition_every_item_via_score_row():
+    # An abstention from a final_gate method: escalated, not solved, and therefore not
+    # counted as "wrong, unflagged" -- it told someone.
+    abstained_row = {
+        "method": "pfagent", "ok": True, "raw_response": ABSTENTION, "truth_converged": True,
+        "final_converged": False, "formulation_exact": True, "verification_outcome": "abstained",
+        "formulation_error_type": "ok", "metrics": _metrics(),
+    }
+    scored = bs.score_row(abstained_row)
+    assert scored["escalated"] is True and scored["solved"] is False and scored["wrong_silently"] is False
+    # A wrong answer from a method with no handoff at all: not solved, not escalated ->
+    # wrong_silently, the outcome an operator most needs surfaced.
+    wrong_row = {
+        "method": "react_nogate", "ok": True, "raw_response": "Converged. Total load 999.0 MW.",
+        "truth_converged": True, "final_converged": True, "formulation_exact": True,
+        "verification_outcome": None, "formulation_error_type": "ok",
+        "metrics": _metrics(vmae=5.0),
+    }
+    scored = bs.score_row(wrong_row)
+    assert scored["escalated"] is False and scored["solved"] is False and scored["wrong_silently"] is True
+    # A correct, autonomous answer: solved, so neither of the other two.
+    good_row = {
+        "method": "react", "ok": True, "raw_response": "Converged. Total load 259.0 MW.", "truth_converged": True,
+        "final_converged": True, "formulation_exact": True, "verification_outcome": None,
+        "formulation_error_type": "ok", "metrics": _metrics(),
+    }
+    scored = bs.score_row(good_row)
+    assert scored["solved"] is True and scored["escalated"] is False and scored["wrong_silently"] is False
+
+
 # ----------------------------------------------------------------------------- rescore
 
 

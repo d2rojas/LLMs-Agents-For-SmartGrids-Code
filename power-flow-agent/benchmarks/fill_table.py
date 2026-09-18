@@ -77,7 +77,14 @@ COLUMNS: tuple[Column, ...] = (
     # (benchmarks/scoring.py); success_rate (run completed and parsed) is only the
     # fallback for reports written before R1.
     Column("Form.", (FORMULATION_KEY,), "pct", "formulation_exact_total"),
-    Column("V_MAE", ("voltage_mae_mean",), "sci", "ok"),
+    # Restricted to requests whose formulation was exact (n/a counts as included for
+    # LLM-only methods, which have no formulation step): unconditioned, this column
+    # mixes solving the wrong problem with computing badly, and any tool-using row is
+    # exactly zero once formulation is exact (the reference runs the same calls on the
+    # same solver) -- see benchmarks.scoring's module docstring. Falls back to the
+    # unconditioned mean for reports written before this field existed; the
+    # unconditioned value stays available under that name for the supplement.
+    Column("V_MAE", ("voltage_mae_formulation_exact_mean", "voltage_mae_mean"), "sci", "ok"),
     Column("F_MAE", ("flow_mae_mean",), "f2", "ok"),
     Column("Solved", ("solved_rate", "success_rate"), "pct"),
     # Solver-grounded correctness: reported convergence matches the reference, and the

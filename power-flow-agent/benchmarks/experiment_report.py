@@ -660,7 +660,6 @@ def section_prompts(exp: Experiment) -> str:
 
 
 _PROTOCOL_COLUMNS = [(c.name, c.keys, c.fmt) for c in COLUMNS]
-_ABSTAIN_KEYS = ("abstained_on_solvable_rate",)
 
 
 def _rate_counts(items: list[dict[str, Any]], name: str) -> tuple[Optional[int], Optional[int]]:
@@ -685,9 +684,12 @@ def _rate_counts(items: list[dict[str, Any]], name: str) -> tuple[Optional[int],
     if name == "Claim":
         vals = [r.get("claimed_success_on_failure") for r in items]
         return sum(1 for v in vals if v is True), sum(1 for v in vals if v is not None)
-    if name == "Abst.":
-        vals = [r.get("abstained_on_solvable") for r in items]
-        return sum(1 for v in vals if v is True), sum(1 for v in vals if v is not None)
+    if name == "Escalated":
+        vals = [r.get("escalated") for r in items]
+        return sum(1 for v in vals if v is True), len(items)
+    if name == "Wrong (silent)":
+        vals = [r.get("wrong_silently") for r in items]
+        return sum(1 for v in vals if v is True), len(items)
     return None, None
 
 
@@ -700,8 +702,9 @@ def _pct_cell(val: Any, items: list[dict[str, Any]], name: str) -> str:
 
 
 def _protocol_cells(row: dict[str, Any], items: list[dict[str, Any]]) -> list[str]:
-    # Claim / Abst. are not paper-table columns (metricas_pfagent_definiciones.md: they stay
-    # in the JSON and REPORT.md, not the LaTeX tables), but the report still shows them here.
+    # Claim / Escalated / Wrong (silent) are not paper-table columns (metricas_pfagent_
+    # definiciones.md: they stay in the JSON and REPORT.md, not the LaTeX tables), but
+    # the report still shows them here.
     cells = []
     for name, keys, fmt in _PROTOCOL_COLUMNS:
         val = _first_key(row, keys)
@@ -714,7 +717,12 @@ def _protocol_cells(row: dict[str, Any], items: list[dict[str, Any]]) -> list[st
         else:
             cells.append(format_value(val, fmt))
     cells.append(_pct_cell(_first_key(row, ("claimed_success_on_failure_rate",)), items, "Claim"))
-    cells.append(_pct_cell(_first_key(row, _ABSTAIN_KEYS), items, "Abst."))
+    # Escalated / Wrong (silent) / Solved (already a _PROTOCOL_COLUMNS entry) sum to
+    # 100%: where every request in this row ends up. See benchmarks.scoring.escalation_check
+    # -- replaces the old "Abst." (abstained_on_solvable), which mixed in a text heuristic
+    # for methods with no actual handoff mechanism.
+    cells.append(_pct_cell(_first_key(row, ("escalated_rate",)), items, "Escalated"))
+    cells.append(_pct_cell(_first_key(row, ("wrong_silently_rate",)), items, "Wrong (silent)"))
     cells.append(fmt_usd(_first_key(row, ("cost_usd_total",))))
     return cells
 
@@ -724,7 +732,8 @@ def _protocol_header(with_model: bool, with_case: bool) -> list[str]:
     for name, _, _ in _PROTOCOL_COLUMNS:
         head.append(name)
     head.append("Claim")
-    head.append("Abst.")
+    head.append("Escalated")
+    head.append("Wrong (silent)")
     head.append("$")
     return head
 
@@ -734,13 +743,18 @@ def section_results(exp: Experiment) -> str:
     lines.append(
         "Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), en los 4 grupos de "
         "`metricas_pfagent_definiciones.md`: **utilidad de tarea** Form. (formulación exacta de las tool calls), "
-        "V_MAE (p.u.) y F_MAE (MW) sobre los items con resultado, Solved (respondió correctamente de extremo a "
+        "V_MAE (p.u., solo sobre peticiones con formulación exacta -- toda fila con herramientas que llega al "
+        "solver con la formulación correcta da exactamente cero, ver benchmarks/scoring.py) y F_MAE (MW) sobre "
+        "los items con resultado, Solved (respondió correctamente de extremo a "
         "extremo); **corrección solver-grounded** Solver status (convergencia reportada = convergencia real), "
         "B_mean (residual medio de KCL de los flujos reportados, MW); **fidelidad** Faith. (por respuesta, no "
         "por número: fracción de respuestas donde todo número es trazable a una salida de tool Y viene del "
         "solve posterior al último cambio de red) y SFR (fallos declarados con seguridad); **costo** Calls (tool "
         "calls medias) y Tok. (tokens medios). Fuera de los 4 grupos, solo en este reporte (no en las tablas del "
-        "paper): Claim (éxito reclamado sobre un fallo), Abst. (abstención en items resolubles) y $ (costo total "
+        "paper): Claim (éxito reclamado sobre un fallo), Escalated y Wrong (silent) (con Solved, las tres suman "
+        "100 %: dónde termina cada petición -- resuelta sola, entregada a una persona, o mal contestada sin "
+        "aviso; solo cuenta como Escalated una arquitectura con mecanismo de traspaso real, ver "
+        "benchmarks.scoring.escalation_check) y $ (costo total "
         "USD). Porcentajes en %.\n"
     )
     per_case = exp.per_case
@@ -768,7 +782,8 @@ def section_results(exp: Experiment) -> str:
             for method, agg in sorted(aggregate_all(mrows).items(), key=lambda kv: _method_sort_key(kv[0])):
                 items = [r for r in rows if str(r.get("model")) == model and str(r.get("method")) == method]
                 claim_rate = bm.rate([r.get("claimed_success_on_failure") for r in items])["rate"]
-                abst_rate = bm.rate([r.get("abstained_on_solvable") for r in items])["rate"]
+                escalated_rate = bm.rate([r.get("escalated") for r in items])["rate"]
+                wrong_silently_rate = bm.rate([r.get("wrong_silently") for r in items])["rate"]
                 cells = []
                 for name, _, fmt in _PROTOCOL_COLUMNS:
                     if name == "Calls" and method.startswith(("llm_only", "baseline_pf", "blueprint_pf")):
@@ -780,7 +795,8 @@ def section_results(exp: Experiment) -> str:
                     else:
                         cells.append(format_value(agg.get(name), fmt))
                 cells.append(_pct_cell(claim_rate, items, "Claim"))
-                cells.append(_pct_cell(abst_rate, items, "Abst."))
+                cells.append(_pct_cell(escalated_rate, items, "Escalated"))
+                cells.append(_pct_cell(wrong_silently_rate, items, "Wrong (silent)"))
                 cost = sum(float(r.get("cost_usd_total") or 0.0) for r in mrows if str(r.get("method")) == method)
                 cells.append(fmt_usd(cost))
                 agg_rows.append(([alias.get(model, model)] if with_model else []) + [method, f"{agg['n_cases']} casos", fmt_int(agg["n_items"])] + cells)
