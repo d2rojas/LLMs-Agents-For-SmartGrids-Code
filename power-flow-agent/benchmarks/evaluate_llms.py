@@ -158,12 +158,15 @@ EXTENDED_SCOREBOARD_FIELDS = [
     # docstring on why the unconditioned voltage_mae_mean mixes two different failures
     # for any tool-using row. voltage_mae_mean above stays as-is for the supplement.
     "voltage_mae_formulation_exact_mean",
-    # where every request ends, as three outcomes summing to 100%: solved_rate (above)
-    # is one of them; escalated_rate/wrong_silently_rate are the other two -- see
-    # benchmarks.scoring.escalation_check.
+    # Where every request ends, as three outcomes summing to 100%: solved_autonomously,
+    # escalated, wrong_silently -- NOT solved_rate above, which can overlap with
+    # escalated_rate (see benchmarks.scoring.escalation_check / module docstring).
     "escalated_rate",
     "escalated_count",
     "escalated_total",
+    "solved_autonomously_rate",
+    "solved_autonomously_count",
+    "solved_autonomously_total",
     "wrong_silently_rate",
     "wrong_silently_count",
     "wrong_silently_total",
@@ -1061,6 +1064,10 @@ def evaluate_item(
         verification_outcome=(trace or {}).get("verification_outcome"),
         formulation_error_type=formulation.get("formulation_error_type"),
     )
+    # solved and escalated can both be true (a verification abstention on an item
+    # whose underlying computed state was actually correct) -- escalation takes
+    # precedence for this outcome triple; see benchmarks.scoring's module docstring.
+    solved_autonomously = solved["solved"] and not escalated
     wrong_silently = (not solved["solved"]) and not escalated
     cost = bm.cost_from_trace(trace)
     cost_usd = _estimate_cost_usd(model_spec.key, usage, pricing) if method.uses_llm else 0.0
@@ -1131,6 +1138,7 @@ def evaluate_item(
         "solved": solved["solved"],
         "solved_reason": solved["solved_reason"],
         "escalated": escalated,
+        "solved_autonomously": solved_autonomously,
         "wrong_silently": wrong_silently,
         "is_failure": failure["is_failure"],
         "safe_failure": failure["safe_failure"],
@@ -1167,6 +1175,7 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
     form_exact_ok_rows = [r for r in ok_rows if r.get("formulation_exact") is not False]
     form = bm.rate([r.get("formulation_exact") for r in rows])
     escalated = bm.rate([r.get("escalated") for r in rows])
+    solved_autonomously = bm.rate([r.get("solved_autonomously") for r in rows])
     wrong_silently = bm.rate([r.get("wrong_silently") for r in rows])
     safe = bm.rate([r.get("safe_failure") for r in rows])
     claimed = bm.rate([r.get("claimed_success_on_failure") for r in rows])
@@ -1255,11 +1264,16 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "abstained_on_solvable_count": abstained["count"],
         "abstained_on_solvable_total": abstained["total"],
         # Where every request ends, unconditioned on solvability (unlike
-        # abstained_on_solvable above): solved (already reported), escalated (an
-        # explicit handoff), or wrong with nothing flagging it. Sum to 100%.
+        # abstained_on_solvable above): solved_autonomously, escalated (an
+        # explicit handoff), or wrong with nothing flagging it. Sum to 100% --
+        # solved_rate (already reported above) does NOT, since solved and
+        # escalated can overlap (see benchmarks.scoring's module docstring).
         "escalated_rate": escalated["rate"],
         "escalated_count": escalated["count"],
         "escalated_total": escalated["total"],
+        "solved_autonomously_rate": solved_autonomously["rate"],
+        "solved_autonomously_count": solved_autonomously["count"],
+        "solved_autonomously_total": solved_autonomously["total"],
         "wrong_silently_rate": wrong_silently["rate"],
         "wrong_silently_count": wrong_silently["count"],
         "wrong_silently_total": wrong_silently["total"],

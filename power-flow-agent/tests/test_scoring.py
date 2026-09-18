@@ -242,6 +242,30 @@ def test_escalated_and_wrong_silently_partition_every_item_via_score_row():
     }
     scored = bs.score_row(good_row)
     assert scored["solved"] is True and scored["escalated"] is False and scored["wrong_silently"] is False
+    assert scored["solved_autonomously"] is True
+
+
+def test_solved_and_escalated_can_overlap_solved_autonomously_resolves_it():
+    """Found on results_validation_gpt-4o-mini_agents/pfagent (2026-09-18): a verification
+    abstention landed on 3 items whose underlying computed state was in fact numerically
+    correct (solved=True by solved_check, verification_outcome="abstained" anyway --
+    probably rejected on a condition solved_check doesn't check, e.g. V4/V5). That breaks
+    the "solved + escalated + wrong_silently = 100%" invariant unless the outcome-triple
+    uses solved_autonomously (solved and not escalated) instead of solved for the first
+    bucket -- wrong_silently was already correct (not solved and not escalated is
+    unaffected by escalated also being True).
+    """
+    row = {
+        "method": "pfagent", "ok": True, "raw_response": ABSTENTION, "truth_converged": True,
+        "final_converged": True, "formulation_exact": True, "verification_outcome": "abstained",
+        "formulation_error_type": "ok", "metrics": _metrics(),  # numerically correct underlying state
+    }
+    scored = bs.score_row(row)
+    assert scored["solved"] is True  # the computation itself was right
+    assert scored["escalated"] is True  # but the system still handed it off
+    assert scored["solved_autonomously"] is False  # so it's NOT an autonomous solve
+    assert scored["wrong_silently"] is False  # and it's not silently wrong either
+    assert 100 * (scored["solved_autonomously"] + scored["escalated"] + scored["wrong_silently"]) == 100.0
 
 
 # ----------------------------------------------------------------------------- rescore

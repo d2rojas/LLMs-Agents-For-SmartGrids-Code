@@ -113,11 +113,13 @@ CAPTIONS = {
         r"that are traceable (\%) -- kept here since it can read much higher than the per-answer "
         r"Faith. when a few answers are each partially contaminated; Stale: share of answers "
         r"quoting a number from before the last network change (\%). "
-        r"Escalated and Wrong (silent), together with Solved above, sum to 100\%: where every "
-        r"request ends up -- solved autonomously, explicitly handed to a person (only the "
-        r"task-level verification gate's abstention and the deterministic parser's cannot-parse "
-        r"refusal count; every other method reads 0, not a dash), or answered wrong with "
-        r"nothing flagging it. "
+        r"Escalated and Wrong (silent), together with solved\_autonomously (solved and not "
+        r"escalated -- NOT the Solved column above, which can overlap with Escalated when "
+        r"verification abstains on an item whose underlying computed state was actually "
+        r"correct), sum to 100\%: where every request ends up -- solved autonomously, "
+        r"explicitly handed to a person (only the task-level verification gate's abstention "
+        r"and the deterministic parser's cannot-parse refusal count; every other method reads "
+        r"0, not a dash), or answered wrong with nothing flagging it. "
         r"n/a: the method has no tools or no LLM; --: not measured."
     ),
     "compact": (

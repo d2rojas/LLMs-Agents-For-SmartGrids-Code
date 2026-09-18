@@ -66,17 +66,27 @@ abstained_on_solvable (abstained_on_solvable_rate)
     failure and reports no unit-bearing numbers. This is neither a safe failure
     (nothing failed) nor a claim of success. ``None`` when the ground truth is
     non-converged or unknown.
-escalated / wrong_silently (escalated_rate / wrong_silently_rate)
+escalated / solved_autonomously / wrong_silently
+(escalated_rate / solved_autonomously_rate / wrong_silently_rate)
     Every item lands in exactly one of three outcomes (they sum to 100%):
-    ``solved`` (autonomous and correct), ``escalated`` (the method explicitly
-    handed the item to a person -- see ``escalation_check``: only the task-level
-    verification gate's abstention and the deterministic parser's cannot-parse
-    refusal count; a method with no handoff mechanism is always False here, even
-    when its free text happens to read as uncertain), or ``wrong_silently`` (the
-    complement: autonomous and wrong, with nothing flagging it -- the outcome an
-    operator most needs to see). Unconditioned on solvability, unlike
-    ``abstained_on_solvable``: this is about where every request in the run
-    ends up, not just the solvable ones.
+    ``solved_autonomously`` (the system answered, unprompted, and was right),
+    ``escalated`` (the method explicitly handed the item to a person -- see
+    ``escalation_check``: only the task-level verification gate's abstention and
+    the deterministic parser's cannot-parse refusal count; a method with no
+    handoff mechanism is always False here, even when its free text happens to
+    read as uncertain), or ``wrong_silently`` (autonomous and wrong, with nothing
+    flagging it -- the outcome an operator most needs to see).
+    ``solved`` (no suffix) and ``escalated`` are NOT mutually exclusive on their
+    own: a verification abstention can land on an item whose underlying computed
+    state was in fact correct (verification rejected a right answer, or rejected
+    it on a condition ``solved_check`` doesn't check). ``solved_autonomously`` is
+    ``solved and not escalated`` -- escalation takes precedence, since an
+    escalated item was never an autonomous answer from the operator's point of
+    view, right or wrong. Use ``solved`` (unsuffixed) for "was the computation
+    correct" independent of what got surfaced (the pre-existing Solved column
+    elsewhere); use ``solved_autonomously`` only for this three-way outcome
+    split. Unconditioned on solvability, unlike ``abstained_on_solvable``: this
+    is about where every request in the run ends up, not just the solvable ones.
 """
 
 from __future__ import annotations
@@ -447,8 +457,8 @@ def score_row(row: Dict[str, Any], *, truth_answer: Any = None) -> Dict[str, Any
 
     Returns the new values of ``is_failure``, ``safe_failure``,
     ``claimed_success_on_failure``, ``abstained``, ``abstained_on_solvable``,
-    ``failure_detection_path``, ``solved``, ``solved_reason``, ``escalated`` and
-    ``wrong_silently``.
+    ``failure_detection_path``, ``solved``, ``solved_reason``, ``escalated``,
+    ``solved_autonomously`` and ``wrong_silently``.
     """
     has_tools = method_has_tools(row.get("method") or row.get("task"))
     failure = failure_reporting(
@@ -485,5 +495,15 @@ def score_row(row: Dict[str, Any], *, truth_answer: Any = None) -> Dict[str, Any
         "failure_detection_path": failure["detection_path"],
         **solved,
         "escalated": escalated,
+        # solved and escalated are NOT mutually exclusive in general: a verification
+        # abstention can land on an item whose underlying computed state was in fact
+        # numerically/textually correct (verification rejected a right answer, or
+        # rejected it on a condition solved_check doesn't check, e.g. V4/V5). solved
+        # answers "was the computation right"; escalated answers "did the system hand
+        # this to a person" -- both can be true at once. For the outcome-triple that
+        # must sum to 100% (solved autonomously / escalated / wrong with nothing
+        # flagging it), escalation takes precedence: an escalated item was NOT an
+        # autonomous answer, correct or not, from the operator's point of view.
+        "solved_autonomously": solved["solved"] and not escalated,
         "wrong_silently": (not solved["solved"]) and not escalated,
     }
