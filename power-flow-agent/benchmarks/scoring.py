@@ -265,7 +265,11 @@ _PAIR_RE = re.compile(
     flags=re.IGNORECASE,
 )
 _NUM_RE = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")
-_NO_OVERLOAD_RE = re.compile(r"\bno\b[^.\n]{0,40}\b(?:overload|thermal|violation)", flags=re.IGNORECASE)
+_NO_OVERLOAD_RE = re.compile(
+    r"\bno\b[^.\n]{0,40}\b(?:overload|thermal|violation)"
+    r"|\bno\b[^.\n]{0,40}\blines?\b[^.\n]{0,40}\b(?:loaded|loading)\b[^.\n]{0,20}\b(?:above|over)\b",
+    flags=re.IGNORECASE,
+)
 
 
 def _pairs_in_text(text: str) -> set[tuple[int, int]]:
@@ -294,17 +298,33 @@ def answer_matches_truth(answer_text: Optional[str], truth_answer: Any) -> Optio
     """Does the answer text name the ground-truth quantity in ``truth_answer``?
 
     ``truth_answer`` is ``benchmarks.requests.compute_ground_truth(...)["answer"]``:
-    ``{"bus_id", "vm_pu"}`` (worst-voltage bus: the first bus mentioned must be it),
-    ``{"threshold_percent", "lines": [...]}`` (every overloaded line's endpoints
-    must appear; an empty list needs a "no overload/violation" statement),
-    ``{"worst": {"from_bus", "to_bus"}, ...}`` (the worst outage's endpoints appear)
-    or a power-flow summary (total load and losses within 1 %). ``None`` when the
-    answer is not checkable (no truth answer, network info, non-converged truth).
+    ``{"bus_id", "vm_pu"}`` (worst-voltage bus: for a JSON answer, the bus with the
+    lowest ``vm_pu`` in its own ``bus_voltages`` array; otherwise the first bus
+    mentioned in prose), ``{"threshold_percent", "lines": [...]}`` (every overloaded
+    line's endpoints must appear; an empty list needs a statement that denies any
+    overload -- either naming "overload/thermal/violation" directly, or the
+    "no line(s) loaded/loading above/over N%" phrasing react_nogate and PFAgent
+    actually use), ``{"worst": {"from_bus", "to_bus"}, ...}`` (the worst outage's
+    endpoints appear) or a power-flow summary (total load and losses within 1 %).
+    ``None`` when the answer is not checkable (no truth answer, network info,
+    non-converged truth).
     """
     if not isinstance(truth_answer, dict) or not answer_text:
         return None
     text = str(answer_text)
     if "bus_id" in truth_answer and "vm_pu" in truth_answer:
+        # A structured (JSON) answer carries the worst-voltage bus in its own
+        # bus_voltages array, not in prose -- read that first (the bus with the lowest
+        # vm_pu, matching how the ground truth itself is computed) instead of always
+        # falling through to a "bus N" text search, which finds nothing in JSON and
+        # used to return False regardless of whether the JSON's own answer was right.
+        obj = extract_json_object(text)
+        if isinstance(obj, dict) and isinstance(obj.get("bus_voltages"), list) and obj["bus_voltages"]:
+            try:
+                worst = min(obj["bus_voltages"], key=lambda b: float(b["vm_pu"]))
+                return int(worst["bus_id"]) == int(truth_answer["bus_id"])
+            except (KeyError, TypeError, ValueError):
+                pass  # malformed entry -- fall through to the text-based check
         buses = [int(m.group(1)) for m in _BUS_RE.finditer(text)]
         if not buses:
             return False

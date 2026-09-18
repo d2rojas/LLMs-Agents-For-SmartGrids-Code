@@ -172,6 +172,70 @@ def test_answer_matches_truth_for_each_request_kind():
     assert out == {"solved": True, "solved_reason": "answer_ok"}
 
 
+def test_no_overload_regex_recognizes_the_phrasing_react_nogate_and_pfagent_actually_use():
+    """Found while sizing the numeric_ok/answer_matches_truth conjunction (2026-09-18):
+    _NO_OVERLOAD_RE only recognized "overload/thermal/violation" near "no", so a correct,
+    faithful denial in this phrasing was misclassified as a mismatch. Fixed at the regex,
+    not by hand-reviewing around it. Exact strings from GPT-5.4's react_nogate on the
+    committed results_validation_n40 block (case14, N=40)."""
+    empty = {"threshold_percent": 100.0, "lines": []}
+    # case14-multistep-002-s0
+    assert bs.answer_matches_truth(
+        "the case still converged and there are no lines loaded above 100% according to the tool output.",
+        empty,
+    ) is True
+    # case14-multistep-018-s0 (threshold 90, singular "line")
+    assert bs.answer_matches_truth(
+        "reran the power flow successfully, and found that no line is loaded above 90%.",
+        {"threshold_percent": 90.0, "lines": []},
+    ) is True
+    # case14-parameterized-029-s0 (threshold 80, "with loading above")
+    assert bs.answer_matches_truth(
+        "I loaded IEEE case14, ran the AC power flow successfully, and found no lines with loading above 80%.",
+        {"threshold_percent": 80.0, "lines": []},
+    ) is True
+    # case14-parameterized-037-s0
+    assert bs.answer_matches_truth(
+        "ran the AC power flow successfully, and found no lines loaded above 100%.",
+        empty,
+    ) is True
+    # a genuine claim of overload must NOT be swallowed by the broadened regex -- this is
+    # case14-multistep-010-s0, GPT-5.4 pfagent's retry: every number faithfully traces to a
+    # tool output (loading_percent copied verbatim), but the summary sentence misreads what
+    # the number means and claims two lines are overloaded when thermal_violations is empty.
+    assert bs.answer_matches_truth(
+        "the rerun power flow converged, and 2 lines are above 100% loading.\n"
+        "Line 1-5: loading_percent = 2.3877971517363594\nLine 4-5: loading_percent = 1.8010192668344878",
+        empty,
+    ) is False
+
+
+def test_answer_matches_truth_reads_the_bus_voltages_array_for_json_answers():
+    """Found the same day: llm_only:structured answers in raw JSON, and _BUS_RE only
+    recognizes natural-language "bus N" phrasing, so it found nothing and always returned
+    False regardless of whether the JSON's own worst-voltage bus was right. Fixed by reading
+    bus_voltages directly (the bus with the lowest vm_pu, matching how the ground truth
+    itself is computed) before falling back to the text search."""
+    truth = {"bus_id": 3, "vm_pu": 1.01}
+    correct_json = json.dumps({
+        "converged": True,
+        "bus_voltages": [
+            {"bus_id": 1, "vm_pu": 1.06}, {"bus_id": 2, "vm_pu": 1.045}, {"bus_id": 3, "vm_pu": 1.01},
+        ],
+    })
+    assert bs.answer_matches_truth(correct_json, truth) is True
+    wrong_json = json.dumps({
+        "converged": True,
+        "bus_voltages": [
+            {"bus_id": 1, "vm_pu": 1.06}, {"bus_id": 2, "vm_pu": 1.045}, {"bus_id": 3, "vm_pu": 1.05},
+        ],
+    })
+    assert bs.answer_matches_truth(wrong_json, truth) is False
+    # prose answers are unaffected: still fall through to the text-based "bus N" search
+    assert bs.answer_matches_truth("the bus with the lowest voltage magnitude is Bus 14.", truth) is False
+    assert bs.answer_matches_truth("the bus with the lowest voltage magnitude is bus 3.", truth) is True
+
+
 def test_score_row_and_aggregate_group_expose_solved_and_abstained():
     abstain_row = {
         "method": "llm_only:structured", "ok": True, "raw_response": ABSTENTION, "truth_converged": True,
