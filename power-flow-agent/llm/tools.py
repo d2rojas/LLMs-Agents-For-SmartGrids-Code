@@ -150,8 +150,54 @@ TOOLS: list[dict[str, Any]] = [
 ]
 
 
-def get_openai_tools() -> list[dict[str, Any]]:
-    return [{"type": "function", "function": {"name": t["name"], "description": t["description"], "parameters": t["parameters"]}} for t in TOOLS]
+# Experimental variant (not used by any committed run; see notes/... on the invented-q_mvar
+# formulation failure): replaces modify_load with two narrower tools so a request that only
+# names an active-power value maps to a function that structurally cannot carry a reactive
+# one, rather than relying on the model to omit an argument it technically could supply. The
+# old modify_load stays in TOOLS/TOOLS_LOAD_SPLIT and its dispatcher handler is unchanged, so
+# selecting "v1" (the default everywhere) reproduces exactly what is already committed.
+_SET_ACTIVE_LOAD_SCHEMA = {
+    "name": "set_active_load",
+    "description": (
+        "Set a bus's active load (MW) and recompute. Use this when the request states only an "
+        "active-power value. This tool has no reactive-power argument: the bus's present "
+        "reactive load is always left unchanged. If the request also states a reactive-power "
+        "value, use set_load instead."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {"bus_id": {"type": "integer"}, "p_mw": {"type": "number"}},
+        "required": ["bus_id", "p_mw"],
+    },
+}
+_SET_LOAD_SCHEMA = {
+    "name": "set_load",
+    "description": (
+        "Set a bus's active and reactive load (MW, Mvar) and recompute. Use this only when the "
+        "request states both values. If the request states only an active-power value, use "
+        "set_active_load instead -- do not invent a reactive-power value here to fill this in."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {"bus_id": {"type": "integer"}, "p_mw": {"type": "number"}, "q_mvar": {"type": "number"}},
+        "required": ["bus_id", "p_mw", "q_mvar"],
+    },
+}
+TOOLS_LOAD_SPLIT: list[dict[str, Any]] = [t for t in TOOLS if t["name"] != "modify_load"] + [
+    _SET_ACTIVE_LOAD_SCHEMA,
+    _SET_LOAD_SCHEMA,
+]
+
+
+def get_openai_tools(variant: str = "v1") -> list[dict[str, Any]]:
+    """``variant="v1"`` (default, used by every committed run) is modify_load as it always was.
+
+    ``variant="load_split"`` swaps it for set_active_load/set_load (see TOOLS_LOAD_SPLIT above);
+    the dispatcher (build_default_dispatcher) always registers handlers for all three names, so
+    either schema works against the same ToolDispatcher regardless of which one the model is shown.
+    """
+    tools = TOOLS if variant == "v1" else TOOLS_LOAD_SPLIT
+    return [{"type": "function", "function": {"name": t["name"], "description": t["description"], "parameters": t["parameters"]}} for t in tools]
 
 
 Handler = Callable[[Mapping[str, Any]], Any]
@@ -402,6 +448,52 @@ def build_default_dispatcher(ctx: ToolContext) -> ToolDispatcher:
             )
         )
         return res.model_dump()
+
+    def _set_load_impl(args: Mapping[str, Any], *, tool_name: str, force_q_none: bool) -> Any:
+        """Shared body of set_active_load/set_load (TOOLS_LOAD_SPLIT, not used by TOOLS):
+        same update as modify_load, plus an echoed assumption and resolved bus id (change 3
+        of the invented-q_mvar fix) so a checker has something to compare the answer against."""
+        if ctx.net is None:
+            return {"error": "Please load a test case first."}
+        bus_id = int(args.get("bus_id"))
+        p_mw = float(args.get("p_mw"))
+        if force_q_none:
+            q_mvar = None
+        else:
+            q_raw = args.get("q_mvar")
+            q_mvar = float(q_raw) if q_raw is not None else None
+
+        ctx.prev_result = ctx.session.last_result
+        if _is_llm_only():
+            _modify_load_no_solve(ctx.net, bus_id=bus_id, p_mw=p_mw, q_mvar=q_mvar)
+            res = _run_pf_with_backend()
+        else:
+            res = _modify_bus_load(ctx.net, bus_id=bus_id, p_mw=p_mw, q_mvar=q_mvar, config=ctx.solver_config)
+        if isinstance(res, dict) and res.get("error"):
+            return res
+        ctx.session.last_result = res
+
+        ctx.session.modification_log.append(
+            Modification(
+                action=tool_name,
+                description=f"{tool_name} bus {bus_id} load to P={p_mw} MW" + (f", Q={q_mvar} Mvar" if q_mvar is not None else ""),
+                parameters={"bus_id": bus_id, "p_mw": p_mw, "q_mvar": q_mvar},
+            )
+        )
+        out = res.model_dump()
+        out["resolved_bus_id"] = bus_id
+        out["assumption"] = (
+            "reactive load at this bus is unchanged from its present value"
+            if q_mvar is None
+            else f"reactive load at this bus set to {q_mvar} Mvar as requested"
+        )
+        return out
+
+    def set_active_load(args: Mapping[str, Any]) -> Any:
+        return _set_load_impl(args, tool_name="set_active_load", force_q_none=True)
+
+    def set_load(args: Mapping[str, Any]) -> Any:
+        return _set_load_impl(args, tool_name="set_load", force_q_none=False)
 
     def disconnect_line(args: Mapping[str, Any]) -> Any:
         if ctx.net is None:
@@ -666,6 +758,8 @@ def build_default_dispatcher(ctx: ToolContext) -> ToolDispatcher:
             "load_case": load_case,
             "run_powerflow": run_powerflow,
             "modify_load": modify_load,
+            "set_active_load": set_active_load,
+            "set_load": set_load,
             "disconnect_line": disconnect_line,
             "reconnect_line": reconnect_line,
             "get_status": get_status,
