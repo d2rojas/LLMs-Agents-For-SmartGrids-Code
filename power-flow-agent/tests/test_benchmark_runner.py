@@ -326,6 +326,10 @@ def test_agent_methods_run_end_to_end_with_scripted_client(method):
     assert row["n_llm_calls"] >= 1 and row["n_tool_calls"] >= 1
     assert row["usage"]["prompt_tokens"] == 100 * row["n_llm_calls"]
     assert row["trace"]["max_rounds"] == 4
+    # Every LLM-backed row records which exact system prompt text produced it, so a later
+    # wording change (e.g. the 2026-09-17 bus-indexing fix) doesn't silently make two runs
+    # of the "same" method incomparable.
+    assert row["system_prompt_hash"] and isinstance(row["system_prompt_hash"], str)
     if method.startswith("single_call"):
         assert "tools" in client.calls[0] and client.calls[0]["tools"]
         assert row["executed_calls"][0]["tool"] != "load_case"  # preloaded
@@ -402,6 +406,7 @@ def test_rule_based_end_to_end_on_generated_case14_requests(tmp_path):
         assert row["n_llm_calls"] == 0 and row["cost_usd"] == 0.0
         assert row["formulation_error_type"] in ("ok", "wrong_id", "wrong_unit_or_value", "missed_step", "extra_step", "unparsed")
         assert row["intended_calls"][0]["tool"] == "load_case"
+        assert row["system_prompt_hash"] is None  # rule_based has no LLM system prompt
     sb = report["scoreboard"][0]
     assert sb["n_items"] == 2 and sb["formulation_exact_total"] == 2
     assert sum(sb["formulation_error_counts"].values()) == 2

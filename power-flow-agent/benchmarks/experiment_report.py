@@ -583,6 +583,25 @@ def section_what_ran(exp: Experiment) -> str:
     if diffs:
         cnt = Counter(str(r.get("difficulty")) for r in rows)
         lines.append("- Items por dificultad: " + ", ".join(f"{d}={cnt.get(d, 0)}" for d in diffs))
+    # Which exact system-prompt text produced these rows -- runs are attributable to a model,
+    # case and seed but not to the prompt they were given, and a wording change (e.g. the
+    # 2026-09-17 bus-indexing fix) otherwise makes two runs of the "same" method silently
+    # incomparable. None means rule_based (no LLM system prompt) or a row from before this
+    # field existed.
+    hash_rows = [r for r in rows if r.get("system_prompt_hash")]
+    if hash_rows:
+        hash_cnt = Counter(str(r.get("system_prompt_hash")) for r in hash_rows)
+        n_no_hash = len(rows) - len(hash_rows)
+        if len(hash_cnt) == 1:
+            (h, n), = hash_cnt.items()
+            lines.append(f"- System prompt: hash `{h}` ({n} filas)" + (f"; {n_no_hash} filas sin hash (rule_based u otro método sin prompt)" if n_no_hash else ""))
+        else:
+            lines.append(
+                "- **System prompt: MULTIPLE hashes en este reporte** -- "
+                + ", ".join(f"`{h}`={n}" for h, n in sorted(hash_cnt.items()))
+                + (f"; {n_no_hash} filas sin hash" if n_no_hash else "")
+                + ". Los métodos de este reporte no vieron el mismo prompt; comparar columnas entre ellos no es apples-to-apples."
+            )
 
     def _uniq(key: str) -> str:
         vals = sorted({json.dumps(c.get(key), sort_keys=True) for c in cfgs})

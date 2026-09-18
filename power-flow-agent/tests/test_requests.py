@@ -76,6 +76,49 @@ def test_ambiguous_requests_document_intended_reading(requests_case14):
             assert 3 <= len(r.intended_calls) <= 6  # load_case + 2..4 ops (+ explicit run_powerflow)
 
 
+def test_zero_based_ambiguous_requests_carry_the_tag_in_visible_text():
+    """The `notes` field (e.g. "Intended reading: 0-based index 4 is MATPOWER bus 5...") is
+    generator-only bookkeeping, never shown to the model (see benchmarks/requests.py::_assemble).
+    A zero-based item is only fair/solvable if the "(0-based)" tag itself is in the request
+    text the model actually sees -- this pins that it is, for both templates that can carry it
+    (modify_load's bus_text, disconnect's fb_text/tb_text)."""
+    from benchmarks.requests import op_disconnect, op_modify_load
+
+    op = op_modify_load(5, 20.0, bus_text="bus 4 (0-based)")
+    assert "bus 4 (0-based)" in op.clause
+
+    op = op_disconnect(5, 6, fb_text="bus 4", tb_text="bus 5 (0-based)")
+    assert "bus 4" in op.clause and "bus 5 (0-based)" in op.clause
+
+    seen_zero_based = False
+    for seed in range(200):
+        for r in generate_requests("case14", 6, seed=seed):
+            if r.difficulty == "ambiguous" and "0-based" in r.notes:
+                seen_zero_based = True
+                assert "(0-based)" in r.text, r.id
+        if seen_zero_based:
+            break
+    assert seen_zero_based, "no zero-based ambiguous item found across 200 seeds; noise-type odds may have changed"
+
+
+def test_system_prompt_does_not_unconditionally_override_stated_indexing():
+    """llm/prompts.py:SYSTEM_PROMPT_EN used to say identifiers are always MATPOWER 1-based and
+    should be "passed as given", which flatly contradicted the "(0-based)" tag above and made
+    every method (LLM and rule_based alike) get those items wrong the same way -- see
+    notes/failure_examples_verbatim.md, case14-ambiguous-039-s0/-027-s0 (fixed 2026-09-17)."""
+    from llm.prompts import SYSTEM_PROMPT_EN
+
+    assert "0-based" in SYSTEM_PROMPT_EN
+    assert "convert" in SYSTEM_PROMPT_EN.lower()
+
+
+def test_prompt_hash_is_stable_and_sensitive_to_wording():
+    from llm.prompts import SYSTEM_PROMPT_EN, prompt_hash
+
+    assert prompt_hash(SYSTEM_PROMPT_EN) == prompt_hash(SYSTEM_PROMPT_EN)
+    assert prompt_hash(SYSTEM_PROMPT_EN) != prompt_hash(SYSTEM_PROMPT_EN + " ")
+
+
 def test_intended_calls_execute_without_error(requests_case14, ground_truths):
     for r in requests_case14:
         gt = ground_truths[r.id]

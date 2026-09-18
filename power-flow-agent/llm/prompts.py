@@ -7,6 +7,19 @@ System prompt & prompt templates.
 - 所有数值结果只能来自 solver 工具函数
 """
 
+import hashlib
+
+
+def prompt_hash(text: str) -> str:
+    """Short, stable identifier for a system prompt's exact text.
+
+    Runs are attributable to a model, case and seed but not to the prompt they were given.
+    Store this alongside every trace/row so a later prompt-wording change (like the
+    2026-09-17 bus-indexing fix) doesn't silently make two runs of the "same" method
+    incomparable.
+    """
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
 
 SYSTEM_PROMPT = """你是一个电力系统潮流分析助手。你帮助用户通过自然语言完成电力系统分析任务。
 
@@ -66,7 +79,7 @@ You complete tasks by calling tool functions:
 - Never fabricate any numerical result. Every voltage, power, loss, or loading value must come from a tool return value.
 - If a tool reports an error or a non-converged power flow, say so explicitly and do not report numbers for that state.
 - If the request is ambiguous, state the interpretation you are using.
-- Bus and line identifiers in the request are MATPOWER 1-based ids; pass them to the tools as given.
+- Bus and line identifiers in the request are MATPOWER 1-based ids; pass them to the tools as given, unless the request itself states a different indexing convention for that identifier (e.g. "(0-based)"), in which case convert it to the MATPOWER 1-based id before calling any tool.
 - After a network modification, re-solve before reporting any value.
 - Always reply in English.
 

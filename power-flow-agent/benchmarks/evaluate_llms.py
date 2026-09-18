@@ -776,6 +776,18 @@ def _numeric_metrics(parsed: Any, item: Item, net: Any, solver_config: Any) -> O
     )
 
 
+def _prompt_hash_of(system_prompt: Optional[str]) -> Optional[str]:
+    """Short hash of the exact system prompt text a row was run against, or None (e.g. rule_based,
+    which has no LLM system prompt). Lets a report attribute its numbers to a prompt version, not
+    just a model/case/seed, so a wording change (like the 2026-09-17 bus-indexing fix) doesn't
+    silently make two runs of the "same" method incomparable."""
+    if not isinstance(system_prompt, str):
+        return None
+    from llm.prompts import prompt_hash
+
+    return prompt_hash(system_prompt)
+
+
 def evaluate_item(
     *,
     method: MethodSpec,
@@ -809,6 +821,7 @@ def evaluate_item(
     executed: Optional[list[dict[str, Any]]] = None
     final_converged: Optional[bool] = None
     formulation: Optional[dict[str, Any]] = None
+    system_prompt: Optional[str] = None
     ok = False
 
     session = SessionState()
@@ -1112,6 +1125,7 @@ def evaluate_item(
         "verification_outcome": (trace or {}).get("verification_outcome"),
         "verification_attempts": (trace or {}).get("verification_attempts"),
         "v_pass": v_pass,
+        "system_prompt_hash": _prompt_hash_of(system_prompt),
         **cost,
         "trace": _truncate_trace(trace, TRACE_OUTPUT_CHARS_REPORT),
     }
