@@ -639,7 +639,11 @@ def section_prompts(exp: Experiment) -> str:
     lines.append(
         "Los prompts se reconstruyen offline con el mismo código del runner (`llm.prompt_variants.build_messages` "
         "sobre la red perturbada con el seed del item). Las tablas de datos del caso se recortan a sus primeras "
-        f"{TABLE_LINES_KEPT} líneas con un marcador `…`; el número de caracteres indicado corresponde al prompt completo.\n"
+        f"{TABLE_LINES_KEPT} líneas con un marcador `…`; el número de caracteres indicado corresponde al prompt completo. "
+        "**Esta reconstrucción es ilustrativa, no histórica**: usa el código de `llm/prompts.py` de HOY, así que si el "
+        "texto del prompt cambió después de que esta corrida se generó, lo que se ve aquí no es lo que el modelo "
+        "recibió. El registro histórico real es el hash por fila (`system_prompt_hash`, ver sección 1 / "
+        "`benchmarks/experiment_report.py::section_what_ran`), fijado en el momento de la corrida y nunca recalculado.\n"
     )
     nets = NetCache()
     rows = exp.rows
@@ -651,10 +655,12 @@ def section_prompts(exp: Experiment) -> str:
         if not mrows:
             continue
         first = mrows[0]
-        lines.append(f"### Método `{method}`\n")
+        row_hash = first.get("system_prompt_hash")
+        lines.append(f"### Método `{method}`" + (f" (system_prompt_hash real de esta fila: `{row_hash}`)" if row_hash else "") + "\n")
         for title, text, note in reconstruct_prompts(method, first, nets):
             shown = truncate_case_tables(text) if title.startswith("User prompt") else text
-            lines.append(f"**{title}** — {len(text)} caracteres" + (f"; {note}" if note else "") + "\n")
+            reconstructed_note = " (reconstrucción con el código actual, no necesariamente histórica)" if title.startswith("System prompt") else ""
+            lines.append(f"**{title}**{reconstructed_note} — {len(text)} caracteres" + (f"; {note}" if note else "") + "\n")
             lines.append(code_block(shown))
     return "\n".join(lines) + "\n"
 
