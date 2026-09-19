@@ -1,6 +1,6 @@
 # Informe de experimento: `pfagent`
 
-Generado el 2026-09-17 23:56 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio pfagent (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-18 23:19 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio pfagent (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -20,7 +20,7 @@ Directorio analizado:
 - Fecha de la corrida (mtime de report.json): 2026-09-16 13:36
 - Costo total: 1.6125 USD (40 items; costo medio 0.04031 USD/item)
 - Items totales: 40; ok=40; con error=0; tokens totales=567798
-- Solved global: 62.5 % (25/40)
+- Solved global: 60.0 % (24/40)
 
 Errores por tipo:
 
@@ -29,11 +29,11 @@ _(ningún item con `error`)_
 
 ## 2. Prompts usados
 
-Los prompts se reconstruyen offline con el mismo código del runner (`llm.prompt_variants.build_messages` sobre la red perturbada con el seed del item). Las tablas de datos del caso se recortan a sus primeras 12 líneas con un marcador `…`; el número de caracteres indicado corresponde al prompt completo.
+Los prompts se reconstruyen offline con el mismo código del runner (`llm.prompt_variants.build_messages` sobre la red perturbada con el seed del item). Las tablas de datos del caso se recortan a sus primeras 12 líneas con un marcador `…`; el número de caracteres indicado corresponde al prompt completo. **Esta reconstrucción es ilustrativa, no histórica**: usa el código de `llm/prompts.py` de HOY, así que si el texto del prompt cambió después de que esta corrida se generó, lo que se ve aquí no es lo que el modelo recibió. El registro histórico real es el hash por fila (`system_prompt_hash`, ver sección 1 / `benchmarks/experiment_report.py::section_what_ran`), fijado en el momento de la corrida y nunca recalculado.
 
 ### Método `pfagent`
 
-**System prompt (SYSTEM_PROMPT_EN)** — 1557 caracteres; architecture=react, gate=False, memory=False
+**System prompt (SYSTEM_PROMPT_EN)** (reconstrucción con el código actual, no necesariamente histórica) — 1557 caracteres; architecture=react, gate=False, memory=False
 
 ````
 You are a power system power-flow analysis assistant. You help the user complete power system analysis tasks from natural-language requests.
@@ -73,13 +73,13 @@ Load case14 and disconnect the line between bus ten and bus eleven.
 
 ## 3. Resultados agregados
 
-Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), en los 4 grupos de `metricas_pfagent_definiciones.md`: **utilidad de tarea** Form. (formulación exacta de las tool calls), V_MAE (p.u., solo sobre peticiones con formulación exacta -- toda fila con herramientas que llega al solver con la formulación correcta da exactamente cero, ver benchmarks/scoring.py) y F_MAE (MW) sobre los items con resultado, Solved (respondió correctamente de extremo a extremo); **corrección solver-grounded** Solver status (convergencia reportada = convergencia real), B_mean (residual medio de KCL de los flujos reportados, MW); **fidelidad** Faith. (por respuesta, no por número: fracción de respuestas donde todo número es trazable a una salida de tool Y viene del solve posterior al último cambio de red) y SFR (fallos declarados con seguridad); **costo** Calls (tool calls medias) y Tok. (tokens medios). Fuera de los 4 grupos, solo en este reporte (no en las tablas del paper): Claim (éxito reclamado sobre un fallo), Escalated y Wrong (silent) (con Solved, las tres suman 100 %: dónde termina cada petición -- resuelta sola, entregada a una persona, o mal contestada sin aviso; solo cuenta como Escalated una arquitectura con mecanismo de traspaso real, ver benchmarks.scoring.escalation_check) y $ (costo total USD). Porcentajes en %.
+Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), en los 4 grupos de `metricas_pfagent_definiciones.md`: **utilidad de tarea** Form. (formulación exacta de las tool calls), V_MAE (p.u., solo sobre peticiones con formulación exacta -- toda fila con herramientas que llega al solver con la formulación correcta da exactamente cero, ver benchmarks/scoring.py) y F_MAE (MW) sobre los items con resultado, Solved (respondió correctamente de extremo a extremo); **corrección solver-grounded** Solver status (convergencia reportada = convergencia real), B_mean (residual medio de KCL de los flujos reportados, MW); **fidelidad** Faith. (por respuesta, no por número: fracción de respuestas donde todo número es trazable a una salida de tool Y viene del solve posterior al último cambio de red) y SFR (fallos declarados con seguridad); **costo** Calls (tool calls medias) y Tok. (tokens medios). Fuera de los 4 grupos, solo en este reporte (no en las tablas del paper): Claim (éxito reclamado sobre un fallo), Escalated y Wrong (silent). Escalated y Wrong (silent) junto con solved_autonomously_rate (no la columna Solved de arriba, que puede solaparse con Escalated -- una abstención de verificación puede caer sobre un item cuyo cálculo de fondo sí era correcto) suman 100 %: dónde termina cada petición -- resuelta sola, entregada a una persona, o mal contestada sin aviso; solo cuenta como Escalated una arquitectura con mecanismo de traspaso real, ver benchmarks.scoring.escalation_check) y $ (costo total USD). Porcentajes en %.
 
 ### Por método × caso
 
 | Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Escalated | Wrong (silent) | $ |
 |-------|------|----|---------------|-----|-----|---------------|----------------|--------|----------------|----|-----|-----|-----|----------|-----------------|------|
-| pfagent | case14 | 40 | 62.5 (25/40) | 0 | 0.06 | 62.5 (25/40) | 100.0 (40/40) | 8.26e-03 | 100.0 (40/40) | -- | 2.8 | 14195 | -- | 2.5 (1/40) | 35.0 (14/40) | 1.6125 |
+| pfagent | case14 | 40 | 62.5 (25/40) | 0 | 0.06 | 60.0 (24/40) | 100.0 (40/40) | 8.26e-03 | 100.0 (40/40) | -- | 2.8 | 14195 | -- | 2.5 (1/40) | 37.5 (15/40) | 1.6125 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 
@@ -91,7 +91,7 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 | Method | plain | parameterized | multistep | ambiguous |
 |-------|-------------|----------------|-------------|-------------|
-| pfagent | 80.0 (8/10) | 90.0 (9/10) | 40.0 (4/10) | 40.0 (4/10) |
+| pfagent | 80.0 (8/10) | 90.0 (9/10) | 30.0 (3/10) | 40.0 (4/10) |
 
 ### Verificación final (pfagent: V(x,c,z,y) aplicado a la respuesta final)
 
@@ -173,7 +173,7 @@ I loaded IEEE case14 and disconnected the line between bus 10 and bus 11; the po
 4. Suggested next step  
 If you want, I can now check which branch is most heavily loaded after this outage, run an N-1 contingency analysis, or recommend remedi …[38 chars más]
 --- Scoring ---
-formulation=ok (exact=True); V_MAE=0; F_MAE=0.00; faithful=100.0 %; solved=True (numeric_ok); flags=-; error=-; tokens=5347; cost_usd=0.0173; wall=5.4 s
+formulation=ok (exact=True); V_MAE=0; F_MAE=0.00; faithful=100.0 %; solved=True (numeric_and_answer_ok); flags=-; error=-; tokens=5347; cost_usd=0.0173; wall=5.4 s
 ````
 
 **Ejemplo: formulación fallida (formulation_exact=False)**
@@ -284,7 +284,7 @@ Observaciones generadas automáticamente a partir de los números del report (si
 - V_MAE >= 1e-4 p.u. en 1 filas método×caso con solver: pfagent/case14 (3.17e-04).
 - El gate verificó 58 resultados de flujo, 0 fallaron la verificación y se activó (retuvo números) 0 veces en 0 items.
 - Ningún item terminó con `error`.
-- Solved de `pfagent`: 62.5 % (25/40).
+- Solved de `pfagent`: 60.0 % (24/40).
 - Formulación exacta agregada sobre métodos con tools: 62.5 % (25/40).
 - Formulación por dificultad: mejor `parameterized` 90.0 % (9/10), peor `multistep` 40.0 % (4/10).
 - Errores de formulación más frecuentes: `extra_arg_changes_result`=13, `missed_step`=1, `wrong_id`=1.

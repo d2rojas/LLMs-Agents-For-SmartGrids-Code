@@ -1,6 +1,6 @@
 # Informe de experimento: `single_call_structured`
 
-Generado el 2026-09-17 23:56 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio single_call_structured (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-18 23:19 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio single_call_structured (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -20,7 +20,7 @@ Directorio analizado:
 - Fecha de la corrida (mtime de report.json): 2026-09-16 13:56
 - Costo total: 0.5575 USD (40 items; costo medio 0.01394 USD/item)
 - Items totales: 40; ok=40; con error=0; tokens totales=185473
-- Solved global: 20.0 % (8/40)
+- Solved global: 10.0 % (4/40)
 
 Errores por tipo:
 
@@ -29,11 +29,11 @@ _(ningún item con `error`)_
 
 ## 2. Prompts usados
 
-Los prompts se reconstruyen offline con el mismo código del runner (`llm.prompt_variants.build_messages` sobre la red perturbada con el seed del item). Las tablas de datos del caso se recortan a sus primeras 12 líneas con un marcador `…`; el número de caracteres indicado corresponde al prompt completo.
+Los prompts se reconstruyen offline con el mismo código del runner (`llm.prompt_variants.build_messages` sobre la red perturbada con el seed del item). Las tablas de datos del caso se recortan a sus primeras 12 líneas con un marcador `…`; el número de caracteres indicado corresponde al prompt completo. **Esta reconstrucción es ilustrativa, no histórica**: usa el código de `llm/prompts.py` de HOY, así que si el texto del prompt cambió después de que esta corrida se generó, lo que se ve aquí no es lo que el modelo recibió. El registro histórico real es el hash por fila (`system_prompt_hash`, ver sección 1 / `benchmarks/experiment_report.py::section_what_ran`), fijado en el momento de la corrida y nunca recalculado.
 
 ### Método `single_call:structured`
 
-**System prompt** — 1879 caracteres; strategy=structured; la red ya está cargada (preload_case)
+**System prompt** (reconstrucción con el código actual, no necesariamente histórica) — 1879 caracteres; strategy=structured; la red ya está cargada (preload_case)
 
 ````
 You are a power system power-flow analysis assistant. You help the user complete power system analysis tasks from natural-language requests.
@@ -139,13 +139,13 @@ Write the final answer for the user strictly from the tool outputs above. Never 
 
 ## 3. Resultados agregados
 
-Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), en los 4 grupos de `metricas_pfagent_definiciones.md`: **utilidad de tarea** Form. (formulación exacta de las tool calls), V_MAE (p.u., solo sobre peticiones con formulación exacta -- toda fila con herramientas que llega al solver con la formulación correcta da exactamente cero, ver benchmarks/scoring.py) y F_MAE (MW) sobre los items con resultado, Solved (respondió correctamente de extremo a extremo); **corrección solver-grounded** Solver status (convergencia reportada = convergencia real), B_mean (residual medio de KCL de los flujos reportados, MW); **fidelidad** Faith. (por respuesta, no por número: fracción de respuestas donde todo número es trazable a una salida de tool Y viene del solve posterior al último cambio de red) y SFR (fallos declarados con seguridad); **costo** Calls (tool calls medias) y Tok. (tokens medios). Fuera de los 4 grupos, solo en este reporte (no en las tablas del paper): Claim (éxito reclamado sobre un fallo), Escalated y Wrong (silent) (con Solved, las tres suman 100 %: dónde termina cada petición -- resuelta sola, entregada a una persona, o mal contestada sin aviso; solo cuenta como Escalated una arquitectura con mecanismo de traspaso real, ver benchmarks.scoring.escalation_check) y $ (costo total USD). Porcentajes en %.
+Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), en los 4 grupos de `metricas_pfagent_definiciones.md`: **utilidad de tarea** Form. (formulación exacta de las tool calls), V_MAE (p.u., solo sobre peticiones con formulación exacta -- toda fila con herramientas que llega al solver con la formulación correcta da exactamente cero, ver benchmarks/scoring.py) y F_MAE (MW) sobre los items con resultado, Solved (respondió correctamente de extremo a extremo); **corrección solver-grounded** Solver status (convergencia reportada = convergencia real), B_mean (residual medio de KCL de los flujos reportados, MW); **fidelidad** Faith. (por respuesta, no por número: fracción de respuestas donde todo número es trazable a una salida de tool Y viene del solve posterior al último cambio de red) y SFR (fallos declarados con seguridad); **costo** Calls (tool calls medias) y Tok. (tokens medios). Fuera de los 4 grupos, solo en este reporte (no en las tablas del paper): Claim (éxito reclamado sobre un fallo), Escalated y Wrong (silent). Escalated y Wrong (silent) junto con solved_autonomously_rate (no la columna Solved de arriba, que puede solaparse con Escalated -- una abstención de verificación puede caer sobre un item cuyo cálculo de fondo sí era correcto) suman 100 %: dónde termina cada petición -- resuelta sola, entregada a una persona, o mal contestada sin aviso; solo cuenta como Escalated una arquitectura con mecanismo de traspaso real, ver benchmarks.scoring.escalation_check) y $ (costo total USD). Porcentajes en %.
 
 ### Por método × caso
 
 | Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Escalated | Wrong (silent) | $ |
 |---------------------------|------|----|-------------|-----|-----|-------------|----------------|--------|---------------|----|-----|----|-----|----------|-----------------|------|
-| single_call:structured | case14 | 40 | 20.0 (8/40) | 0 | 2.75 | 20.0 (8/40) | 100.0 (40/40) | 4.79e-02 | 87.5 (35/40) | -- | 1.0 | 4637 | -- | 0.0 (0/40) | 80.0 (32/40) | 0.5575 |
+| single_call:structured | case14 | 40 | 20.0 (8/40) | 0 | 2.75 | 10.0 (4/40) | 100.0 (40/40) | 4.79e-02 | 87.5 (35/40) | -- | 1.0 | 4637 | -- | 0.0 (0/40) | 90.0 (36/40) | 0.5575 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 
@@ -157,7 +157,7 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 | Method | plain | parameterized | multistep | ambiguous |
 |---------------------------|-------------|----------------|----------|----------|
-| single_call:structured | 60.0 (6/10) | 20.0 (2/10) | 0.0 (0/10) | 0.0 (0/10) |
+| single_call:structured | 30.0 (3/10) | 10.0 (1/10) | 0.0 (0/10) | 0.0 (0/10) |
 
 ### Tipos de error de formulación (conteo de items)
 
@@ -179,30 +179,46 @@ Hasta 3 items por método: uno resuelto, uno con formulación fallida (si existe
 **Ejemplo: resuelto (solved=True)**
 
 ````
-request (case14-parameterized-029-s0, case14, difficulty=parameterized, seed=1716703953): Load the 14-bus test case (case14) and run the power flow, then list every line whose loading is above 80%.
+request (case14-parameterized-037-s0, case14, difficulty=parameterized, seed=1292574852): Load the IEEE 14-bus system and run the power flow, then list every line whose loading is above 100%.
 intended_calls: load_case({"case_name": "case14"}) -> run_powerflow({})
 executed_calls: load_case({"case_name": "case14"})
 fuente de la traza: archivo de traza completo
 --- Ronda 1 ---
 tool: load_case({"case_name": "case14"})
-  output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 259.0350441033985, "total_gen_capacity_mw": 772.4000000000001}
+  output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 262.9675788776612, "total_gen_capacity_mw": 772.4000000000001}
   gate: n/a (no es un resultado de flujo)
 --- Ronda 2 [final] ---
-LLM: I loaded case14 successfully.
+LLM: 1. One-sentence summary  
+The IEEE 14-bus system was loaded successfully, but the power flow was not run, so I cannot list lines above 100% loading.
 
-Key numbers: 14 buses, 5 generators, 20 lines, 11 loads, total load 259.0350441033985 MW, total generation capacity 772.4000000000001 MW.
-
-Violations: I cannot list lines above 80% loading because no power-flow result or branch loading output was provided in the availa …[134 chars más]
+2. Key numbers  
+- Case: case14  
+- Buses: 14  
+- Generators: 5  
+- Lines: 20  
+- Loads: 11  
+- Total load: 262.9675788776612 MW  
+- Total generation …[248 chars más]
 --- Respuesta final ---
-I loaded case14 successfully.
+1. One-sentence summary  
+The IEEE 14-bus system was loaded successfully, but the power flow was not run, so I cannot list lines above 100% loading.
 
-Key numbers: 14 buses, 5 generators, 20 lines, 11 loads, total load 259.0350441033985 MW, total generation capacity 772.4000000000001 MW.
+2. Key numbers  
+- Case: case14  
+- Buses: 14  
+- Generators: 5  
+- Lines: 20  
+- Loads: 11  
+- Total load: 262.9675788776612 MW  
+- Total generation capacity: 772.4000000000001 MW  
 
-Violations: I cannot list lines above 80% loading because no power-flow result or branch loading output was provided in the available tool results.
+3. Violations, if any  
+No loading violations can be reported because no power-flow results were produced.
 
-Suggested next step: run the power flow, then query branch loading/status so the lines above 80% can be identified.
+4. Suggested next step  
+Run the power flow, then query branch loadings to identify every line above 100%.
 --- Scoring ---
-formulation=ok (exact=True); V_MAE=0; F_MAE=0.00; faithful=100.0 %; solved=True (numeric_ok); flags=-; error=-; tokens=4571; cost_usd=0.0130; wall=3.0 s
+formulation=ok (exact=True); V_MAE=0; F_MAE=0.00; faithful=100.0 %; solved=True (numeric_and_answer_ok); flags=-; error=-; tokens=4608; cost_usd=0.0137; wall=4.9 s
 ````
 
 **Ejemplo: formulación fallida (formulation_exact=False)**
@@ -307,7 +323,7 @@ Observaciones generadas automáticamente a partir de los números del report (si
 - V_MAE >= 1e-4 p.u. en 1 filas método×caso con solver: single_call:structured/case14 (1.77e-03).
 - El gate no verificó ningún resultado de flujo (gate_checked=0 en todos los items).
 - Ningún item terminó con `error`.
-- Solved de `single_call:structured`: 20.0 % (8/40).
+- Solved de `single_call:structured`: 10.0 % (4/40).
 - Formulación exacta agregada sobre métodos con tools: 20.0 % (8/40).
 - Formulación por dificultad: mejor `plain` 60.0 % (6/10), peor `multistep` 0.0 % (0/10).
 - Errores de formulación más frecuentes: `missed_step`=32.
