@@ -149,7 +149,11 @@ class FakeAgentClient(LLMClient):
 
     def create(self, **kwargs):
         messages = kwargs["messages"]
-        self.calls.append({"messages": [dict(m) for m in messages], "tools": kwargs.get("tools")})
+        self.calls.append({
+            "messages": [dict(m) for m in messages],
+            "tools": kwargs.get("tools"),
+            "parallel_tool_calls": kwargs.get("parallel_tool_calls"),
+        })
         system = "".join(m["content"] or "" for m in messages if m["role"] == "system")
         has_tool_msgs = any(m.get("role") == "tool" for m in messages)
 
@@ -334,6 +338,11 @@ def test_agent_methods_run_end_to_end_with_scripted_client(method):
     # wording change (e.g. the 2026-09-17 bus-indexing fix) doesn't silently make two runs
     # of the "same" method incomparable.
     assert row["system_prompt_hash"] and isinstance(row["system_prompt_hash"], str)
+    # parallel_tool_calls is a plan_act-structured-only override (see EngineConfig /
+    # _run_plan_act) -- every other architecture, and plan_act's own default text mode,
+    # must never send it, so the already-committed react/pfagent/single_call numbers are
+    # untouched by its addition.
+    assert client.calls[0]["parallel_tool_calls"] is None
     # The harness computes compute_ground_truth's "answer" for solved_check and used to
     # discard it right after -- persisted (as its own key, even though it's None here: this
     # test's default request text isn't from the generator, so there's no ground_truth
@@ -371,6 +380,11 @@ def test_plan_variant_structured_routes_planning_through_function_calling():
 
     plan_call = client.calls[0]
     assert plan_call["tools"], "structured planning call must expose tools"
+    assert plan_call["parallel_tool_calls"] is True, (
+        "found 2026-09-18: without this explicit, a model can return a single tool_call for a "
+        "multi-step request and there is no loop to recover the rest in -- see the plan_structured "
+        "GPT-5.4/gpt-4o-mini comparison, re-measured after this fix"
+    )
     assert not any(m.get("role") == "tool" for m in plan_call["messages"]), (
         "no tool result may exist before the plan is committed -- otherwise this is ReAct, not Plan-and-Act"
     )
@@ -378,6 +392,7 @@ def test_plan_variant_structured_routes_planning_through_function_calling():
     client_text = FakeAgentClient()
     report_text = _run(["plan_act"], client_text, k=1, seeds=[0], max_rounds=4)
     assert report_text["config"]["plan_variant"] == "text"
+    assert client_text.calls[0]["parallel_tool_calls"] is None, "text mode must not touch this setting"
     assert client_text.calls[0]["tools"] is None, "default text plan must not expose tools for the planning call"
 
 

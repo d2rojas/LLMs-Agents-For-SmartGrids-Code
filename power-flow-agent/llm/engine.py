@@ -797,6 +797,7 @@ class LLMEngine:
         trace: Dict[str, Any],
         round_rec: Dict[str, Any],
         system_override: Optional[str] = None,
+        parallel_tool_calls: Optional[bool] = None,
     ) -> Dict[str, Any]:
         kwargs: Dict[str, Any] = dict(
             model=self.config.model,
@@ -807,6 +808,14 @@ class LLMEngine:
         if with_tools:
             kwargs["tools"] = self._openai_tools
             kwargs["tool_choice"] = "auto"
+            # None (default) omits the field entirely, leaving every existing call site
+            # (react/pfagent/single_call, and plan_act's own act-phase calls) on whatever
+            # the provider defaults to, unchanged. Only the structured plan_act's planning
+            # call passes True explicitly -- see _run_plan_act -- because that call has no
+            # loop to recover a truncated turn in: if the model returns one tool_call
+            # instead of the whole sequence, the plan silently is one step long.
+            if parallel_tool_calls is not None:
+                kwargs["parallel_tool_calls"] = bool(parallel_tool_calls)
 
         t0 = time.perf_counter()
         trace["n_llm_calls"] += 1
@@ -1031,6 +1040,7 @@ class LLMEngine:
                 trace=trace,
                 round_rec=plan_rec,
                 system_override=PLAN_SYSTEM_PROMPT_STRUCTURED if structured_plan else PLAN_SYSTEM_PROMPT,
+                parallel_tool_calls=True if structured_plan else None,
             )
         except _LLMCallError as e:
             return self._finish(e.text, session, trace, "llm_error")
