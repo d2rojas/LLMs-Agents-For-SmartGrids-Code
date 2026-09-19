@@ -819,6 +819,7 @@ def evaluate_item(
     max_rounds: int = DEFAULT_MAX_ROUNDS,
     full_trace_dir: Optional[Path] = None,
     tool_variant: str = "v1",
+    plan_variant: str = "text",
 ) -> dict[str, Any]:
     """Evaluate one method on one item; returns a JSON-serializable result row.
 
@@ -826,6 +827,11 @@ def evaluate_item(
     existing run. "load_split" swaps modify_load for set_active_load/set_load (see
     llm.tools.TOOLS_LOAD_SPLIT and llm.engine.EngineConfig.tool_variant). Only affects
     "engine"-kind methods (react/plan_act/single_call/pfagent); ignored otherwise.
+
+    ``plan_variant``: "text" (default) is plan_act's original free-text JSON plan,
+    byte-identical to every existing run. "structured" routes the planning step through
+    real function-calling instead (see llm.engine.EngineConfig.plan_variant), so its
+    arguments are schema-valid by construction. Only affects plan_act; ignored otherwise.
 
     When ``full_trace_dir`` is given, the untruncated trace, the final answer and the request are
     also written to ``<full_trace_dir>/<method>/<case>/<request_id>_run<k>.json`` for qualitative analysis.
@@ -933,6 +939,7 @@ def evaluate_item(
                 max_rounds=int(max_rounds),
                 trace_output_chars=TRACE_OUTPUT_CHARS_FULL,
                 tool_variant=tool_variant,
+                plan_variant=plan_variant,
             )
             engine = LLMEngine(client=client, dispatcher=dispatcher, system_prompt=system_prompt, config=cfg)
             raw_text, trace = engine.run_with_trace(user_message, session)
@@ -1432,6 +1439,7 @@ def run_benchmark(
     full_trace_dir: Optional[Path] = None,
     condition: str = "normal",
     tool_variant: str = "v1",
+    plan_variant: str = "text",
 ) -> dict[str, Any]:
     """Run every (model, method, case, seed, item, run) and aggregate.
 
@@ -1491,6 +1499,7 @@ def run_benchmark(
                                     max_rounds=max_rounds,
                                     full_trace_dir=full_trace_dir,
                                     tool_variant=tool_variant,
+                                    plan_variant=plan_variant,
                                 )
                             )
 
@@ -1520,6 +1529,7 @@ def run_benchmark(
             "cases": cases,
             "condition": condition,
             "tool_variant": tool_variant,
+            "plan_variant": plan_variant,
             "runs": runs,
             "k": int(k),
             "seeds": [int(s) for s in seeds],
@@ -1610,6 +1620,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         "load_split: set_active_load/set_load instead (llm.tools.TOOLS_LOAD_SPLIT), validated offline "
         "to eliminate the invented-q_mvar formulation failures by construction.",
     )
+    parser.add_argument(
+        "--plan-variant", dest="plan_variant", default="text", choices=["text", "structured"],
+        help="text (default, plan_act only): original free-text JSON plan, byte-identical to every "
+        "existing run. structured: routes the planning step through real function-calling instead, "
+        "so arguments (including enum-constrained ones like criteria/case_name) are schema-valid by "
+        "construction rather than parsed from prose.",
+    )
     parser.add_argument("--temperature", dest="temperature", type=float, default=0.0)
     parser.add_argument("--timeout-s", dest="timeout_s", type=float, default=90.0)
     parser.add_argument("--pricing-file", dest="pricing_file", default=None)
@@ -1682,6 +1699,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         full_trace_dir=None if args.no_traces else Path(args.trace_dir or (Path(args.out_dir) / "traces")),
         condition=condition,
         tool_variant=args.tool_variant,
+        plan_variant=args.plan_variant,
     )
 
     write_report(Path(args.out_dir), report)

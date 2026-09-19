@@ -138,6 +138,17 @@ class EngineConfig:
     # committed traces (2026-09-17) to eliminate GPT-5.4's invented-q_mvar formulation
     # failures by construction; this field is what actually lets a live run pick it.
     tool_variant: str = "v1"
+    # "text" (default, plan_act only) is the original free-text JSON plan: the model
+    # writes prose that must then be parsed, so nothing stops it writing criteria "min
+    # voltage" (schema wants "min_voltage") or case_name "IEEE 14-bus" (schema wants
+    # "case14") -- prose leaking into typed fields, a failure mode ReAct/PFAgent cannot
+    # have since they call tools through real function-calling. "structured" routes the
+    # planning step through the same function-calling mechanism (one call, tools
+    # exposed, no execution in between so the architecture still commits to the whole
+    # sequence before seeing any result) so every argument is schema-valid, including
+    # enum-constrained ones like criteria/case_name, by construction rather than by
+    # validate-and-repair.
+    plan_variant: str = "text"
 
     def __post_init__(self) -> None:
         if self.architecture not in ARCHITECTURES:
@@ -605,6 +616,13 @@ PLAN_SYSTEM_PROMPT = (
     "Available tools:\n" + _tools_catalog_text()
 )
 
+PLAN_SYSTEM_PROMPT_STRUCTURED = (
+    "You are the planner of a power-system analysis agent. You cannot see any tool result "
+    "before committing to your plan: issue every tool call the whole request needs in this "
+    "one turn, all at once, not one at a time and not waiting to see a result before deciding "
+    "the next call. If the request needs several steps, call several tools now."
+)
+
 FINAL_ANSWER_INSTRUCTION = (
     "Write the final answer for the user strictly from the tool outputs above. "
     "Never invent numbers; if a tool reported an error or a non-converged result, say so."
@@ -999,17 +1017,29 @@ class LLMEngine:
         session: SessionState,
         trace: Dict[str, Any],
     ) -> str:
-        # 1) Planning call: no tools, strict JSON plan.
+        # 1) Planning call: either free-text JSON (default) or real function-calling
+        #    ("structured" -- see EngineConfig.plan_variant). Either way this is a single
+        #    call with nothing executed beforehand, so the architecture still commits to
+        #    the whole sequence before seeing any result.
+        structured_plan = self.config.plan_variant == "structured"
         plan_rec: Dict[str, Any] = {"round": 1, "phase": "plan"}
         trace["rounds"].append(plan_rec)
         try:
             plan_msg = self._call_llm(
-                messages, with_tools=False, trace=trace, round_rec=plan_rec, system_override=PLAN_SYSTEM_PROMPT
+                messages,
+                with_tools=structured_plan,
+                trace=trace,
+                round_rec=plan_rec,
+                system_override=PLAN_SYSTEM_PROMPT_STRUCTURED if structured_plan else PLAN_SYSTEM_PROMPT,
             )
         except _LLMCallError as e:
             return self._finish(e.text, session, trace, "llm_error")
 
-        plan = parse_plan(plan_msg.get("content"))
+        if structured_plan:
+            raw_calls = plan_msg.get("tool_calls") or []
+            plan = [{"tool": tc["name"], "args": _safe_json_loads(tc["arguments"])} for tc in raw_calls] or None
+        else:
+            plan = parse_plan(plan_msg.get("content"))
         if plan is None:
             trace["formulation_failure"] = True
             trace["plan"] = None

@@ -154,7 +154,11 @@ class FakeAgentClient(LLMClient):
         has_tool_msgs = any(m.get("role") == "tool" for m in messages)
 
         if "planner" in system and not has_tool_msgs:  # plan_act planning call
-            plan = [{"tool": t, "args": a} for t, a in self._plan_for(messages)]
+            plan_steps = self._plan_for(messages)
+            if kwargs.get("tools"):  # plan_variant="structured": real function-calling
+                calls = [_tool_call(f"p{i}", t, a) for i, (t, a) in enumerate(plan_steps)]
+                return _resp(tool_calls=calls)
+            plan = [{"tool": t, "args": a} for t, a in plan_steps]
             return _resp(content=json.dumps({"plan": plan}))
         if not has_tool_msgs:  # first react / single_call round
             calls = [_tool_call(f"c{i}", t, a) for i, (t, a) in enumerate(self._plan_for(messages))]
@@ -344,6 +348,37 @@ def test_agent_methods_run_end_to_end_with_scripted_client(method):
     agg = report["scoreboard"][0]
     assert agg["formulation_exact_rate"] == 1.0 and agg["formulation_exact_count"] == 1
     assert agg["n_llm_calls_mean"] == row["n_llm_calls"]
+
+
+def test_plan_variant_structured_routes_planning_through_function_calling():
+    """plan_act's "text" plan (default) is free-text JSON a model writes and we parse --
+    nothing stops prose leaking into typed fields (criteria "min voltage" instead of
+    "min_voltage", case_name "IEEE 14-bus" instead of "case14"). "structured" routes the
+    same planning step through real function-calling so those fields are schema-valid
+    by construction. Verifies: (1) the planning call is made with tools exposed only
+    under "structured", (2) the resulting plan has the same {tool, args} shape either
+    way so downstream scoring is unaffected, (3) the architectural invariant survives --
+    the plan is still committed in one call with zero tool results seen beforehand, so
+    this has not quietly become ReAct."""
+    client = FakeAgentClient()
+    report = _run(["plan_act"], client, k=1, seeds=[0], max_rounds=4, plan_variant="structured")
+    assert report["config"]["plan_variant"] == "structured"
+    row = report["runs"][0]
+    assert row["ok"] is True, row["error"]
+    assert row["trace"]["plan"] is not None
+    for step in row["trace"]["plan"]:
+        assert set(step) == {"tool", "args"}
+
+    plan_call = client.calls[0]
+    assert plan_call["tools"], "structured planning call must expose tools"
+    assert not any(m.get("role") == "tool" for m in plan_call["messages"]), (
+        "no tool result may exist before the plan is committed -- otherwise this is ReAct, not Plan-and-Act"
+    )
+
+    client_text = FakeAgentClient()
+    report_text = _run(["plan_act"], client_text, k=1, seeds=[0], max_rounds=4)
+    assert report_text["config"]["plan_variant"] == "text"
+    assert client_text.calls[0]["tools"] is None, "default text plan must not expose tools for the planning call"
 
 
 def test_tool_variant_load_split_is_wired_from_the_cli_through_to_the_model_tools():
