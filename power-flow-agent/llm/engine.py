@@ -132,6 +132,12 @@ class EngineConfig:
     memory: bool = True
     trace_output_chars: int = 400
     final_gate: bool = False
+    # "v1" (default) is the original modify_load tool, byte-identical to every existing
+    # run. "load_split" swaps it for set_active_load/set_load (llm.tools.TOOLS_LOAD_SPLIT),
+    # which drops modify_load's optional q_mvar argument -- validated offline against
+    # committed traces (2026-09-17) to eliminate GPT-5.4's invented-q_mvar formulation
+    # failures by construction; this field is what actually lets a live run pick it.
+    tool_variant: str = "v1"
 
     def __post_init__(self) -> None:
         if self.architecture not in ARCHITECTURES:
@@ -685,7 +691,7 @@ class LLMEngine:
         self.dispatcher = dispatcher
         self.system_prompt = system_prompt
         self.config = config
-        self._openai_tools = get_openai_tools()
+        self._openai_tools = get_openai_tools(variant=self.config.tool_variant)
         self.last_trace: Dict[str, Any] = {}
 
     # ------------------------------------------------------------------ public

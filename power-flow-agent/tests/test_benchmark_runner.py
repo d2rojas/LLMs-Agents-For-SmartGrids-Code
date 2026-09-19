@@ -346,6 +346,27 @@ def test_agent_methods_run_end_to_end_with_scripted_client(method):
     assert agg["n_llm_calls_mean"] == row["n_llm_calls"]
 
 
+def test_tool_variant_load_split_is_wired_from_the_cli_through_to_the_model_tools():
+    """v1 (default) must stay byte-identical to every existing run; load_split is what
+    actually lets a live run use the validated set_active_load/set_load tool split
+    (2026-09-17) instead of modify_load. Exercises the full path: CLI-shaped kwarg ->
+    run_benchmark -> evaluate_item -> EngineConfig -> LLMEngine -> the tools schema an
+    agent method actually sees."""
+    client = FakeAgentClient()
+    report = _run(["react_nogate"], client, k=1, seeds=[0], max_rounds=4, tool_variant="load_split")
+    assert report["config"]["tool_variant"] == "load_split"
+    tool_names = {t["function"]["name"] for t in client.calls[0]["tools"]}
+    assert "modify_load" not in tool_names
+    assert {"set_active_load", "set_load"}.issubset(tool_names)
+
+    client_v1 = FakeAgentClient()
+    report_v1 = _run(["react_nogate"], client_v1, k=1, seeds=[0], max_rounds=4)
+    assert report_v1["config"]["tool_variant"] == "v1"
+    tool_names_v1 = {t["function"]["name"] for t in client_v1.calls[0]["tools"]}
+    assert "modify_load" in tool_names_v1
+    assert not {"set_active_load", "set_load"} & tool_names_v1
+
+
 def test_wrong_bus_id_is_a_formulation_error_not_a_solve_error():
     from benchmarks.requests import Request
 

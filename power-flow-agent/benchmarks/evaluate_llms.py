@@ -818,8 +818,14 @@ def evaluate_item(
     solver_config: Any,
     max_rounds: int = DEFAULT_MAX_ROUNDS,
     full_trace_dir: Optional[Path] = None,
+    tool_variant: str = "v1",
 ) -> dict[str, Any]:
     """Evaluate one method on one item; returns a JSON-serializable result row.
+
+    ``tool_variant``: "v1" (default) is the original tool set, byte-identical to every
+    existing run. "load_split" swaps modify_load for set_active_load/set_load (see
+    llm.tools.TOOLS_LOAD_SPLIT and llm.engine.EngineConfig.tool_variant). Only affects
+    "engine"-kind methods (react/plan_act/single_call/pfagent); ignored otherwise.
 
     When ``full_trace_dir`` is given, the untruncated trace, the final answer and the request are
     also written to ``<full_trace_dir>/<method>/<case>/<request_id>_run<k>.json`` for qualitative analysis.
@@ -926,6 +932,7 @@ def evaluate_item(
                 memory=bool(method.memory),
                 max_rounds=int(max_rounds),
                 trace_output_chars=TRACE_OUTPUT_CHARS_FULL,
+                tool_variant=tool_variant,
             )
             engine = LLMEngine(client=client, dispatcher=dispatcher, system_prompt=system_prompt, config=cfg)
             raw_text, trace = engine.run_with_trace(user_message, session)
@@ -1424,6 +1431,7 @@ def run_benchmark(
     verbose: bool = True,
     full_trace_dir: Optional[Path] = None,
     condition: str = "normal",
+    tool_variant: str = "v1",
 ) -> dict[str, Any]:
     """Run every (model, method, case, seed, item, run) and aggregate.
 
@@ -1482,6 +1490,7 @@ def run_benchmark(
                                     solver_config=solver_config,
                                     max_rounds=max_rounds,
                                     full_trace_dir=full_trace_dir,
+                                    tool_variant=tool_variant,
                                 )
                             )
 
@@ -1510,6 +1519,7 @@ def run_benchmark(
             "methods": method_names,
             "cases": cases,
             "condition": condition,
+            "tool_variant": tool_variant,
             "runs": runs,
             "k": int(k),
             "seeds": [int(s) for s in seeds],
@@ -1594,6 +1604,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--gen-requests", dest="gen_requests", type=int, default=0, help="generate N requests per case and seed")
     parser.add_argument("--difficulty", dest="difficulties", action="append", default=[], help="restrict generated requests")
     parser.add_argument("--max-rounds", dest="max_rounds", type=int, default=DEFAULT_MAX_ROUNDS, help="tool-round budget for all agents")
+    parser.add_argument(
+        "--tool-variant", dest="tool_variant", default="v1", choices=["v1", "load_split"],
+        help="v1 (default): original modify_load, byte-identical to every existing run. "
+        "load_split: set_active_load/set_load instead (llm.tools.TOOLS_LOAD_SPLIT), validated offline "
+        "to eliminate the invented-q_mvar formulation failures by construction.",
+    )
     parser.add_argument("--temperature", dest="temperature", type=float, default=0.0)
     parser.add_argument("--timeout-s", dest="timeout_s", type=float, default=90.0)
     parser.add_argument("--pricing-file", dest="pricing_file", default=None)
@@ -1665,6 +1681,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         verbose=not args.quiet,
         full_trace_dir=None if args.no_traces else Path(args.trace_dir or (Path(args.out_dir) / "traces")),
         condition=condition,
+        tool_variant=args.tool_variant,
     )
 
     write_report(Path(args.out_dir), report)
