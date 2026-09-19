@@ -19,26 +19,32 @@ from ``metrics.py`` are only *used*, never changed.
 Definitions
 -----------
 solved
-    The request was answered correctly end to end. Per item::
+    The system did what was asked. Per item (definition fixed 2026-09-18 -- see
+    "changed 2026-09-18" below for what this replaced)::
 
         solved = ok
                  AND (formulation_exact is True            -- methods with tools
                       | reported convergence matches truth  -- methods without tools)
                  AND final_converged == truth_converged
                  AND (truth non-converged                   -- correctly identified failure
-                      | numeric_ok | answer_ok)
+                      | (numeric_ok AND (no checkable truth answer | answer matches)))
 
     ``numeric_ok`` (both converged): ``voltage_mae <= 1e-3`` p.u. over a complete
     bus coverage (every ground-truth bus reported) and, for methods with tools,
     ``flow_mae <= 1 %`` of the largest ground-truth branch flow (taken from
     ``metrics["_raw_p_pairs"]``; skipped when unavailable). For LLM-only
-    methods only the voltage criterion applies, as the paper states.
-    ``answer_ok``: when the ground-truth ``answer`` field is available (request
-    mode) and names a specific quantity (worst-voltage bus, overloaded lines,
-    worst N-1 outage, summary totals), the final answer text names the same
-    quantity (see ``answer_matches_truth``). An empty / non-converged answer on
-    a converged ground truth is never solved.
+    methods only the voltage criterion applies, as the paper states. The state
+    must match the reference; this is necessary and, when the ground-truth
+    ``answer`` field names a specific quantity (worst-voltage bus, overloaded
+    lines, worst N-1 outage, summary totals; see ``answer_matches_truth``), the
+    final answer text must name that same quantity too -- both required, not
+    either. An empty / non-converged answer on a converged ground truth is
+    never solved.
     ``solved_rate`` = solved items / all items (denominator: every row).
+    changed 2026-09-18: solved used to accept numeric_ok OR a matching answer on
+    a wrong state (``answer_ok``, now removed). An answer that happens to be
+    right on top of a wrong state is not solver-grounded, so that path no
+    longer counts; items solved only through it are no longer solved.
 actual failure
     The item is a failure case when the ground truth is unsolvable -- it does
     not converge, or it converges with at least one bus with no solved voltage
@@ -420,16 +426,24 @@ def solved_check(
     if truth_converged is False:
         return _out(True, "non_converged_match")
     num = numeric_within_tolerance(metrics, has_tools=has_tools)
-    if num["numeric_ok"]:
-        return _out(True, "numeric_ok")
+    if not num["numeric_ok"]:
+        if not num["coverage_ok"]:
+            return _out(False, "incomplete_coverage")
+        if not num["voltage_ok"]:
+            return _out(False, "voltage_error")
+        return _out(False, "flow_error")
+    # State matches the reference (Daniela's decision, 2026-09-18): that is necessary but no
+    # longer sufficient on its own. A correct answer can no longer stand in for a wrong state
+    # (the old "answer_ok" path is gone -- an answer that is right on top of a wrong state is
+    # not solver-grounded), and now, additionally, where the request asks a question with a
+    # checkable ground-truth answer, that answer must also be right. answer_matches_truth
+    # returns None when there is nothing to check (no truth_answer, or an operation request
+    # with no specific quantity asked for), which passes -- the state check is then the whole
+    # criterion, as it always was for those items.
     ans = answer_matches_truth(answer_text, truth_answer)
-    if ans is True:
-        return _out(True, "answer_ok")
-    if not num["coverage_ok"]:
-        return _out(False, "incomplete_coverage")
-    if not num["voltage_ok"]:
-        return _out(False, "voltage_error")
-    return _out(False, "flow_error")
+    if ans is False:
+        return _out(False, "answer_mismatch")
+    return _out(True, "numeric_and_answer_ok" if ans is True else "numeric_ok")
 
 
 def method_has_tools(method_name: Optional[str]) -> bool:

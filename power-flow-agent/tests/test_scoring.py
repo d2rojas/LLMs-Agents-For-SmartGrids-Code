@@ -164,12 +164,32 @@ def test_answer_matches_truth_for_each_request_kind():
     assert bs.answer_matches_truth("Total load: 189.48 MW, losses 5.0 MW.", summary) is False
     assert bs.answer_matches_truth("anything", None) is None
     assert bs.answer_matches_truth("anything", {"converged": False}) is None
-    # a wrong numeric state can still be solved through the key quantity
+    # Daniela's decision, 2026-09-18: a wrong numeric state is no longer solved even when the
+    # answer happens to name the right quantity -- the old "answer_ok" escape path is gone,
+    # because an answer that is right on top of a wrong state is not solver-grounded.
     out = bs.solved_check(
         ok=True, has_tools=True, formulation_exact=True, truth_converged=True, final_converged=True,
         metrics=_metrics(vmae=5e-3), answer_text=text, truth_answer={"bus_id": 8, "vm_pu": 0.9587},
     )
-    assert out == {"solved": True, "solved_reason": "answer_ok"}
+    assert out == {"solved": False, "solved_reason": "voltage_error"}
+    # the state must ALSO name the right quantity now: numeric_ok alone is not enough when a
+    # checkable ground-truth answer exists and the answer names something else.
+    out2 = bs.solved_check(
+        ok=True, has_tools=True, formulation_exact=True, truth_converged=True, final_converged=True,
+        metrics=_metrics(), answer_text=text, truth_answer={"bus_id": 7, "vm_pu": 0.9661},
+    )
+    assert out2 == {"solved": False, "solved_reason": "answer_mismatch"}
+    # numeric_ok with no checkable answer (or a matching one) is still solved.
+    out3 = bs.solved_check(
+        ok=True, has_tools=True, formulation_exact=True, truth_converged=True, final_converged=True,
+        metrics=_metrics(), answer_text=text, truth_answer=None,
+    )
+    assert out3 == {"solved": True, "solved_reason": "numeric_ok"}
+    out4 = bs.solved_check(
+        ok=True, has_tools=True, formulation_exact=True, truth_converged=True, final_converged=True,
+        metrics=_metrics(), answer_text=text, truth_answer={"bus_id": 8, "vm_pu": 0.958745},
+    )
+    assert out4 == {"solved": True, "solved_reason": "numeric_and_answer_ok"}
 
 
 def test_no_overload_regex_recognizes_the_phrasing_react_nogate_and_pfagent_actually_use():
