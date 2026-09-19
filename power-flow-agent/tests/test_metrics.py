@@ -98,6 +98,30 @@ def test_formulation_exact_with_normalization_and_benign_run_powerflow():
     assert formulation_check(INTENDED, [_c("load_case", case_name="case14"), _c("modify_load", bus_id=9, p_mw=29.5)])["formulation_exact"]
 
 
+def test_set_active_load_and_set_load_are_formulation_equivalent_to_modify_load():
+    """tool_variant="load_split" (llm.tools.TOOLS_LOAD_SPLIT) replaces modify_load with
+    set_active_load/set_load, but intended_calls always says "modify_load" -- the
+    ground-truth generator predates the split and never emits the new names. Without this
+    alias, a load-split run whose arguments are otherwise identical to the reference would
+    still be flagged as the wrong tool, which is exactly what happened before this fix (all
+    15/15 and 13/13 predicted-fixed items instead read as "missed_step").
+    """
+    out = formulation_check(INTENDED, [_c("load_case", case_name="case14"), _c("set_active_load", bus_id=9, p_mw=29.5), _c("run_powerflow")])
+    assert out["formulation_exact"] is True and out["formulation_error_type"] == "ok"
+    # set_load (both values) is likewise an alias, even though no current request states both
+    out2 = formulation_check(INTENDED, [_c("load_case", case_name="case14"), _c("set_load", bus_id=9, p_mw=29.5), _c("run_powerflow")])
+    assert out2["formulation_exact"] is True
+    # a genuinely wrong bus under the new tool name must still be caught, not laundered by the alias
+    out3 = formulation_check(INTENDED, [_c("load_case", case_name="case14"), _c("set_active_load", bus_id=8, p_mw=29.5), _c("run_powerflow")])
+    assert out3["formulation_exact"] is False and out3["formulation_error_type"] == "wrong_id"
+    # the other failure mode this alias must not launder: the request states only an active
+    # value, but the model picks the two-argument tool and invents a reactive one anyway --
+    # exactly the pattern the split exists to make unrepresentable in set_active_load, so it
+    # must still be a formulation failure when it slips through via set_load instead.
+    out4 = formulation_check(INTENDED, [_c("load_case", case_name="case14"), _c("set_load", bus_id=9, p_mw=29.5, q_mvar=5.0), _c("run_powerflow")])
+    assert out4["formulation_exact"] is False
+
+
 @pytest.mark.parametrize(
     "executed,expected",
     [

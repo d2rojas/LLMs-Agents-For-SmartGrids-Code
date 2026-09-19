@@ -272,8 +272,19 @@ def normalize_call(call: Dict[str, Any]) -> Dict[str, Any]:
     return {"tool": tool, "args": _canonical_args(tool, _raw_args(call), drop_defaults=True, lower_enums=True)}
 
 
+# set_active_load/set_load (llm.tools.TOOLS_LOAD_SPLIT, tool_variant="load_split") are the
+# same underlying action as modify_load with a narrower schema (no invented q_mvar) --
+# intended_calls always says "modify_load" since the ground-truth generator predates the
+# split and never emits the new names, so without this alias every load-split run's
+# formulation would look like a "wrong tool" mismatch regardless of whether the arguments
+# (which are otherwise identical -- requests.py's modify_load intended calls never include
+# q_mvar) were right.
+_TOOL_NAME_ALIASES = {"set_active_load": "modify_load", "set_load": "modify_load"}
+
+
 def _tool_name(call: Dict[str, Any]) -> str:
-    return str(call.get("tool") or call.get("name") or "").strip()
+    name = str(call.get("tool") or call.get("name") or "").strip()
+    return _TOOL_NAME_ALIASES.get(name, name)
 
 
 def _raw_args(call: Dict[str, Any]) -> Dict[str, Any]:
