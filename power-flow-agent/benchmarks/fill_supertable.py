@@ -5,12 +5,12 @@ The paper's core table aggregates IEEE 14/30/57/118; this script writes the per-
 breakdown from the same ``report.json`` files, reusing the loaders, formatters, row
 mapping and n/a rules of ``benchmarks/fill_table.py``. Two layouts:
 
-  blocks   (default) one block per IEEE system, each with the 13 method rows and the 10
+  blocks   (default) one block per IEEE system, each with the 14 method rows and the 10
            protocol columns of the main table (Form., V_MAE, F_MAE, Solved, Solver status,
            B_mean, Faith., SFR, Calls, Tok.). Blocks are separated by ``\midrule`` and a
            full-width ``\multicolumn{12}{l}{\textbf{IEEE 30-bus}}`` row.
   compact  methods x systems for two metrics (Form. and Calls by default, ``--metrics``):
-           13 rows x (n_systems x 2) columns.
+           14 rows x (n_systems x 2) columns.
 
 ``--wrap`` selects how much LaTeX surrounds the body rows: ``rows`` (default, body only,
 to be wrapped by hand), ``tabular`` (``\scriptsize`` + ``\resizebox{\textwidth}{!}`` (blocks only;
@@ -152,7 +152,7 @@ def apply_na(cells: list[Any], key: Optional[str]) -> list[Any]:
 
 
 def table_rows(agg_all: dict[str, dict[str, Any]], gated_baselines: bool = False) -> list[tuple[str, int, str, Optional[str]]]:
-    """[(setting cell, block size, row label, resolved method key or None)] for the 13 rows."""
+    """[(setting cell, block size, row label, resolved method key or None)] for the 14 rows."""
     best = best_single_call(agg_all)
     out: list[tuple[str, int, str, Optional[str]]] = []
     for setting, rows in table_blocks(gated_baselines):
@@ -279,7 +279,7 @@ def compact_colspec(systems: list[str], metrics: tuple[str, ...]) -> str:
 
 
 def wrap(body: str, header: str, colspec: str, wrap_level: str, caption: str, label: str, resize: bool = True) -> str:
-    """``resize``: wrap the tabular in ``\resizebox{\textwidth}{!}`` (the 13-column blocks layout);
+    """``resize``: wrap the tabular in ``\resizebox{\textwidth}{!}`` (the 14-column blocks layout);
     the narrow compact layout is left at natural width so it is not scaled up."""
     if wrap_level == "rows":
         return body

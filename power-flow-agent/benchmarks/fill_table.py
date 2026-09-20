@@ -110,7 +110,14 @@ def table_blocks(gated_baselines: bool = False) -> list[tuple[str, list[tuple[st
     react = "react" if gated_baselines else "react_nogate"
     plan = "plan_act" if gated_baselines else "plan_act_nogate"
     return [
-        (r"LLM-only (Sec.~\ref{sec:prompting})", [(label, f"llm_only:{s}") for s, label in STRATEGIES]),
+        (
+            r"LLM-only (Sec.~\ref{sec:prompting})",
+            [(label, f"llm_only:{s}") for s, label in STRATEGIES]
+            # Third rung of the six-row ladder in main.tex's Table~\ref{tab:pf_architectures}
+            # prose ("LLM only, forced, ... removes the option to abstain"): same structured
+            # prompt as the "Structured" row above, minus the abstention clause.
+            + [("LLM only, forced", "llm_only_forced:structured")],
+        ),
         (r"Single-call (Sec.~\ref{sec:prompting})", [(label, f"single_call:{s}") for s, label in STRATEGIES]),
         (
             r"Architectures (Sec.~\ref{sec:agents})",

@@ -63,6 +63,9 @@ SOURCES: dict[str, dict[str, str]] = {
         "rule_based": f"{GPT54_BASE}/rule_based",
         "llm_only:structured": f"{GPT54_BASE}/llm_only_structured",
         "llm_only:cot": f"{GPT54_BASE}/llm_only_cot",
+        # "LLM only, forced" row of the ladder (main.tex): same structured prompt, minus the
+        # abstention clause. No tools, so unaffected by either fix, like the row above it.
+        "llm_only_forced:structured": f"{GPT54_BASE}/llm_only_forced_structured",
         "react_nogate": f"{GPT54_BASE}/react_nogate",
         "plan_act_nogate": f"{GPT54_BASE}/plan_act_nogate",
         "pfagent": f"{GPT54_BASE}/pfagent",
@@ -78,6 +81,7 @@ SOURCES: dict[str, dict[str, str]] = {
         # Per-unit representation rerun (2026-09-16), postdates the matrix.
         "llm_only:structured": "results_validation_nr/gpt-4o-mini/llm_only_structured",
         "llm_only:cot": "results_validation_nr/gpt-4o-mini/llm_only_cot",
+        "llm_only_forced:structured": "results_validation_nr/gpt-4o-mini/llm_only_forced_structured",
         # Post-verification-rework (mutation-blocked retry), NOT the matrix and NOT the
         # "_v1" pre-fix snapshot kept only for reference.
         "pfagent": "results_validation_gpt-4o-mini_agents",

@@ -17,7 +17,7 @@ SYSTEMS = ["case14", "case30"]
 METHODS = ["single_call:structured", "rule_based"]
 
 EXPECTED_LABELS = [
-    "Structured", "Few-shot", "Chain-of-thought", "RAG",
+    "Structured", "Few-shot", "Chain-of-thought", "RAG", "LLM only, forced",
     "Structured", "Few-shot", "Chain-of-thought", "RAG",
     "Rule-based parser, no LLM", "Single-call, best prompt", "ReAct", "Plan-and-Act", "PFAgent: ReAct + gate",
 ]
@@ -130,10 +130,10 @@ def test_blocks_headers_and_row_order(results_dir, tmp_path):
     rows = _data_rows(tex)
     assert [r[1] for r in rows] == EXPECTED_LABELS + EXPECTED_LABELS
     assert all(len(r) == 2 + len(COLUMN_NAMES) for r in rows)
-    for offset in (0, 13):
-        assert rows[offset][0] == r"\multirow{4}{*}{LLM-only (Sec.~\ref{sec:prompting})}"
-        assert rows[offset + 4][0] == r"\multirow{4}{*}{Single-call (Sec.~\ref{sec:prompting})}"
-        assert rows[offset + 8][0] == r"\multirow{5}{*}{Architectures (Sec.~\ref{sec:agents})}"
+    for offset in (0, 14):
+        assert rows[offset][0] == r"\multirow{5}{*}{LLM-only (Sec.~\ref{sec:prompting})}"
+        assert rows[offset + 5][0] == r"\multirow{4}{*}{Single-call (Sec.~\ref{sec:prompting})}"
+        assert rows[offset + 9][0] == r"\multirow{5}{*}{Architectures (Sec.~\ref{sec:agents})}"
         assert rows[offset + 1][0] == ""
     # rows only: no table/tabular wrapper
     assert r"\begin{table}" not in tex and r"\begin{tabular}" not in tex and r"\resizebox" not in tex
@@ -143,28 +143,28 @@ def test_blocks_values_na_and_missing(results_dir, tmp_path):
     tex = _run(results_dir, tmp_path)
     rows = _data_rows(tex)
     names = COLUMN_NAMES
-    b14, b30 = rows[:13], rows[13:]
+    b14, b30 = rows[:14], rows[14:]
     # single_call:structured, per system, Solved from the rescored solved_rate (0.90, not 0.10)
     # order: Form., V_MAE, F_MAE, Solved, Solver status, B_mean, Faith. (per-answer), SFR,
     # Calls, Tok., Faith. (per-number), Stale, Escalated, Wrong (silent)
-    assert b14[4][1] == "Structured" and b14[4][2:] == [
+    assert b14[5][1] == "Structured" and b14[5][2:] == [
         "85.0", r"$1.65{\times}10^{-5}$", "0.12", "90.0", "100.0", "0", "100.0", "100.0", "2.0", "10000", "90.0", "0.0",
         "5.0", "15.0",
     ]
-    assert b30[4][2] == "75.0" and b30[4][2 + 3] == "70.0" and b30[4][2 + names.index("Calls")] == "1.5" and b30[4][2 + names.index("Tok.")] == "12000"
+    assert b30[5][2] == "75.0" and b30[5][2 + 3] == "70.0" and b30[5][2 + names.index("Calls")] == "1.5" and b30[5][2 + names.index("Tok.")] == "12000"
     # best single-call prompt = the only one present, copied per system
-    assert b14[9][1] == "Single-call, best prompt" and b14[9][2:] == b14[4][2:] and b30[9][2:] == b30[4][2:]
+    assert b14[10][1] == "Single-call, best prompt" and b14[10][2:] == b14[5][2:] and b30[10][2:] == b30[5][2:]
     # rule-based: Tok. is n/a, numbers per system
-    assert b14[8][1] == "Rule-based parser, no LLM"
-    assert b14[8][2 + names.index("Tok.")] == NA and b30[8][2 + names.index("Tok.")] == NA
-    assert b14[8][2] == "60.0" and b30[8][2] == "55.0" and b30[8][2 + 3] == "50.0"
+    assert b14[9][1] == "Rule-based parser, no LLM"
+    assert b14[9][2 + names.index("Tok.")] == NA and b30[9][2 + names.index("Tok.")] == NA
+    assert b14[9][2] == "60.0" and b30[9][2] == "55.0" and b30[9][2 + 3] == "50.0"
     # LLM-only rows are missing: all dashes except Calls = n/a
     expected_llm_only = [MISSING] * len(names)
     expected_llm_only[names.index("Calls")] = NA
     for block in (b14, b30):
-        for i in range(4):
+        for i in range(5):
             assert block[i][2:] == expected_llm_only
-        for i in (10, 11, 12):  # ReAct, Plan-and-Act, PFAgent absent
+        for i in (11, 12, 13):  # ReAct, Plan-and-Act, PFAgent absent
             assert block[i][2:] == [MISSING] * len(names)
 
 
@@ -196,12 +196,12 @@ def test_compact_layout(results_dir, tmp_path):
     rows = _data_rows(tex)
     assert [r[1] for r in rows] == EXPECTED_LABELS
     assert all(len(r) == 2 + 4 for r in rows)
-    assert rows[0][0] == r"\multirow{4}{*}{LLM-only (Sec.~\ref{sec:prompting})}"
-    assert rows[4][2:] == ["85.0", "75.0", "2.0", "1.5"]  # single_call:structured: Form. 14, 30; Calls 14, 30
-    assert rows[9][2:] == rows[4][2:]  # best prompt
-    assert rows[8][2:] == ["60.0", "55.0", "1.0", "1.0"]  # rule_based
+    assert rows[0][0] == r"\multirow{5}{*}{LLM-only (Sec.~\ref{sec:prompting})}"
+    assert rows[5][2:] == ["85.0", "75.0", "2.0", "1.5"]  # single_call:structured: Form. 14, 30; Calls 14, 30
+    assert rows[10][2:] == rows[5][2:]  # best prompt
+    assert rows[9][2:] == ["60.0", "55.0", "1.0", "1.0"]  # rule_based
     assert rows[0][2:] == [MISSING, MISSING, NA, NA]  # LLM-only missing, Calls n/a
-    assert rows[12][2:] == [MISSING] * 4
+    assert rows[13][2:] == [MISSING] * 4
     # one \midrule between each setting group (2) plus the header rule
     assert tex.count(r"\midrule") == 3
     rows_only = _run(results_dir, tmp_path, "--layout", "compact")
@@ -216,7 +216,7 @@ def test_csv_one_row_per_method_and_system(results_dir, tmp_path):
     _run(results_dir, tmp_path, "--csv", str(csv_path))
     with csv_path.open(newline="") as fh:
         recs = list(csv.DictReader(fh))
-    assert len(recs) == 13 * 2
+    assert len(recs) == 14 * 2
     assert [(r["method"], r["case"]) for r in recs] == [(m, c) for m in EXPECTED_LABELS for c in SYSTEMS]
     assert set(recs[0].keys()) == {"setting", "method", "method_key", "case", "n_buses", "n_items", *COLUMN_NAMES}
     sc30 = next(r for r in recs if r["method"] == "Structured" and r["setting"] == "Single-call" and r["case"] == "case30")
@@ -230,9 +230,9 @@ def test_csv_one_row_per_method_and_system(results_dir, tmp_path):
 
 def test_no_prefer_rescored_and_cases_filter(results_dir, tmp_path):
     tex = _run(results_dir, tmp_path, "--no-prefer-rescored")
-    assert _data_rows(tex)[4][2 + 3] == "10.0"  # original report's solved_rate (Solved column)
+    assert _data_rows(tex)[5][2 + 3] == "10.0"  # original report's solved_rate (Solved column)
     tex = _run(results_dir, tmp_path, "--cases", "case30")
     assert _block_headers(tex) == [r"\multicolumn{16}{l}{\textbf{IEEE 30-bus}} \\"]
-    assert tex.count(r"\midrule") == 0 and len(_data_rows(tex)) == 13
+    assert tex.count(r"\midrule") == 0 and len(_data_rows(tex)) == 14
     with pytest.raises(SystemExit):
         main([str(results_dir), "--out", str(tmp_path / "x.tex"), "--layout", "compact", "--metrics", "Bogus"])

@@ -1,6 +1,6 @@
 # Informe de experimento: `llm_only_forced_structured`
 
-Generado el 2026-09-17 23:56 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio llm_only_forced_structured (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-19 20:00 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio llm_only_forced_structured (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -20,7 +20,7 @@ Directorio analizado:
 - Fecha de la corrida (mtime de report.json): 2026-09-16 13:47
 - Costo total: 0.6674 USD (40 items; costo medio 0.01668 USD/item)
 - Items totales: 40; ok=40; con error=0; tokens totales=112674
-- Solved global: 70.0 % (28/40)
+- Solved global: 17.5 % (7/40)
 
 Errores por tipo:
 
@@ -29,11 +29,11 @@ _(ningún item con `error`)_
 
 ## 2. Prompts usados
 
-Los prompts se reconstruyen offline con el mismo código del runner (`llm.prompt_variants.build_messages` sobre la red perturbada con el seed del item). Las tablas de datos del caso se recortan a sus primeras 12 líneas con un marcador `…`; el número de caracteres indicado corresponde al prompt completo.
+Los prompts se reconstruyen offline con el mismo código del runner (`llm.prompt_variants.build_messages` sobre la red perturbada con el seed del item). Las tablas de datos del caso se recortan a sus primeras 12 líneas con un marcador `…`; el número de caracteres indicado corresponde al prompt completo. **Esta reconstrucción es ilustrativa, no histórica**: usa el código de `llm/prompts.py` de HOY, así que si el texto del prompt cambió después de que esta corrida se generó, lo que se ve aquí no es lo que el modelo recibió. El registro histórico real es el hash por fila (`system_prompt_hash`, ver sección 1 / `benchmarks/experiment_report.py::section_what_ran`), fijado en el momento de la corrida y nunca recalculado.
 
 ### Método `llm_only_forced:structured`
 
-**System prompt** — 565 caracteres; strategy=structured, forced=True, sin herramientas
+**System prompt** (reconstrucción con el código actual, no necesariamente histórica) — 565 caracteres; strategy=structured, forced=True, sin herramientas
 
 ````
 You are a power system analysis expert. You need to calculate AC power flow results based on test system data provided by the user.
@@ -164,13 +164,13 @@ Please strictly follow the following JSON schema output (all fields are complete
 
 ## 3. Resultados agregados
 
-Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), en los 4 grupos de `metricas_pfagent_definiciones.md`: **utilidad de tarea** Form. (formulación exacta de las tool calls), V_MAE (p.u., solo sobre peticiones con formulación exacta -- toda fila con herramientas que llega al solver con la formulación correcta da exactamente cero, ver benchmarks/scoring.py) y F_MAE (MW) sobre los items con resultado, Solved (respondió correctamente de extremo a extremo); **corrección solver-grounded** Solver status (convergencia reportada = convergencia real), B_mean (residual medio de KCL de los flujos reportados, MW); **fidelidad** Faith. (por respuesta, no por número: fracción de respuestas donde todo número es trazable a una salida de tool Y viene del solve posterior al último cambio de red) y SFR (fallos declarados con seguridad); **costo** Calls (tool calls medias) y Tok. (tokens medios). Fuera de los 4 grupos, solo en este reporte (no en las tablas del paper): Claim (éxito reclamado sobre un fallo), Escalated y Wrong (silent) (con Solved, las tres suman 100 %: dónde termina cada petición -- resuelta sola, entregada a una persona, o mal contestada sin aviso; solo cuenta como Escalated una arquitectura con mecanismo de traspaso real, ver benchmarks.scoring.escalation_check) y $ (costo total USD). Porcentajes en %.
+Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), en los 4 grupos de `metricas_pfagent_definiciones.md`: **utilidad de tarea** Form. (formulación exacta de las tool calls), V_MAE (p.u., solo sobre peticiones con formulación exacta -- toda fila con herramientas que llega al solver con la formulación correcta da exactamente cero, ver benchmarks/scoring.py) y F_MAE (MW) sobre los items con resultado, Solved (respondió correctamente de extremo a extremo); **corrección solver-grounded** Solver status (convergencia reportada = convergencia real), B_mean (residual medio de KCL de los flujos reportados, MW); **fidelidad** Faith. (por respuesta, no por número: fracción de respuestas donde todo número es trazable a una salida de tool Y viene del solve posterior al último cambio de red) y SFR (fallos declarados con seguridad); **costo** Calls (tool calls medias) y Tok. (tokens medios). Fuera de los 4 grupos, solo en este reporte (no en las tablas del paper): Claim (éxito reclamado sobre un fallo), Escalated y Wrong (silent). Escalated y Wrong (silent) junto con solved_autonomously_rate (no la columna Solved de arriba, que puede solaparse con Escalated -- una abstención de verificación puede caer sobre un item cuyo cálculo de fondo sí era correcto) suman 100 %: dónde termina cada petición -- resuelta sola, entregada a una persona, o mal contestada sin aviso; solo cuenta como Escalated una arquitectura con mecanismo de traspaso real, ver benchmarks.scoring.escalation_check) y $ (costo total USD). Porcentajes en %.
 
 ### Por método × caso
 
 | Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Escalated | Wrong (silent) | $ |
-|--------------------------------|------|----|-----|--------|-----|---------------|----------------|--------|----------|----|-----|----|-----|----------|-----------------|------|
-| llm_only_forced:structured | case14 | 40 | -- | 2.74e-03 | 5.45 | 70.0 (28/40) | 100.0 (40/40) | 9.86e+00 | 0.0 (0/40) | -- | n/a | 2817 | -- | 0.0 (0/40) | 30.0 (12/40) | 0.6674 |
+|--------------------------------|------|----|-----|--------|-----|-------------|----------------|--------|----------|----|-----|----|-----|----------|-----------------|------|
+| llm_only_forced:structured | case14 | 40 | -- | 2.74e-03 | 5.45 | 17.5 (7/40) | 100.0 (40/40) | 9.86e+00 | 0.0 (0/40) | -- | n/a | 2817 | -- | 0.0 (0/40) | 82.5 (33/40) | 0.6674 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 
@@ -181,8 +181,8 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 ### Solved por dificultad (%, items resueltos / items)
 
 | Method | plain | parameterized | multistep | ambiguous |
-|--------------------------------|-------------|----------------|-------------|-------------|
-| llm_only_forced:structured | 90.0 (9/10) | 80.0 (8/10) | 40.0 (4/10) | 70.0 (7/10) |
+|--------------------------------|-------------|----------------|-------------|----------|
+| llm_only_forced:structured | 50.0 (5/10) | 0.0 (0/10) | 20.0 (2/10) | 0.0 (0/10) |
 
 ### Tipos de error de formulación (conteo de items)
 
@@ -202,15 +202,15 @@ Hasta 3 items por método: uno resuelto, uno con formulación fallida (si existe
 **Ejemplo: resuelto (solved=True)**
 
 ````
-request (case14-ambiguous-011-s0, case14, difficulty=ambiguous, seed=1971893210): Load case14 and set the active load at bus 6 to 14,700 kw.
-intended_calls: load_case({"case_name": "case14"}) -> modify_load({"bus_id": 6, "p_mw": 14.7})
+request (case14-multistep-014-s0, case14, difficulty=multistep, seed=651359109): Load case14, set the active load at bus 13 to 18.9 MW, set the active load at bus 4 to 59.1 MW, set the active load at bus 9 to 23.2 MW, and finally rerun the power flow, then report the bus with the lowest voltage magnitude.
+intended_calls: load_case({"case_name": "case14"}) -> modify_load({"bus_id": 13, "p_mw": 18.9}) -> modify_load({"bus_id": 4, "p_mw": 59.1}) -> modify_load({"bus_id": 9, "p_mw": 23.2}) -> run_powerflow({})
 executed_calls: (sin etapa de tools)
 fuente de la traza: archivo de traza completo
 (sin rondas de herramientas: una sola llamada al LLM)
 --- Respuesta final ---
-{"converged":true,"bus_voltages":[{"bus_id":1,"vm_pu":1.06,"va_deg":0.0},{"bus_id":2,"vm_pu":1.045,"va_deg":-4.98},{"bus_id":3,"vm_pu":1.01,"va_deg":-12.72},{"bus_id":4,"vm_pu":1.017,"va_deg":-10.33},{"bus_id":5,"vm_pu":1.019,"va_deg":-8.78},{"bus_id":6,"vm_pu":1.07,"va_deg":-14.22},{"bus_id":7,"vm_pu":1.062,"va_deg":-13.37},{"bus_id":8,"vm_pu":1.09,"va_deg":-13.37},{"bus_id":9,"vm_pu":1.056,"va_deg":-14.94},{"bus_id":10,"vm_pu":1.051,"va_deg":-15.1},{"bus_id":11,"vm_pu":1.057,"va_deg":-14.79},{"bus_id":12,"vm_pu":1.055,"va_deg":-15.08},{"bus_id":13,"vm_pu":1.05,"va_deg":-15.16},{"bus_id":14,"vm_pu":1.036,"va_deg":-16.04}],"line_flows":[{"line_id":0,"p_from_mw":156.88,"loading_percent":0.0},{"line_id":1,"p_from_mw":75.51,"loading_percent":0.0},{"line_id":2,"p_from_mw":73.24,"loading_percen …[1020 chars más]
+{"converged":true,"bus_voltages":[{"bus_id":1,"vm_pu":1.06,"va_deg":0.0},{"bus_id":2,"vm_pu":1.045,"va_deg":-4.98},{"bus_id":3,"vm_pu":1.01,"va_deg":-12.72},{"bus_id":4,"vm_pu":1.017,"va_deg":-10.33},{"bus_id":5,"vm_pu":1.019,"va_deg":-8.78},{"bus_id":6,"vm_pu":1.07,"va_deg":-14.22},{"bus_id":7,"vm_pu":1.062,"va_deg":-13.37},{"bus_id":8,"vm_pu":1.09,"va_deg":-13.36},{"bus_id":9,"vm_pu":1.056,"va_deg":-14.94},{"bus_id":10,"vm_pu":1.051,"va_deg":-15.1},{"bus_id":11,"vm_pu":1.057,"va_deg":-14.78},{"bus_id":12,"vm_pu":1.055,"va_deg":-15.08},{"bus_id":13,"vm_pu":1.05,"va_deg":-15.16},{"bus_id":14,"vm_pu":1.034,"va_deg":-16.03}],"line_flows":[{"line_id":0,"p_from_mw":147.4,"loading_percent":0.0},{"line_id":1,"p_from_mw":73.6,"loading_percent":0.0},{"line_id":2,"p_from_mw":71.6,"loading_percent": …[1004 chars más]
 --- Scoring ---
-formulation=n/a (exact=None); V_MAE=4.27e-04; F_MAE=2.25; faithful=0.0 %; solved=True (numeric_ok); flags=-; error=-; tokens=2805; cost_usd=0.0166; wall=6.6 s
+formulation=n/a (exact=None); V_MAE=9.59e-04; F_MAE=7.18; faithful=1.4 %; solved=True (numeric_and_answer_ok); flags=-; error=-; tokens=2852; cost_usd=0.0168; wall=6.3 s
 ````
 
 **Ejemplo: no resuelto**
@@ -248,9 +248,9 @@ Observaciones generadas automáticamente a partir de los números del report (si
 
 - LLM-only: V_MAE entre 2.74e-03 (llm_only_forced:structured/case14) y 2.74e-03 (llm_only_forced:structured/case14) p.u. sobre los items que devolvieron números.
 - 0.0 % (0/40) de abstención en LLM-only (respuesta con `converged=false` o arrays vacíos).
-- En LLM-only, 0 items no resueltos por `convergence_mismatch` y 12 por `voltage_error`.
+- En LLM-only, 0 items no resueltos por `convergence_mismatch` y 14 por `voltage_error`.
 - Ningún item terminó con `error`.
-- Solved de `llm_only_forced:structured`: 70.0 % (28/40).
+- Solved de `llm_only_forced:structured`: 17.5 % (7/40).
 - Ningún item reclamó éxito sobre un fallo (claimed_success_on_failure=0).
 - Trazabilidad de números (Faith.) media en LLM-only: 1.6 % (sin tools, todo número es no trazable salvo los copiados de la request).
 - Costo total 0.6674 USD; el método más caro fue `llm_only_forced:structured` con 0.6674 USD (100 %).

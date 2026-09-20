@@ -25,7 +25,7 @@ from benchmarks.fill_table import (  # noqa: E402
 MODEL = "fake:scripted"
 
 EXPECTED_LABELS = [
-    "Structured", "Few-shot", "Chain-of-thought", "RAG",
+    "Structured", "Few-shot", "Chain-of-thought", "RAG", "LLM only, forced",
     "Structured", "Few-shot", "Chain-of-thought", "RAG",
     "Rule-based parser, no LLM", "Single-call, best prompt", "ReAct", "Plan-and-Act", "PFAgent: ReAct + gate",
 ]
@@ -112,9 +112,9 @@ def test_row_order_and_shape(reports_dir, tmp_path):
     assert [r[1] for r in rows] == EXPECTED_LABELS
     assert all(len(r) == 2 + len(COLUMNS) for r in rows)
     assert tex.count(r"\midrule") == 2
-    assert rows[0][0] == r"\multirow{4}{*}{LLM-only (Sec.~\ref{sec:prompting})}"
-    assert rows[4][0] == r"\multirow{4}{*}{Single-call (Sec.~\ref{sec:prompting})}"
-    assert rows[8][0] == r"\multirow{5}{*}{Architectures (Sec.~\ref{sec:agents})}"
+    assert rows[0][0] == r"\multirow{5}{*}{LLM-only (Sec.~\ref{sec:prompting})}"
+    assert rows[5][0] == r"\multirow{4}{*}{Single-call (Sec.~\ref{sec:prompting})}"
+    assert rows[9][0] == r"\multirow{5}{*}{Architectures (Sec.~\ref{sec:agents})}"
     assert rows[1][0] == "" and tex.splitlines()[1].startswith(" & Few-shot")
     # no tabular preamble or rules other than \midrule
     assert r"\begin{tabular}" not in tex and r"\toprule" not in tex and r"\bottomrule" not in tex
@@ -122,9 +122,14 @@ def test_row_order_and_shape(reports_dir, tmp_path):
 
 def test_missing_methods_are_dashes(reports_dir, tmp_path):
     _, tex = _run(reports_dir, tmp_path)
+    data_rows = _data_rows(tex)
+    block_sizes = [len(rows) for _setting, rows in table_blocks()]
+    block_of = []
+    for b, size in enumerate(block_sizes):
+        block_of.extend([b] * size)
     by_label = {}
-    for i, r in enumerate(_data_rows(tex)):
-        by_label.setdefault((i // 4 if i < 8 else 2, r[1]), r[2:])
+    for i, r in enumerate(data_rows):
+        by_label.setdefault((block_of[i], r[1]), r[2:])
     llm_only_structured = _data_rows(tex)[0][2:]
     expected = [MISSING] * len(COLUMNS)
     expected[[c.name for c in COLUMNS].index("Calls")] = "n/a"  # LLM-only has no tools
@@ -136,7 +141,7 @@ def test_missing_methods_are_dashes(reports_dir, tmp_path):
 def test_number_formatting_and_weighting(reports_dir, tmp_path):
     _, tex = _run(reports_dir, tmp_path)
     rows = _data_rows(tex)
-    structured = rows[4]
+    structured = rows[5]
     assert structured[1] == "Structured"
     form, v_mae, f_mae, solved, solver_status, b_mean, faith, sfr, calls, tok = structured[2:]
     assert form == "70.0"  # (0.8*40 + 0.5*20) / 60
@@ -147,7 +152,7 @@ def test_number_formatting_and_weighting(reports_dir, tmp_path):
     assert solver_status == "100.0" and b_mean == "0" and faith == "90.0" and sfr == "100.0"
     assert calls == "1.3"  # (1*40 + 2*20) / 60
     assert tok == "1100"  # (1000*40 + 1300*20) / 60
-    rule = rows[8]
+    rule = rows[9]
     assert rule[1] == "Rule-based parser, no LLM"
     assert rule[2 + 1] == "0"  # V_MAE exactly zero
     assert rule[2 + 9] == "n/a"  # no LLM, so tokens are not applicable
@@ -156,8 +161,8 @@ def test_number_formatting_and_weighting(reports_dir, tmp_path):
 def test_best_prompt_selection(reports_dir, tmp_path):
     _, tex = _run(reports_dir, tmp_path)
     rows = _data_rows(tex)
-    cot = rows[6]
-    best = rows[9]
+    cot = rows[7]
+    best = rows[10]
     assert cot[1] == "Chain-of-thought" and best[1] == "Single-call, best prompt"
     assert best[2:] == cot[2:]
     assert best[2 + 1] == r"$1.65{\times}10^{-5}$"  # V_MAE
@@ -173,7 +178,7 @@ def test_per_system_and_scaling_csv(reports_dir, tmp_path):
         rows = _data_rows(p.read_text(encoding="utf-8"))
         assert [r[1] for r in rows] == EXPECTED_LABELS
     case14 = _data_rows(out.with_name("rows_case14.tex").read_text(encoding="utf-8"))
-    assert case14[4][2 + 3] == "100.0"  # Solved, structured, case14 only
+    assert case14[5][2 + 3] == "100.0"  # Solved, structured, case14 only
     with csv_path.open(newline="") as fh:
         recs = list(csv.DictReader(fh))
     assert {(r["method"], r["case"]) for r in recs} == {
