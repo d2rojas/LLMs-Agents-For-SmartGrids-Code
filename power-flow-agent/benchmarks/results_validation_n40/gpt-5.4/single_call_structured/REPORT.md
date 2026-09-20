@@ -1,6 +1,6 @@
 # Informe de experimento: `single_call_structured`
 
-Generado el 2026-09-18 23:19 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio single_call_structured (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-19 19:42 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio single_call_structured (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
