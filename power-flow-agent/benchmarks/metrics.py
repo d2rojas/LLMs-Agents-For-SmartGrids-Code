@@ -96,6 +96,17 @@ FORMULATION_ERROR_TYPES: Tuple[str, ...] = (
 RECOMPUTING_TOOLS: frozenset[str] = frozenset({"modify_load", "disconnect_line", "reconnect_line", "run_powerflow"})
 # Read-only tools that never change the network state; extra calls are benign.
 BENIGN_EXTRA_TOOLS: frozenset[str] = frozenset({"run_powerflow", "get_status", "get_most_loaded_branch", "generate_plot"})
+# Read-only analysis tools that, unlike BENIGN_EXTRA_TOOLS, are only forgiven as a
+# REPEAT of a call the request already intended -- a first-time, wholly unrequested
+# occurrence is still a real extra_step (it has no backstop rule the way run_powerflow's
+# absence is separately caught by R10's solve requirement; an unrequested N-1 analysis
+# nobody asked for is still a formulation deviation worth flagging). Only excess
+# occurrences beyond the count already in intended_calls are dropped -- see
+# _drop_excess_repeats. 2026-09-21: PFAgent's verification-retry protocol re-runs its
+# read-only analysis calls (blocked from mutating tools on retry) when checking its own
+# answer again, which used to cost a formulation point for doing exactly what the gate
+# is supposed to do.
+REPEATABLE_ANALYSIS_TOOLS: frozenset[str] = frozenset({"run_n1_contingency"})
 # Tools that change the network (stale_state); each also re-solves and returns the
 # new PowerFlowResult (apply_remedial_action nests it under "result").
 MUTATING_TOOLS: frozenset[str] = frozenset({"modify_load", "disconnect_line", "reconnect_line", "apply_remedial_action"})
@@ -640,6 +651,35 @@ def _strip_benign_calibrated(calls: List[Dict[str, Any]]) -> Tuple[List[Dict[str
     return out, notes
 
 
+def _drop_excess_repeats(
+    executed_core: List[Dict[str, Any]], intended_core: List[Dict[str, Any]]
+) -> Tuple[List[Dict[str, Any]], List[str]]:
+    """Drop REPEATABLE_ANALYSIS_TOOLS occurrences in ``executed_core`` beyond how many
+    times ``intended_core`` already calls for that tool -- see REPEATABLE_ANALYSIS_TOOLS'
+    own comment for why this is a repeat-count rule rather than BENIGN_EXTRA_TOOLS'
+    unconditional strip. The cap is at least 1 even when the tool is absent from
+    ``intended_core``, so a wholly unrequested call still shows up once for R3's
+    sequence match (a real deviation, still flagged) rather than being erased outright;
+    only genuine repeats collapse."""
+    allowed: Dict[str, int] = {}
+    for c in intended_core:
+        if c["tool"] in REPEATABLE_ANALYSIS_TOOLS:
+            allowed[c["tool"]] = allowed.get(c["tool"], 0) + 1
+    seen: Dict[str, int] = {}
+    out: List[Dict[str, Any]] = []
+    notes: List[str] = []
+    for c in executed_core:
+        tool = c["tool"]
+        if tool in REPEATABLE_ANALYSIS_TOOLS:
+            seen[tool] = seen.get(tool, 0) + 1
+            cap = max(allowed.get(tool, 0), 1)  # an unrequested call still gets its first occurrence kept
+            if seen[tool] > cap:
+                notes.append(f"repeated read-only {tool} beyond the intended count ignored")
+                continue
+        out.append(c)
+    return out, notes
+
+
 def formulation_check(
     intended_calls: Optional[Sequence[Dict[str, Any]]],
     executed_calls: Optional[Sequence[Dict[str, Any]]],
@@ -661,6 +701,12 @@ def formulation_check(
         intended ``run_powerflow`` is checked separately, R10), ``get_status``,
         ``get_most_loaded_branch``, ``generate_plot`` (``BENIGN_EXTRA_TOOLS``), and a
         ``load_case`` that re-loads the case already loaded before any mutation.
+    R2b Read-only *analysis* calls (``REPEATABLE_ANALYSIS_TOOLS``, currently
+        ``run_n1_contingency``) are not unconditionally ignored like R2 -- only
+        occurrences beyond how many times the request already intends that tool are
+        dropped, so a repeat (e.g. PFAgent's verification retry re-checking its own
+        answer with a read-only call it already made once) is benign but a wholly
+        unrequested occurrence still surfaces to R3, once, as a real deviation.
     R3  Remaining tool sequences must match in order. Missing intended tools, or a
         different tool in place of the intended one -> ``missed_step``; unintended
         tools that survive R2 (every mutating or analysis tool: ``modify_load``,
@@ -742,6 +788,8 @@ def formulation_check(
 
     intended_core, _ = _strip_benign_calibrated(intended_raw)
     executed_core, benign_notes = _strip_benign_calibrated(executed_raw)
+    executed_core, repeat_notes = _drop_excess_repeats(executed_core, intended_core)
+    benign_notes = benign_notes + repeat_notes
     intended_needs_solve = any(c["tool"] == "run_powerflow" for c in intended_raw)
 
     def _result(exact: bool, err: str, detail: str) -> Dict[str, Any]:

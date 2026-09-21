@@ -484,7 +484,10 @@ def test_rule_based_end_to_end_on_generated_case14_requests(tmp_path):
         assert row["formulation_error_type"] in ("ok", "wrong_id", "wrong_unit_or_value", "missed_step", "extra_step", "unparsed")
         assert row["intended_calls"][0]["tool"] == "load_case"
         assert row["system_prompt_hash"] is None  # rule_based has no LLM system prompt
-        assert "truth_answer" in row  # persisted for every row from a generated request, not just numeric_ok ones
+        # Not just "key present": compute_ground_truth's real answer dict, not the None a
+        # broken getattr chain against nonexistent Item attributes used to silently produce
+        # for every row on every live run (see test_fresh_run_matches_its_own_rescore).
+        assert isinstance(row["truth_answer"], dict) and row["truth_answer"]
     sb = report["scoreboard"][0]
     assert sb["n_items"] == 2 and sb["formulation_exact_total"] == 2
     assert sum(sb["formulation_error_counts"].values()) == 2
@@ -501,6 +504,79 @@ def test_rule_based_end_to_end_on_generated_case14_requests(tmp_path):
     cmp_rows = json.loads((cmp_out / "c.json").read_text(encoding="utf-8"))
     assert cmp_rows[0]["task"] == "rule_based" and "success_rate" in cmp_rows[0]
     assert "formulation_exact_rate" in DEFAULT_FIELDS and cmp_rows[0]["k"] == 1
+
+
+def test_fresh_run_matches_its_own_rescore(tmp_path):
+    """A live run and rescore.py's offline recompute of that same run must be the exact
+    same file, field for field, not just agree on solved/solved_reason -- the harness's
+    own run-time path is expected to already produce the paper's current scoring, not
+    need a second pass to get there. Two dead paths this catches (2026-09-21):
+
+    * truth_answer was always None on every live row, from a getattr chain against Item
+      attributes that never existed, so solved_check's answer-matching branch never ran
+      live and every live run silently reproduced the pre-redefinition, numeric_ok-
+      suffices Solved definition regardless of when it was run.
+    * KCL (and any other metric needing the solved network) was scored against ctx.net
+      unconditionally live, instead of only when formulation was exact like rescore.py
+      does -- a wrong-formulation row got a real (meaningless) KCL number live that
+      rescore correctly blanks to None.
+
+    Traces are NOT disabled: rescore.py prefers the full untruncated trace file over a
+    row's own truncated embedded trace when one exists, so a --no-traces run compares
+    the live path against a rescore working from strictly less information than a real
+    run would have and reports spurious faithfulness/traceability diffs that a real
+    (traced) run does not have -- this test exercises the harness the way every actual
+    committed run is produced, not the fast-test shortcut.
+    """
+    from benchmarks.rescore import rescore_report
+
+    out_dir = tmp_path / "rb"
+    rc = main(["--method", "rule_based", "--case", "case14", "--gen-requests", "40", "--seeds", "1",
+               "--out-dir", str(out_dir), "--quiet"])
+    assert rc == 0
+    fresh = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
+    rescore_report(out_dir / "report.json", verbose=False)
+    rescored = json.loads((out_dir / "report.rescored.json").read_text(encoding="utf-8"))
+
+    fresh_rows = {r["request_id"]: r for r in fresh["runs"]}
+    rescored_rows = {r["request_id"]: r for r in rescored["runs"]}
+    assert set(fresh_rows) == set(rescored_rows) and len(fresh_rows) == 40
+
+    # "rescore" is rescore.py's own added provenance metadata (trace_source/truth_source/
+    # etc.) and has no fresh-run counterpart to compare against. V6/V7
+    # (notes/mision_cero_erroneas.md) are rescore-only measurement fields for now --
+    # not yet computed on the live path, by design (step 2 of that mission is
+    # measuring what V6/V7 would change *before* wiring them into the live gate in
+    # step 3) -- so they are the one deliberate exception to "exact same file" this
+    # test otherwise enforces; every other key must match.
+    _RESCORE_ONLY_KEYS = {
+        "rescore",
+        "v6_argument_grounding_passed",
+        "v6_invented_args",
+        "v7_claims_from_tools_passed",
+        "v7_claims_from_tools_detail",
+    }
+    mismatches = {}
+    for rid in fresh_rows:
+        fr, rr = fresh_rows[rid], rescored_rows[rid]
+        diff = {
+            k: (fr.get(k), rr.get(k))
+            for k in set(fr) | set(rr)
+            if k not in _RESCORE_ONLY_KEYS and fr.get(k) != rr.get(k)
+        }
+        if diff:
+            mismatches[rid] = diff
+    assert mismatches == {}
+    assert fresh["scoreboard"][0]["solved_rate"] == rescored["scoreboard"][0]["solved_rate"]
+    assert fresh["scoreboard"][0]["kcl_mean_mismatch_mw_mean"] == rescored["scoreboard"][0]["kcl_mean_mismatch_mw_mean"]
+    # the specific reason class the truth_answer bug always fell into for every numeric_ok
+    # item: real coverage of this test requires at least one item where the answer
+    # actually mismatches the reference, or an "always numeric_ok" regression would pass
+    # silently
+    assert any(r["solved_reason"] == "answer_mismatch" for r in fresh_rows.values())
+    # coverage for the KCL/formulation-exact gate: at least one wrong-formulation row,
+    # or a regression back to "always pass ctx.net" would also pass silently
+    assert any(r.get("formulation_exact") is False for r in fresh_rows.values())
 
 
 def test_compare_reports_still_reads_committed_pre_r1_report(tmp_path):

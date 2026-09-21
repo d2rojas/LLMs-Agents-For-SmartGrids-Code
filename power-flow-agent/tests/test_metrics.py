@@ -122,6 +122,75 @@ def test_set_active_load_and_set_load_are_formulation_equivalent_to_modify_load(
     assert out4["formulation_exact"] is False
 
 
+def test_set_active_load_alias_holds_on_the_real_multistep_shape_that_needed_it():
+    """2026-09-21: results_validation_load_split/gpt-5.4/react_nogate's report.json
+    (predates this alias, and is gitignored -- not a fixture this test can read from a
+    clean checkout) reads formulation_exact=False/missed_step on the item this shape is
+    taken from; report.rescored.json (rescored after the alias landed) reads True/ok --
+    the number the paper quotes. Confirmed directly (not assumed) by re-running *current*
+    formulation_check on that file's own stored intended/executed calls, which already
+    gives the rescored answer: the gap is not a live-path bug the way the truth_answer/
+    KCL-gating/N1-repeat ones are, since formulation_check is one shared function
+    evaluate_llms.py and rescore.py both call -- that report.json is simply older than
+    the alias existing at all, which rescoring is exactly for. This test pins the real
+    shape (set_active_load standing in for modify_load inside a longer disconnect/
+    reconnect/re-solve sequence, not the isolated single-call case above) so the alias
+    is covered on the shape that actually needed it, without depending on the
+    ungitignored file.
+    """
+    intended = [
+        _c("load_case", case_name="case14"), _c("modify_load", bus_id=3, p_mw=42.7),
+        _c("disconnect_line", from_bus=2, to_bus=3), _c("reconnect_line", from_bus=2, to_bus=3),
+        _c("run_powerflow"),
+    ]
+    executed = [
+        _c("load_case", case_name="case14"), _c("set_active_load", bus_id=3, p_mw=42.7),
+        _c("disconnect_line", from_bus=2, to_bus=3), _c("reconnect_line", from_bus=2, to_bus=3),
+        _c("run_powerflow"),
+    ]
+    out = formulation_check(intended, executed)
+    assert out["formulation_exact"] is True and out["formulation_error_type"] == "ok"
+
+
+def test_repeated_read_only_analysis_call_is_benign_but_a_genuine_extra_mutation_is_not():
+    """2026-09-21: PFAgent's verification-retry re-runs its read-only analysis calls
+    (blocked from mutating tools on retry) to check its own answer again. That repeat used
+    to cost a formulation point for doing exactly what the gate is supposed to do --
+    case14-multistep-022-s0 (gpt-4o-mini, pfagent) below is the real item that surfaced it.
+    Covers both directions: the repeat must now be forgiven, and a genuine extra *mutating*
+    step (case14-stress-000-s0, results_validation_gpt-4o-mini_stress_v1) must still fail --
+    this fix narrows one specific false positive, not formulation checking in general.
+    """
+    intended = [_c("load_case", case_name="case14"), _c("disconnect_line", from_bus=9, to_bus=10),
+                _c("modify_load", bus_id=3, p_mw=118.6), _c("modify_load", bus_id=4, p_mw=53.6),
+                _c("run_n1_contingency", top_k=8, criteria="max_violations")]
+    executed = intended + [_c("run_powerflow"), _c("run_n1_contingency", top_k=8, criteria="max_violations")]
+    out = formulation_check(intended, executed)
+    assert out["formulation_exact"] is True and out["formulation_error_type"] == "ok"
+    assert any("run_n1_contingency" in note for note in out["benign_notes"])
+
+    # same shape, but the repeat is a genuine mutation (undoing the disconnect): still a
+    # real formulation error, not swept up by the same exemption.
+    intended2 = [_c("load_case", case_name="case14"), _c("disconnect_line", from_bus=7, to_bus=8)]
+    executed2 = intended2 + [_c("reconnect_line", from_bus=7, to_bus=8)]
+    out2 = formulation_check(intended2, executed2)
+    assert out2["formulation_exact"] is False and out2["formulation_error_type"] == "extra_step"
+
+    # the backstop this fix must not break: a genuinely unrequested (not a repeat) call to
+    # a repeatable-analysis tool is still a real deviation, and a genuinely *missing*
+    # intended call to one is still caught, not silently forgiven either way.
+    intended3 = [_c("load_case", case_name="case14")]
+    executed3 = intended3 + [_c("run_n1_contingency"), _c("run_n1_contingency")]
+    out3 = formulation_check(intended3, executed3)
+    assert out3["formulation_exact"] is False and out3["formulation_error_type"] == "extra_step"
+    assert out3["detail"] == "unintended tools: ['run_n1_contingency']"  # deduplicated, not doubled
+
+    intended4 = [_c("load_case", case_name="case14"), _c("run_n1_contingency")]
+    executed4 = [_c("load_case", case_name="case14")]
+    out4b = formulation_check(intended4, executed4)
+    assert out4b["formulation_exact"] is False and out4b["formulation_error_type"] == "missed_step"
+
+
 @pytest.mark.parametrize(
     "executed,expected",
     [

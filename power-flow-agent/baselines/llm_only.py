@@ -27,7 +27,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 
-from llm.engine import LLMClient, OpenAIChatClient
+from llm.engine import GATE_BALANCE_REL_TOL, GATE_BALANCE_TOL_MW, LLMClient, OpenAIChatClient
 from solver import case_loader
 from solver.power_flow import SolverConfig, run_power_flow
 from models.schemas import PowerFlowResult
@@ -871,11 +871,24 @@ def evaluate_against_truth_extended(
     kcl_self_violation_rate = None
     kcl_max_mismatch_mw = None
     kcl_mean_mismatch_mw = None
+    feasible = None
     if net is not None and parsed.line_ends:
         kcl_metrics = _compute_kcl_self_consistency(parsed, net, truth)
         kcl_self_violation_rate = kcl_metrics.get("kcl_self_violation_rate")
         kcl_max_mismatch_mw = kcl_metrics.get("kcl_max_mismatch_mw")
         kcl_mean_mismatch_mw = kcl_metrics.get("kcl_mean_mismatch_mw")
+        # "Feasible": kcl_mean_mismatch_mw (B_mean's own per-item residual) against the
+        # same tolerance the V2 verification gate uses for system-wide active-power
+        # balance (llm.engine.GATE_BALANCE_TOL_MW / _REL_TOL), so no new threshold to
+        # justify and no rerun -- computed from data evaluate_against_truth_extended
+        # already produces (2026-09-21, replaces an earlier "B_mean, all requests"
+        # composite column: kcl_mean_mismatch_mw is a self-consistency check on whatever
+        # network the agent actually solved, so the solver satisfies it on invented
+        # parameters just as well as real ones and it can never be large the way V_MAE
+        # against the true reference is -- a rate over a fixed tolerance is meaningful
+        # where an "against the reference" version of the same quantity is not).
+        if kcl_mean_mismatch_mw is not None:
+            feasible = bool(kcl_mean_mismatch_mw <= max(GATE_BALANCE_TOL_MW, GATE_BALANCE_REL_TOL * truth.total_load_mw))
 
     # F1 scores
     v_prec = base.get("voltage_violation_precision")
@@ -950,6 +963,7 @@ def evaluate_against_truth_extended(
         "kcl_self_violation_rate": kcl_self_violation_rate,
         "kcl_max_mismatch_mw": kcl_max_mismatch_mw,
         "kcl_mean_mismatch_mw": kcl_mean_mismatch_mw,
+        "feasible": feasible,
         "voltage_f1": voltage_f1,
         "thermal_f1": thermal_f1,
         "convergence_match": convergence_match,

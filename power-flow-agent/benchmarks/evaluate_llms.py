@@ -158,6 +158,16 @@ EXTENDED_SCOREBOARD_FIELDS = [
     # docstring on why the unconditioned voltage_mae_mean mixes two different failures
     # for any tool-using row. voltage_mae_mean above stays as-is for the supplement.
     "voltage_mae_formulation_exact_mean",
+    # Same conditioning, branch flows: the composite's B_mean (kcl_mean_mismatch_mw) is a
+    # self-consistency check on whatever network the agent actually solved -- the solver
+    # satisfies KCL on invented parameters just as well as real ones, so it cannot be the
+    # "large where parameters were invented" column notes/tabla_objetivo_pfagent_v2.md's
+    # V_MAE(all)/F_MAE(all) pair calls for (2026-09-21 PI meeting, T3). flow_mae_mean
+    # (unconditioned, against the true reference) already is that column for flows;
+    # this is its formulation-exact-conditioned twin, mirroring voltage_mae's pair.
+    "flow_mae_formulation_exact_mean",
+    "kcl_mean_mismatch_mw_formulation_exact_mean",
+    "feasible_rate",
     # Where every request ends, as three outcomes summing to 100%: solved_autonomously,
     # escalated, wrong_silently -- NOT solved_rate above, which can overlap with
     # escalated_rate (see benchmarks.scoring.escalation_check / module docstring).
@@ -668,6 +678,7 @@ class Item:
     truth_net: Any = None
     truth_tool_errors: list[dict[str, Any]] = field(default_factory=list)
     truth_error: Optional[str] = None
+    truth_answer: Any = None  # compute_ground_truth(req)["answer"]; see evaluate_item's use
 
 
 def execute_intended(
@@ -733,9 +744,23 @@ def build_items(
             from benchmarks.requests import generate_requests
 
             requests = generate_requests(canonical, int(gen_requests), int(seed), difficulties or None)
+        from benchmarks.requests import compute_ground_truth
+
         for req in requests:
             if case_loader.normalize_case_name(req.case_name) != canonical:
                 continue
+            # compute_ground_truth's own "answer" field: the harness used to compute this
+            # and discard it right after formulation checking, leaving solved_check's
+            # answer_matches_truth with nothing to check on any live run (only rescore.py,
+            # which calls compute_ground_truth itself, ever populated it) -- every live run
+            # therefore always took solved_check's "no checkable answer" branch, silently
+            # reproducing pre-redefinition (numeric_ok-suffices) behavior regardless of when
+            # it ran. Computed here, once, same as rescore.py, so a fresh run already matches
+            # what rescoring it would produce.
+            try:
+                truth_answer = compute_ground_truth(req, k=int(k)).get("answer")
+            except Exception:  # pragma: no cover - defensive, matches execute_intended's own try/except below
+                truth_answer = None
             items.append(
                 Item(
                     case_name=canonical,
@@ -749,6 +774,7 @@ def build_items(
                     expected_outcome=str(getattr(req, "expected_outcome", "converged")),
                     notes=req.notes,
                     gen_seed=int(seed),
+                    truth_answer=truth_answer,
                 )
             )
 
@@ -1003,7 +1029,17 @@ def evaluate_item(
                 final_result = run_power_flow(ctx.net, config=solver_config)
             if final_result is not None:
                 final_converged = bool(final_result.converged)
-                metrics = _numeric_metrics(baseline_parsed_from_result(final_result), item, ctx.net, solver_config)
+                # Only score numeric metrics (including KCL, which needs the actual solved
+                # network) against the network the method actually produced when its
+                # formulation was exact -- a wrong-formulation row's ctx.net is the state
+                # after the WRONG tool calls, not a network any reference comparison means
+                # anything against. rescore.py already withholds it the same way
+                # (`net = truth_net if (not has_tools or formulation_exact is True) else
+                # None`); this mirrors that condition on the live path instead of always
+                # passing ctx.net, which used to score a real (meaningless) KCL number for
+                # every wrong-formulation item live, disagreeing with its own rescore.
+                net_for_metrics = ctx.net if formulation.get("formulation_exact") is True else None
+                metrics = _numeric_metrics(baseline_parsed_from_result(final_result), item, net_for_metrics, solver_config)
             if metrics is None:
                 raise RuntimeError("no_solver_result: the method produced no power-flow state to score")
         ok = metrics is not None
@@ -1041,11 +1077,10 @@ def evaluate_item(
         has_tools=has_tools,
         reference_solvable=reference_solvable,
     )
-    # The harness computes this (compute_ground_truth's "answer" field) and used to discard
-    # it right after solved_check -- persisted below so a numeric_ok item (whose Solved verdict
-    # never actually reaches answer_matches_truth, see solved_check) can still be checked
-    # offline against what the request asked for, without recomputing ground truth.
-    truth_answer = getattr(item, "truth_answer", None) or (getattr(getattr(item, "request", None), "ground_truth", None) or {}).get("answer")
+    # item.truth_answer: compute_ground_truth's "answer" field, computed once in
+    # build_items (see there for why -- this used to be an always-None getattr chain
+    # against attributes Item never had).
+    truth_answer = item.truth_answer
     solved = bs.solved_check(
         ok=ok,
         has_tools=has_tools,
@@ -1246,6 +1281,27 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
         # baselines/llm_only.py::_pq_bus_ids.
         "voltage_mae_pq_mean": _safe_mean([(r.get("metrics") or {}).get("voltage_mae_pq") for r in ok_rows]),
         "flow_mae_mean": _safe_mean([(r.get("metrics") or {}).get("flow_mae") for r in ok_rows]),
+        # flow_mae's formulation-exact-conditioned twin -- see EXTENDED_SCOREBOARD_FIELDS'
+        # comment on why B_mean cannot be the "large where parameters were invented" flow
+        # column and this is.
+        "flow_mae_formulation_exact_mean": _safe_mean(
+            [(r.get("metrics") or {}).get("flow_mae") for r in form_exact_ok_rows]
+        ),
+        # B_mean's own "solved" twin: kcl_mean_mismatch_mw_mean below stays as the
+        # unconditioned "all" version (2026-09-21: confirmed nonzero in real data --
+        # GPT-5.4 PFAgent 8.26e-3, single-call 4.79e-2, from stale/non-converged states --
+        # not the always-zero the composite spec first assumed). This is the formulation-
+        # exact-conditioned "solved" pairing, mirroring voltage_mae's pair exactly.
+        "kcl_mean_mismatch_mw_formulation_exact_mean": _safe_mean(
+            [(r.get("metrics") or {}).get("kcl_mean_mismatch_mw") for r in form_exact_ok_rows]
+        ),
+        # Share of answers whose reported flows satisfy bus balance within the V2
+        # verification-gate tolerance (baselines/llm_only.py's evaluate_against_truth_
+        # extended computes the per-item boolean; None for no-tools methods, excluded
+        # here the same way voltage_mae_mean excludes rows with no metrics, not counted
+        # as failing). See that field's own comment for why this replaced a "B_mean,
+        # all requests" composite column.
+        "feasible_rate": _safe_mean([(r.get("metrics") or {}).get("feasible") for r in ok_rows]),
         "loading_rmse_mean": _safe_mean([(r.get("metrics") or {}).get("loading_rmse") for r in ok_rows]),
         "voltage_f1_mean": _safe_mean([(r.get("metrics") or {}).get("voltage_f1") for r in ok_rows]),
         "thermal_f1_mean": _safe_mean([(r.get("metrics") or {}).get("thermal_f1") for r in ok_rows]),
@@ -1440,6 +1496,8 @@ def run_benchmark(
     condition: str = "normal",
     tool_variant: str = "v1",
     plan_variant: str = "text",
+    shard_index: Optional[int] = None,
+    shard_count: Optional[int] = None,
 ) -> dict[str, Any]:
     """Run every (model, method, case, seed, item, run) and aggregate.
 
@@ -1449,6 +1507,16 @@ def run_benchmark(
     stamped on every scoreboard row so fill_table.py can key on (model, method, case,
     condition) instead of silently merging a stress run into a normal one that shares
     the same (model, method, case) — see fill_table.load_case_rows.
+
+    ``shard_index``/``shard_count`` (both None by default, byte-identical to every
+    existing call site): split each (case, seed)'s item list into ``shard_count``
+    contiguous, non-overlapping blocks and run only block ``shard_index`` (0-based).
+    generate_requests(case, N, seed, ...) is deterministic, so every shard of the
+    same (case, N, seed) sees the identical full item list before slicing -- the
+    split needs no coordination between shard processes. Intended for
+    benchmarks/merge_shards.py to reassemble afterward, not for standalone use: a
+    sharded report's ``config`` records ``shard_index``/``shard_count`` so the merge
+    step can refuse to combine shards that do not actually tile one run.
     """
     method_names = list(methods or tasks or [])
     if not method_names:
@@ -1476,6 +1544,11 @@ def run_benchmark(
             )
             if k == 0 and any(it.truth_error for it in items) and not (gen_requests or file_requests):
                 raise RuntimeError(f"Ground-truth solver did not converge for {case_name}")
+            if shard_count:
+                n = len(items)
+                start = (int(shard_index) * n) // int(shard_count)
+                end = ((int(shard_index) + 1) * n) // int(shard_count)
+                items = items[start:end]
             for method in method_specs:
                 model_list = list(models) if method.uses_llm else [RULE_BASED_MODEL]
                 for model_spec in model_list:
@@ -1530,6 +1603,8 @@ def run_benchmark(
             "condition": condition,
             "tool_variant": tool_variant,
             "plan_variant": plan_variant,
+            "shard_index": shard_index,
+            "shard_count": shard_count,
             "runs": runs,
             "k": int(k),
             "seeds": [int(s) for s in seeds],
@@ -1590,14 +1665,23 @@ def _parse_seed_list(raw: Optional[str]) -> Optional[list[int]]:
     return [int(s) for s in str(raw).replace(";", ",").split(",") if s.strip()]
 
 
-def write_report(out_dir: Path, report: dict[str, Any]) -> None:
-    _write_json(out_dir / "report.json", report)
-    _write_json(out_dir / "scoreboard.json", report["scoreboard"])
-    _write_csv(out_dir / "scoreboard.csv", _flatten_scoreboard(report["scoreboard"]))
-    _write_markdown(out_dir / "scoreboard.md", report["scoreboard"], report.get("config"))
-    _write_json(out_dir / "scoreboard_per_case.json", report["scoreboard_per_case"])
-    _write_csv(out_dir / "scoreboard_per_case.csv", _flatten_case_scoreboard(report["scoreboard_per_case"]))
-    _write_case_markdown(out_dir / "scoreboard_per_case.md", report["scoreboard_per_case"])
+def write_report(out_dir: Path, report: dict[str, Any], *, filename: str = "report.json") -> None:
+    """``filename`` defaults to ``report.json`` (every existing call site, unchanged).
+
+    A sharded run passes e.g. ``report.shard0of4.json`` instead, so partial shards
+    never collide with each other or look like a complete report; the scoreboard
+    files it writes alongside are also shard-scoped rather than the final
+    ``scoreboard.*`` names, since they are not yet the real aggregate — merge_shards.py
+    produces the real ``report.json``/``scoreboard.*`` once every shard has landed.
+    """
+    _write_json(out_dir / filename, report)
+    if filename == "report.json":
+        _write_json(out_dir / "scoreboard.json", report["scoreboard"])
+        _write_csv(out_dir / "scoreboard.csv", _flatten_scoreboard(report["scoreboard"]))
+        _write_markdown(out_dir / "scoreboard.md", report["scoreboard"], report.get("config"))
+        _write_json(out_dir / "scoreboard_per_case.json", report["scoreboard_per_case"])
+        _write_csv(out_dir / "scoreboard_per_case.csv", _flatten_case_scoreboard(report["scoreboard_per_case"]))
+        _write_case_markdown(out_dir / "scoreboard_per_case.md", report["scoreboard_per_case"])
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -1642,6 +1726,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         "run more than once under different conditions (default: 'stress' if --difficulty stress is "
         "the only requested difficulty, else 'normal')",
     )
+    parser.add_argument(
+        "--shard-index", dest="shard_index", type=int, default=None,
+        help="0-based index of this shard; requires --shard-count. Runs only that contiguous slice "
+        "of each (case, seed)'s item list and writes report.shard<I>of<N>.json instead of report.json "
+        "-- see benchmarks/merge_shards.py to reassemble the full report afterward.",
+    )
+    parser.add_argument(
+        "--shard-count", dest="shard_count", type=int, default=None,
+        help="total number of shards this run is one of; requires --shard-index.",
+    )
 
     args = parser.parse_args(argv)
 
@@ -1658,6 +1752,13 @@ def main(argv: Optional[list[str]] = None) -> int:
             raise SystemExit(f"{m} reads the MATPOWER .m file and cannot be perturbed; run it with --k 0")
     if args.requests_path and args.gen_requests:
         raise SystemExit("Use either --requests or --gen-requests, not both")
+    if (args.shard_index is None) != (args.shard_count is None):
+        raise SystemExit("--shard-index and --shard-count must be given together")
+    if args.shard_count is not None:
+        if args.shard_count < 1:
+            raise SystemExit("--shard-count must be >= 1")
+        if not (0 <= args.shard_index < args.shard_count):
+            raise SystemExit(f"--shard-index must be in [0, {args.shard_count})")
 
     cases = args.cases
     if not cases and args.requests_path:
@@ -1700,9 +1801,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         condition=condition,
         tool_variant=args.tool_variant,
         plan_variant=args.plan_variant,
+        shard_index=args.shard_index,
+        shard_count=args.shard_count,
     )
 
-    write_report(Path(args.out_dir), report)
+    if args.shard_count is not None:
+        write_report(Path(args.out_dir), report, filename=f"report.shard{args.shard_index}of{args.shard_count}.json")
+    else:
+        write_report(Path(args.out_dir), report)
     return 0
 
 
