@@ -313,6 +313,44 @@ def test_mutating_tool_during_retry_is_blocked_not_executed():
     assert "reconnect_line" in text
 
 
+def test_split_tool_load_mutations_are_blocked_during_retry_too():
+    """2026-09-21: _RETRY_BLOCKED_TOOLS was v1-only (modify_load) and predated
+    --tool-variant load_split's set_active_load/set_load pair -- an audit of the
+    four-row split-tool launch found no PFAgent trace actually exploited the gap
+    (every retry-window call was read-only across all 17 windows that occurred, both
+    models), but the list itself was wrong regardless of whether anything used it.
+    Structural counterpart to test_mutating_tool_during_retry_is_blocked_not_executed,
+    same scenario under the split tool set."""
+    from models.schemas import SessionState
+
+    isolated_pf = _pf_json(bus_voltages=[{"bus_id": 7, "vm_pu": 1.06, "va_deg": 0.0}, {"bus_id": 8, "vm_pu": None, "va_deg": None}])
+    reconnected_pf = _pf_json()
+    dispatcher = _RecordingDispatcher({"disconnect_line": isolated_pf, "set_active_load": reconnected_pf})
+
+    def _call(id_, name, args_json):
+        return {"id": id_, "type": "function", "function": {"name": name, "arguments": args_json}}
+
+    disconnect_call = [_call("1", "disconnect_line", '{"from_bus": 7, "to_bus": 8}')]
+    mutate_call = [_call("2", "set_active_load", '{"bus_id": 9, "p_mw": 70.0}')]
+    client = _ScriptedToolClient(
+        [
+            (None, disconnect_call),
+            ("Voltages are within limits.", []),  # fails no_isolated_buses -> retry injected
+            (None, mutate_call),  # attempts a load mutation instead of reporting the failure
+        ]
+    )
+    engine = LLMEngine(
+        client=client, dispatcher=dispatcher,
+        config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True, tool_variant="load_split"),
+    )
+    text, trace = engine.run_with_trace("Disconnect the branch between bus 7 and bus 8.", SessionState())
+
+    assert "set_active_load" not in dispatcher.calls  # never executed
+    assert dispatcher.calls == ["disconnect_line"]
+    assert trace["verification_outcome"] == "abstained_retry_mutation"
+    assert "set_active_load" in text
+
+
 # ----------------------------------------------------------------------------- V6/V7 (2026-09-21, cheap-tier live wiring)
 
 

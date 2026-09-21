@@ -94,7 +94,16 @@ PLAN_UNPARSEABLE_TEXT = (
 # verification retry is in effect: the model may inspect the current state (run_powerflow,
 # get_status, ...) but must not undo or replace the network change the request asked for just
 # to reach a state that happens to pass verification (see _run_react's retry_active).
-_RETRY_BLOCKED_TOOLS = frozenset({"modify_load", "disconnect_line", "reconnect_line", "apply_remedial_action", "load_case"})
+# set_active_load / set_load: the split tool set's load-mutation pair (llm/tools.py's
+# TOOLS_LOAD_SPLIT), in place of modify_load under --tool-variant load_split. Added
+# 2026-09-21 after an audit found this list was still v1-only (predates load_split):
+# every PFAgent trace in the four-row split-tool launch was checked directly and none
+# actually exploited the gap (every retry-window tool call was read-only), so that
+# launch's numbers stand, but the list itself was wrong regardless of whether anything
+# used it -- retry-gaming protection must cover whichever tool set is actually active.
+_RETRY_BLOCKED_TOOLS = frozenset(
+    {"modify_load", "set_active_load", "set_load", "disconnect_line", "reconnect_line", "apply_remedial_action", "load_case"}
+)
 
 GATE_WITHHELD_NOTE = (
     "Verification gate: the solver result did not pass verification, so numerical fields were "
