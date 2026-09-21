@@ -5,10 +5,12 @@ The paper's core table aggregates IEEE 14/30/57/118; this script writes the per-
 breakdown from the same ``report.json`` files, reusing the loaders, formatters, row
 mapping and n/a rules of ``benchmarks/fill_table.py``. Two layouts:
 
-  blocks   (default) one block per IEEE system, each with the 14 method rows and the 10
-           protocol columns of the main table (Form., V_MAE, F_MAE, Solved, Solver status,
-           B_mean, Faith., SFR, Calls, Tok.). Blocks are separated by ``\midrule`` and a
-           full-width ``\multicolumn{12}{l}{\textbf{IEEE 30-bus}}`` row.
+  blocks   (default) one block per IEEE system, each with the 14 method rows, the 11
+           protocol columns of the main table (Form., V_MAE solved, V_MAE all, B_mean
+           solved, B_mean all, Solved, Escalated, Wrong-unflagged, Traceable, Tokens,
+           Time (s)) and 5 supplement-only detail columns (Solver status,
+           Faith. (per-number), Stale, SFR, Calls). Blocks are separated by ``\midrule``
+           and a full-width ``\multicolumn{18}{l}{\textbf{IEEE 30-bus}}`` row.
   compact  methods x systems for two metrics (Form. and Calls by default, ``--metrics``):
            14 rows x (n_systems x 2) columns.
 
@@ -65,45 +67,39 @@ from benchmarks.fill_table import (  # noqa: E402
 DEFAULT_OUT = PROJECT_ROOT / "benchmarks" / "tab_pf_protocol_per_system.tex"
 NA = "n/a"
 LABELS = {"blocks": "tab:pf_protocol_per_system", "compact": "tab:pf_by_system"}
-# Two columns beyond the paper's 10-column body table (whose "Faith." is now per-answer,
-# over both faithfulness and currency -- see fill_table.py::COLUMNS): the older per-number
-# faithfulness rate the body table used before, and the separate staleness rate, kept here
-# for the supplement per Daniela's decision (2026-09-16) since the per-number rate is what
-# obscured how many answers were actually contaminated (three out of forty read as ~99% under
-# it). The offline V(x,c,z,y) pass rate ("V pass") is not a separate supplement column any
-# more: once restricted to items whose reference is solvable, it is identical to the new
-# per-answer Faith. in every row checked, since conditions 1-3 already pass wherever they are
-# applicable there -- it was never carrying information beyond conditions 4 and 5.
-# Escalated / Wrong (silent), with the body table's own Solved, are where every request
-# ends up (they sum to 100%): an explicit handoff to a person, vs. an autonomous wrong
-# answer nothing flags. Only architectures with a real handoff mechanism can score
-# Escalated > 0 -- see benchmarks.scoring.escalation_check -- so it reads 0 rather than
-# a dash for every method without one, per Daniela's decision (2026-09-17,
-# notes/tabla_objetivo_pfagent.md).
+# Five columns beyond the paper's 11-column body table (see fill_table.py::COLUMNS):
+# detail the main table no longer carries directly, kept here for the supplement.
+# Solver status: reported convergence matches the reference. Faith. (per-number) is the
+# older per-number faithfulness rate the body table used before Traceable became
+# per-answer, and Stale the separate staleness rate, kept here per Daniela's decision
+# (2026-09-16) since the per-number rate is what obscured how many answers were
+# actually contaminated (three out of forty read as ~99% under it). SFR (safe-failure
+# rate) and Calls (mean tool calls) were in the main table before the 2026-09-21
+# restructure and move here, not dropped. F_MAE (flow_mae, both versions) is not a
+# column anywhere, main or supplement, per Daniela's decision the same day: B_mean
+# keeps the body's numeric-error pair, F_MAE stays a computed field only.
 SUPPLEMENT_COLUMNS: tuple[Column, ...] = COLUMNS + (
+    Column("Solver status", ("convergence_match_rate",), "pct"),
     Column("Faith. (per-number)", ("faithful_numbers_mean",), "pct"),
     Column("Stale", ("stale_state_rate",), "pct", "stale_state_total"),
-    Column("Escalated", ("escalated_rate",), "pct"),
-    Column("Wrong (silent)", ("wrong_silently_rate",), "pct"),
-    # Cost-and-operation group (notes/tabla_objetivo_pfagent.md), Daniela's final call
-    # 2026-09-21: mean wall-clock seconds per request, per method, plain -- no manual-
-    # time constant and no escalation term (Escalated already has its own column, so
-    # the operator cost stays visible and a reader can combine the two). The human-
-    # with-solver row has no machine time and reads -- until Daniela times her batch,
-    # at which point her per-case time goes in this same column in the same unit.
-    Column("Time (s)", ("wall_time_s_mean",), "f2"),
+    Column("SFR", ("safe_failure_rate",), "pct", "safe_failure_total"),
+    Column("Calls", ("n_tool_calls_mean",), "f1z"),
 )
 COLUMN_NAMES = [c.name for c in SUPPLEMENT_COLUMNS]
-COLUMN_HEADS = {"V_MAE": r"$V_{\mathrm{MAE}}$", "F_MAE": r"$F_{\mathrm{MAE}}$", "B_mean": r"$B_{\mathrm{mean}}$"}
-# (group title, number of columns) over the 15 supplement columns (10 protocol + 5 here)
+COLUMN_HEADS = {
+    "V_MAE solved": r"$V_{\mathrm{MAE}}$ solved",
+    "V_MAE all": r"$V_{\mathrm{MAE}}$ all",
+    "B_mean solved": r"$B_{\mathrm{mean}}$ solved",
+    "B_mean all": r"$B_{\mathrm{mean}}$ all",
+}
+# (group title, number of columns) over the 16 supplement columns (11 protocol + 5 here)
 COLUMN_GROUPS: tuple[tuple[str, int], ...] = (
-    ("Task utility", 4),
-    ("Solver-grounded correctness", 2),
-    ("Faithfulness and safe failure", 2),
+    ("Task utility", 5),
+    ("Solver-grounded correctness", 4),
     ("Cost", 2),
+    ("Solver status", 1),
     ("Faithfulness detail", 2),
-    ("Outcome breakdown", 2),
-    ("Time", 1),
+    ("Cost detail", 2),
 )
 DEFAULT_COMPACT_METRICS = ("Form.", "Calls")
 
@@ -111,24 +107,30 @@ CAPTIONS = {
     "blocks": (
         r"Per-system breakdown of the aggregated protocol table: one block per IEEE test system, "
         r"40 requests per system, gpt-4o-mini, $k=1$, same tools and an eight-round budget where "
-        r"rounds apply. Form.: formulation correctness (\%); $V_{\mathrm{MAE}}$ (p.u.), "
-        r"$F_{\mathrm{MAE}}$ (MW); Solved: request solved end to end (\%); Solver status: reported "
-        r"convergence matches the reference (\%); B\_mean: mean KCL residual of the reported flows "
-        r"(MW); Faith.: share of answers where every number is traceable to a tool output and "
-        r"comes from the solve after the last network change (\%; per answer, not per number); "
-        r"SFR: safe-failure rate (\%); Calls: mean tool calls; Tok.: mean tokens; "
-        r"Faith. (per-number): mean, over answers, of the share of that answer's own numbers "
-        r"that are traceable (\%) -- kept here since it can read much higher than the per-answer "
-        r"Faith. when a few answers are each partially contaminated; Stale: share of answers "
-        r"quoting a number from before the last network change (\%). "
-        r"Escalated and Wrong (silent), together with solved\_autonomously (solved and not "
-        r"escalated -- NOT the Solved column above, which can overlap with Escalated when "
-        r"verification abstains on an item whose underlying computed state was actually "
-        r"correct), sum to 100\%: where every request ends up -- solved autonomously, "
-        r"explicitly handed to a person (only the task-level verification gate's abstention "
-        r"and the deterministic parser's cannot-parse refusal count; every other method reads "
-        r"0, not a dash), or answered wrong with nothing flagging it. "
-        r"Time (s): mean wall-clock time per request. "
+        r"rounds apply. Form.: formulation correctness (\%). $V_{\mathrm{MAE}}$ (p.u.) and "
+        r"$B_{\mathrm{mean}}$ (MW, mean KCL residual of the reported flows) each come in two "
+        r"versions: solved, restricted to requests whose formulation was exact (should read near "
+        r"zero: the reference runs the same calls on the same solver, so this is computing error, "
+        r"not solving-the-wrong-problem error), and all, unconditioned, over every item on the "
+        r"agent's own reported state. $B_{\mathrm{mean}}$'s all version is a self-consistency "
+        r"check, not a distance to the true reference, but still carries information where states "
+        r"were stale or non-converged. Solved: request solved end to end (\%). "
+        r"Escalated, Wrong-unflagged and Solved (together with solved\_autonomously = solved and "
+        r"not escalated, not shown here -- NOT the same as Solved, which can overlap with "
+        r"Escalated when verification abstains on an item whose underlying computed state was "
+        r"actually correct) sum to 100\%: where every request ends up -- solved autonomously, "
+        r"explicitly handed to a person (only the task-level verification gate's abstention and "
+        r"the deterministic parser's cannot-parse refusal count; every other method reads 0, not "
+        r"a dash), or answered wrong with nothing flagging it. Traceable: share of answers where "
+        r"every number is traceable to a tool output and comes from the solve after the last "
+        r"network change (\%; per answer, not per number). Tokens: mean tokens; Time (s): mean "
+        r"wall-clock time per request. "
+        r"Supplement-only detail -- Solver status: reported convergence matches the reference "
+        r"(\%); Faith. (per-number): mean, over answers, of the share of that answer's own "
+        r"numbers that are traceable (\%) -- kept here since it can read much higher than the "
+        r"per-answer Traceable column when a few answers are each partially contaminated; Stale: "
+        r"share of answers quoting a number from before the last network change (\%); SFR: "
+        r"safe-failure rate (\%); Calls: mean tool calls. "
         r"n/a: the method has no tools or no LLM; --: not measured."
     ),
     "compact": (
@@ -156,7 +158,7 @@ def apply_na(cells: list[Any], key: Optional[str]) -> list[Any]:
     if _is_llm_only_family(key):
         cells[COLUMN_NAMES.index("Calls")] = NA
     if key == "rule_based":
-        cells[COLUMN_NAMES.index("Tok.")] = NA
+        cells[COLUMN_NAMES.index("Tokens")] = NA
     return cells
 
 

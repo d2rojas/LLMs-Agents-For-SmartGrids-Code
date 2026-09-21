@@ -82,31 +82,45 @@ COLUMNS: tuple[Column, ...] = (
     # (benchmarks/scoring.py); success_rate (run completed and parsed) is only the
     # fallback for reports written before R1.
     Column("Form.", (FORMULATION_KEY,), "pct", "formulation_exact_total"),
-    # Restricted to requests whose formulation was exact (n/a counts as included for
-    # LLM-only methods, which have no formulation step): unconditioned, this column
-    # mixes solving the wrong problem with computing badly, and any tool-using row is
-    # exactly zero once formulation is exact (the reference runs the same calls on the
-    # same solver) -- see benchmarks.scoring's module docstring. Falls back to the
-    # unconditioned mean for reports written before this field existed; the
-    # unconditioned value stays available under that name for the supplement.
-    Column("V_MAE", ("voltage_mae_formulation_exact_mean", "voltage_mae_mean"), "sci", "ok"),
-    Column("F_MAE", ("flow_mae_mean",), "f2", "ok"),
+    # V_MAE and B_mean each come in two versions, per Daniela's 2026-09-21 PI-meeting
+    # decision (T3, confirmed after a same-day back-and-forth over whether B_mean or
+    # F_MAE belongs here): "solved", restricted to requests whose formulation was exact
+    # (should read ~zero: the reference runs the same calls on the same solver, so this
+    # is computing error, not solving-the-wrong-problem error), and "all", unconditioned,
+    # over every item on the agent's own reported state. B_mean's "all" version is a
+    # self-consistency KCL residual, not a distance to the true reference (see
+    # benchmarks/baselines/llm_only.py::_compute_kcl_self_consistency) -- Daniela's call
+    # is that it stays in the body under its own name regardless, since it still carries
+    # information where states were stale or non-converged; the footnote says so. No
+    # fallback on "solved": a report written before formulation_exact existed has no
+    # honest solved-only number and should show n/a, not silently reuse the unconditioned
+    # one. F_MAE (branch-flow error against the true reference, the quantity that does
+    # satisfy T3's "against the reference" reading) is not printed anywhere in the body
+    # or supplement per Daniela's decision; it stays a computed field only.
+    Column("V_MAE solved", ("voltage_mae_formulation_exact_mean",), "sci", "ok"),
+    Column("V_MAE all", ("voltage_mae_mean",), "sci", "ok"),
+    Column("B_mean solved", ("kcl_mean_mismatch_mw_formulation_exact_mean",), "sci", "ok"),
+    Column("B_mean all", ("kcl_mean_mismatch_mw_mean",), "sci", "ok"),
     Column("Solved", ("solved_rate", "success_rate"), "pct"),
-    # Solver-grounded correctness: reported convergence matches the reference, and the
-    # KCL residual (B_mean) of the reported flows against the trusted solver.
-    Column("Solver status", ("convergence_match_rate",), "pct"),
-    Column("B_mean", ("kcl_mean_mismatch_mw_mean",), "sci", "ok"),
-    # Faithfulness and safe failure. Per-answer (V4 faithfulness AND V5 currency
-    # together): share of answers where every number traces to a tool output and comes
-    # from the solve after the last network change -- not the mean of each answer's own
-    # traceable-number share (faithful_numbers_mean), which lets a handful of partially-
-    # contaminated answers barely move the aggregate (falls back to that older per-
-    # number rate for reports written before this field existed).
-    Column("Faith.", ("faithful_answers_rate", "faithful_numbers_mean"), "pct", "faithful_answers_total"),
-    Column("SFR", ("safe_failure_rate",), "pct", "safe_failure_total"),
-    # Cost.
-    Column("Calls", ("n_tool_calls_mean",), "f1z"),
-    Column("Tok.", ("total_tokens_mean",), "int"),
+    # Solver-grounded correctness (T2): where every request ends up -- solved
+    # autonomously, explicitly handed to a person (escalated_rate; only architectures
+    # with a real handoff mechanism score above 0, see benchmarks.scoring.escalation_check),
+    # or answered wrong with nothing flagging it (wrong_silently_rate). Escalated and
+    # Wrong-unflagged, together with Solved, are where the mission (notes/
+    # mision_cero_erroneas.md) wants Solved+Escalated=100, Wrong-unflagged=0.
+    Column("Escalated", ("escalated_rate",), "pct"),
+    Column("Wrong-unflagged", ("wrong_silently_rate",), "pct"),
+    # Traceable: per-answer, every unit-bearing number traces to a tool output from the
+    # last solve (V4 faithfulness AND V5 currency together) -- not the mean of each
+    # answer's own traceable-number share (faithful_numbers_mean), which lets a handful
+    # of partially-contaminated answers barely move the aggregate (falls back to that
+    # older per-number rate for reports written before this field existed). Renamed from
+    # "Faith." per Daniela's decision; definition unchanged (PI meeting T5 asks for this
+    # to be explained with failure cases in the text, not redefined).
+    Column("Traceable", ("faithful_answers_rate", "faithful_numbers_mean"), "pct", "faithful_answers_total"),
+    # Cost (T9: tokens for cost, time for time, with units).
+    Column("Tokens", ("total_tokens_mean",), "int"),
+    Column("Time (s)", ("wall_time_s_mean",), "f2"),
 )
 
 
@@ -368,12 +382,12 @@ def render_rows(agg: dict[str, dict[str, Any]], gated_baselines: bool = False) -
             stats = agg.get(key) if key else None
             mapping.append((setting.split(" (")[0], label, key if stats else MISSING))
             cells = [format_cell(stats.get(c.name) if stats else None, c.fmt) for c in COLUMNS]
-            # capabilities the method does not have are n/a, not 0 (LLM-only has no tools; rule-based has no LLM)
+            # capabilities the method does not have are n/a, not 0 (rule-based has no LLM;
+            # Calls (tool calls) is no longer a main-table column -- see fill_supertable's
+            # apply_na for the supplement's LLM-only-has-no-tools override)
             names = [c.name for c in COLUMNS]
-            if _is_llm_only_family(key):
-                cells[names.index("Calls")] = "n/a"
             if key == "rule_based":
-                cells[names.index("Tok.")] = "n/a"
+                cells[names.index("Tokens")] = "n/a"
             lead = rf"\multirow{{{len(rows)}}}{{*}}{{{setting}}}" if i == 0 else ""
             lines.append(f"{lead} & {label} & " + " & ".join(cells) + r" \\")
     return "\n".join(lines) + "\n", mapping

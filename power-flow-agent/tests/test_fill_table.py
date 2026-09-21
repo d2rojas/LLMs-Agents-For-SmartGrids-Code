@@ -42,15 +42,26 @@ def _case_row(model, method, case, n_items, success, form, v_mae, calls, tokens,
         "formulation_exact_rate": form,
         "formulation_exact_count": round(form * n_items),
         "formulation_exact_total": n_items,
+        # The fixture does not distinguish "solved" from "all" -- both V_MAE and F_MAE
+        # feed the same value into their formulation-exact-conditioned and unconditioned
+        # fields, so a test asserting one implicitly asserts the other.
         "voltage_mae_mean": v_mae,
+        "voltage_mae_formulation_exact_mean": v_mae,
         "flow_mae_mean": 0.1234,
+        "flow_mae_formulation_exact_mean": 0.1234,
         "convergence_match_rate": 1.0,
         "kcl_mean_mismatch_mw_mean": 0.0,
+        "kcl_mean_mismatch_mw_formulation_exact_mean": 0.0,
         "faithful_numbers_mean": 0.9,
         "safe_failure_rate": 1.0,
         "safe_failure_total": 2,
         "claimed_success_on_failure_rate": 0.0,
         "claimed_success_on_failure_total": 2,
+        # Constant across every synthetic row on purpose: a weighted mean of a constant
+        # is that constant regardless of the per-row item counts, so tests can assert on
+        # it without redoing the weighting arithmetic.
+        "escalated_rate": 0.0,
+        "wrong_silently_rate": 0.1,
         "n_tool_calls_mean": calls,
         "total_tokens_mean": tokens,
         "wall_time_s_mean": ttv,
@@ -132,7 +143,6 @@ def test_missing_methods_are_dashes(reports_dir, tmp_path):
         by_label.setdefault((block_of[i], r[1]), r[2:])
     llm_only_structured = _data_rows(tex)[0][2:]
     expected = [MISSING] * len(COLUMNS)
-    expected[[c.name for c in COLUMNS].index("Calls")] = "n/a"  # LLM-only has no tools
     assert llm_only_structured == expected
     for label in ("ReAct", "Plan-and-Act", "PFAgent: ReAct + gate"):
         assert by_label[(2, label)] == [MISSING] * len(COLUMNS)
@@ -143,18 +153,20 @@ def test_number_formatting_and_weighting(reports_dir, tmp_path):
     rows = _data_rows(tex)
     structured = rows[5]
     assert structured[1] == "Structured"
-    form, v_mae, f_mae, solved, solver_status, b_mean, faith, sfr, calls, tok = structured[2:]
+    form, v_mae_solved, v_mae_all, b_mean_solved, b_mean_all, solved, escalated, wrong_unflagged, traceable, tokens, time_s = structured[2:]
     assert form == "70.0"  # (0.8*40 + 0.5*20) / 60
-    # V_MAE weighted by solved items: (1e-5*40 + 4e-5*10) / 50 = 1.6e-5
-    assert v_mae == r"$1.60{\times}10^{-5}$"
-    assert f_mae == "0.12"
+    # V_MAE weighted by solved items: (1e-5*40 + 4e-5*10) / 50 = 1.6e-5 -- the fixture
+    # feeds the same value into both the "solved" and "all" fields, so both columns
+    # read the same number here.
+    assert v_mae_solved == v_mae_all == r"$1.60{\times}10^{-5}$"
+    assert b_mean_solved == b_mean_all == "0"  # kcl_mean_mismatch_mw is 0.0 in the fixture
     assert solved == "83.3"  # item-weighted, not 75.0
-    assert solver_status == "100.0" and b_mean == "0" and faith == "90.0" and sfr == "100.0"
-    assert calls == "1.3"  # (1*40 + 2*20) / 60
-    assert tok == "1100"  # (1000*40 + 1300*20) / 60
+    assert escalated == "0.0" and wrong_unflagged == "10.0" and traceable == "90.0"
+    assert tokens == "1100"  # (1000*40 + 1300*20) / 60
+    assert time_s == "2.67"  # (2.0*40 + 4.0*20) / 60
     rule = rows[9]
     assert rule[1] == "Rule-based parser, no LLM"
-    assert rule[2 + 1] == "0"  # V_MAE exactly zero
+    assert rule[2 + 1] == "0"  # V_MAE solved exactly zero
     assert rule[2 + 9] == "n/a"  # no LLM, so tokens are not applicable
 
 
@@ -178,7 +190,7 @@ def test_per_system_and_scaling_csv(reports_dir, tmp_path):
         rows = _data_rows(p.read_text(encoding="utf-8"))
         assert [r[1] for r in rows] == EXPECTED_LABELS
     case14 = _data_rows(out.with_name("rows_case14.tex").read_text(encoding="utf-8"))
-    assert case14[5][2 + 3] == "100.0"  # Solved, structured, case14 only
+    assert case14[5][2 + 5] == "100.0"  # Solved, structured, case14 only
     with csv_path.open(newline="") as fh:
         recs = list(csv.DictReader(fh))
     assert {(r["method"], r["case"]) for r in recs} == {
@@ -276,11 +288,11 @@ def test_solved_reads_solved_rate_and_prefers_rescored_report(tmp_path):
 
     out = tmp_path / "rows.tex"
     assert main([str(d), "--out", str(out)]) == 0
-    assert _data_rows(out.read_text(encoding="utf-8"))[0][2 + 3] == "25.0"  # Solved from solved_rate
+    assert _data_rows(out.read_text(encoding="utf-8"))[0][2 + 5] == "25.0"  # Solved from solved_rate
     assert main([str(d), "--out", str(out), "--no-prefer-rescored"]) == 0
-    assert _data_rows(out.read_text(encoding="utf-8"))[0][2 + 3] == "100.0"  # fallback: success_rate
+    assert _data_rows(out.read_text(encoding="utf-8"))[0][2 + 5] == "100.0"  # fallback: success_rate
     # a null solved_rate (report written without per-item solved) also falls back
     null_rows = [_case_row(MODEL, "llm_only:structured", "case14", 40, 0.9, 0.0, None, 0.0, 3000, 4.0, solved_rate=None)]
     (d / "report.rescored.json").write_text(json.dumps(_report(null_rows, ["case14"])), encoding="utf-8")
     assert main([str(d), "--out", str(out)]) == 0
-    assert _data_rows(out.read_text(encoding="utf-8"))[0][2 + 3] == "90.0"
+    assert _data_rows(out.read_text(encoding="utf-8"))[0][2 + 5] == "90.0"
