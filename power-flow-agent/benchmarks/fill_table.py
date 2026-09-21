@@ -62,13 +62,18 @@ class Column:
     ``keys`` are tried in order on the aggregate rows (first present wins), so a
     dedicated metric added later (e.g. ``feasibility_rate``) takes precedence
     over the current proxy. ``weight`` names the per-case denominator used for
-    the weighted mean; ``"ok"`` means the number of solved items.
+    the weighted mean; ``"ok"`` means the number of solved items. ``scale``
+    multiplies the weighted mean before formatting (e.g. seconds -> hours per 100
+    cases); applied after aggregation rather than to each row's raw value, which is
+    safe because the aggregate is a linear weighted mean and scaling commutes with
+    that.
     """
 
     name: str
     keys: tuple[str, ...]
     fmt: str
     weight: str = "n_items"
+    scale: float = 1.0
 
 
 COLUMNS: tuple[Column, ...] = (
@@ -319,7 +324,7 @@ def aggregate_method(case_rows: list[dict[str, Any]], columns: tuple[Column, ...
                 continue
             num += w * float(r[key])
             den += w
-        agg[col.name] = num / den if den > 0 else None
+        agg[col.name] = (num / den) * col.scale if den > 0 else None
     return agg
 
 

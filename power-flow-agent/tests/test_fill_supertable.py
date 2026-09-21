@@ -110,7 +110,7 @@ def _data_rows(tex):
 
 
 def _block_headers(tex):
-    return [ln for ln in tex.splitlines() if ln.startswith(r"\multicolumn{16}{l}")]
+    return [ln for ln in tex.splitlines() if ln.startswith(r"\multicolumn{" + str(2 + len(COLUMN_NAMES)) + "}{l}")]
 
 
 # ----------------------------------------------------------------------------- blocks layout
@@ -119,11 +119,11 @@ def _block_headers(tex):
 def test_blocks_headers_and_row_order(results_dir, tmp_path):
     tex = _run(results_dir, tmp_path)
     assert _block_headers(tex) == [
-        r"\multicolumn{16}{l}{\textbf{IEEE 14-bus}} \\",
-        r"\multicolumn{16}{l}{\textbf{IEEE 30-bus}} \\",
+        r"\multicolumn{17}{l}{\textbf{IEEE 14-bus}} \\",
+        r"\multicolumn{17}{l}{\textbf{IEEE 30-bus}} \\",
     ]
     lines = tex.splitlines()
-    assert lines[0].startswith(r"\multicolumn{16}{l}{\textbf{IEEE 14-bus}}")
+    assert lines[0].startswith(r"\multicolumn{17}{l}{\textbf{IEEE 14-bus}}")
     # blocks separated by exactly one \midrule, placed right before the second header
     assert tex.count(r"\midrule") == 1
     assert lines[lines.index(_block_headers(tex)[1]) - 1] == r"\midrule"
@@ -146,10 +146,10 @@ def test_blocks_values_na_and_missing(results_dir, tmp_path):
     b14, b30 = rows[:14], rows[14:]
     # single_call:structured, per system, Solved from the rescored solved_rate (0.90, not 0.10)
     # order: Form., V_MAE, F_MAE, Solved, Solver status, B_mean, Faith. (per-answer), SFR,
-    # Calls, Tok., Faith. (per-number), Stale, Escalated, Wrong (silent)
+    # Calls, Tok., Faith. (per-number), Stale, Escalated, Wrong (silent), Hours / 100
     assert b14[5][1] == "Structured" and b14[5][2:] == [
         "85.0", r"$1.65{\times}10^{-5}$", "0.12", "90.0", "100.0", "0", "100.0", "100.0", "2.0", "10000", "90.0", "0.0",
-        "5.0", "15.0",
+        "5.0", "15.0", "0.08",
     ]
     assert b30[5][2] == "75.0" and b30[5][2 + 3] == "70.0" and b30[5][2 + names.index("Calls")] == "1.5" and b30[5][2 + names.index("Tok.")] == "12000"
     # best single-call prompt = the only one present, copied per system
@@ -173,9 +173,12 @@ def test_blocks_standalone_and_tabular_wrappers(results_dir, tmp_path):
     assert tex.startswith(r"\begin{table}[!ht]") and tex.rstrip().endswith(r"\end{table}")
     assert r"\label{tab:pf_protocol_per_system}" in tex and r"\caption{" in tex
     assert r"\scriptsize" in tex and r"\resizebox{\textwidth}{!}{%" in tex
-    assert r"\begin{tabular}{ll cccc cc cc cc cc cc}" in tex and r"\toprule" in tex and r"\bottomrule" in tex
+    assert r"\begin{tabular}{ll cccc cc cc cc cc cc c}" in tex and r"\toprule" in tex and r"\bottomrule" in tex
     assert r"\textbf{Setting} & \textbf{Method} & \textbf{Form.} & $V_{\mathrm{MAE}}$" in tex
-    assert r"\cmidrule(lr){3-6}\cmidrule(lr){7-8}\cmidrule(lr){9-10}\cmidrule(lr){11-12}\cmidrule(lr){13-14}\cmidrule(lr){15-16}" in tex
+    assert (
+        r"\cmidrule(lr){3-6}\cmidrule(lr){7-8}\cmidrule(lr){9-10}\cmidrule(lr){11-12}"
+        r"\cmidrule(lr){13-14}\cmidrule(lr){15-16}\cmidrule(lr){17-17}"
+    ) in tex
     assert len(_block_headers(tex)) == 2 and [r[1] for r in _data_rows(tex)] == EXPECTED_LABELS * 2
     tab = _run(results_dir, tmp_path, "--wrap", "tabular")
     assert tab.startswith(r"\scriptsize") and r"\begin{table}" not in tab and r"\begin{tabular}" in tab
@@ -216,7 +219,7 @@ def test_csv_one_row_per_method_and_system(results_dir, tmp_path):
     _run(results_dir, tmp_path, "--csv", str(csv_path))
     with csv_path.open(newline="") as fh:
         recs = list(csv.DictReader(fh))
-    assert len(recs) == 14 * 2
+    assert len(recs) == 14 * 2  # rows: unaffected by the new Hours column, still 14 method rows
     assert [(r["method"], r["case"]) for r in recs] == [(m, c) for m in EXPECTED_LABELS for c in SYSTEMS]
     assert set(recs[0].keys()) == {"setting", "method", "method_key", "case", "n_buses", "n_items", *COLUMN_NAMES}
     sc30 = next(r for r in recs if r["method"] == "Structured" and r["setting"] == "Single-call" and r["case"] == "case30")
@@ -232,7 +235,7 @@ def test_no_prefer_rescored_and_cases_filter(results_dir, tmp_path):
     tex = _run(results_dir, tmp_path, "--no-prefer-rescored")
     assert _data_rows(tex)[5][2 + 3] == "10.0"  # original report's solved_rate (Solved column)
     tex = _run(results_dir, tmp_path, "--cases", "case30")
-    assert _block_headers(tex) == [r"\multicolumn{16}{l}{\textbf{IEEE 30-bus}} \\"]
+    assert _block_headers(tex) == [r"\multicolumn{17}{l}{\textbf{IEEE 30-bus}} \\"]
     assert tex.count(r"\midrule") == 0 and len(_data_rows(tex)) == 14
     with pytest.raises(SystemExit):
         main([str(results_dir), "--out", str(tmp_path / "x.tex"), "--layout", "compact", "--metrics", "Bogus"])

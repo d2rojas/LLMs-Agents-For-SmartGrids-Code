@@ -43,7 +43,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 VENV_PY = str(PROJECT_ROOT / ".venv" / "bin" / "python")
@@ -58,6 +58,7 @@ VENV_PY = str(PROJECT_ROOT / ".venv" / "bin" / "python")
 # no-tools representation fix does not apply either).
 
 GPT54_BASE = "results_validation_n40/gpt-5.4"
+SOL_BASE = "results_validation_sol_n40_clean"
 SOURCES: dict[str, dict[str, str]] = {
     "openrouter:openai/gpt-5.4": {
         "rule_based": f"{GPT54_BASE}/rule_based",
@@ -86,6 +87,20 @@ SOURCES: dict[str, dict[str, str]] = {
         # "_v1" pre-fix snapshot kept only for reference.
         "pfagent": "results_validation_gpt-4o-mini_agents",
     },
+    # gpt-5.6-sol, launched 2026-09-21: one clean N=40 case14 ladder, all 7 methods under
+    # one prompt hash (none of the pre-fix/split-ladder history the other two blocks carry
+    # caveats about). Landing over several hours; _resolve_sources/_retag skip a method
+    # whose report.json does not exist yet rather than crashing, so rebuilding while only
+    # some of the 7 have finished renders the rest as missing/dashes, not an error.
+    "openrouter:openai/gpt-5.6-sol": {
+        "rule_based": f"{SOL_BASE}/rule_based/case14",
+        "llm_only:structured": f"{SOL_BASE}/llm_only_structured/case14",
+        "llm_only:cot": f"{SOL_BASE}/llm_only_cot/case14",
+        "react_nogate": f"{SOL_BASE}/react_nogate/case14",
+        "plan_act_nogate": f"{SOL_BASE}/plan_act_nogate/case14",
+        "pfagent": f"{SOL_BASE}/pfagent/case14",
+        "single_call:structured": f"{SOL_BASE}/single_call_structured/case14",
+    },
 }
 
 # Stress-condition sources (expected_outcome != converged; the 16-item islanded/non-converged
@@ -108,17 +123,21 @@ OUT_PER_SYSTEM = PROJECT_ROOT / "benchmarks" / "tab_pf_protocol_per_system_gpt-5
 OUT_STRESS = PROJECT_ROOT / "benchmarks" / "tab_pf_protocol_stress_gpt-5.4-and-4o-mini_validation.tex"
 
 
-def _retag(scratch: Path, model: str, method: str, src_dir: Path) -> Path:
+def _retag(scratch: Path, model: str, method: str, src_dir: Path) -> Optional[Path]:
     """Copy src_dir's rescored (preferred) or plain report.json into its own scratch
     sub-directory, keeping only `method`'s own rows (a source file can hold other methods
     too -- e.g. a stress-set report with react_nogate/pfagent rows alongside rule_based's;
     copying the whole file would duplicate those against their own real source) with every
-    row's "model" field rewritten to `model`. Returns that directory."""
+    row's "model" field rewritten to `model`. Returns that directory, or None if src_dir
+    has no report yet (a ladder still in flight, e.g. sol's methods landing one at a time)
+    -- the caller skips it rather than crashing, and the method reads as missing/dashes,
+    same as any other absent source."""
     src = src_dir / "report.rescored.json"
     if not src.is_file():
         src = src_dir / "report.json"
     if not src.is_file():
-        raise SystemExit(f"no report.json under {src_dir}")
+        print(f"note: no report.json under {src_dir} yet; {model}/{method} will read as missing", file=sys.stderr)
+        return None
     data: dict[str, Any] = json.loads(src.read_text(encoding="utf-8"))
     data = copy.deepcopy(data)
 
@@ -148,10 +167,15 @@ def _resolve_sources(scratch: Path, sources: dict[str, dict[str, str]], base: Pa
         for method, rel in methods.items():
             src_dir = base / rel
             if method == "rule_based":
-                resolved.append(str(_retag(scratch, model, method, src_dir)))
+                retagged = _retag(scratch, model, method, src_dir)
+                if retagged is not None:
+                    resolved.append(str(retagged))
                 continue
             key = str(src_dir)
             if key in seen:
+                continue
+            if not (src_dir / "report.rescored.json").is_file() and not (src_dir / "report.json").is_file():
+                print(f"note: no report.json under {src_dir} yet; {model}/{method} will read as missing", file=sys.stderr)
                 continue
             seen.add(key)
             resolved.append(key)
@@ -193,7 +217,9 @@ def regenerate_reports(with_pdf: bool) -> None:
         for methods in sources.values():
             for rel in methods.values():
                 d = base / rel
-                if d in seen or not d.is_dir():
+                if d in seen:
+                    continue
+                if not (d / "report.rescored.json").is_file() and not (d / "report.json").is_file():
                     continue
                 seen.add(d)
                 cmd = [VENV_PY, "benchmarks/experiment_report.py", str(d)]

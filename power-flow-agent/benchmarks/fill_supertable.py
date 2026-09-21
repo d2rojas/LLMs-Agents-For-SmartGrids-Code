@@ -85,10 +85,15 @@ SUPPLEMENT_COLUMNS: tuple[Column, ...] = COLUMNS + (
     Column("Stale", ("stale_state_rate",), "pct", "stale_state_total"),
     Column("Escalated", ("escalated_rate",), "pct"),
     Column("Wrong (silent)", ("wrong_silently_rate",), "pct"),
+    # Hours per 100 cases (notes/tabla_objetivo_pfagent.md's cost-and-operation group):
+    # wall_time_s_mean is already a per-item weighted mean in seconds; x100/3600 turns
+    # "seconds per item" into "hours per 100 items" without touching the aggregation
+    # itself (Column.scale commutes with the weighted mean in aggregate_method).
+    Column("Hours / 100", ("wall_time_s_mean",), "f2", scale=100.0 / 3600.0),
 )
 COLUMN_NAMES = [c.name for c in SUPPLEMENT_COLUMNS]
 COLUMN_HEADS = {"V_MAE": r"$V_{\mathrm{MAE}}$", "F_MAE": r"$F_{\mathrm{MAE}}$", "B_mean": r"$B_{\mathrm{mean}}$"}
-# (group title, number of columns) over the 14 supplement columns (10 protocol + 4 here)
+# (group title, number of columns) over the 15 supplement columns (10 protocol + 5 here)
 COLUMN_GROUPS: tuple[tuple[str, int], ...] = (
     ("Task utility", 4),
     ("Solver-grounded correctness", 2),
@@ -96,6 +101,7 @@ COLUMN_GROUPS: tuple[tuple[str, int], ...] = (
     ("Cost", 2),
     ("Faithfulness detail", 2),
     ("Outcome breakdown", 2),
+    ("Time", 1),
 )
 DEFAULT_COMPACT_METRICS = ("Form.", "Calls")
 
@@ -120,6 +126,7 @@ CAPTIONS = {
         r"explicitly handed to a person (only the task-level verification gate's abstention "
         r"and the deterministic parser's cannot-parse refusal count; every other method reads "
         r"0, not a dash), or answered wrong with nothing flagging it. "
+        r"Hours / 100: mean wall-clock time per request, scaled to hours per 100 cases. "
         r"n/a: the method has no tools or no LLM; --: not measured."
     ),
     "compact": (
