@@ -1,6 +1,6 @@
 # Informe de experimento: `case14`
 
-Generado el 2026-09-21 15:02 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio case14 (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-21 15:31 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio case14 (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -18,10 +18,10 @@ Directorio analizado:
 - Items por dificultad: plain=10, parameterized=10, multistep=10, ambiguous=10
 - System prompt: hash `7da5e2a37ec4` (40 filas)
 - runs por item: 1; k (perturbación ±10 %·k): 1; seeds: [0]; max_rounds: 8; temperature: 0.0; timeout_s: 90.0
-- Fecha de la corrida (mtime de report.json): 2026-09-21 14:38
+- Fecha de la corrida (mtime de report.json): 2026-09-21 15:24
 - Costo total: 0.0000 USD (40 items; costo medio 0.00000 USD/item)
-- Items totales: 40; ok=40; con error=0; tokens totales=230880
-- Solved global: 27.5 % (11/40)
+- Items totales: 40; ok=40; con error=0; tokens totales=235105
+- Solved global: 45.0 % (18/40)
 
 Errores por tipo:
 
@@ -104,25 +104,25 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 | Method | Case | N | Form. | V_MAE solved | V_MAE all | B_mean solved | B_mean all | Solved | Escalated | Wrong-unflagged | Traceable | Tokens | Time (s) | Claim | Escalated | Wrong (silent) | $ |
 |------------------|------|----|---------------|---------------|---------|----------------|----------|---------------|----------|------------------|---------|------|--------|-----|----------|-----------------|----|
-| plan_act_nogate | case14 | 40 | 47.5 (19/40) | 0 | 4.36e-04 | 0 | 0 | 27.5 (11/40) | 0.0 (0/40) | 72.5 | 85.0 | 5772 | 5.32 | -- | 0.0 (0/40) | 72.5 (29/40) | -- |
+| plan_act_nogate | case14 | 40 | 75.0 (30/40) | 0 | 1.47e-05 | 0 | 0 | 45.0 (18/40) | 0.0 (0/40) | 55.0 | 82.5 | 5878 | 4.36 | -- | 0.0 (0/40) | 55.0 (22/40) | -- |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 
 | Method | plain | parameterized | multistep | ambiguous |
 |------------------|-------------|----------------|-------------|-------------|
-| plan_act_nogate | 60.0 (6/10) | 50.0 (5/10) | 40.0 (4/10) | 40.0 (4/10) |
+| plan_act_nogate | 80.0 (8/10) | 60.0 (6/10) | 80.0 (8/10) | 80.0 (8/10) |
 
 ### Solved por dificultad (%, items resueltos / items)
 
 | Method | plain | parameterized | multistep | ambiguous |
 |------------------|-------------|----------------|----------|-------------|
-| plan_act_nogate | 40.0 (4/10) | 30.0 (3/10) | 0.0 (0/10) | 40.0 (4/10) |
+| plan_act_nogate | 60.0 (6/10) | 40.0 (4/10) | 0.0 (0/10) | 80.0 (8/10) |
 
 ### Tipos de error de formulación (conteo de items)
 
-| Method | extra_arg_changes_result | invalid_value | ok | wrong_id |
-|------------------|------------------------------|----------------|----|--------|
-| plan_act_nogate | 13 | 6 | 19 | 2 |
+| Method | invalid_value | ok | wrong_id |
+|------------------|----------------|----|--------|
+| plan_act_nogate | 8 | 30 | 2 |
 
 ### Errores de ejecución por método (conteo de items con `error`)
 
@@ -154,100 +154,103 @@ tool: disconnect_line({"from_bus": 10, "to_bus": 11})
 --- Ronda 3 [answer] [final] ---
 LLM: The power flow analysis has been completed after disconnecting the line between bus 10 and bus 11.
 
-1. Summary: The system is converged, but there are multiple voltage violations.
-2. Key numbers: Total load = 253.85 MW, Total generation = 266.51 MW, Total losses = 12.66 MW, Voltage range = 1.01 to 1 …[209 chars más]
+1. Summary: The system is operating with some voltage violations.
+2. Key numbers: Total load = 253.85 MW, Total generation = 266.51 MW, Total losses = 12.66 MW, Voltage range = 1.01 to 1.09 p.u.
+3. Vi …[186 chars más]
 --- Respuesta final ---
 The power flow analysis has been completed after disconnecting the line between bus 10 and bus 11.
 
-1. Summary: The system is converged, but there are multiple voltage violations.
+1. Summary: The system is operating with some voltage violations.
 2. Key numbers: Total load = 253.85 MW, Total generation = 266.51 MW, Total losses = 12.66 MW, Voltage range = 1.01 to 1.09 p.u.
-3. Violations: Overvoltage violations at buses 1, 6, 7, 8, 11, and 12.
-4. Suggested next step: Consider implementing voltage regulation measures or load shedding to address the overvoltage violations.
+3. Violations: There are multiple overvoltage violations at buses 1, 6, 7, 8, 11, and 12.
+4. Suggested next step: Consider implementing remedial actions to address the overvoltage violations.
 --- Scoring ---
-formulation=ok (exact=True); V_MAE=0; F_MAE=0.00; faithful=100.0 %; solved=True (numeric_and_answer_ok); flags=-; error=-; tokens=3649; cost_usd=--; wall=3.8 s
+formulation=ok (exact=True); V_MAE=0; F_MAE=0.00; faithful=100.0 %; solved=True (numeric_and_answer_ok); flags=-; error=-; tokens=3771; cost_usd=--; wall=3.4 s
 ````
 
 **Ejemplo: formulación fallida (formulation_exact=False)**
 
 ````
-request (case14-ambiguous-011-s0, case14, difficulty=ambiguous, seed=1971893210): Load case14 and set the active load at bus 6 to 14,700 kw.
-intended_calls: load_case({"case_name": "case14"}) -> modify_load({"bus_id": 6, "p_mw": 14.7})
-executed_calls: load_case({"case_name": "case14"}) -> modify_load({"bus_id": 6, "p_mw": 14.7, "q_mvar": 0})
+request (case14-ambiguous-027-s0, case14, difficulty=ambiguous, seed=203647507): Load the IEEE 14-bus system and set the active load at bus 10 (0-based) to 4.7 MW.
+intended_calls: load_case({"case_name": "case14"}) -> modify_load({"bus_id": 11, "p_mw": 4.7})
+executed_calls: load_case({"case_name": "IEEE 14-bus"}) -> set_active_load({"bus_id": 10, "p_mw": 4.7})
 fuente de la traza: archivo de traza completo
 --- Ronda 1 [plan] ---
-LLM: {"plan":[{"tool":"load_case","args":{"case_name":"case14"}},{"tool":"modify_load","args":{"bus_id":6,"p_mw":14.7,"q_mvar":0}}]}
+LLM: {"plan":[{"tool":"load_case","args":{"case_name":"IEEE 14-bus"}},{"tool":"set_active_load","args":{"bus_id":10,"p_mw":4.7}}]}
 --- Ronda 2 [act] ---
-tool: load_case({"case_name": "case14"})
-  output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 263.13580543670497, "total_gen_capacity_mw": 772.4000000000001}
+tool: load_case({"case_name": "IEEE 14-bus"})
+  output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 263.708166484847, "total_gen_capacity_mw": 772.4000000000001}
   gate: n/a (no es un resultado de flujo)
-tool: modify_load({"bus_id": 6, "p_mw": 14.7, "q_mvar": 0})
-  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.0449999999999997, "va_deg": -5.236323374534588, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_p …[6297 chars más]
-  gate: PASS (reasons=-, mismatch=6.47e-09 MW)
+tool: set_active_load({"bus_id": 10, "p_mw": 4.7})
+  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.0450000000000002, "va_deg": -4.9130978627475494, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_ …[6551 chars más]
+  gate: PASS (reasons=-, mismatch=4.77e-09 MW)
 --- Ronda 3 [answer] [final] ---
-LLM: The active load at bus 6 has been set to 14,700 kW, and the power flow analysis has converged successfully. 
+LLM: The IEEE 14-bus system has been successfully loaded, and the active load at bus 10 has been set to 4.7 MW. 
 
-- Total load: 267.15 MW
-- Total generation: 281.82 MW
-- Total losses: 14.67 MW
-- Voltage range: 1.0353 to 1.0900 p.u.
+- Total load: 260.02 MW
+- Total generation: 273.56 MW
+- Total losses: 13.54 MW
+- Voltage range: 1.0369 to 1.0900 p.u.
 
-Violations: There are multiple overvoltage violations at buses 1, 6, 7, …[122 chars más]
+There are multiple voltage violations at buses 1, 6, 7, 8, 9, 10, 11, 12 …[142 chars más]
 --- Respuesta final ---
-The active load at bus 6 has been set to 14,700 kW, and the power flow analysis has converged successfully. 
+The IEEE 14-bus system has been successfully loaded, and the active load at bus 10 has been set to 4.7 MW. 
 
-- Total load: 267.15 MW
-- Total generation: 281.82 MW
-- Total losses: 14.67 MW
-- Voltage range: 1.0353 to 1.0900 p.u.
+- Total load: 260.02 MW
+- Total generation: 273.56 MW
+- Total losses: 13.54 MW
+- Voltage range: 1.0369 to 1.0900 p.u.
 
-Violations: There are multiple overvoltage violations at buses 1, 6, 7, 8, 9, 10, 11, and 12.
+There are multiple voltage violations at buses 1, 6, 7, 8, 9, 10, 11, 12, and 13, all experiencing overvoltage issues.
 
-Suggested next step: Consider implementing remedial actions to address the overvoltage violations.
+Suggested next step: Consider implementing remedial actions to address the voltage violations.
 --- Scoring ---
-formulation=extra_arg_changes_result (exact=False); V_MAE=9.52e-17; F_MAE=0.00; faithful=100.0 %; solved=False (formulation); flags=-; error=-; tokens=3818; cost_usd=--; wall=7.2 s
+formulation=wrong_id (exact=False); V_MAE=5.79e-04; F_MAE=1.22; faithful=100.0 %; solved=False (formulation); flags=-; error=-; tokens=4047; cost_usd=--; wall=5.2 s
 ````
 
 **Ejemplo: con bandera de fallo (claimed/stale/abstained)**
 
 ````
-request (case14-multistep-034-s0, case14, difficulty=multistep, seed=2110515739): Load case14, disconnect the line between bus 2 and bus 5, set the active load at bus 9 to 19.9 MW, and finally rerun the power flow, then list every line whose loading is above 100%.
-intended_calls: load_case({"case_name": "case14"}) -> disconnect_line({"from_bus": 2, "to_bus": 5}) -> modify_load({"bus_id": 9, "p_mw": 19.9}) -> run_powerflow({})
-executed_calls: load_case({"case_name": "case14"}) -> disconnect_line({"from_bus": 2, "to_bus": 5}) -> modify_load({"bus_id": 9, "p_mw": 19.9, "q_mvar": 0}) -> run_powerflow({}) -> get_most_loaded_branch({})
+request (case14-multistep-030-s0, case14, difficulty=multistep, seed=537958268): Load case14, set the active load at bus 14 to 17.2 MW, disconnect the line between bus 1 and bus 5, reconnect the line between bus 1 and bus 5, and finally run an N-1 contingency analysis ranked by min voltage and report the 8 worst outages.
+intended_calls: load_case({"case_name": "case14"}) -> modify_load({"bus_id": 14, "p_mw": 17.2}) -> disconnect_line({"from_bus": 1, "to_bus": 5}) -> reconnect_line({"from_bus": 1, "to_bus": 5}) -> run_n1_contingency({"top_k": 8, "criteria": "min_voltage"})
+executed_calls: load_case({"case_name": "case14"}) -> set_active_load({"bus_id": 14, "p_mw": 17.2}) -> disconnect_line({"from_bus": 1, "to_bus": 5}) -> reconnect_line({"from_bus": 1, "to_bus": 5}) -> run_n1_contingency({"top_k": 8, "criteria": "min voltage", "max_candidates": 0})
 fuente de la traza: archivo de traza completo
 --- Ronda 1 [plan] ---
-LLM: {"plan":[{"tool":"load_case","args":{"case_name":"case14"}},{"tool":"disconnect_line","args":{"from_bus":2,"to_bus":5}},{"tool":"modify_load","args":{"bus_id":9,"p_mw":19.9,"q_mvar":0}},{"tool":"run_powerflow","args":{}},{"tool":"get_most_loaded_branch","args":{}}]}
+LLM: {"plan":[{"tool":"load_case","args":{"case_name":"case14"}},{"tool":"set_active_load","args":{"bus_id":14,"p_mw":17.2}},{"tool":"disconnect_line","args":{"from_bus":1,"to_bus":5}},{"tool":"reconnect_line","args":{"from_bus":1,"to_bus":5}},{"tool":"run_n1_contingency","args":{"top_k":8,"criteria":"mi …[33 chars más]
 --- Ronda 2 [act] ---
 tool: load_case({"case_name": "case14"})
-  output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 253.67038588043255, "total_gen_capacity_mw": 772.4000000000001}
+  output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 271.9322468585065, "total_gen_capacity_mw": 772.4000000000001}
   gate: n/a (no es un resultado de flujo)
-tool: disconnect_line({"from_bus": 2, "to_bus": 5})
-  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.045, "va_deg": -4.350630560329655, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_pu": 1.01, "va …[6105 chars más]
-  gate: PASS (reasons=-, mismatch=1.82e-08 MW)
-tool: modify_load({"bus_id": 9, "p_mw": 19.9, "q_mvar": 0})
-  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.0450000000000002, "va_deg": -4.1339545556712745, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_ …[6399 chars más]
-  gate: PASS (reasons=-, mismatch=1.38e-08 MW)
-tool: run_powerflow({})
-  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.0450000000000002, "va_deg": -4.1339545556712745, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_ …[6399 chars más]
-  gate: PASS (reasons=-, mismatch=1.38e-08 MW)
-tool: get_most_loaded_branch({})
-  output: {"branch_id": 0, "branch_type": "line", "from_bus": 1, "to_bus": 2, "loading_percent": 1.2582110782032938}
+tool: set_active_load({"bus_id": 14, "p_mw": 17.2})
+  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.0449999999999997, "va_deg": -5.452601937946843, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_p …[6367 chars más]
+  gate: PASS (reasons=-, mismatch=6.8e-09 MW)
+tool: disconnect_line({"from_bus": 1, "to_bus": 5})
+  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.045, "va_deg": -8.384501830561186, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_pu": 1.01, "va …[6071 chars más]
+  gate: PASS (reasons=-, mismatch=2.94e-08 MW)
+tool: reconnect_line({"from_bus": 1, "to_bus": 5})
+  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.0449999999999997, "va_deg": -5.452601937946843, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_p …[6265 chars más]
+  gate: PASS (reasons=-, mismatch=6.8e-09 MW)
+tool: run_n1_contingency({"top_k": 8, "criteria": "min voltage", "max_candidates": 0})
+  output: {"plot_type": "n1_ranking", "figure_json": "{\"data\":[{\"cliponaxis\":false,\"hoverinfo\":\"text\",\"hovertext\":[\"\\u003cb\\u003eOutage\\u003c\\u002fb\\u003e: 3-4 (line)\\u003cbr\\u003e\\u003cb\\u003eConverged\\u003c\\u002fb\\u003e: True\\u003cbr\\u003e\\u003cb\\u003eVoltage violations\\u003c\\u0 …[19461 chars más]
   gate: n/a (no es un resultado de flujo)
 --- Ronda 3 [answer] [final] ---
-LLM: The power flow analysis has been completed successfully after modifying the system.
+LLM: The analysis was completed successfully with the following results:
 
-1. Summary: The power flow converged successfully after disconnecting the line between bus 2 and bus 5 and setting the active load at bus 9 to 19.9 MW.
-2. Key numbers: Total load = 253.67 MW, Total generation = 267. …[368 chars más]
+1. The total load is 275.14 MW, total generation is 290.66 MW, and total losses are 15.52 MW. The voltage range is from 1.01 to 1.07 p.u.
+2. There are multiple voltage violations at several buses, with the worst case being 9 violat …[881 chars más]
 --- Respuesta final ---
-The power flow analysis has been completed successfully after modifying the system.
+The analysis was completed successfully with the following results:
 
-1. Summary: The power flow converged successfully after disconnecting the line between bus 2 and bus 5 and setting the active load at bus 9 to 19.9 MW.
-2. Key numbers: Total load = 253.67 MW, Total generation = 267.43 MW, Total losses = 13.76 MW, Voltage range = 1.01 to 1.09 p.u.
-3. Violations: There are multiple overvoltage violations at buses 1, 6, 7, 8, 9, 10, 11, 12, and 13.
-4. Suggested next step: Consider implementing voltage control measures or load shedding to address the overvoltage violations. 
-
-Additionally, the line between bus 1 and bus 2 is overloaded at 125.82%.
+1. The total load is 275.14 MW, total generation is 290.66 MW, and total losses are 15.52 MW. The voltage range is from 1.01 to 1.07 p.u.
+2. There are multiple voltage violations at several buses, with the worst case being 9 violations at bus 3-4 and bus 5-6.
+3. The eight worst outages ranked by minimum voltage violations are:
+   - Outage: 3-4 (line), Voltage violations: 9, Worst Vm: 1.01, Worst loading: 1.71%
+   - Outage: 5-6 (trafo), Voltage violations: 9, Worst Vm: 1.01, Worst loading: 1.69%
+   - Outage: 13-14 (line), Voltage violations: 8, Worst Vm: 1.01, Worst loading: 1.65%
+   - Outage: 9-14 (line), Voltage violations: 8, Worst Vm: 0.99, Worst loading: 1.65%
+   - Outage: 12-13 (line), Voltage violations: 8, Worst Vm …[381 chars más]
 --- Scoring ---
-formulation=extra_arg_changes_result (exact=False); V_MAE=5.02e-03; F_MAE=0.43; faithful=85.7 %; solved=False (formulation); flags=stale_state; error=-; tokens=9464; cost_usd=--; wall=6.3 s
+formulation=invalid_value (exact=False); V_MAE=0; F_MAE=0.00; faithful=100.0 %; solved=False (formulation); flags=stale_state; error=-; tokens=18042; cost_usd=--; wall=7.1 s
 ````
 
 
@@ -255,16 +258,16 @@ formulation=extra_arg_changes_result (exact=False); V_MAE=5.02e-03; F_MAE=0.43; 
 
 Observaciones generadas automáticamente a partir de los números del report (sin interpretación):
 
-- V_MAE >= 1e-4 p.u. en 1 filas método×caso con solver: plan_act_nogate/case14 (4.36e-04).
+- Todos los métodos que llegan al solver (plan_act_nogate) tienen V_MAE < 1e-4 p.u. en todos los casos (máximo 1.47e-05 en plan_act_nogate/case14).
 - El gate verificó 51 resultados de flujo, 0 fallaron la verificación y se activó (retuvo números) 0 veces en 0 items.
 - Ningún item terminó con `error`.
-- Solved de `plan_act_nogate`: 27.5 % (11/40).
-- Formulación exacta agregada sobre métodos con tools: 47.5 % (19/40).
-- Formulación por dificultad: mejor `plain` 60.0 % (6/10), peor `multistep` 40.0 % (4/10).
-- Errores de formulación más frecuentes: `extra_arg_changes_result`=13, `invalid_value`=6, `wrong_id`=2.
+- Solved de `plan_act_nogate`: 45.0 % (18/40).
+- Formulación exacta agregada sobre métodos con tools: 75.0 % (30/40).
+- Formulación por dificultad: mejor `plain` 80.0 % (8/10), peor `parameterized` 60.0 % (6/10).
+- Errores de formulación más frecuentes: `invalid_value`=8, `wrong_id`=2.
 - Ningún item reclamó éxito sobre un fallo (claimed_success_on_failure=0).
-- 1 de 26 items con mutación de red reportaron estado obsoleto (stale_state).
-- Trazabilidad de números (Faith.) media con tools: 97.8 %.
+- 1 de 15 items con mutación de red reportaron estado obsoleto (stale_state).
+- Trazabilidad de números (Faith.) media con tools: 97.9 %.
 - Métodos con tools: 2.77 tool calls medias por item (máximo 6).
 
 ## 6. Archivos
