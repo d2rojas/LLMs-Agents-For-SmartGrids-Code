@@ -1129,6 +1129,131 @@ def _mutation_applied(record: Dict[str, Any]) -> bool:
     return True
 
 
+_BUS_LIKE_ARGS: frozenset[str] = frozenset({"bus_id", "from_bus", "to_bus"})
+_REQUEST_NUMBER_RE = re.compile(r"-?\d+(?:\.\d+)?")
+
+
+_INDEXING_CONVENTION_RE = re.compile(r"\(\s*[01]\s*-\s*based\s*\)", re.IGNORECASE)
+
+
+def _word_numbers_from_text(text: str) -> set[float]:
+    """Spelled-out bus numbers ("bus ten and bus eleven") the digit regex alone
+    misses -- reuses baselines.rule_based's own word list (its bus-number parser
+    covers the same generated-request phrasings) rather than a second one to keep
+    in sync."""
+    from baselines.rule_based import _NUMBER_WORDS
+
+    found: set[float] = set()
+    for word in re.findall(r"[a-zA-Z]+", text):
+        v = _NUMBER_WORDS.get(word.lower())
+        if v is not None:
+            found.add(float(v))
+    return found
+
+
+def _numbers_from_text(text: Optional[str]) -> set[float]:
+    """Every number literal in ``text`` (request or prior tool output rendered as
+    text), permissive on purpose -- unlike ``numbers_in_text`` (built for the
+    *answer*, where a bare integer is usually an id/count to ignore), V6 needs bus
+    ids and other bare integers from the *request* to count as grounding, not just
+    unit-bearing values. A ``(0-based)``/``(1-based)`` indexing-convention marker is
+    stripped first: the "0" or "1" there names a convention, not a requested value,
+    and otherwise grounds an unrelated argument that happens to equal 0 or 1 (a
+    default reactive power, say) as if the request had stated it. Spelled-out bus
+    numbers ("bus ten") are also picked up, not just digits.
+    """
+    cleaned = _INDEXING_CONVENTION_RE.sub(" ", str(text or ""))
+    return {float(m) for m in _REQUEST_NUMBER_RE.findall(cleaned)} | _word_numbers_from_text(cleaned)
+
+
+def _numbers_from_json(obj: Any) -> set[float]:
+    """Every numeric leaf in a JSON-like structure (a parsed tool output)."""
+    found: set[float] = set()
+
+    def _walk(o: Any) -> None:
+        if isinstance(o, bool):
+            return
+        if isinstance(o, (int, float)):
+            found.add(float(o))
+        elif isinstance(o, dict):
+            for v in o.values():
+                _walk(v)
+        elif isinstance(o, (list, tuple)):
+            for v in o:
+                _walk(v)
+
+    _walk(obj)
+    return found
+
+
+def argument_grounding_check(trace: Optional[Dict[str, Any]], request_text: Optional[str]) -> Dict[str, Any]:
+    """V6: every numeric or identifier argument passed to a MUTATING tool must appear
+    in the user request or in the output of a tool call that already ran -- never a
+    value the model introduced on its own (e.g. an unrequested ``q_mvar``, an
+    unrequested bus, an invented N-1 ``criteria``). Closes the reactive-argument-
+    invention class under either tool set (the request's numbers ground
+    ``set_active_load``/``set_load`` exactly as they ground ``modify_load``) and,
+    unlike the tool-split redesign, catches unrequested bus/line ids and invented
+    N-1 criteria too, since those are not eliminated by construction the way an
+    extra ``q_mvar`` argument is.
+
+    Returns ``{"passed", "invented_args": [{"tool", "arg", "value"}, ...], "detail"}``.
+    A bus-like argument (``bus_id``/``from_bus``/``to_bus``) also grounds against its
+    zero-based-to-one-based neighbor (n-1 or n+1), so a request that states its bus
+    reference in the 0-based convention (``"bus 10 (0-based)"``, converted to the
+    MATPOWER 1-based id before the tool call -- see llm/prompts.py) is not flagged
+    for a conversion the request itself asked for.
+    """
+    records = _tool_records_from_trace(trace)
+    request_nums = _numbers_from_text(request_text)
+    seen_output_nums: set[float] = set(request_nums)
+    invented: List[Dict[str, Any]] = []
+
+    for rec in records:
+        name = str(rec.get("name") or "")
+        canonical = _TOOL_NAME_ALIASES.get(name, name)
+        if canonical in MUTATING_TOOLS or name in ("set_active_load", "set_load"):
+            args = rec.get("arguments") or {}
+            if isinstance(args, str):
+                args = _safe_json_loads(args)
+            for key, value in (args or {}).items():
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    continue
+                fv = float(value)
+                grounded = fv in seen_output_nums
+                if not grounded and key in _BUS_LIKE_ARGS:
+                    grounded = (fv - 1) in seen_output_nums or (fv + 1) in seen_output_nums
+                if not grounded:
+                    invented.append({"tool": name, "arg": key, "value": value})
+
+        # This call's own output grounds every later call, so a value the request
+        # never stated but a prior tool reported (e.g. a bus id read off get_status)
+        # is not penalized. load_case's own output is excluded: it is a bulk network-
+        # metadata dump (n_buses, n_generators, n_lines, total_load_mw, ...), not
+        # something a reasoning agent repurposes as a load's reactive power, and its
+        # small integers (a generator count of 5, a line count of 20) otherwise
+        # coincidentally ground an unrelated invented value.
+        if name != "load_case":
+            seen_output_nums |= _numbers_from_json(_parse_output(rec.get("output")))
+
+    detail = (
+        "; ".join(f"{i['tool']}.{i['arg']}={i['value']}" for i in invented)
+        if invented
+        else "every mutating-tool argument traces to the request or a prior tool output"
+    )
+    return {"passed": not invented, "invented_args": invented, "detail": detail}
+
+
+def _safe_json_loads(text: Any) -> Optional[Dict[str, Any]]:
+    if isinstance(text, dict):
+        return text
+    try:
+        obj = json.loads(str(text))
+        return obj if isinstance(obj, dict) else None
+    except Exception:
+        return None
+
+
 def stale_state_check(
     trace: Optional[Dict[str, Any]],
     answer_text: Optional[str],
