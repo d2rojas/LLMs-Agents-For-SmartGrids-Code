@@ -76,22 +76,19 @@ SOURCES: dict[str, dict[str, str]] = {
         # Safe from the pre-fix matrix: no LLM (rule_based) or no final_gate and tool-using, so
         # neither the per-unit representation fix nor the verification rework applies.
         "rule_based": "results_matrix_gpt-4o-mini/rule_based/case14",
-        "react_nogate": "results_matrix_gpt-4o-mini/react_nogate/case14",
-        "plan_act_nogate": "results_matrix_gpt-4o-mini/plan_act_nogate/case14",
-        "single_call:structured": "results_matrix_gpt-4o-mini/single_call_structured/case14",
         # Per-unit representation rerun (2026-09-16), postdates the matrix.
         "llm_only:structured": "results_validation_nr/gpt-4o-mini/llm_only_structured",
         "llm_only:cot": "results_validation_nr/gpt-4o-mini/llm_only_cot",
         "llm_only_forced:structured": "results_validation_nr/gpt-4o-mini/llm_only_forced_structured",
-        # Back on the original (modify_load) tool set, same as every other row in this
-        # block, so the body table has one tool set per block and one caption clause
-        # (V6/V7 applied offline; Escalated is an upper bound). 750e91d switched this to
-        # the split-tool run for one build; that commit stays as the historical record
-        # of the switch, but the split-tool PFAgent run does not belong in the body
-        # until the four-row split-tool launch brings every row in this block onto it
-        # at once -- until then it is an appendix before-and-after entry, see
-        # SPLIT_TOOL_SOURCES below, beside gpt-5.4's own split-tool rows.
-        "pfagent": "results_validation_gpt-4o-mini_agents",
+        # 2026-09-21: the four-row split-tool launch (set_active_load/set_load in place of
+        # modify_load; PFAgent under the live V1-V7 gate, a3f2733). Every tool-using row in
+        # this block is on the same tool set now, so 750e91d/fa6e340's "temporary,
+        # documented" mismatch is resolved -- this replaces both the old modify_load matrix
+        # rows above and the interim gates-by-rescoring PFAgent row (d8acccb, fa6e340).
+        "react_nogate": "results_validation_split_tool_launch/gpt-4o-mini/react_nogate/case14",
+        "plan_act_nogate": "results_validation_split_tool_launch/gpt-4o-mini/plan_act_nogate/case14",
+        "single_call:structured": "results_validation_split_tool_launch/gpt-4o-mini/single_call_structured/case14",
+        "pfagent": "results_validation_split_tool_launch/gpt-4o-mini/pfagent/case14",
     },
     # gpt-5.6-sol, launched 2026-09-21: one clean N=40 case14 ladder, all 7 methods under
     # one prompt hash (none of the pre-fix/split-ladder history the other two blocks carry
@@ -102,10 +99,12 @@ SOURCES: dict[str, dict[str, str]] = {
         "rule_based": f"{SOL_BASE}/rule_based/case14",
         "llm_only:structured": f"{SOL_BASE}/llm_only_structured/case14",
         "llm_only:cot": f"{SOL_BASE}/llm_only_cot/case14",
-        "react_nogate": f"{SOL_BASE}/react_nogate/case14",
-        "plan_act_nogate": f"{SOL_BASE}/plan_act_nogate/case14",
-        "pfagent": f"{SOL_BASE}/pfagent/case14",
-        "single_call:structured": f"{SOL_BASE}/single_call_structured/case14",
+        # 2026-09-21: superseded by the four-row split-tool launch (same reasoning as the
+        # gpt-4o-mini block above); the SOL_BASE (modify_load) tool-using rows predate it.
+        "react_nogate": "results_validation_split_tool_launch/gpt-5.6-sol/react_nogate/case14",
+        "plan_act_nogate": "results_validation_split_tool_launch/gpt-5.6-sol/plan_act_nogate/case14",
+        "pfagent": "results_validation_split_tool_launch/gpt-5.6-sol/pfagent/case14",
+        "single_call:structured": "results_validation_split_tool_launch/gpt-5.6-sol/single_call_structured/case14",
     },
 }
 
