@@ -1,6 +1,6 @@
 # Informe de experimento: `results_validation_gpt-5.4_stress_rule_based`
 
-Generado el 2026-09-21 08:33 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-5.4_stress_rule_based (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-21 15:02 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-5.4_stress_rule_based (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -48,9 +48,9 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 ### Por método × caso
 
-| Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Escalated | Wrong (silent) | $ |
-|----------|------|----|-------------|-----|-----|----------|----------------|------|----------------|-------------|-----|----|-------------|-------------|-----------------|------|
-| rule_based | case14 | 10 | 50.0 (5/10) | -- | 0.00 | 0.0 (0/10) | 83.3 (5/6) | 0 | 100.0 (10/10) | 40.0 (4/10) | 1.7 | n/a | 60.0 (6/10) | 40.0 (4/10) | 60.0 (6/10) | 0.0000 |
+| Method | Case | N | Form. | V_MAE solved | V_MAE all | B_mean solved | B_mean all | Solved | Escalated | Wrong-unflagged | Traceable | Tokens | Time (s) | Claim | Escalated | Wrong (silent) | $ |
+|----------|------|----|-------------|---------------|---------|----------------|----------|----------|-------------|------------------|---------|------|--------|-------------|-------------|-----------------|------|
+| rule_based | case14 | 10 | 50.0 (5/10) | -- | -- | -- | 0 | 0.0 (0/10) | 40.0 (4/10) | 60.0 | 100.0 | 0 | 0.15 | 60.0 (6/10) | 40.0 (4/10) | 60.0 (6/10) | 0.0000 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 

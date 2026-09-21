@@ -1,6 +1,6 @@
 # Informe de experimento: `single_call_structured`
 
-Generado el 2026-09-21 08:32 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio single_call_structured (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-21 15:02 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio single_call_structured (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -143,9 +143,9 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 ### Por método × caso
 
-| Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Escalated | Wrong (silent) | $ |
-|---------------------------|------|----|-------------|-----|-----|-------------|----------------|--------|---------------|----|-----|----|-----|----------|-----------------|------|
-| single_call:structured | case14 | 40 | 20.0 (8/40) | 0 | 2.75 | 10.0 (4/40) | 100.0 (40/40) | 4.79e-02 | 87.5 (35/40) | -- | 1.0 | 4637 | -- | 0.0 (0/40) | 90.0 (36/40) | 0.5575 |
+| Method | Case | N | Form. | V_MAE solved | V_MAE all | B_mean solved | B_mean all | Solved | Escalated | Wrong-unflagged | Traceable | Tokens | Time (s) | Claim | Escalated | Wrong (silent) | $ |
+|---------------------------|------|----|-------------|---------------|---------|----------------|----------|-------------|----------|------------------|---------|------|--------|-----|----------|-----------------|------|
+| single_call:structured | case14 | 40 | 20.0 (8/40) | 0 | 1.77e-03 | -- | 4.79e-02 | 10.0 (4/40) | 0.0 (0/40) | 90.0 | 87.5 | 4637 | 3.93 | -- | 0.0 (0/40) | 90.0 (36/40) | 0.5575 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 

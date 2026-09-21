@@ -1,6 +1,6 @@
 # Informe de experimento: `results_validation_gpt-5.4_stress`
 
-Generado el 2026-09-21 08:33 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-5.4_stress (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-21 15:02 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-5.4_stress (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -116,10 +116,10 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 ### Por método × caso
 
-| Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Escalated | Wrong (silent) | $ |
-|---------------|------|----|-------------|-----|-----|-------------|----------------|------|----------------|----------------|-----|-----|----------|----------------|-----------------|------|
-| react_nogate | case14 | 10 | 50.0 (5/10) | -- | 0.01 | 50.0 (5/10) | 100.0 (10/10) | 0 | 50.0 (5/10) | 100.0 (10/10) | 3.6 | 16333 | 0.0 (0/10) | 0.0 (0/10) | 50.0 (5/10) | 0.4563 |
-| pfagent | case14 | 10 | 50.0 (5/10) | -- | 0.01 | 50.0 (5/10) | 100.0 (10/10) | 0 | 100.0 (10/10) | 100.0 (10/10) | 3.9 | 24422 | 0.0 (0/10) | 100.0 (10/10) | 0.0 (0/10) | 0.6890 |
+| Method | Case | N | Form. | V_MAE solved | V_MAE all | B_mean solved | B_mean all | Solved | Escalated | Wrong-unflagged | Traceable | Tokens | Time (s) | Claim | Escalated | Wrong (silent) | $ |
+|---------------|------|----|-------------|---------------|---------|----------------|----------|-------------|----------------|------------------|---------|------|--------|----------|----------------|-----------------|------|
+| react_nogate | case14 | 10 | 50.0 (5/10) | -- | -- | -- | 0 | 50.0 (5/10) | 0.0 (0/10) | 50.0 | 50.0 | 16333 | 9.53 | 0.0 (0/10) | 0.0 (0/10) | 50.0 (5/10) | 0.4563 |
+| pfagent | case14 | 10 | 50.0 (5/10) | -- | -- | -- | 0 | 50.0 (5/10) | 100.0 (10/10) | 0.0 | 100.0 | 24422 | 12.69 | 0.0 (0/10) | 100.0 (10/10) | 0.0 (0/10) | 0.6890 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 

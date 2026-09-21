@@ -1,6 +1,6 @@
 # Informe de experimento: `case14`
 
-Generado el 2026-09-21 12:24 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio case14 (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-21 15:02 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio case14 (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -179,9 +179,9 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 ### Por método × caso
 
-| Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Escalated | Wrong (silent) | $ |
-|---------------|------|----|-----|--------|-----|---------------|----------------|--------|----------|----|-----|-----|-----|----------|-----------------|------|
-| llm_only:cot | case14 | 40 | -- | 1.46e-03 | 0.53 | 35.0 (14/40) | 80.0 (32/40) | 1.69e-01 | 0.0 (0/40) | -- | n/a | 10052 | -- | 0.0 (0/40) | 65.0 (26/40) | 3.3181 |
+| Method | Case | N | Form. | V_MAE solved | V_MAE all | B_mean solved | B_mean all | Solved | Escalated | Wrong-unflagged | Traceable | Tokens | Time (s) | Claim | Escalated | Wrong (silent) | $ |
+|---------------|------|----|-----|---------------|---------|----------------|----------|---------------|----------|------------------|---------|------|--------|-----|----------|-----------------|------|
+| llm_only:cot | case14 | 40 | -- | 1.46e-03 | 1.46e-03 | 1.69e-01 | 1.69e-01 | 35.0 (14/40) | 0.0 (0/40) | 65.0 | 0.0 | 10052 | 184.24 | -- | 0.0 (0/40) | 65.0 (26/40) | 3.3181 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 

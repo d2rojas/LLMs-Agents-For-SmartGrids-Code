@@ -1,6 +1,6 @@
 # Informe de experimento: `plan_act_nogate`
 
-Generado el 2026-09-21 08:32 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio plan_act_nogate (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-21 15:01 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio plan_act_nogate (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -102,9 +102,9 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 ### Por método × caso
 
-| Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Escalated | Wrong (silent) | $ |
-|------------------|------|----|---------------|-----|-----|---------------|----------------|------|---------------|----|-----|----|-----|----------|-----------------|------|
-| plan_act_nogate | case14 | 40 | 47.5 (19/40) | 0 | 0.07 | 42.5 (17/40) | 100.0 (40/40) | 0 | 97.5 (39/40) | -- | 2.9 | 6209 | -- | 0.0 (0/40) | 57.5 (23/40) | 0.8189 |
+| Method | Case | N | Form. | V_MAE solved | V_MAE all | B_mean solved | B_mean all | Solved | Escalated | Wrong-unflagged | Traceable | Tokens | Time (s) | Claim | Escalated | Wrong (silent) | $ |
+|------------------|------|----|---------------|---------------|---------|----------------|----------|---------------|----------|------------------|---------|------|--------|-----|----------|-----------------|------|
+| plan_act_nogate | case14 | 40 | 47.5 (19/40) | 0 | 4.36e-04 | -- | 0 | 42.5 (17/40) | 0.0 (0/40) | 57.5 | 97.5 | 6209 | 6.93 | -- | 0.0 (0/40) | 57.5 (23/40) | 0.8189 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 

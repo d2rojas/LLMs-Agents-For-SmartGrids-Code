@@ -1,6 +1,6 @@
 # Informe de experimento: `llm_only_forced_structured`
 
-Generado el 2026-09-21 12:24 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio llm_only_forced_structured (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-21 15:02 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio llm_only_forced_structured (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -170,9 +170,9 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 ### Por método × caso
 
-| Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Escalated | Wrong (silent) | $ |
-|--------------------------------|------|----|-----|--------|-----|----------|----------------|--------|----------|----|-----|----|-----|----------|-----------------|------|
-| llm_only_forced:structured | case14 | 40 | -- | 2.74e-02 | 34.09 | 0.0 (0/40) | 100.0 (27/27) | 1.20e+01 | 0.0 (0/40) | -- | n/a | 2928 | -- | 0.0 (0/40) | 100.0 (40/40) | 0.0334 |
+| Method | Case | N | Form. | V_MAE solved | V_MAE all | B_mean solved | B_mean all | Solved | Escalated | Wrong-unflagged | Traceable | Tokens | Time (s) | Claim | Escalated | Wrong (silent) | $ |
+|--------------------------------|------|----|-----|---------------|---------|----------------|----------|----------|----------|------------------|---------|------|--------|-----|----------|-----------------|------|
+| llm_only_forced:structured | case14 | 40 | -- | 2.74e-02 | 2.74e-02 | 1.20e+01 | 1.20e+01 | 0.0 (0/40) | 0.0 (0/40) | 100.0 | 0.0 | 2928 | 13.96 | -- | 0.0 (0/40) | 100.0 (40/40) | 0.0334 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 
