@@ -124,6 +124,27 @@ STRESS_SOURCES: dict[str, dict[str, str]] = {
     },
 }
 
+# Split-tool ("before" = original modify_load tool set, sourced from the entries above;
+# "after" = set_active_load/set_load in its place) appendix before-and-after comparison,
+# both models, pfagent and react_nogate (2026-09-21). Not yet rendered into its own .tex:
+# fill_supertable.py's --condition is one tag per invocation, so showing "before" and
+# "after" side by side per row needs a small dedicated renderer, not a second
+# _resolve_sources + fill_supertable.py call -- that would produce two separate table
+# fragments, not one comparison table. This dict is the documented data pointer the
+# appendix table is built from once that renderer exists; "before" duplicates SOURCES'
+# own paths rather than aliasing them so this table's source list stays self-contained
+# and readable without cross-referencing SOURCES.
+SPLIT_TOOL_SOURCES: dict[str, dict[str, dict[str, str]]] = {
+    "openrouter:openai/gpt-5.4": {
+        "pfagent": {"before": f"{GPT54_BASE}/pfagent", "after": "results_validation_load_split/gpt-5.4/pfagent"},
+        "react_nogate": {"before": f"{GPT54_BASE}/react_nogate", "after": "results_validation_load_split/gpt-5.4/react_nogate"},
+    },
+    "openrouter:openai/gpt-4o-mini": {
+        "pfagent": {"before": "results_validation_gpt-4o-mini_agents", "after": "results_validation_load_split/gpt-4o-mini/pfagent"},
+        "react_nogate": {"before": "results_matrix_gpt-4o-mini/react_nogate/case14", "after": "results_validation_load_split/gpt-4o-mini/react_nogate"},
+    },
+}
+
 OUT_ROWS = PROJECT_ROOT / "benchmarks" / "tab_pf_protocol_rows_gpt-5.4-and-4o-mini_validation.tex"
 OUT_PER_SYSTEM = PROJECT_ROOT / "benchmarks" / "tab_pf_protocol_per_system_gpt-5.4-and-4o-mini_validation.tex"
 OUT_STRESS = PROJECT_ROOT / "benchmarks" / "tab_pf_protocol_stress_gpt-5.4-and-4o-mini_validation.tex"
