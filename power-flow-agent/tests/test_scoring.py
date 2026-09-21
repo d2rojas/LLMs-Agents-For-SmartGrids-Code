@@ -293,6 +293,50 @@ def test_claims_from_tools_check_v7_self_consistency_not_reference_comparison():
     assert no_state == {"passed": True, "applicable": False, "detail": "no solved state in the trace to re-derive a claim from"}
 
 
+def test_claims_from_tools_check_unwraps_a_plotted_n1_contingency_call():
+    """case14-multistep-022-s0: a real committed item where run_n1_contingency was called
+    with plotting on, so its output is {"plot_type", "figure_json", "n1_report"} instead of
+    a bare {"results": [...]} dict at the top level. _last_pf_and_n1 used to only look at
+    the top level, so the N-1 ranking silently read as "never ran" and every n1_worst_outage
+    claim in a plotted run came back not-applicable instead of actually being checked --
+    this was the real cause behind that item's Wrong-unflagged verdict, not a missing V7
+    claim type."""
+    pf = {
+        "case_name": "case14",
+        "converged": True,
+        "bus_voltages": [{"bus_id": 1, "vm_pu": 1.05}],
+        "line_flows": [],
+        "total_load_mw": 286.75,
+        "total_generation_mw": 304.21,
+        "total_loss_mw": 17.46,
+    }
+    n1_report = {
+        "criteria": "max_violations",
+        "top_k": 8,
+        "results": [
+            {"from_bus": 10, "to_bus": 11, "branch_type": "line", "converged": True,
+             "n_voltage_violations": 8, "n_thermal_violations": 0, "score": 80001.6472},
+        ],
+    }
+    plotted_output = {"plot_type": "n1_ranking", "figure_json": "{}", "n1_report": n1_report}
+    trace = {
+        "rounds": [{"tools": [
+            {"name": "run_powerflow", "arguments": {}, "output": json.dumps(pf)},
+            {"name": "run_n1_contingency", "arguments": {"top_k": 8, "criteria": "max_violations"}, "output": json.dumps(plotted_output)},
+        ]}]
+    }
+    request_text = "Load case14 and run an N-1 contingency analysis ranked by max violations and report the 8 worst outages."
+
+    pf_found, n1_found = bs._last_pf_and_n1(trace)
+    assert n1_found == n1_report  # unwrapped, not the plot envelope
+
+    matching = bs.claims_from_tools_check(trace, "The worst outage is between bus 10 and bus 11.", request_text)
+    assert matching["passed"] is True and matching["applicable"] is True
+
+    silent_on_it = bs.claims_from_tools_check(trace, "Total load is 286.75 MW with several voltage violations.", request_text)
+    assert silent_on_it["passed"] is False and silent_on_it["applicable"] is True
+
+
 def test_no_overload_regex_recognizes_the_phrasing_react_nogate_and_pfagent_actually_use():
     """Found while sizing the numeric_ok/answer_matches_truth conjunction (2026-09-18):
     _NO_OVERLOAD_RE only recognized "overload/thermal/violation" near "no", so a correct,

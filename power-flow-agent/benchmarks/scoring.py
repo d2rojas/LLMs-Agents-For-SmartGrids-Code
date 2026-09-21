@@ -378,6 +378,15 @@ def _last_pf_and_n1(trace: Optional[Dict[str, Any]]) -> tuple[Optional[Dict[str,
             if isinstance(out, dict) and "results" in out:
                 n1 = out
                 break
+            # A call made with plotting on wraps the real report under "n1_report"
+            # ("plot_type", "figure_json", "n1_report") instead of returning it at the
+            # top level -- unwrap it rather than treat a plotted N-1 call as if it
+            # never ran (2026-09-21, closes the "worst"-shaped claim going uncheckable
+            # for any multistep request whose N-1 call happened to render a chart).
+            nested = out.get("n1_report") if isinstance(out, dict) else None
+            if isinstance(nested, dict) and "results" in nested:
+                n1 = nested
+                break
     return pf, n1
 
 
