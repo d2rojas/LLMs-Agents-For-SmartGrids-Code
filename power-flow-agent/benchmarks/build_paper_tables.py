@@ -83,9 +83,15 @@ SOURCES: dict[str, dict[str, str]] = {
         "llm_only:structured": "results_validation_nr/gpt-4o-mini/llm_only_structured",
         "llm_only:cot": "results_validation_nr/gpt-4o-mini/llm_only_cot",
         "llm_only_forced:structured": "results_validation_nr/gpt-4o-mini/llm_only_forced_structured",
-        # Post-verification-rework (mutation-blocked retry), NOT the matrix and NOT the
-        # "_v1" pre-fix snapshot kept only for reference.
-        "pfagent": "results_validation_gpt-4o-mini_agents",
+        # 2026-09-21: switched from the old modify_load-only tool set
+        # (results_validation_gpt-4o-mini_agents, kept only for reference; predates
+        # this commit) to the split-tool set (set_active_load/set_load, plus
+        # disconnect_line/reconnect_line unchanged) at Daniela's direction, ahead of
+        # the four-row split-tool launch that will bring the rest of this block's
+        # methods onto the same tools. Until that lands, PFAgent's row here is on a
+        # different tool set from react_nogate/plan_act_nogate/single_call above --
+        # a deliberate, temporary, documented state, not an oversight.
+        "pfagent": "results_validation_load_split/gpt-4o-mini/pfagent",
     },
     # gpt-5.6-sol, launched 2026-09-21: one clean N=40 case14 ladder, all 7 methods under
     # one prompt hash (none of the pre-fix/split-ladder history the other two blocks carry
