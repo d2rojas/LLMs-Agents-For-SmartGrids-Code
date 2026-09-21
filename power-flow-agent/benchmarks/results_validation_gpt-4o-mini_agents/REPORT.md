@@ -1,6 +1,6 @@
 # Informe de experimento: `results_validation_gpt-4o-mini_agents`
 
-Generado el 2026-09-21 12:47 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-4o-mini_agents (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-21 13:27 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-4o-mini_agents (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -78,8 +78,8 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 ### Por método × caso
 
 | Method | Case | N | Form. | V_MAE solved | V_MAE all | B_mean solved | B_mean all | Solved | Escalated | Wrong-unflagged | Traceable | Tokens | Time (s) | Claim | Escalated | Wrong (silent) | $ |
-|-------|------|----|---------------|---------------|---------|----------------|----------|---------------|----------|------------------|---------|------|--------|-----|----------|-----------------|------|
-| pfagent | case14 | 40 | 97.5 (39/40) | 0 | 1.90e-07 | 0 | 0 | 65.0 (26/40) | 7.5 (3/40) | 27.5 | 97.5 | 10441 | 4.80 | -- | 7.5 (3/40) | 27.5 (11/40) | 0.0667 |
+|-------|------|----|---------------|---------------|---------|----------------|----------|---------------|-------------|------------------|---------|------|--------|-----|----------|-----------------|------|
+| pfagent | case14 | 40 | 97.5 (39/40) | 0 | 1.90e-07 | 0 | 0 | 65.0 (26/40) | 35.0 (3/40) | 0.0 | 97.5 | 10441 | 4.80 | -- | 7.5 (3/40) | 27.5 (11/40) | 0.0667 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 

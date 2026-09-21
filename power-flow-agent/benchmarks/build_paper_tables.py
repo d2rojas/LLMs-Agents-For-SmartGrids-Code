@@ -83,15 +83,15 @@ SOURCES: dict[str, dict[str, str]] = {
         "llm_only:structured": "results_validation_nr/gpt-4o-mini/llm_only_structured",
         "llm_only:cot": "results_validation_nr/gpt-4o-mini/llm_only_cot",
         "llm_only_forced:structured": "results_validation_nr/gpt-4o-mini/llm_only_forced_structured",
-        # 2026-09-21: switched from the old modify_load-only tool set
-        # (results_validation_gpt-4o-mini_agents, kept only for reference; predates
-        # this commit) to the split-tool set (set_active_load/set_load, plus
-        # disconnect_line/reconnect_line unchanged) at Daniela's direction, ahead of
-        # the four-row split-tool launch that will bring the rest of this block's
-        # methods onto the same tools. Until that lands, PFAgent's row here is on a
-        # different tool set from react_nogate/plan_act_nogate/single_call above --
-        # a deliberate, temporary, documented state, not an oversight.
-        "pfagent": "results_validation_load_split/gpt-4o-mini/pfagent",
+        # Back on the original (modify_load) tool set, same as every other row in this
+        # block, so the body table has one tool set per block and one caption clause
+        # (V6/V7 applied offline; Escalated is an upper bound). 750e91d switched this to
+        # the split-tool run for one build; that commit stays as the historical record
+        # of the switch, but the split-tool PFAgent run does not belong in the body
+        # until the four-row split-tool launch brings every row in this block onto it
+        # at once -- until then it is an appendix before-and-after entry, see
+        # SPLIT_TOOL_SOURCES below, beside gpt-5.4's own split-tool rows.
+        "pfagent": "results_validation_gpt-4o-mini_agents",
     },
     # gpt-5.6-sol, launched 2026-09-21: one clean N=40 case14 ladder, all 7 methods under
     # one prompt hash (none of the pre-fix/split-ladder history the other two blocks carry
