@@ -123,20 +123,42 @@ OUT_PER_SYSTEM = PROJECT_ROOT / "benchmarks" / "tab_pf_protocol_per_system_gpt-5
 OUT_STRESS = PROJECT_ROOT / "benchmarks" / "tab_pf_protocol_stress_gpt-5.4-and-4o-mini_validation.tex"
 
 
+def _require_rescored(model: str, method: str, src_dir: Path) -> Optional[Path]:
+    """report.rescored.json under src_dir, or None if the method has not run yet
+    (src_dir has neither report.json nor a rescored one -- a ladder still in flight,
+    e.g. sol's methods landing one at a time; the caller skips it and the method
+    reads as missing/dashes, same as any other absent source).
+
+    Refuses (SystemExit) rather than silently falling back to report.json when a run
+    exists but was never rescored: a live evaluate_llms.py run does not by itself
+    produce the paper's current scoring (2026-09-21 -- a run-time truth_answer bug
+    meant every live run silently reproduced the pre-redefinition Solved definition
+    regardless of when it ran, caught only because sol's un-rescored parser row
+    visibly disagreed with the other two blocks' rescored ones). Falling back to
+    report.json here would let that recur silently instead of loudly."""
+    rescored = src_dir / "report.rescored.json"
+    if rescored.is_file():
+        return rescored
+    if (src_dir / "report.json").is_file():
+        raise SystemExit(
+            f"{src_dir} has report.json but no report.rescored.json -- run "
+            f"benchmarks/rescore.py on it before building the paper tables "
+            f"({model}/{method})"
+        )
+    print(f"note: no report.json under {src_dir} yet; {model}/{method} will read as missing", file=sys.stderr)
+    return None
+
+
 def _retag(scratch: Path, model: str, method: str, src_dir: Path) -> Optional[Path]:
-    """Copy src_dir's rescored (preferred) or plain report.json into its own scratch
-    sub-directory, keeping only `method`'s own rows (a source file can hold other methods
-    too -- e.g. a stress-set report with react_nogate/pfagent rows alongside rule_based's;
-    copying the whole file would duplicate those against their own real source) with every
-    row's "model" field rewritten to `model`. Returns that directory, or None if src_dir
-    has no report yet (a ladder still in flight, e.g. sol's methods landing one at a time)
-    -- the caller skips it rather than crashing, and the method reads as missing/dashes,
-    same as any other absent source."""
-    src = src_dir / "report.rescored.json"
-    if not src.is_file():
-        src = src_dir / "report.json"
-    if not src.is_file():
-        print(f"note: no report.json under {src_dir} yet; {model}/{method} will read as missing", file=sys.stderr)
+    """Copy src_dir's report.rescored.json into its own scratch sub-directory, keeping
+    only `method`'s own rows (a source file can hold other methods too -- e.g. a
+    stress-set report with react_nogate/pfagent rows alongside rule_based's; copying
+    the whole file would duplicate those against their own real source) with every
+    row's "model" field rewritten to `model`. Returns that directory, or None if
+    src_dir has no report yet -- see _require_rescored, which this also uses to
+    refuse a run that exists but was never rescored."""
+    src = _require_rescored(model, method, src_dir)
+    if src is None:
         return None
     data: dict[str, Any] = json.loads(src.read_text(encoding="utf-8"))
     data = copy.deepcopy(data)
@@ -174,8 +196,7 @@ def _resolve_sources(scratch: Path, sources: dict[str, dict[str, str]], base: Pa
             key = str(src_dir)
             if key in seen:
                 continue
-            if not (src_dir / "report.rescored.json").is_file() and not (src_dir / "report.json").is_file():
-                print(f"note: no report.json under {src_dir} yet; {model}/{method} will read as missing", file=sys.stderr)
+            if _require_rescored(model, method, src_dir) is None:
                 continue
             seen.add(key)
             resolved.append(key)
@@ -214,12 +235,12 @@ def regenerate_reports(with_pdf: bool) -> None:
     base = PROJECT_ROOT / "benchmarks"
     seen: set[Path] = set()
     for sources in (SOURCES, STRESS_SOURCES):
-        for methods in sources.values():
-            for rel in methods.values():
+        for model, methods in sources.items():
+            for method, rel in methods.items():
                 d = base / rel
                 if d in seen:
                     continue
-                if not (d / "report.rescored.json").is_file() and not (d / "report.json").is_file():
+                if _require_rescored(model, method, d) is None:
                     continue
                 seen.add(d)
                 cmd = [VENV_PY, "benchmarks/experiment_report.py", str(d)]
