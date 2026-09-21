@@ -1130,10 +1130,31 @@ def _mutation_applied(record: Dict[str, Any]) -> bool:
 
 
 _BUS_LIKE_ARGS: frozenset[str] = frozenset({"bus_id", "from_bus", "to_bus"})
-_REQUEST_NUMBER_RE = re.compile(r"-?\d+(?:\.\d+)?")
+_REQUEST_NUMBER_RE = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
+_THOUSANDS_RE = re.compile(r"(?<=\d),(?=\d{3}(?:\D|$))")
 
 
 _INDEXING_CONVENTION_RE = re.compile(r"\(\s*[01]\s*-\s*based\s*\)", re.IGNORECASE)
+# A bus number stated under an explicit 0-based marker ("bus 6 (0-based)"): the
+# MATPOWER 1-based tool argument must be this number + 1, so the raw, unconverted
+# digit is a wrong reading for a bus-like argument even though it is literally present
+# in the request text -- see argument_grounding_check's docstring.
+_ZERO_BASED_BUS_RE = re.compile(r"bus\s+(\d+)\s*\(\s*0\s*-\s*based\s*\)", re.IGNORECASE)
+# A number immediately followed by a unit token, typing the grounding pool by argument
+# kind (2026-09-21 retype): "kw"/"kvar" convert to MW/Mvar (divide by 1000) since the
+# generator deliberately phrases some requests that way (benchmarks/requests.py's
+# "kw_thousands" ambiguous-template noise); "mva" is a deliberate unit slip for MW
+# with no conversion (same noise template, "mva" variant).
+_MW_UNIT_RE = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(kw|mw|mva)\b", re.IGNORECASE)
+_MVAR_UNIT_RE = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(kvar|mvar)\b", re.IGNORECASE)
+_JSON_MVAR_KEY_RE = re.compile(r"mvar|reactive", re.IGNORECASE)
+_JSON_MW_KEY_RE = re.compile(r"(?<!m)mw\b|active", re.IGNORECASE)
+
+
+def _strip_thousands(text: str) -> str:
+    """Collapse comma thousands-separators ("14,700" -> "14700") so the number regex
+    reads the value the request states, not its first three digits and a stray "700"."""
+    return _THOUSANDS_RE.sub("", text)
 
 
 def _word_numbers_from_text(text: str) -> set[float]:
@@ -1151,39 +1172,74 @@ def _word_numbers_from_text(text: str) -> set[float]:
     return found
 
 
-def _numbers_from_text(text: Optional[str]) -> set[float]:
+def _empty_typed_pool() -> dict[str, set[float]]:
+    return {"any": set(), "mw": set(), "mvar": set()}
+
+
+def _merge_typed_pool(dst: dict[str, set[float]], src: dict[str, set[float]]) -> None:
+    for k in dst:
+        dst[k] |= src.get(k, set())
+
+
+def _numbers_by_type(text: Optional[str]) -> dict[str, set[float]]:
     """Every number literal in ``text`` (request or prior tool output rendered as
-    text), permissive on purpose -- unlike ``numbers_in_text`` (built for the
-    *answer*, where a bare integer is usually an id/count to ignore), V6 needs bus
-    ids and other bare integers from the *request* to count as grounding, not just
-    unit-bearing values. A ``(0-based)``/``(1-based)`` indexing-convention marker is
-    stripped first: the "0" or "1" there names a convention, not a requested value,
-    and otherwise grounds an unrelated argument that happens to equal 0 or 1 (a
-    default reactive power, say) as if the request had stated it. Spelled-out bus
-    numbers ("bus ten") are also picked up, not just digits.
+    text), split by argument kind: ``mw`` (a number tagged MW/MVA/kW, kW converted to
+    MW), ``mvar`` (tagged Mvar/kMvar), and ``any`` (every number regardless of tag --
+    the untyped pool every argument kind grounded against before this retype, kept as
+    the fallback for arguments V6 does not type, e.g. N-1 ``top_k``). Permissive on
+    purpose -- unlike ``numbers_in_text`` (built for the *answer*, where a bare
+    integer is usually an id/count to ignore), V6 needs bus ids and other bare
+    integers from the *request* to count as grounding, not just unit-bearing values.
+    A ``(0-based)``/``(1-based)`` indexing-convention marker is stripped first: the "0"
+    or "1" there names a convention, not a requested value, and otherwise grounds an
+    unrelated argument that happens to equal 0 or 1 (a default reactive power, say) as
+    if the request had stated it. Spelled-out bus numbers ("bus ten") are also picked
+    up, not just digits, and comma thousands-separators are collapsed first.
     """
-    cleaned = _INDEXING_CONVENTION_RE.sub(" ", str(text or ""))
-    return {float(m) for m in _REQUEST_NUMBER_RE.findall(cleaned)} | _word_numbers_from_text(cleaned)
+    cleaned = _INDEXING_CONVENTION_RE.sub(" ", _strip_thousands(str(text or "")))
+    pool = _empty_typed_pool()
+    pool["any"] |= {float(m.replace(",", "")) for m in _REQUEST_NUMBER_RE.findall(cleaned)}
+    pool["any"] |= _word_numbers_from_text(cleaned)
+    for m in _MW_UNIT_RE.finditer(cleaned):
+        v, unit = float(m.group(1).replace(",", "")), m.group(2).lower()
+        pool["mw"].add(v / 1000.0 if unit == "kw" else v)
+    for m in _MVAR_UNIT_RE.finditer(cleaned):
+        v, unit = float(m.group(1).replace(",", "")), m.group(2).lower()
+        pool["mvar"].add(v / 1000.0 if unit == "kvar" else v)
+    return pool
 
 
-def _numbers_from_json(obj: Any) -> set[float]:
-    """Every numeric leaf in a JSON-like structure (a parsed tool output)."""
-    found: set[float] = set()
+def _numbers_by_type_from_json(obj: Any) -> dict[str, set[float]]:
+    """Every numeric leaf in a JSON-like structure (a parsed tool output), typed by
+    its containing key: a key naming a reactive quantity (``mvar``, ``reactive``)
+    types its value ``mvar``; a key naming an active-power quantity (``..._mw``,
+    ``active``) types it ``mw``; every numeric leaf, typed or not, also lands in
+    ``any`` (the untyped fallback pool). This is what stops a get_status dump's bulk
+    status fields (``n_generators``, ``n_lines``, ...) from coincidentally grounding
+    an invented ``q_mvar`` argument just because some unrelated integer in the dump
+    happens to equal it -- a q_mvar argument now only grounds against a value the
+    dump itself labeled reactive.
+    """
+    pool = _empty_typed_pool()
 
-    def _walk(o: Any) -> None:
+    def _walk(o: Any, key: Optional[str]) -> None:
         if isinstance(o, bool):
             return
         if isinstance(o, (int, float)):
-            found.add(float(o))
+            pool["any"].add(float(o))
+            if key and _JSON_MVAR_KEY_RE.search(key):
+                pool["mvar"].add(float(o))
+            elif key and _JSON_MW_KEY_RE.search(key):
+                pool["mw"].add(float(o))
         elif isinstance(o, dict):
-            for v in o.values():
-                _walk(v)
+            for k, v in o.items():
+                _walk(v, str(k))
         elif isinstance(o, (list, tuple)):
             for v in o:
-                _walk(v)
+                _walk(v, key)
 
-    _walk(obj)
-    return found
+    _walk(obj, None)
+    return pool
 
 
 def argument_grounding_check(trace: Optional[Dict[str, Any]], request_text: Optional[str]) -> Dict[str, Any]:
@@ -1197,16 +1253,32 @@ def argument_grounding_check(trace: Optional[Dict[str, Any]], request_text: Opti
     N-1 criteria too, since those are not eliminated by construction the way an
     extra ``q_mvar`` argument is.
 
+    Typed by argument kind (2026-09-21 retype): ``q_mvar`` only grounds against a
+    value the request or a prior tool output labeled reactive; ``p_mw`` only against a
+    value labeled active/MW (kW/MVA converted or read as-is). Every other argument
+    falls back to the untyped pool, unchanged from before the retype. This closes two
+    known gaps in the untyped version: an unrelated integer in a bulk tool-output dump
+    (e.g. get_status's generator/line counts) no longer coincidentally grounds an
+    invented q_mvar just by matching digit for digit, and a request phrased with a
+    comma thousands-separator and a lowercase kW unit ("14,700 kw") now parses to the
+    MW value the tool call actually uses (14.7), instead of never matching and reading
+    as an invented p_mw.
+
     Returns ``{"passed", "invented_args": [{"tool", "arg", "value"}, ...], "detail"}``.
     A bus-like argument (``bus_id``/``from_bus``/``to_bus``) also grounds against its
     zero-based-to-one-based neighbor (n-1 or n+1), so a request that states its bus
     reference in the 0-based convention (``"bus 10 (0-based)"``, converted to the
-    MATPOWER 1-based id before the tool call -- see llm/prompts.py) is not flagged
-    for a conversion the request itself asked for.
+    MATPOWER 1-based id before the tool call -- see llm/prompts.py) is not flagged for
+    a conversion the request itself asked for. Conversely, a bus-like argument that
+    reuses the *unconverted* 0-based number verbatim (a real conversion bug, not a
+    conversion) is flagged even though that literal number appears in the request
+    text, since an explicit 0-based marker on it makes the raw digit the wrong
+    reading by construction.
     """
     records = _tool_records_from_trace(trace)
-    request_nums = _numbers_from_text(request_text)
-    seen_output_nums: set[float] = set(request_nums)
+    request_text = request_text or ""
+    zero_based_raw = {float(m) for m in _ZERO_BASED_BUS_RE.findall(request_text)}
+    pool = _numbers_by_type(request_text)
     invented: List[Dict[str, Any]] = []
 
     for rec in records:
@@ -1220,9 +1292,17 @@ def argument_grounding_check(trace: Optional[Dict[str, Any]], request_text: Opti
                 if isinstance(value, bool) or not isinstance(value, (int, float)):
                     continue
                 fv = float(value)
-                grounded = fv in seen_output_nums
-                if not grounded and key in _BUS_LIKE_ARGS:
-                    grounded = (fv - 1) in seen_output_nums or (fv + 1) in seen_output_nums
+                if key in _BUS_LIKE_ARGS and fv in zero_based_raw:
+                    invented.append({"tool": name, "arg": key, "value": value})
+                    continue
+                if key == "q_mvar":
+                    grounded = fv in pool["mvar"]
+                elif key == "p_mw":
+                    grounded = fv in pool["mw"]
+                else:
+                    grounded = fv in pool["any"]
+                    if not grounded and key in _BUS_LIKE_ARGS:
+                        grounded = (fv - 1) in pool["any"] or (fv + 1) in pool["any"]
                 if not grounded:
                     invented.append({"tool": name, "arg": key, "value": value})
 
@@ -1234,7 +1314,7 @@ def argument_grounding_check(trace: Optional[Dict[str, Any]], request_text: Opti
         # small integers (a generator count of 5, a line count of 20) otherwise
         # coincidentally ground an unrelated invented value.
         if name != "load_case":
-            seen_output_nums |= _numbers_from_json(_parse_output(rec.get("output")))
+            _merge_typed_pool(pool, _numbers_by_type_from_json(_parse_output(rec.get("output"))))
 
     detail = (
         "; ".join(f"{i['tool']}.{i['arg']}={i['value']}" for i in invented)

@@ -15,6 +15,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from benchmarks.metrics import (
     FORMULATION_ERROR_TYPES,
     TOOL_SCHEMA,
+    argument_grounding_check,
     cost_from_trace,
     error_type_counts,
     executed_calls_from_trace,
@@ -656,3 +657,63 @@ def test_number_matching_uses_the_answer_precision():
     # a genuinely old-only quotation is still caught
     still = stale_state_check(trace, "Bus 9 is at 0.9300 pu.", request_text=REQUEST)
     assert still["stale_state_quoted_old"] is True
+
+
+# ----------------------------------------------------------------------------- V6 argument grounding (typed, 2026-09-21)
+
+
+def _mutating_trace(tool, args, output=None):
+    return {"rounds": [{"round": 1, "tools": [{"name": tool, "arguments": args, "output": output or "{}"}]}]}
+
+
+def test_v6_typed_grounding_reads_comma_thousands_and_kw_unit_conversion():
+    """case14-ambiguous-011-s0: 'set the active load at bus 6 to 14,700 kw' -> p_mw=14.7 is
+    a faithful reading of the request, not an invented value, but the untyped regex never
+    parsed the comma-grouped, kW-labeled number at all -- a real false escalation this fixes."""
+    request = "Load case14 and set the active load at bus 6 to 14,700 kw."
+    trace = _mutating_trace("modify_load", {"bus_id": 6, "p_mw": 14.7})
+    out = argument_grounding_check(trace, request)
+    assert out["passed"] is True and out["invented_args"] == []
+
+    # an unrelated p_mw the request never stated, even in the same units, is still caught
+    invented = argument_grounding_check(_mutating_trace("modify_load", {"bus_id": 6, "p_mw": 20.0}), request)
+    assert invented["passed"] is False and invented["invented_args"][0]["arg"] == "p_mw"
+
+
+def test_v6_typed_grounding_by_argument_kind_ignores_unlabeled_json_integers_for_q_mvar():
+    """case14-parameterized-033-s0-style miss: a bulk get_status dump's unrelated integer
+    (a generator count) used to coincidentally ground an invented q_mvar just by matching
+    digit for digit. Typing the pool by the JSON key that carries each number closes this:
+    an untyped integer no longer grounds a q_mvar argument, only a key naming a reactive
+    quantity does."""
+    request = "Load case14 and report the status of every bus."
+    status_output = json.dumps({"n_generators": 5, "buses": [{"bus_id": 6, "p_mw": 20.0}]})
+    # 5 is present in the dump, but not under a reactive-power key -> still invented
+    trace = _mutating_trace("modify_load", {"bus_id": 6, "p_mw": 20.0, "q_mvar": 5.0}, output=status_output)
+    trace["rounds"][0]["tools"].insert(0, {"name": "get_status", "arguments": {}, "output": status_output})
+    out = argument_grounding_check(trace, request)
+    assert out["passed"] is False and out["invented_args"] == [{"tool": "modify_load", "arg": "q_mvar", "value": 5.0}]
+
+    # the same number, this time reported under a reactive-power key, legitimately grounds it
+    labeled_output = json.dumps({"n_generators": 5, "buses": [{"bus_id": 6, "p_mw": 20.0, "q_mvar": 5.0}]})
+    trace2 = _mutating_trace("modify_load", {"bus_id": 6, "p_mw": 20.0, "q_mvar": 5.0})
+    trace2["rounds"][0]["tools"].insert(0, {"name": "get_status", "arguments": {}, "output": labeled_output})
+    out2 = argument_grounding_check(trace2, request)
+    assert out2["passed"] is True and out2["invented_args"] == []
+
+
+def test_v6_flags_a_zero_based_bus_argument_used_unconverted_but_not_the_correctly_converted_one():
+    """case14-ambiguous-039-s0: 'bus 1 (0-based)' means MATPOWER bus 2. Using bus_id=1
+    verbatim is a real conversion bug, even though '1' is literally in the request text --
+    the untyped grounding check could not tell a converted value from an unconverted one."""
+    request = "Load the 14-bus test case (case14) and set the active load at bus 1 (0-based) to 11 MW."
+    unconverted = argument_grounding_check(_mutating_trace("modify_load", {"bus_id": 1, "p_mw": 11.0}), request)
+    assert unconverted["passed"] is False and unconverted["invented_args"][0] == {"tool": "modify_load", "arg": "bus_id", "value": 1}
+
+    converted = argument_grounding_check(_mutating_trace("modify_load", {"bus_id": 2, "p_mw": 11.0}), request)
+    assert converted["passed"] is True and converted["invented_args"] == []
+
+    # "(1-based)" is a different marker: no conversion is required, the literal digit grounds
+    one_based_request = "Load case14 and set the active load at bus 6 (1-based) to 20 MW."
+    ok = argument_grounding_check(_mutating_trace("modify_load", {"bus_id": 6, "p_mw": 20.0}), one_based_request)
+    assert ok["passed"] is True and ok["invented_args"] == []
