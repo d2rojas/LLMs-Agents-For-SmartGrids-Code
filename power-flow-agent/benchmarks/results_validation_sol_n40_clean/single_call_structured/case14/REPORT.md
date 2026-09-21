@@ -1,26 +1,27 @@
-# Informe de experimento: `single_call_structured`
+# Informe de experimento: `case14`
 
-Generado el 2026-09-21 08:32 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio single_call_structured (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-21 08:33 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio case14 (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
 Directorio analizado:
 
 ````
-/Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_n40/gpt-5.4/single_call_structured
+/Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_sol_n40_clean/single_call_structured/case14
 ````
 
-- Reports leídos: 1 (`report.rescored.json` usado en 1; el resto `report.json`)
-- Modelos: `openrouter:openai/gpt-5.4`
+- Reports leídos: 1 (`report.rescored.json` usado en 0; el resto `report.json`)
+- Modelos: `openrouter:openai/gpt-5.6-sol`
 - Métodos: `single_call:structured`
 - Casos: `case14`
 - Requests: generadas, N=40 por caso y seed, difficulties=todas (1 report)
 - Items por dificultad: plain=10, parameterized=10, multistep=10, ambiguous=10
+- System prompt: hash `23e5d9b407f9` (40 filas)
 - runs por item: 1; k (perturbación ±10 %·k): 1; seeds: [0]; max_rounds: 8; temperature: 0.0; timeout_s: 90.0
-- Fecha de la corrida (mtime de report.json): 2026-09-16 13:56
-- Costo total: 0.5575 USD (40 items; costo medio 0.01394 USD/item)
-- Items totales: 40; ok=40; con error=0; tokens totales=185473
-- Solved global: 10.0 % (4/40)
+- Fecha de la corrida (mtime de report.json): 2026-09-21 08:12
+- Costo total: 0.4731 USD (40 items; costo medio 0.01183 USD/item)
+- Items totales: 40; ok=40; con error=0; tokens totales=192180
+- Solved global: 20.0 % (8/40)
 
 Errores por tipo:
 
@@ -31,7 +32,7 @@ _(ningún item con `error`)_
 
 Los prompts se reconstruyen offline con el mismo código del runner (`llm.prompt_variants.build_messages` sobre la red perturbada con el seed del item). Las tablas de datos del caso se recortan a sus primeras 12 líneas con un marcador `…`; el número de caracteres indicado corresponde al prompt completo. **Esta reconstrucción es ilustrativa, no histórica**: usa el código de `llm/prompts.py` de HOY, así que si el texto del prompt cambió después de que esta corrida se generó, lo que se ve aquí no es lo que el modelo recibió. El registro histórico real es el hash por fila (`system_prompt_hash`, ver sección 1 / `benchmarks/experiment_report.py::section_what_ran`), fijado en el momento de la corrida y nunca recalculado.
 
-### Método `single_call:structured`
+### Método `single_call:structured` (system_prompt_hash real de esta fila: `23e5d9b407f9`)
 
 **System prompt** (reconstrucción con el código actual, no necesariamente histórica) — 1879 caracteres; strategy=structured; la red ya está cargada (preload_case)
 
@@ -145,7 +146,7 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 | Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Escalated | Wrong (silent) | $ |
 |---------------------------|------|----|-------------|-----|-----|-------------|----------------|--------|---------------|----|-----|----|-----|----------|-----------------|------|
-| single_call:structured | case14 | 40 | 20.0 (8/40) | 0 | 2.75 | 10.0 (4/40) | 100.0 (40/40) | 4.79e-02 | 87.5 (35/40) | -- | 1.0 | 4637 | -- | 0.0 (0/40) | 90.0 (36/40) | 0.5575 |
+| single_call:structured | case14 | 40 | 20.0 (8/40) | 0 | 2.75 | 20.0 (8/40) | 100.0 (40/40) | 4.79e-02 | 92.5 (37/40) | -- | 1.0 | 4804 | -- | 0.0 (0/40) | 80.0 (32/40) | 0.4731 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 
@@ -157,7 +158,7 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 | Method | plain | parameterized | multistep | ambiguous |
 |---------------------------|-------------|----------------|----------|----------|
-| single_call:structured | 30.0 (3/10) | 10.0 (1/10) | 0.0 (0/10) | 0.0 (0/10) |
+| single_call:structured | 60.0 (6/10) | 20.0 (2/10) | 0.0 (0/10) | 0.0 (0/10) |
 
 ### Tipos de error de formulación (conteo de items)
 
@@ -179,46 +180,40 @@ Hasta 3 items por método: uno resuelto, uno con formulación fallida (si existe
 **Ejemplo: resuelto (solved=True)**
 
 ````
-request (case14-parameterized-037-s0, case14, difficulty=parameterized, seed=1292574852): Load the IEEE 14-bus system and run the power flow, then list every line whose loading is above 100%.
+request (case14-parameterized-029-s0, case14, difficulty=parameterized, seed=1716703953): Load the 14-bus test case (case14) and run the power flow, then list every line whose loading is above 80%.
 intended_calls: load_case({"case_name": "case14"}) -> run_powerflow({})
 executed_calls: load_case({"case_name": "case14"})
 fuente de la traza: archivo de traza completo
 --- Ronda 1 ---
 tool: load_case({"case_name": "case14"})
-  output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 262.9675788776612, "total_gen_capacity_mw": 772.4000000000001}
+  output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 259.0350441033985, "total_gen_capacity_mw": 772.4000000000001}
   gate: n/a (no es un resultado de flujo)
 --- Ronda 2 [final] ---
-LLM: 1. One-sentence summary  
-The IEEE 14-bus system was loaded successfully, but the power flow was not run, so I cannot list lines above 100% loading.
+LLM: The case14 network was loaded successfully, but no power-flow result was returned, so lines above 80% loading cannot be identified.
 
-2. Key numbers  
-- Case: case14  
-- Buses: 14  
-- Generators: 5  
-- Lines: 20  
-- Loads: 11  
-- Total load: 262.9675788776612 MW  
-- Total generation …[248 chars más]
+**Key numbers**
+- Total load: **259.035 MW**
+- Total generation: **Not available**
+- Total losses: **Not available**
+- Voltage range: **Not available**
+
+**Violations** …[186 chars más]
 --- Respuesta final ---
-1. One-sentence summary  
-The IEEE 14-bus system was loaded successfully, but the power flow was not run, so I cannot list lines above 100% loading.
+The case14 network was loaded successfully, but no power-flow result was returned, so lines above 80% loading cannot be identified.
 
-2. Key numbers  
-- Case: case14  
-- Buses: 14  
-- Generators: 5  
-- Lines: 20  
-- Loads: 11  
-- Total load: 262.9675788776612 MW  
-- Total generation capacity: 772.4000000000001 MW  
+**Key numbers**
+- Total load: **259.035 MW**
+- Total generation: **Not available**
+- Total losses: **Not available**
+- Voltage range: **Not available**
 
-3. Violations, if any  
-No loading violations can be reported because no power-flow results were produced.
+**Violations**
+- Cannot assess line-loading violations because the power flow was not run.
 
-4. Suggested next step  
-Run the power flow, then query branch loadings to identify every line above 100%.
+**Suggested next step**
+- Run the AC power flow, then query branch loading to list every line above **80%**.
 --- Scoring ---
-formulation=ok (exact=True); V_MAE=0; F_MAE=0.00; faithful=100.0 %; solved=True (numeric_and_answer_ok); flags=-; error=-; tokens=4608; cost_usd=0.0137; wall=4.9 s
+formulation=ok (exact=True); V_MAE=0; F_MAE=0.00; faithful=100.0 %; solved=True (numeric_ok); flags=-; error=-; tokens=4805; cost_usd=0.0119; wall=14.3 s
 ````
 
 **Ejemplo: formulación fallida (formulation_exact=False)**
@@ -233,38 +228,19 @@ tool: load_case({"case_name": "case14"})
   output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 253.84578240591338, "total_gen_capacity_mw": 772.4000000000001}
   gate: n/a (no es un resultado de flujo)
 --- Ronda 2 [final] ---
-LLM: 1. One-sentence summary  
-case14 was loaded successfully.
+LLM: 1. **Summary:** case14 was loaded successfully, but the requested line disconnection between buses 10 and 11 was not executed.
 
-2. Key numbers  
-- Buses: 14  
-- Generators: 5  
-- Lines: 20  
-- Loads: 11  
-- Total load: 253.84578240591338 MW  
-- Total generation capacity: 772.4000000000001 MW
-
-3. Violations, if any  
-No power-flow or violation results are available fr …[256 chars más]
+2. **Key numbers:** 14 buses, 5 generators, 20 branches, 11 loads; total load **253.8458 MW**; generation capacity **772.4 MW**. Power-flow generation, losses, and voltage …[213 chars más]
 --- Respuesta final ---
-1. One-sentence summary  
-case14 was loaded successfully.
+1. **Summary:** case14 was loaded successfully, but the requested line disconnection between buses 10 and 11 was not executed.
 
-2. Key numbers  
-- Buses: 14  
-- Generators: 5  
-- Lines: 20  
-- Loads: 11  
-- Total load: 253.84578240591338 MW  
-- Total generation capacity: 772.4000000000001 MW
+2. **Key numbers:** 14 buses, 5 generators, 20 branches, 11 loads; total load **253.8458 MW**; generation capacity **772.4 MW**. Power-flow generation, losses, and voltage range were not available.
 
-3. Violations, if any  
-No power-flow or violation results are available from the tool output above.
+3. **Violations:** Not assessed because no post-disconnection power flow was run.
 
-4. Suggested next step  
-The requested line disconnection between bus 10 and bus 11 was not executed in the available tool output; the next step is to call `disconnect_line(from_bus=10, to_bus=11)` and use its recomputed results.
+4. **Suggested next step:** Disconnect the branch between buses 10 and 11 and recompute the power flow.
 --- Scoring ---
-formulation=missed_step (exact=False); V_MAE=2.05e-03; F_MAE=1.39; faithful=100.0 %; solved=False (formulation); flags=-; error=-; tokens=4590; cost_usd=0.0136; wall=3.2 s
+formulation=missed_step (exact=False); V_MAE=2.05e-03; F_MAE=1.39; faithful=100.0 %; solved=False (formulation); flags=-; error=-; tokens=4732; cost_usd=0.0114; wall=8.0 s
 ````
 
 **Ejemplo: no resuelto**
@@ -279,40 +255,21 @@ tool: load_case({"case_name": "case14"})
   output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 261.9028323717408, "total_gen_capacity_mw": 772.4000000000001}
   gate: n/a (no es un resultado de flujo)
 --- Ronda 2 [final] ---
-LLM: 1. One-sentence summary  
-Loaded case14 successfully.
+LLM: 1. **Summary:** The case14 network was loaded successfully, but the requested 6–13 line disconnection was not executed.
 
-2. Key numbers  
-- Buses: 14  
-- Generators: 5  
-- Lines: 20  
-- Loads: 11  
-- Total load: 261.9028323717408 MW  
-- Total generation capacity: 772.4000000000001 MW
+2. **Key numbers:** Total load: **261.9028323717408 MW**; generation capacity: **772.4000000000001 MW**. Actual generation, losses, and voltage range were not provided.
 
-3. Violations, if any  
-No violations were reported by the tool output.
-
-4. Sugg …[202 chars más]
+3. **Viol …[193 chars más]
 --- Respuesta final ---
-1. One-sentence summary  
-Loaded case14 successfully.
+1. **Summary:** The case14 network was loaded successfully, but the requested 6–13 line disconnection was not executed.
 
-2. Key numbers  
-- Buses: 14  
-- Generators: 5  
-- Lines: 20  
-- Loads: 11  
-- Total load: 261.9028323717408 MW  
-- Total generation capacity: 772.4000000000001 MW
+2. **Key numbers:** Total load: **261.9028323717408 MW**; generation capacity: **772.4000000000001 MW**. Actual generation, losses, and voltage range were not provided.
 
-3. Violations, if any  
-No violations were reported by the tool output.
+3. **Violations:** Not evaluated because no post-disconnection power flow result is available.
 
-4. Suggested next step  
-The requested line disconnection between bus 6 and bus 13 has not been executed yet in the available tool outputs; the next step is to run the line disconnection and re-solve the case.
+4. **Suggested next step:** Disconnect the branch between buses **6 and 13** and recompute the power flow.
 --- Scoring ---
-formulation=missed_step (exact=False); V_MAE=8.99e-03; F_MAE=3.80; faithful=100.0 %; solved=False (formulation); flags=-; error=-; tokens=4605; cost_usd=0.0135; wall=3.6 s
+formulation=missed_step (exact=False); V_MAE=8.99e-03; F_MAE=3.80; faithful=100.0 %; solved=False (formulation); flags=-; error=-; tokens=4805; cost_usd=0.0119; wall=11.9 s
 ````
 
 
@@ -323,27 +280,26 @@ Observaciones generadas automáticamente a partir de los números del report (si
 - V_MAE >= 1e-4 p.u. en 1 filas método×caso con solver: single_call:structured/case14 (1.77e-03).
 - El gate no verificó ningún resultado de flujo (gate_checked=0 en todos los items).
 - Ningún item terminó con `error`.
-- Solved de `single_call:structured`: 10.0 % (4/40).
+- Solved de `single_call:structured`: 20.0 % (8/40).
 - Formulación exacta agregada sobre métodos con tools: 20.0 % (8/40).
 - Formulación por dificultad: mejor `plain` 60.0 % (6/10), peor `multistep` 0.0 % (0/10).
 - Errores de formulación más frecuentes: `missed_step`=32.
 - Ningún item reclamó éxito sobre un fallo (claimed_success_on_failure=0).
-- Trazabilidad de números (Faith.) media con tools: 96.5 %.
-- Costo total 0.5575 USD; el método más caro fue `single_call:structured` con 0.5575 USD (100 %).
+- Trazabilidad de números (Faith.) media con tools: 98.0 %.
+- Costo total 0.4731 USD; el método más caro fue `single_call:structured` con 0.4731 USD (100 %).
 - Métodos con tools: 1.00 tool calls medias por item (máximo 1).
 
 ## 6. Archivos
 
-Rutas absolutas bajo `single_call_structured`. `report.rescored.json` (cuando existe) es el archivo leído para las métricas.
+Rutas absolutas bajo `case14`. `report.rescored.json` (cuando existe) es el archivo leído para las métricas.
 
 ````
-report: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_n40/gpt-5.4/single_call_structured/report.json   [leído: report.rescored.json]
-  scoreboard.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_n40/gpt-5.4/single_call_structured/scoreboard.json
-  scoreboard.csv: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_n40/gpt-5.4/single_call_structured/scoreboard.csv
-  scoreboard.md: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_n40/gpt-5.4/single_call_structured/scoreboard.md
-  scoreboard_per_case.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_n40/gpt-5.4/single_call_structured/scoreboard_per_case.json
-  scoreboard.rescored.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_n40/gpt-5.4/single_call_structured/scoreboard.rescored.json
-  scoreboard_per_case.rescored.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_n40/gpt-5.4/single_call_structured/scoreboard_per_case.rescored.json
-  traces (40 archivos): /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_n40/gpt-5.4/single_call_structured/traces
+report: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_sol_n40_clean/single_call_structured/case14/report.json
+  scoreboard.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_sol_n40_clean/single_call_structured/case14/scoreboard.json
+  scoreboard.csv: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_sol_n40_clean/single_call_structured/case14/scoreboard.csv
+  scoreboard.md: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_sol_n40_clean/single_call_structured/case14/scoreboard.md
+  scoreboard_per_case.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_sol_n40_clean/single_call_structured/case14/scoreboard_per_case.json
+  traces (40 archivos): /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_sol_n40_clean/single_call_structured/case14/traces
+  log: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_sol_n40_clean/single_call_structured/case14/run.attempt1.log
 ````
 

@@ -1,6 +1,6 @@
 # Informe de experimento: `llm_only_forced_structured`
 
-Generado el 2026-09-21 08:17 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio llm_only_forced_structured (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-21 08:32 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio llm_only_forced_structured (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 

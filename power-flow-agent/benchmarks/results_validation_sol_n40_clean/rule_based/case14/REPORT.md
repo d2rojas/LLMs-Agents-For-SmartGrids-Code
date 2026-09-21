@@ -1,26 +1,26 @@
-# Informe de experimento: `rule_based`
+# Informe de experimento: `case14`
 
-Generado el 2026-09-21 08:32 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio rule_based (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-21 08:33 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio case14 (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
 Directorio analizado:
 
 ````
-/Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_n40/gpt-5.4/rule_based
+/Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_sol_n40_clean/rule_based/case14
 ````
 
-- Reports leídos: 1 (`report.rescored.json` usado en 1; el resto `report.json`)
+- Reports leídos: 1 (`report.rescored.json` usado en 0; el resto `report.json`)
 - Modelos: `none:rule_based`
 - Métodos: `rule_based`
 - Casos: `case14`
 - Requests: generadas, N=40 por caso y seed, difficulties=todas (1 report)
 - Items por dificultad: plain=10, parameterized=10, multistep=10, ambiguous=10
 - runs por item: 1; k (perturbación ±10 %·k): 1; seeds: [0]; max_rounds: 8; temperature: 0.0; timeout_s: 90.0
-- Fecha de la corrida (mtime de report.json): 2026-09-16 13:56
+- Fecha de la corrida (mtime de report.json): 2026-09-21 08:05
 - Costo total: 0.0000 USD (40 items; costo medio 0.00000 USD/item)
 - Items totales: 40; ok=31; con error=9; tokens totales=0
-- Solved global: 55.0 % (22/40)
+- Solved global: 72.5 % (29/40)
 
 Errores por tipo:
 
@@ -49,8 +49,8 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 ### Por método × caso
 
 | Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Escalated | Wrong (silent) | $ |
-|----------|------|----|---------------|-----|-----|---------------|----------------|------|----------------|----|-----|----|-----|-------------|-----------------|------|
-| rule_based | case14 | 40 | 72.5 (29/40) | 0 | 0.06 | 55.0 (22/40) | 100.0 (31/31) | 0 | 100.0 (40/40) | -- | 1.9 | n/a | -- | 22.5 (9/40) | 22.5 (9/40) | 0.0000 |
+|----------|------|----|---------------|-----|-----|---------------|----------------|--------|----------------|----|-----|----|-----|-------------|-----------------|------|
+| rule_based | case14 | 40 | 72.5 (29/40) | 0 | 0.06 | 72.5 (29/40) | 100.0 (31/31) | 2.27e-04 | 100.0 (40/40) | -- | 1.9 | n/a | -- | 22.5 (9/40) | 5.0 (2/40) | 0.0000 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 
@@ -62,7 +62,7 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 | Method | plain | parameterized | multistep | ambiguous |
 |----------|-------------|----------------|-------------|-------------|
-| rule_based | 80.0 (8/10) | 40.0 (4/10) | 30.0 (3/10) | 70.0 (7/10) |
+| rule_based | 80.0 (8/10) | 60.0 (6/10) | 80.0 (8/10) | 70.0 (7/10) |
 
 ### Tipos de error de formulación (conteo de items)
 
@@ -102,7 +102,7 @@ plan: [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "disconn
 Loaded case14 (14 buses, 20 branches).
 disconnect_line: converged; load 253.846 MW, generation 266.510 MW, losses 12.665 MW; 6 voltage and 0 thermal violation(s).
 --- Scoring ---
-formulation=ok (exact=True); V_MAE=0; F_MAE=0.00; faithful=100.0 %; solved=True (numeric_and_answer_ok); flags=-; error=-; tokens=0; cost_usd=0.0000; wall=0.2 s
+formulation=ok (exact=True); V_MAE=0; F_MAE=0.00; faithful=100.0 %; solved=True (numeric_ok); flags=-; error=-; tokens=0; cost_usd=0.0000; wall=0.3 s
 ````
 
 **Ejemplo: formulación fallida (formulation_exact=False)**
@@ -143,7 +143,7 @@ Observaciones generadas automáticamente a partir de los números del report (si
 - Todos los métodos que llegan al solver (rule_based) tienen V_MAE < 1e-4 p.u. en todos los casos (máximo 1.89e-05 en rule_based/case14).
 - El gate verificó 44 resultados de flujo, 0 fallaron la verificación y se activó (retuvo números) 0 veces en 0 items.
 - 9 items con `formulation_failure`: el método no formuló ninguna tool call.
-- Solved de `rule_based`: 55.0 % (22/40).
+- Solved de `rule_based`: 72.5 % (29/40).
 - Formulación exacta agregada sobre métodos con tools: 72.5 % (29/40).
 - Formulación por dificultad: mejor `plain` 80.0 % (8/10), peor `parameterized` 60.0 % (6/10).
 - Errores de formulación más frecuentes: `unparsed`=9, `wrong_id`=2.
@@ -154,16 +154,15 @@ Observaciones generadas automáticamente a partir de los números del report (si
 
 ## 6. Archivos
 
-Rutas absolutas bajo `rule_based`. `report.rescored.json` (cuando existe) es el archivo leído para las métricas.
+Rutas absolutas bajo `case14`. `report.rescored.json` (cuando existe) es el archivo leído para las métricas.
 
 ````
-report: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_n40/gpt-5.4/rule_based/report.json   [leído: report.rescored.json]
-  scoreboard.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_n40/gpt-5.4/rule_based/scoreboard.json
-  scoreboard.csv: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_n40/gpt-5.4/rule_based/scoreboard.csv
-  scoreboard.md: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_n40/gpt-5.4/rule_based/scoreboard.md
-  scoreboard_per_case.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_n40/gpt-5.4/rule_based/scoreboard_per_case.json
-  scoreboard.rescored.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_n40/gpt-5.4/rule_based/scoreboard.rescored.json
-  scoreboard_per_case.rescored.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_n40/gpt-5.4/rule_based/scoreboard_per_case.rescored.json
-  traces (40 archivos): /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_n40/gpt-5.4/rule_based/traces
+report: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_sol_n40_clean/rule_based/case14/report.json
+  scoreboard.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_sol_n40_clean/rule_based/case14/scoreboard.json
+  scoreboard.csv: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_sol_n40_clean/rule_based/case14/scoreboard.csv
+  scoreboard.md: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_sol_n40_clean/rule_based/case14/scoreboard.md
+  scoreboard_per_case.json: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_sol_n40_clean/rule_based/case14/scoreboard_per_case.json
+  traces (40 archivos): /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_sol_n40_clean/rule_based/case14/traces
+  log: /Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2/power-flow-agent/benchmarks/results_validation_sol_n40_clean/rule_based/case14/run.attempt1.log
 ````
 
