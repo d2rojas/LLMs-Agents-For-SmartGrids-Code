@@ -85,11 +85,13 @@ SUPPLEMENT_COLUMNS: tuple[Column, ...] = COLUMNS + (
     Column("Stale", ("stale_state_rate",), "pct", "stale_state_total"),
     Column("Escalated", ("escalated_rate",), "pct"),
     Column("Wrong (silent)", ("wrong_silently_rate",), "pct"),
-    # Hours per 100 cases (notes/tabla_objetivo_pfagent.md's cost-and-operation group):
-    # wall_time_s_mean is already a per-item weighted mean in seconds; x100/3600 turns
-    # "seconds per item" into "hours per 100 items" without touching the aggregation
-    # itself (Column.scale commutes with the weighted mean in aggregate_method).
-    Column("Hours / 100", ("wall_time_s_mean",), "f2", scale=100.0 / 3600.0),
+    # Cost-and-operation group (notes/tabla_objetivo_pfagent.md), Daniela's final call
+    # 2026-09-21: mean wall-clock seconds per request, per method, plain -- no manual-
+    # time constant and no escalation term (Escalated already has its own column, so
+    # the operator cost stays visible and a reader can combine the two). The human-
+    # with-solver row has no machine time and reads -- until Daniela times her batch,
+    # at which point her per-case time goes in this same column in the same unit.
+    Column("Time (s)", ("wall_time_s_mean",), "f2"),
 )
 COLUMN_NAMES = [c.name for c in SUPPLEMENT_COLUMNS]
 COLUMN_HEADS = {"V_MAE": r"$V_{\mathrm{MAE}}$", "F_MAE": r"$F_{\mathrm{MAE}}$", "B_mean": r"$B_{\mathrm{mean}}$"}
@@ -126,7 +128,7 @@ CAPTIONS = {
         r"explicitly handed to a person (only the task-level verification gate's abstention "
         r"and the deterministic parser's cannot-parse refusal count; every other method reads "
         r"0, not a dash), or answered wrong with nothing flagging it. "
-        r"Hours / 100: mean wall-clock time per request, scaled to hours per 100 cases. "
+        r"Time (s): mean wall-clock time per request. "
         r"n/a: the method has no tools or no LLM; --: not measured."
     ),
     "compact": (

@@ -146,10 +146,10 @@ def test_blocks_values_na_and_missing(results_dir, tmp_path):
     b14, b30 = rows[:14], rows[14:]
     # single_call:structured, per system, Solved from the rescored solved_rate (0.90, not 0.10)
     # order: Form., V_MAE, F_MAE, Solved, Solver status, B_mean, Faith. (per-answer), SFR,
-    # Calls, Tok., Faith. (per-number), Stale, Escalated, Wrong (silent), Hours / 100
+    # Calls, Tok., Faith. (per-number), Stale, Escalated, Wrong (silent), Time (s)
     assert b14[5][1] == "Structured" and b14[5][2:] == [
         "85.0", r"$1.65{\times}10^{-5}$", "0.12", "90.0", "100.0", "0", "100.0", "100.0", "2.0", "10000", "90.0", "0.0",
-        "5.0", "15.0", "0.08",
+        "5.0", "15.0", "3.00",
     ]
     assert b30[5][2] == "75.0" and b30[5][2 + 3] == "70.0" and b30[5][2 + names.index("Calls")] == "1.5" and b30[5][2 + names.index("Tok.")] == "12000"
     # best single-call prompt = the only one present, copied per system
