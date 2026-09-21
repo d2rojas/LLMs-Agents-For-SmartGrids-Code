@@ -337,6 +337,44 @@ def test_claims_from_tools_check_unwraps_a_plotted_n1_contingency_call():
     assert silent_on_it["passed"] is False and silent_on_it["applicable"] is True
 
 
+def test_claims_from_tools_check_treats_a_declared_failure_as_not_applicable_not_a_mismatch():
+    """2026-09-21 (found rescoring the split-tool launch, escalation_check fix): a
+    round-limit exhaustion or a verification abstention both say, in words, that no
+    result is reported (llm.engine's MAX_ROUNDS_EXCEEDED_TEXT and
+    _verification_abstention_text share the fixed phrase "No numerical result is
+    reported."). Neither is wrong about what it computed -- it computed nothing to
+    report -- so V7 must read it as nothing to check, not as a claim mismatch;
+    otherwise the same declared failure shows up in the failure analysis under the
+    wrong class (an autonomous wrong claim, rather than the explicit handoff it
+    actually is)."""
+    pf = {
+        "case_name": "case14",
+        "converged": True,
+        "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06}, {"bus_id": 3, "vm_pu": 1.01}],
+        "line_flows": [],
+    }
+    trace = {"rounds": [{"tools": [{"name": "run_powerflow", "arguments": {}, "output": json.dumps(pf)}]}]}
+    request_text = "Load case14 and report the bus with the lowest voltage magnitude."
+
+    round_limit_text = (
+        "The tool-call round limit was reached before an answer could be verified. "
+        "No numerical result is reported. Narrow the request or split it into fewer consecutive operations."
+    )
+    out = bs.claims_from_tools_check(trace, round_limit_text, request_text)
+    assert out == {"passed": True, "applicable": False, "detail": "the answer is a declared failure (round limit or verification abstention), not a claim to check"}
+
+    abstention_text = (
+        "No numerical result is reported. Verification failed: the last power flow did not converge. "
+        "This is a declared failure of the verification step, not a claim that the network failed to converge."
+    )
+    out2 = bs.claims_from_tools_check(trace, abstention_text, request_text)
+    assert out2["applicable"] is False and out2["passed"] is True
+
+    # a genuine, correct claim on the same solved state is unaffected -- still checked normally
+    real = bs.claims_from_tools_check(trace, "The bus with the lowest voltage magnitude is bus 3.", request_text)
+    assert real["applicable"] is True and real["passed"] is True
+
+
 def test_no_overload_regex_recognizes_the_phrasing_react_nogate_and_pfagent_actually_use():
     """Found while sizing the numeric_ok/answer_matches_truth conjunction (2026-09-18):
     _NO_OVERLOAD_RE only recognized "overload/thermal/violation" near "no", so a correct,

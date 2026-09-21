@@ -477,10 +477,20 @@ def claims_from_tools_check(
 
     Returns ``{"passed", "applicable", "detail", "self_derived_answer"}``;
     ``applicable`` is False (and passed True) when the shape or the request text
-    itself is not recoverable, or there is no solved state in the trace to re-derive
-    a claim from -- the same "nothing to check" convention ``answer_matches_truth``
-    itself uses (``None`` there, not a failure).
+    itself is not recoverable, there is no solved state in the trace to re-derive
+    a claim from, or the final answer is itself a declared failure (round-limit
+    exhaustion or a verification abstention -- both share the fixed
+    ``llm.engine`` phrase "No numerical result is reported.") rather than a
+    claim -- the same "nothing to check" convention ``answer_matches_truth``
+    itself uses (``None`` there, not a failure). Checked before re-deriving a
+    claim to compare against: a declared failure is not wrong about what it
+    computed, it computed nothing to report, and letting the shape-match logic
+    run anyway used to return a hard mismatch on text with nothing checkable in
+    it (2026-09-21, found via the round-limit escalation fix -- the failure
+    analysis must not count a declared failure under the wrong class).
     """
+    if "No numerical result is reported." in str(final_answer_text or ""):
+        return {"passed": True, "applicable": False, "detail": "the answer is a declared failure (round limit or verification abstention), not a claim to check"}
     query = infer_claim_shape(request_text)
     if query is None:
         return {"passed": True, "applicable": False, "detail": "no request text to infer a claim shape from"}
