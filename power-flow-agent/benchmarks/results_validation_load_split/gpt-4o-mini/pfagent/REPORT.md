@@ -1,6 +1,6 @@
 # Informe de experimento: `pfagent`
 
-Generado el 2026-09-18 22:46 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio pfagent (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-21 13:19 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio pfagent (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -21,7 +21,7 @@ Directorio analizado:
 - Fecha de la corrida (mtime de report.json): 2026-09-18 22:06
 - Costo total: 0.0554 USD (40 items; costo medio 0.00138 USD/item)
 - Items totales: 40; ok=40; con error=0; tokens totales=342603
-- Solved global: 97.5 % (39/40)
+- Solved global: 67.5 % (27/40)
 
 Errores por tipo:
 
@@ -78,9 +78,9 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 ### Por método × caso
 
-| Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Escalated | Wrong (silent) | $ |
-|-------|------|----|---------------|-----|-----|---------------|----------------|------|----------------|----|-----|----|-----|----------|-----------------|------|
-| pfagent | case14 | 40 | 97.5 (39/40) | 0 | 0.02 | 97.5 (39/40) | 100.0 (40/40) | 0 | 100.0 (40/40) | -- | 2.4 | 8565 | -- | 5.0 (2/40) | 2.5 (1/40) | 0.0554 |
+| Method | Case | N | Form. | V_MAE solved | V_MAE all | B_mean solved | B_mean all | Solved | Escalated | Wrong-unflagged | Traceable | Tokens | Time (s) | Claim | Escalated | Wrong (silent) | $ |
+|-------|------|----|---------------|---------------|---------|----------------|----------|---------------|-------------|------------------|---------|------|--------|-----|----------|-----------------|------|
+| pfagent | case14 | 40 | 97.5 (39/40) | 0 | 1.90e-07 | 0 | 0 | 67.5 (27/40) | 32.5 (2/40) | 0.0 | 100.0 | 8565 | 6.99 | -- | 5.0 (2/40) | 27.5 (11/40) | 0.0554 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 
@@ -91,8 +91,8 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 ### Solved por dificultad (%, items resueltos / items)
 
 | Method | plain | parameterized | multistep | ambiguous |
-|-------|----------------|----------------|----------------|-------------|
-| pfagent | 100.0 (10/10) | 100.0 (10/10) | 100.0 (10/10) | 90.0 (9/10) |
+|-------|-------------|----------------|-------------|-------------|
+| pfagent | 80.0 (8/10) | 80.0 (8/10) | 20.0 (2/10) | 90.0 (9/10) |
 
 ### Verificación final (pfagent: V(x,c,z,y) aplicado a la respuesta final)
 
@@ -161,7 +161,7 @@ The case14 has been loaded, and the line between bus 10 and bus 11 has been succ
 
 **Suggested Next Step:** Consider running a contingency analysis to assess the impact of this disconnection on the network's stability.
 --- Scoring ---
-formulation=ok (exact=True); V_MAE=0; F_MAE=0.00; faithful=100.0 %; solved=True (numeric_ok); flags=-; error=-; tokens=4693; cost_usd=0.0008; wall=9.5 s
+formulation=ok (exact=True); V_MAE=0; F_MAE=0.00; faithful=100.0 %; solved=True (numeric_and_answer_ok); flags=-; error=-; tokens=4693; cost_usd=0.0008; wall=9.5 s
 ````
 
 **Ejemplo: formulación fallida (formulation_exact=False)**
@@ -202,44 +202,45 @@ The active load at bus 1 has been set to 11 MW, and the power flow has been succ
 formulation=wrong_id (exact=False); V_MAE=7.59e-06; F_MAE=0.61; faithful=100.0 %; solved=False (formulation); flags=-; error=-; tokens=4897; cost_usd=0.0008; wall=7.2 s
 ````
 
-**Ejemplo: primer item**
+**Ejemplo: no resuelto**
 
 ````
-request (case14-ambiguous-007-s0, case14, difficulty=ambiguous, seed=2073320062): Load the 14-bus test case (case14) and disconnect the line between bus 6 and bus 13 (1-based).
-intended_calls: load_case({"case_name": "case14"}) -> disconnect_line({"from_bus": 6, "to_bus": 13})
-executed_calls: load_case({"case_name": "case14"}) -> disconnect_line({"from_bus": 6, "to_bus": 13})
+request (case14-multistep-002-s0, case14, difficulty=multistep, seed=1627694679): Load the 14-bus test case (case14), disconnect the line between bus 6 and bus 13, disconnect the line between bus 12 and bus 13, and finally rerun the power flow, then list every line whose loading is above 100%.
+intended_calls: load_case({"case_name": "case14"}) -> disconnect_line({"from_bus": 6, "to_bus": 13}) -> disconnect_line({"from_bus": 12, "to_bus": 13}) -> run_powerflow({})
+executed_calls: load_case({"case_name": "case14"}) -> disconnect_line({"from_bus": 6, "to_bus": 13}) -> disconnect_line({"from_bus": 12, "to_bus": 13})
 fuente de la traza: archivo de traza completo
 --- Ronda 1 ---
 tool: load_case({"case_name": "case14"})
-  output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 261.9028323717408, "total_gen_capacity_mw": 772.4000000000001}
+  output: {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 257.9016499664761, "total_gen_capacity_mw": 772.4000000000001}
   gate: n/a (no es un resultado de flujo)
 tool: disconnect_line({"from_bus": 6, "to_bus": 13})
-  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.045, "va_deg": -5.104476346710827, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_pu": 1.01, "va …[5772 chars más]
-  gate: PASS (reasons=-, mismatch=5.12e-08 MW)
+  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.045, "va_deg": -5.078737433931405, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_pu": 1.0100000 …[5832 chars más]
+  gate: PASS (reasons=-, mismatch=4.88e-08 MW)
+tool: disconnect_line({"from_bus": 12, "to_bus": 13})
+  output: {"case_name": "case14", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 2, "vm_pu": 1.0449999999999997, "va_deg": -5.117618104783695, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_p …[5729 chars más]
+  gate: PASS (reasons=-, mismatch=5.12e-13 MW)
 --- Ronda 2 ---
-LLM: The 14-bus test case has been loaded, and the line between bus 6 and bus 13 has been successfully disconnected.
+LLM: The power flow analysis has been completed after disconnecting the specified lines.
 
-- **Total Load:** 261.90 MW
-- **Total Generation:** 276.66 MW
-- **Total Losses:** 14.76 MW
-- **Voltage Range:** 1.06 to 1.09 p.u.
-
-**Violations:**
-- Overvoltage at buses 1, 6, 7, 8, and 1 …[127 chars más]
+1. Summary: The power flow converged successfully after the modifications.
+2. Key numbers: 
+   - Total Load: 257.90 MW
+   - Total Generation: 273.14 MW
+   - Total Losses: 15.24 MW
+   - Voltage Range: 0.918 to 1.090 …[309 chars más]
 --- Respuesta final ---
-The 14-bus test case has been loaded, and the line between bus 6 and bus 13 has been successfully disconnected.
+The power flow analysis has been completed after disconnecting the specified lines.
 
-- **Total Load:** 261.90 MW
-- **Total Generation:** 276.66 MW
-- **Total Losses:** 14.76 MW
-- **Voltage Range:** 1.06 to 1.09 p.u.
-
-**Violations:**
-- Overvoltage at buses 1, 6, 7, 8, and 11.
-
-**Suggested Next Step:** Consider running a contingency analysis to assess the impact of potential failures in the network.
+1. Summary: The power flow converged successfully after the modifications.
+2. Key numbers: 
+   - Total Load: 257.90 MW
+   - Total Generation: 273.14 MW
+   - Total Losses: 15.24 MW
+   - Voltage Range: 0.918 to 1.090 p.u.
+3. Violations: There are several voltage violations, including overvoltage at buses 1, 6, 8, and 12, and undervoltage at bus 13.
+4. Suggested next step: Consider running a contingency analysis to assess the impact of potential line outages or recommend remedial actions to address the voltage violations.
 --- Scoring ---
-formulation=ok (exact=True); V_MAE=0; F_MAE=0.00; faithful=100.0 %; solved=True (numeric_ok); flags=-; error=-; tokens=4652; cost_usd=0.0008; wall=4.9 s
+formulation=ok (exact=True); V_MAE=0; F_MAE=0.00; faithful=100.0 %; solved=False (answer_mismatch); flags=-; error=-; tokens=7252; cost_usd=0.0012; wall=5.1 s
 ````
 
 
@@ -250,7 +251,7 @@ Observaciones generadas automáticamente a partir de los números del report (si
 - Todos los métodos que llegan al solver (pfagent) tienen V_MAE < 1e-4 p.u. en todos los casos (máximo 1.90e-07 en pfagent/case14).
 - El gate verificó 44 resultados de flujo, 0 fallaron la verificación y se activó (retuvo números) 0 veces en 0 items.
 - Ningún item terminó con `error`.
-- Solved de `pfagent`: 97.5 % (39/40).
+- Solved de `pfagent`: 67.5 % (27/40).
 - Formulación exacta agregada sobre métodos con tools: 97.5 % (39/40).
 - Formulación por dificultad: mejor `plain` 100.0 % (10/10), peor `ambiguous` 90.0 % (9/10).
 - Errores de formulación más frecuentes: `wrong_id`=1.
