@@ -443,6 +443,34 @@ def test_escalation_check_only_fires_for_a_real_handoff_mechanism():
     assert bs.escalation_check(method_name="llm_only:structured", verification_outcome=None, formulation_error_type="unparsed") is False
 
 
+def test_escalation_check_recognizes_the_round_limit_as_a_declared_failure():
+    """2026-09-21 (found rescoring the split-tool launch): a retry -- which may call tools
+    again to refresh state before re-answering -- can exhaust the tool-round budget before
+    the model ever gets a second attempt at a final answer. verification_outcome stays None
+    (verify_final_answer never got to run again) and verification_attempts stays 0, so
+    without this the round-limit case reads as wrong_silently even though
+    MAX_ROUNDS_EXCEEDED_TEXT says in words that no result is reported -- the same
+    declared-failure shape as a verification abstention, just from a different exhaustion
+    point. round_limit_exceeded is a separate signal from verification_outcome on purpose:
+    it must not be inferred from V6/V7 (or any other condition) happening to read the
+    round-limit text as a claim mismatch, which is a coincidence of what that condition
+    checks, not a stated rule."""
+    assert bs.escalation_check(
+        method_name="pfagent", verification_outcome=None, formulation_error_type=None, round_limit_exceeded=True
+    ) is True
+    assert bs.escalation_check(
+        method_name="pfagent", verification_outcome=None, formulation_error_type=None, round_limit_exceeded=False
+    ) is False
+    # Not gated by method_name, unlike the rule_based/final_gate paths: the round-limit
+    # message is inserted by _run_react itself (llm/engine.py) regardless of whether
+    # final_gate is on, so react_nogate (no verification gate at all) can hit the same
+    # "max_rounds" status and deserves the same declared-failure reading -- a real fix,
+    # not a PFAgent-only one.
+    assert bs.escalation_check(
+        method_name="react_nogate", verification_outcome=None, formulation_error_type=None, round_limit_exceeded=True
+    ) is True
+
+
 def test_escalated_and_wrong_silently_partition_every_item_via_score_row():
     # An abstention from a final_gate method: escalated, not solved, and therefore not
     # counted as "wrong, unflagged" -- it told someone.

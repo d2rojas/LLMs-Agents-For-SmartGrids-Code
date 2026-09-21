@@ -399,7 +399,7 @@ def rescore_row(
     from llm.engine import verify_final_answer
 
     new["v_pass"] = bool(verify_final_answer(trace or {}, raw or "", request_text=request_text)["passed"])
-    new.update(bs.score_row(new, truth_answer=truth_answer))
+    new.update(bs.score_row(new, truth_answer=truth_answer, round_limit_exceeded=bool(trace and trace.get("status") == "max_rounds")))
     new["rescore"] = {"trace_source": trace_source, "truth_source": truth_source, "metrics_source": metrics_source}
     if trace_source == "file":
         new["trace"] = ev._truncate_trace(trace, ev.TRACE_OUTPUT_CHARS_REPORT)

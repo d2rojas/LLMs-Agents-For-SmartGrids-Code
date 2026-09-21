@@ -1125,6 +1125,7 @@ def evaluate_item(
         method_name=method.name,
         verification_outcome=(trace or {}).get("verification_outcome"),
         formulation_error_type=formulation.get("formulation_error_type"),
+        round_limit_exceeded=(trace or {}).get("status") == "max_rounds",
     )
     # solved and escalated can both be true (a verification abstention on an item
     # whose underlying computed state was actually correct) -- escalation takes

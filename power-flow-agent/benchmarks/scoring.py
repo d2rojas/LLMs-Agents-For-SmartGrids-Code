@@ -609,6 +609,7 @@ def escalation_check(
     method_name: Optional[str],
     verification_outcome: Optional[str],
     formulation_error_type: Optional[str],
+    round_limit_exceeded: bool = False,
 ) -> bool:
     """Whether this row ended in an explicit handoff to a person, as opposed to an
     autonomous answer (right or wrong). Every request lands in exactly one of three
@@ -618,25 +619,48 @@ def escalation_check(
 
     Only architectures with a built-in escalation path can produce True here: the
     task-level verification gate's abstention (``final_gate=True``, see
-    ``llm.engine.verify_final_answer`` / its ``verification_outcome``) and the
-    deterministic parser's refusal when it cannot map the request to any tool call.
-    Every other method has nowhere to route an "I don't know" -- so it is False by
-    construction, not derived from free text a model happened to write. "I cannot
-    determine..." trips the regex/JSON abstention heuristic in ``failure_reporting``
-    (see its ``abstained`` field) for a method with no handoff mechanism too, but
-    that is the model being uncertain, not the system escalating; those rows belong
-    in "wrong, unflagged" instead. This is why ``escalated`` is its own check rather
+    ``llm.engine.verify_final_answer`` / its ``verification_outcome``), the
+    tool-round budget running out before a final answer was ever produced
+    (``round_limit_exceeded``, ``llm.engine``'s ``MAX_ROUNDS_EXCEEDED_TEXT`` --
+    ``trace["status"] == "max_rounds"``: the run says in words that no result is
+    reported, the same declared-failure shape as a verification abstention, just
+    from a different exhaustion point), and the deterministic parser's refusal
+    when it cannot map the request to any tool call. Every other method has
+    nowhere to route an "I don't know" -- so it is False by construction, not
+    derived from free text a model happened to write. "I cannot determine..."
+    trips the regex/JSON abstention heuristic in ``failure_reporting`` (see its
+    ``abstained`` field) for a method with no handoff mechanism too, but that is
+    the model being uncertain, not the system escalating; those rows belong in
+    "wrong, unflagged" instead. This is why ``escalated`` is its own check rather
     than reusing ``abstained``.
+
+    ``round_limit_exceeded`` is deliberately not folded into
+    ``verification_outcome`` upstream: the round budget can run out before
+    ``verify_final_answer`` ever runs (``verification_outcome`` stays ``None``,
+    ``verification_attempts`` stays 0), most often because a failed verification's
+    own retry -- which may call tools again to refresh state -- consumed the
+    remaining rounds before the model could produce a second final-answer attempt.
+    That is a real fairness question for a gated architecture's round budget, not
+    something this check should paper over by inferring it from V6/V7 (or any
+    other condition) happening to read the round-limit text as a claim mismatch.
     """
     if verification_outcome in _ESCALATION_VERIFICATION_OUTCOMES:
+        return True
+    if round_limit_exceeded:
         return True
     if str(method_name or "") == "rule_based" and formulation_error_type == "unparsed":
         return True
     return False
 
 
-def score_row(row: Dict[str, Any], *, truth_answer: Any = None) -> Dict[str, Any]:
+def score_row(row: Dict[str, Any], *, truth_answer: Any = None, round_limit_exceeded: bool = False) -> Dict[str, Any]:
     """Recompute the fields owned by this module from a stored result row.
+
+    ``round_limit_exceeded``: the caller's own read of whether this row's trace
+    ended via the tool-round budget (``trace["status"] == "max_rounds"``) rather
+    than a real answer or a verification abstention -- not derivable from ``row``
+    alone, since a rescored row's ``verification_outcome`` stays ``None``/0
+    attempts in this case (verification never ran) -- see ``escalation_check``.
 
     Returns the new values of ``is_failure``, ``safe_failure``,
     ``claimed_success_on_failure``, ``abstained``, ``abstained_on_solvable``,
@@ -668,6 +692,7 @@ def score_row(row: Dict[str, Any], *, truth_answer: Any = None) -> Dict[str, Any
         method_name=row.get("method") or row.get("task"),
         verification_outcome=row.get("verification_outcome"),
         formulation_error_type=row.get("formulation_error_type"),
+        round_limit_exceeded=round_limit_exceeded,
     )
     return {
         "is_failure": failure["is_failure"],
