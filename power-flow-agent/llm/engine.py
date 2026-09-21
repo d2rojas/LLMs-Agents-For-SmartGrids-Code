@@ -78,6 +78,8 @@ CONDITION_LABELS: Dict[str, str] = {
     "no_isolated_buses": "V3",
     "faithfulness": "V4",
     "currency": "V5",
+    "argument_grounding": "V6",
+    "claims_from_tools": "V7",
 }
 
 MAX_ROUNDS_EXCEEDED_TEXT = (
@@ -364,6 +366,7 @@ def verify_final_answer(
     request_text: Optional[str] = None,
     balance_tol_mw: float = GATE_BALANCE_TOL_MW,
     balance_rel_tol: float = GATE_BALANCE_REL_TOL,
+    enforce_v6v7: bool = False,
 ) -> Dict[str, Any]:
     """Task-level verification V(x, c, z, y), applied once to the final answer text.
 
@@ -371,8 +374,9 @@ def verify_final_answer(
     after the last network mutation (or the last such output in the whole trace, when
     no mutation happened): converged, active-power balance, no isolated buses,
     faithfulness of the answer's numbers, and currency (no stale pre-mutation numbers).
-    ``passed`` requires all five. Only ``trace`` (the agent's own observed tool calls
-    and outputs) and ``final_answer_text`` are used — never a reference solution.
+    ``passed`` requires all five (six or seven with ``enforce_v6v7``). Only ``trace``
+    (the agent's own observed tool calls and outputs) and ``final_answer_text`` are
+    used — never a reference solution.
 
     Conditions 1-3 (converged, balance, no_isolated_buses) read a single-state
     ``PowerFlowResult`` payload; requests answered from a different kind of tool
@@ -380,6 +384,19 @@ def verify_final_answer(
     state) never produce one. When the trace carries no such payload anywhere, those
     three conditions do not apply to this item and are reported ``passed`` with
     ``"applicable": False`` rather than penalized as an unconverged solve.
+
+    ``enforce_v6v7`` (2026-09-21, cheap-tier live wiring, default False) adds V6
+    (``benchmarks.metrics.argument_grounding_check``: every argument to a mutating
+    tool traces to the request or a prior tool output) and V7
+    (``benchmarks.scoring.claims_from_tools_check``: the answer's claim matches what
+    the agent's own tools actually computed) as two more conditions, reusing this
+    function's existing retry/abstention machinery unchanged. Default False on
+    purpose: this function is also called from evaluate_llms.py/rescore.py to compute
+    the offline ``v_pass`` measurement for every method, not just PFAgent, and V6/V7
+    must not silently start gating that measurement for architectures with no
+    escalation path of their own (see benchmarks.evaluate_llms._aggregate_group's
+    same concern for escalated_rate_v6v7). Only ``llm.engine._run_react`` — PFAgent's
+    own loop — passes ``enforce_v6v7=True``.
     """
     from benchmarks import metrics as bm
 
@@ -458,8 +475,17 @@ def verify_final_answer(
     # top-level dict entries, which would double-count/double-list every condition for
     # the code that already iterates conditions.items() (the retry message and
     # abstention text builders below).
+    if enforce_v6v7:
+        from benchmarks import scoring as bs
+
+        v6 = bm.argument_grounding_check(trace, request_text)
+        conditions["argument_grounding"] = {"passed": v6["passed"], "invented_args": v6["invented_args"], "detail": v6["detail"]}
+        v7 = bs.claims_from_tools_check(trace, final_answer_text, request_text)
+        conditions["claims_from_tools"] = {"passed": v7["passed"], "applicable": v7["applicable"], "detail": v7["detail"]}
+
     for key, label in CONDITION_LABELS.items():
-        conditions[key]["label"] = label
+        if key in conditions:
+            conditions[key]["label"] = label
 
     last_mutation: Optional[Dict[str, Any]] = None
     if last_mut is not None:
@@ -536,7 +562,17 @@ def _condition_plain_text(name: str, cond: Dict[str, Any], verdict: Dict[str, An
         suffix = f" ({mutation_desc})" if mutation_desc else ""
         return f"the answer quotes {r} number(s) from a solve made before the last network change{suffix}"
 
-    return name  # pragma: no cover - defensive, all five names are handled above
+    if name == "argument_grounding":
+        invented = cond.get("invented_args") or []
+        items = "; ".join(f"{i['tool']}.{i['arg']}={i['value']}" for i in invented)
+        return f"the following tool argument(s) do not trace to the request or a prior tool output: {items}"
+
+    if name == "claims_from_tools":
+        return "the answer's claim does not match what the tools actually computed" + (
+            f" ({cond['detail']})" if cond.get("detail") else ""
+        )
+
+    return name  # pragma: no cover - defensive, all seven names are handled above
 
 
 def _verification_retry_message(verdict: Dict[str, Any]) -> str:
@@ -960,7 +996,7 @@ class LLMEngine:
                 return final_text
 
             verify_attempts += 1
-            verdict = verify_final_answer(trace, final_text, request_text=trace.get("request_text"))
+            verdict = verify_final_answer(trace, final_text, request_text=trace.get("request_text"), enforce_v6v7=True)
             trace["verification"].append(verdict)
             if verdict["passed"]:
                 trace["verification_attempts"] = verify_attempts

@@ -30,6 +30,11 @@ def _pf_json(*, converged=True, gen=100.0, load=95.0, loss=5.0, bus_voltages=Non
             "total_generation_mw": gen,
             "total_load_mw": load,
             "total_loss_mw": loss,
+            # Always present on a real solver payload (baselines.requests._answer's
+            # powerflow_summary branch reads them); an empty fixture default matches
+            # every existing case here, which never actually flags a violation.
+            "voltage_violations": [],
+            "thermal_violations": [],
         }
     )
 
@@ -306,3 +311,94 @@ def test_mutating_tool_during_retry_is_blocked_not_executed():
     assert trace["verification_outcome"] == "abstained_retry_mutation"
     assert "attempted to change the network" in text
     assert "reconnect_line" in text
+
+
+# ----------------------------------------------------------------------------- V6/V7 (2026-09-21, cheap-tier live wiring)
+
+
+def test_verify_final_answer_checks_v6_v7_only_when_enforced():
+    """enforce_v6v7 defaults False: evaluate_llms.py/rescore.py's offline v_pass measurement
+    (computed for every method, not just PFAgent) must stay exactly as it read before this
+    condition existed. Only a caller that opts in sees an invented argument as a failure."""
+    pf = _pf_json()
+    trace = _trace(_round(_tool("modify_load", pf, arguments={"bus_id": 1, "p_mw": 100.0, "q_mvar": 5.0})))
+    request_text = "Load case14 and set the active load at bus 1 to 100 MW."  # never mentions q_mvar
+
+    default_verdict = verify_final_answer(trace, "Bus 1 is now at 100.0 MW.", request_text=request_text)
+    assert default_verdict["passed"] is True
+    assert "argument_grounding" not in default_verdict["conditions"]
+    assert "claims_from_tools" not in default_verdict["conditions"]
+
+    enforced_verdict = verify_final_answer(trace, "Bus 1 is now at 100.0 MW.", request_text=request_text, enforce_v6v7=True)
+    assert enforced_verdict["passed"] is False
+    cond = enforced_verdict["conditions"]["argument_grounding"]
+    assert cond["passed"] is False and cond["label"] == "V6"
+    assert cond["invented_args"] == [{"tool": "modify_load", "arg": "q_mvar", "value": 5.0}]
+    msg = _verification_retry_message(enforced_verdict)
+    assert "modify_load.q_mvar=5.0" in msg
+
+
+def test_pfagent_live_gate_abstains_on_a_v6_argument_grounding_failure():
+    """End-to-end through _run_react: a mutating call with an argument the request never
+    stated (and no prior tool output reported) passes every V1-V5 condition -- the network
+    genuinely converges and balances -- but must still trigger the same retry-once,
+    abstain-twice machinery as a V1-V5 failure, since the tool call itself is the defect the
+    live gate is supposed to catch. The retry cannot fix it (modify_load is blocked once
+    retry_active is set, so the invented q_mvar stays in the trace); the second attempt fails
+    the same way and the run abstains rather than silently reporting the tainted answer."""
+    from models.schemas import SessionState
+
+    pf = _pf_json()  # converged, balanced, no isolated buses, gen=100/load=95/loss=5
+    dispatcher = _FakeDispatcher(pf)
+
+    def _call(id_, name, args_json):
+        return {"id": id_, "type": "function", "function": {"name": name, "arguments": args_json}}
+
+    modify_call = [_call("1", "modify_load", '{"bus_id": 1, "p_mw": 100.0, "q_mvar": 5.0}')]
+    client = _ScriptedToolClient(
+        [
+            (None, modify_call),
+            ("Bus 1 is now at 100.0 MW; generation 100.0 MW, load 95.0 MW, losses 5.0 MW.", []),
+            ("Bus 1 is now at 100.0 MW; generation 100.0 MW, load 95.0 MW, losses 5.0 MW.", []),  # retry: same tainted call, nothing to fix
+        ]
+    )
+    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True))
+    text, trace = engine.run_with_trace("Load case14 and set the active load at bus 1 to 100 MW.", SessionState())
+
+    assert trace["verification_outcome"] == "abstained"
+    assert trace["verification_attempts"] == 2
+    v6_conditions = [v["conditions"]["argument_grounding"] for v in trace["verification"]]
+    assert all(c["passed"] is False for c in v6_conditions)  # failed both attempts, as expected
+    assert "do not trace to the request" in text
+
+
+def test_pfagent_live_gate_v7_self_corrects_a_wrong_claim_on_retry():
+    """V7 is where the retry path can genuinely fix the answer, unlike V6: the agent
+    already has the right state (its own run_powerflow output), it just misreported which
+    bus was worst. On retry it does not need to call any tool again -- read-only tools stay
+    allowed during retry -- it only needs to restate its own already-computed result
+    correctly, and the run passes on the second attempt instead of abstaining."""
+    from models.schemas import SessionState
+
+    pf = _pf_json(bus_voltages=[{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0}, {"bus_id": 3, "vm_pu": 0.94, "va_deg": 0.0}])
+    dispatcher = _FakeDispatcher(pf)
+
+    def _call(id_, name, args_json):
+        return {"id": id_, "type": "function", "function": {"name": name, "arguments": args_json}}
+
+    pf_call = [_call("1", "run_powerflow", "{}")]
+    client = _ScriptedToolClient(
+        [
+            (None, pf_call),
+            ("The bus with the lowest voltage magnitude is bus 1.", []),  # wrong: bus 3 is actually worst
+            ("On review, the bus with the lowest voltage magnitude is bus 3.", []),  # self-corrected, no new tool call
+        ]
+    )
+    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True))
+    text, trace = engine.run_with_trace("Load case14 and report the bus with the lowest voltage magnitude.", SessionState())
+
+    assert trace["verification_outcome"] == "pass_retry"
+    assert trace["verification_attempts"] == 2
+    assert trace["verification"][0]["conditions"]["claims_from_tools"]["passed"] is False
+    assert trace["verification"][1]["conditions"]["claims_from_tools"]["passed"] is True
+    assert "bus 3" in text
