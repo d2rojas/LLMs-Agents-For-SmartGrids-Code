@@ -1,6 +1,6 @@
 # Informe de experimento: `results_validation_gpt-4o-mini_agents`
 
-Generado el 2026-09-21 08:33 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-4o-mini_agents (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-21 12:24 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-4o-mini_agents (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -79,13 +79,13 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 
 | Method | Case | N | Form. | V_MAE | F_MAE | Solved | Solver status | B_mean | Faith. | SFR | Calls | Tok. | Claim | Escalated | Wrong (silent) | $ |
 |-------|------|----|---------------|-----|-----|---------------|----------------|------|---------------|----|-----|-----|-----|----------|-----------------|------|
-| pfagent | case14 | 40 | 95.0 (38/40) | 0 | 0.02 | 65.0 (26/40) | 100.0 (40/40) | 0 | 97.5 (39/40) | -- | 2.5 | 10441 | -- | 7.5 (3/40) | 27.5 (11/40) | 0.0667 |
+| pfagent | case14 | 40 | 97.5 (39/40) | 0 | 0.02 | 65.0 (26/40) | 100.0 (40/40) | 0 | 97.5 (39/40) | -- | 2.5 | 10441 | -- | 7.5 (3/40) | 27.5 (11/40) | 0.0667 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 
 | Method | plain | parameterized | multistep | ambiguous |
-|-------|----------------|----------------|-------------|-------------|
-| pfagent | 100.0 (10/10) | 100.0 (10/10) | 90.0 (9/10) | 90.0 (9/10) |
+|-------|----------------|----------------|----------------|-------------|
+| pfagent | 100.0 (10/10) | 100.0 (10/10) | 100.0 (10/10) | 90.0 (9/10) |
 
 ### Solved por dificultad (%, items resueltos / items)
 
@@ -108,9 +108,9 @@ De 4 ítem(s) que llegaron a un reintento, 0 intentaron una herramienta que muta
 
 ### Tipos de error de formulación (conteo de items)
 
-| Method | extra_step | ok | wrong_id |
-|-------|----------|----|--------|
-| pfagent | 1 | 38 | 1 |
+| Method | ok | wrong_id |
+|-------|----|--------|
+| pfagent | 39 | 1 |
 
 ### Errores de ejecución por método (conteo de items con `error`)
 
@@ -241,9 +241,9 @@ Observaciones generadas automáticamente a partir de los números del report (si
 - El gate verificó 46 resultados de flujo, 0 fallaron la verificación y se activó (retuvo números) 0 veces en 0 items.
 - Ningún item terminó con `error`.
 - Solved de `pfagent`: 65.0 % (26/40).
-- Formulación exacta agregada sobre métodos con tools: 95.0 % (38/40).
-- Formulación por dificultad: mejor `plain` 100.0 % (10/10), peor `multistep` 90.0 % (9/10).
-- Errores de formulación más frecuentes: `extra_step`=1, `wrong_id`=1.
+- Formulación exacta agregada sobre métodos con tools: 97.5 % (39/40).
+- Formulación por dificultad: mejor `plain` 100.0 % (10/10), peor `ambiguous` 90.0 % (9/10).
+- Errores de formulación más frecuentes: `wrong_id`=1.
 - Ningún item reclamó éxito sobre un fallo (claimed_success_on_failure=0).
 - 0 de 26 items con mutación de red reportaron estado obsoleto (stale_state).
 - Trazabilidad de números (Faith.) media con tools: 97.5 %.
