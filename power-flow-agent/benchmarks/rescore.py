@@ -354,6 +354,25 @@ def rescore_row(
         }
     )
 
+    # V6/V7 (notes/mision_cero_erroneas.md, 2026-09-21): measurement fields only --
+    # does not change escalated/wrong_silently/solved here, which is a scoring-
+    # definition decision of its own (Daniela's call, same as the earlier Solved
+    # conjunction change), not something a rescore field addition should make
+    # silently. V6 is scored for every method (any tool call can invent an
+    # argument); V7 only makes sense where the request has a checkable claim and
+    # the trace has a state to re-derive it from, and is None (not True/False) on
+    # rows where it does not apply, matching answer_matches_truth's own convention.
+    v6 = bm.argument_grounding_check(trace, request_text)
+    v7 = bs.claims_from_tools_check(trace, raw, request_text)
+    new.update(
+        {
+            "v6_argument_grounding_passed": v6["passed"],
+            "v6_invented_args": v6["invented_args"],
+            "v7_claims_from_tools_passed": v7["passed"] if v7["applicable"] else None,
+            "v7_claims_from_tools_detail": v7["detail"],
+        }
+    )
+
     faith = bm.faithful_numbers(raw, bm.tool_outputs_from_trace(trace), request_text=request_text)
     stale = bm.stale_state_check(trace, raw, request_text=request_text)
     new.update(

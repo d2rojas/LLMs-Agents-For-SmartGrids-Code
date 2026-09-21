@@ -353,6 +353,146 @@ def answer_matches_truth(answer_text: Optional[str], truth_answer: Any) -> Optio
     return None
 
 
+def _last_pf_and_n1(trace: Optional[Dict[str, Any]]) -> tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """(pf, n1_report): the agent's own last solved power-flow payload (after the
+    last network mutation, same search llm.engine.verify_final_answer uses for its
+    own conditions) and the last run_n1_contingency output, if any."""
+    records = bm._tool_records_from_trace(trace)
+    last_mut: Optional[int] = None
+    for i, rec in enumerate(records):
+        if str(rec.get("name") or "") == "load_case":
+            last_mut = None
+        elif bm._mutation_applied(rec):
+            last_mut = i
+    search_from = last_mut if last_mut is not None else 0
+    pf: Optional[Dict[str, Any]] = None
+    for i in range(len(records) - 1, search_from - 1, -1):
+        payload = bm._find_pf_payload(bm._parse_output(records[i].get("output")))
+        if payload is not None:
+            pf = payload
+            break
+    n1: Optional[Dict[str, Any]] = None
+    for rec in reversed(records):
+        if str(rec.get("name") or "") == "run_n1_contingency":
+            out = bm._parse_output(rec.get("output"))
+            if isinstance(out, dict) and "results" in out:
+                n1 = out
+                break
+    return pf, n1
+
+
+_OVERLOADS_CLAUSE_RE = re.compile(r"loading is above\s+(.+?)(?:[.,]|\s+and\b|$)", re.IGNORECASE)
+_OVERLOADS_PCT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:%|percent|pct)", re.IGNORECASE)
+_WORST_VOLTAGE_RE = re.compile(r"bus with the lowest voltage magnitude", re.IGNORECASE)
+_N1_RE = re.compile(r"n-1 contingency", re.IGNORECASE)
+
+
+def _spelled_out_number(text: str) -> Optional[float]:
+    """Reverse of ``benchmarks.requests._num_words`` (its own ``_ONES``/``_TENS``
+    word lists, so a threshold this parses is guaranteed to match what the
+    generator can actually spell): "eighty" -> 80, "eighty-five"/"eighty five" ->
+    85, "one hundred" -> 100. A generated request's threshold_text only ever uses
+    this vocabulary (see op_overloads' ``f"{_num_words(t)} percent"``), so this
+    does not need to handle arbitrary English number words."""
+    from benchmarks.requests import _ONES, _TENS
+
+    words = re.findall(r"[a-zA-Z]+", text.lower())
+    ones = {w: i for i, w in enumerate(_ONES)}
+    tens = {w: i * 10 for i, w in enumerate(_TENS) if w}
+    if "hundred" in words:
+        idx = words.index("hundred")
+        base = ones.get(words[idx - 1], 0) if idx > 0 else 0
+        return float(base * 100 or 100)
+    for i, w in enumerate(words):
+        if w in tens:
+            rest = ones.get(words[i + 1]) if i + 1 < len(words) else None
+            return float(tens[w] + (rest or 0))
+        if w in ones:
+            return float(ones[w])
+    return None
+
+
+def infer_claim_shape(request_text: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Recover a request's checkable-claim shape from its text alone -- no
+    ground-truth field, no ``truth_answer`` -- by matching the same fixed clause
+    templates ``benchmarks/requests.py``'s generator itself emits (``op_worst_voltage``,
+    ``op_overloads``, ``op_n1``; every other op defaults to ``powerflow_summary``, the
+    fallback here too). This is what makes V7 usable in the live gate: the verifier
+    is not allowed to see ``truth_answer`` there (it would leak which question is
+    being asked to a check that is supposed to work from the request and the trace
+    alone), so both the live path and the rescoring path call this same function --
+    see ``claims_from_tools_check``. Returns ``None`` only when ``request_text`` is
+    empty; a request the generator's templates don't match still gets the
+    ``powerflow_summary`` default, matching the generator's own fallback.
+    """
+    text = str(request_text or "")
+    if not text.strip():
+        return None
+    m = _OVERLOADS_CLAUSE_RE.search(text)
+    if m:
+        pm = _OVERLOADS_PCT_RE.search(m.group(1))
+        if pm:
+            return {"kind": "overloads_above", "threshold_percent": float(pm.group(1))}
+        spelled = _spelled_out_number(m.group(1))
+        if spelled is not None:
+            return {"kind": "overloads_above", "threshold_percent": spelled}
+    if _WORST_VOLTAGE_RE.search(text):
+        return {"kind": "worst_voltage_bus"}
+    if _N1_RE.search(text):
+        return {"kind": "n1_worst_outage"}
+    return {"kind": "powerflow_summary"}
+
+
+def claims_from_tools_check(
+    trace: Optional[Dict[str, Any]], final_answer_text: Optional[str], request_text: Optional[str]
+) -> Dict[str, Any]:
+    """V7(a): every checkable claim in the final answer -- a list above a threshold, a
+    max, a min, a count -- must be the literal, re-derived output of the agent's own
+    last solver call, not a prose calculation over it. Verifier-side re-derivation
+    (notes/mision_cero_erroneas.md's "(a)"): reuses ``benchmarks.requests._answer``,
+    the same function that builds the ground-truth answer, applied instead to the
+    agent's own last-solved ``pf``/``n1_report`` -- so this is self-consistency
+    (does the prose match what the agent's own tools actually returned), never a
+    comparison against the external reference, which is what makes it applicable to
+    a run's own trace regardless of whether the agent got the *state* right.
+
+    Reproducible from ``request_text`` and ``trace`` alone (2026-09-21 revision):
+    the claim's *shape* -- which kind of question this was, and the threshold for an
+    "overloads above" claim -- comes from ``infer_claim_shape(request_text)``, never
+    from ``truth_answer``; the live gate cannot see ``truth_answer`` without leaking
+    which question is being asked to a check meant to work from the request alone.
+    Callers that also have ``truth_answer`` (rescoring) should cross-check its shape
+    against this function's output themselves -- see
+    ``tests/test_metrics.py::test_v7_shape_matches_truth_answer_shape_on_every_committed_item``
+    -- rather than pass it in here.
+
+    Returns ``{"passed", "applicable", "detail", "self_derived_answer"}``;
+    ``applicable`` is False (and passed True) when the shape or the request text
+    itself is not recoverable, or there is no solved state in the trace to re-derive
+    a claim from -- the same "nothing to check" convention ``answer_matches_truth``
+    itself uses (``None`` there, not a failure).
+    """
+    query = infer_claim_shape(request_text)
+    if query is None:
+        return {"passed": True, "applicable": False, "detail": "no request text to infer a claim shape from"}
+    pf, n1 = _last_pf_and_n1(trace)
+    if pf is None:
+        return {"passed": True, "applicable": False, "detail": "no solved state in the trace to re-derive a claim from"}
+
+    from benchmarks.requests import _answer as _derive_answer
+
+    self_derived = _derive_answer(query, pf, n1, None)
+    verdict = answer_matches_truth(final_answer_text, self_derived)
+    if verdict is None:
+        return {"passed": True, "applicable": False, "detail": "re-derived claim was not itself checkable", "self_derived_answer": self_derived}
+    return {
+        "passed": bool(verdict),
+        "applicable": True,
+        "detail": "answer matches the agent's own last solved state" if verdict else "answer does not match the agent's own last solved state",
+        "self_derived_answer": self_derived,
+    }
+
+
 # --------------------------------------------------------------------------- solved
 
 

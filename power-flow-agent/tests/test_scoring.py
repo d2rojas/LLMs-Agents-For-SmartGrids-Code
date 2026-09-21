@@ -192,6 +192,107 @@ def test_answer_matches_truth_for_each_request_kind():
     assert out4 == {"solved": True, "solved_reason": "numeric_and_answer_ok"}
 
 
+def test_infer_claim_shape_recovers_the_generators_own_clause_templates():
+    """2026-09-21: V7's live gate cannot see truth_answer (it would leak which
+    question is being asked to a check meant to work from the request alone), so
+    the claim shape has to come from the request text itself -- matching the exact
+    clause templates benchmarks/requests.py's op_worst_voltage/op_overloads/op_n1
+    emit (every other op defaults to powerflow_summary, the fallback here too)."""
+    assert bs.infer_claim_shape("Load case14 and report the bus with the lowest voltage magnitude.") == {
+        "kind": "worst_voltage_bus"
+    }
+    assert bs.infer_claim_shape(
+        "Load case14, then list every line whose loading is above 80%."
+    ) == {"kind": "overloads_above", "threshold_percent": 80.0}
+    # spelled-out threshold (requests.py's _num_words path)
+    assert bs.infer_claim_shape(
+        "Load case14, then list every line whose loading is above eighty percent."
+    ) == {"kind": "overloads_above", "threshold_percent": 80.0}
+    assert bs.infer_claim_shape(
+        "Run an N-1 contingency analysis ranked by max violations and report the 3 worst outages."
+    ) == {"kind": "n1_worst_outage"}
+    assert bs.infer_claim_shape("Run an N-1 contingency analysis and report the worst single outage.") == {
+        "kind": "n1_worst_outage"
+    }
+    # no question clause at all -> the generator's own default
+    assert bs.infer_claim_shape("Load case14, set the active load at bus 9 to 29.5 MW.") == {"kind": "powerflow_summary"}
+    assert bs.infer_claim_shape("") is None
+    assert bs.infer_claim_shape(None) is None
+
+
+def test_v7_shape_matches_truth_answer_shape_committed_cross_check():
+    """The rescoring path has truth_answer available; this asserts it agrees with
+    the request-text-only inference on every shape truth_answer can itself imply,
+    so the two never silently diverge -- infer_claim_shape is the only one the live
+    gate is allowed to use, and this is the check that it is not quietly wrong."""
+    cases = [
+        ("Load case14 and report the bus with the lowest voltage magnitude.", {"bus_id": 8, "vm_pu": 0.9587}, "worst_voltage_bus"),
+        (
+            "Load case14, then list every line whose loading is above 80%.",
+            {"threshold_percent": 80.0, "lines": []},
+            "overloads_above",
+        ),
+        (
+            "Run an N-1 contingency analysis ranked by max violations and report the 3 worst outages.",
+            {"criteria": "max_violations", "top_k": 3, "worst": {"from_bus": 6, "to_bus": 8}, "ranking": []},
+            "n1_worst_outage",
+        ),
+        (
+            "Load case14, set the active load at bus 9 to 29.5 MW.",
+            {"converged": True, "total_load_mw": 250.0, "total_generation_mw": 260.0, "total_loss_mw": 10.0},
+            "powerflow_summary",
+        ),
+    ]
+    for request_text, truth_answer, expected_kind in cases:
+        if "bus_id" in truth_answer and "vm_pu" in truth_answer:
+            truth_kind = "worst_voltage_bus"
+        elif "lines" in truth_answer:
+            truth_kind = "overloads_above"
+        elif "worst" in truth_answer:
+            truth_kind = "n1_worst_outage"
+        else:
+            truth_kind = "powerflow_summary"
+        assert truth_kind == expected_kind  # the fixture itself is honest about what it's asserting
+        shape = bs.infer_claim_shape(request_text)
+        assert shape is not None and shape["kind"] == truth_kind
+        if truth_kind == "overloads_above":
+            assert shape["threshold_percent"] == truth_answer["threshold_percent"]
+
+
+def test_claims_from_tools_check_v7_self_consistency_not_reference_comparison():
+    """V7(a): re-derives the claim from the agent's own last solved state (never the
+    external reference) and compares the answer text against that -- covers a
+    correct claim, a wrong claim over an otherwise-correct state (the case14-
+    multistep-006/010/014/038 mechanism from notes/mision_cero_erroneas.md), and "no
+    claim to check" (no solved state in the trace)."""
+
+    def _trace(pf_output):
+        return {"rounds": [{"tools": [{"name": "run_powerflow", "arguments": {}, "output": json.dumps(pf_output)}]}]}
+
+    pf = {
+        "case_name": "case14",
+        "converged": True,
+        "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06}, {"bus_id": 3, "vm_pu": 1.01}],
+        "line_flows": [{"line_id": 1, "from_bus": 1, "to_bus": 2, "loading_percent": 42.0}],
+    }
+    request_text = "Load case14, then list every line whose loading is above 80%."
+
+    ok = bs.claims_from_tools_check(_trace(pf), "No lines are loaded above 80%.", request_text)
+    assert ok == {
+        "passed": True,
+        "applicable": True,
+        "detail": "answer matches the agent's own last solved state",
+        "self_derived_answer": {"threshold_percent": 80.0, "lines": []},
+    }
+
+    wrong_claim = bs.claims_from_tools_check(_trace(pf), "Line 1-2 has loading above 80%.", request_text)
+    assert wrong_claim["passed"] is False and wrong_claim["applicable"] is True
+    assert wrong_claim["self_derived_answer"] == {"threshold_percent": 80.0, "lines": []}
+
+    no_state = bs.claims_from_tools_check({"rounds": []}, "No lines are loaded above 80%.", request_text)
+    assert no_state == {"passed": True, "applicable": False, "detail": "no solved state in the trace to re-derive a claim from"}
+
+
 def test_no_overload_regex_recognizes_the_phrasing_react_nogate_and_pfagent_actually_use():
     """Found while sizing the numeric_ok/answer_matches_truth conjunction (2026-09-18):
     _NO_OVERLOAD_RE only recognized "overload/thermal/violation" near "no", so a correct,
