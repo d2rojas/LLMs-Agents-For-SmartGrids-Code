@@ -59,7 +59,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from models.schemas import SessionState
 from llm.prompts import SYSTEM_PROMPT
-from llm.tools import TOOLS, ToolDispatcher, get_openai_tools
+from llm.tools import TOOLS, TOOLS_LOAD_SPLIT, ToolDispatcher, get_openai_tools
 
 ARCHITECTURES = ("react", "single_call", "plan_act")
 
@@ -641,9 +641,10 @@ def _withhold_numbers(tool_output: str, verdict: Dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _tools_catalog_text() -> str:
+def _tools_catalog_text(variant: str = "v1") -> str:
+    tools = TOOLS if variant == "v1" else TOOLS_LOAD_SPLIT
     lines = []
-    for t in TOOLS:
+    for t in tools:
         props = t.get("parameters", {}).get("properties", {}) or {}
         req = t.get("parameters", {}).get("required", []) or []
         params = ", ".join(f"{k}: {v.get('type', 'any')}{'*' if k in req else ''}" for k, v in props.items()) or "(none)"
@@ -651,15 +652,23 @@ def _tools_catalog_text() -> str:
     return "\n".join(lines)
 
 
-PLAN_SYSTEM_PROMPT = (
-    "You are the planner of a power-system analysis agent. You cannot call tools yourself. "
-    "Given the user's request, output ONLY a JSON object of the form\n"
-    '{"plan": [{"tool": "<tool_name>", "args": {...}}, ...]}\n'
-    "listing, in execution order, every tool call needed to answer the request. "
-    "Use only the tools below with exactly these argument names (* = required). "
-    "Do not include explanations, markdown, or any text outside the JSON.\n\n"
-    "Available tools:\n" + _tools_catalog_text()
-)
+def _plan_system_prompt(variant: str = "v1") -> str:
+    """The free-text plan-variant's system prompt, built for the tool set actually in
+    effect (2026-09-21 fix: this used to be a module-level constant baked from the v1
+    catalogue at import time, so a --tool-variant load_split run's planner was told
+    about modify_load and planned against it while the dispatcher executed
+    set_active_load/set_load underneath -- found auditing the four-row split-tool
+    launch's plan_act_nogate rows, which read as still on the old tool despite the
+    launch config)."""
+    return (
+        "You are the planner of a power-system analysis agent. You cannot call tools yourself. "
+        "Given the user's request, output ONLY a JSON object of the form\n"
+        '{"plan": [{"tool": "<tool_name>", "args": {...}}, ...]}\n'
+        "listing, in execution order, every tool call needed to answer the request. "
+        "Use only the tools below with exactly these argument names (* = required). "
+        "Do not include explanations, markdown, or any text outside the JSON.\n\n"
+        "Available tools:\n" + _tools_catalog_text(variant)
+    )
 
 PLAN_SYSTEM_PROMPT_STRUCTURED = (
     "You are the planner of a power-system analysis agent. You cannot see any tool result "
@@ -1084,7 +1093,7 @@ class LLMEngine:
                 with_tools=structured_plan,
                 trace=trace,
                 round_rec=plan_rec,
-                system_override=PLAN_SYSTEM_PROMPT_STRUCTURED if structured_plan else PLAN_SYSTEM_PROMPT,
+                system_override=PLAN_SYSTEM_PROMPT_STRUCTURED if structured_plan else _plan_system_prompt(self.config.tool_variant),
                 parallel_tool_calls=True if structured_plan else None,
             )
         except _LLMCallError as e:

@@ -255,6 +255,37 @@ def test_plan_act_unparseable_plan_is_a_safe_formulation_failure():
     assert session.conversation_history[-1]["content"] == PLAN_UNPARSEABLE_TEXT
 
 
+def test_plan_act_text_planner_catalogue_is_tool_variant_aware():
+    """2026-09-21: the free-text plan-variant's system prompt used to be a
+    module-level constant baked from the v1 tool catalogue at import time, so a
+    --tool-variant load_split run's planner was told about modify_load (and its
+    q_mvar argument) and planned against it while the dispatcher executed
+    set_active_load/set_load underneath -- found auditing the four-row split-tool
+    launch's plan_act_nogate rows, which called modify_load 19 times on both
+    models despite running under load_split. The planner catalogue must name the
+    tool set actually in effect."""
+    client = ScriptedClient([_resp(content=json.dumps({"plan": [{"tool": "load_case", "args": {"case_name": "case14"}}]}))])
+    engine = LLMEngine(
+        client=client, dispatcher=ToolDispatcher(handlers={}),
+        config=EngineConfig(model="fake", architecture="plan_act", tool_variant="load_split"),
+    )
+    engine.run_with_trace("do something", SessionState())
+
+    system_msg = next(m["content"] for m in client.calls[0]["messages"] if m["role"] == "system")
+    assert "modify_load" not in system_msg
+    assert "set_active_load" in system_msg and "set_load" in system_msg
+    # q_mvar is legitimately still present here: it is set_load's own argument in the
+    # split tool set (set a bus's reactive load explicitly), not a v1 leftover
+
+    # v1 (default) still gets the old catalogue -- this is a tool-variant switch,
+    # not a removal of modify_load from the text planner altogether
+    v1_client = ScriptedClient([_resp(content=json.dumps({"plan": [{"tool": "load_case", "args": {"case_name": "case14"}}]}))])
+    v1_engine = LLMEngine(client=v1_client, dispatcher=ToolDispatcher(handlers={}), config=EngineConfig(model="fake", architecture="plan_act"))
+    v1_engine.run_with_trace("do something", SessionState())
+    v1_system_msg = next(m["content"] for m in v1_client.calls[0]["messages"] if m["role"] == "system")
+    assert "modify_load" in v1_system_msg and "set_active_load" not in v1_system_msg
+
+
 def test_plan_act_end_to_end_on_case14_with_real_dispatcher():
     session = SessionState()
     ctx = ToolContext(session=session)

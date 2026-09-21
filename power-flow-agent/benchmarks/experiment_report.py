@@ -384,7 +384,7 @@ def reconstruct_prompts(method: str, row: dict[str, Any], nets: NetCache) -> lis
         return blocks
 
     # engine methods
-    from llm.engine import FINAL_ANSWER_INSTRUCTION, PLAN_SYSTEM_PROMPT
+    from llm.engine import FINAL_ANSWER_INSTRUCTION, _plan_system_prompt
     from llm.prompts import SYSTEM_PROMPT_EN
 
     if spec.architecture == "single_call":
@@ -404,8 +404,12 @@ def reconstruct_prompts(method: str, row: dict[str, Any], nets: NetCache) -> lis
     blocks.append(("System prompt (SYSTEM_PROMPT_EN)", SYSTEM_PROMPT_EN, arch))
     blocks.append(("User prompt (primer item) = request_text", request, f"case={case_name}, seed={seed}, k={k}, request_id={row.get('request_id')}"))
     if spec.architecture == "plan_act":
-        head = "\n".join(PLAN_SYSTEM_PROMPT.splitlines()[:PLAN_PROMPT_HEAD_LINES])
-        blocks.append(("PLAN_SYSTEM_PROMPT (cabecera)", head + "\n…", f"primeras {PLAN_PROMPT_HEAD_LINES} líneas de {len(PLAN_SYSTEM_PROMPT)} caracteres; catálogo de tools omitido"))
+        # v1 catalogue only: this reconstruction does not thread the row's actual
+        # --tool-variant through (spec carries no such field), same as before the
+        # 2026-09-21 fix that made the live prompt itself variant-aware.
+        plan_prompt = _plan_system_prompt("v1")
+        head = "\n".join(plan_prompt.splitlines()[:PLAN_PROMPT_HEAD_LINES])
+        blocks.append(("PLAN_SYSTEM_PROMPT (cabecera)", head + "\n…", f"primeras {PLAN_PROMPT_HEAD_LINES} líneas de {len(plan_prompt)} caracteres; catálogo de tools omitido"))
         blocks.append(("FINAL_ANSWER_INSTRUCTION (ronda final)", FINAL_ANSWER_INSTRUCTION, "se añade tras ejecutar el plan"))
     return blocks
 
