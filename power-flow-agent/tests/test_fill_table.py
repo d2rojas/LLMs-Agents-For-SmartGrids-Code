@@ -170,6 +170,27 @@ def test_number_formatting_and_weighting(reports_dir, tmp_path):
     assert rule[2 + 9] == "n/a"  # no LLM, so tokens are not applicable
 
 
+def test_escalated_and_wrong_unflagged_columns_prefer_the_v6v7_gated_rate_when_present(tmp_path):
+    """fill_table.py's Column keys-fallback: escalated_rate_v6v7 / wrong_silently_rate_v6v7
+    (present only for a gated architecture -- see evaluate_llms._aggregate_group) take
+    priority over the plain rate; a row without them (no gate) reads the plain rate."""
+    gated = _case_row(MODEL, "pfagent", "case14", 40, 1.0, 1.0, 1e-5, 2.0, 5000, 4.0,
+                       escalated_rate=0.05, wrong_silently_rate=0.15,
+                       escalated_rate_v6v7=0.35, wrong_silently_rate_v6v7=0.0)
+    ungated = _case_row(MODEL, "react_nogate", "case14", 40, 1.0, 1.0, 1e-5, 2.0, 5000, 4.0,
+                         escalated_rate=0.0, wrong_silently_rate=0.275)
+    d = tmp_path / "results"
+    (d / "r").mkdir(parents=True)
+    (d / "r" / "report.json").write_text(json.dumps(_report([gated, ungated], ["case14"])), encoding="utf-8")
+    out = tmp_path / "rows.tex"
+    assert main([str(d), "--out", str(out)]) == 0
+    rows = _data_rows(out.read_text(encoding="utf-8"))
+    pfagent_row = next(r for r in rows if r[1] == "PFAgent: ReAct + gate")
+    react_row = next(r for r in rows if r[1] == "ReAct")
+    assert pfagent_row[2 + 6] == "35.0" and pfagent_row[2 + 7] == "0.0"  # gated rate used
+    assert react_row[2 + 6] == "0.0" and react_row[2 + 7] == "27.5"  # falls back to the plain rate
+
+
 def test_best_prompt_selection(reports_dir, tmp_path):
     _, tex = _run(reports_dir, tmp_path)
     rows = _data_rows(tex)

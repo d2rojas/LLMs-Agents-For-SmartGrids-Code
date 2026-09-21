@@ -180,6 +180,14 @@ EXTENDED_SCOREBOARD_FIELDS = [
     "wrong_silently_rate",
     "wrong_silently_count",
     "wrong_silently_total",
+    # V6/V7-gated escalated/wrong_silently, present only for a group that actually went
+    # through the task-level verification gate (PFAgent today) -- see _aggregate_group.
+    "escalated_rate_v6v7",
+    "escalated_count_v6v7",
+    "escalated_total_v6v7",
+    "wrong_silently_rate_v6v7",
+    "wrong_silently_count_v6v7",
+    "wrong_silently_total_v6v7",
 ]
 
 CASE_SCOREBOARD_FIELDS = [
@@ -1232,6 +1240,22 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
     escalated = bm.rate([r.get("escalated") for r in rows])
     solved_autonomously = bm.rate([r.get("solved_autonomously") for r in rows])
     wrong_silently = bm.rate([r.get("wrong_silently") for r in rows])
+    # V6/V7-gated escalated/wrong_silently (2026-09-21, Daniela's decision): only for
+    # groups that actually went through the task-level verification gate
+    # (verification_outcome is not None -- see benchmarks.scoring.escalation_check),
+    # i.e. PFAgent today. A no-gate architecture (react_nogate, plan_act_nogate) has
+    # nowhere to route a V6/V7 catch, so applying the gate offline to it would
+    # fabricate an escalation capability it does not have and erase the row's meaning
+    # as the no-gate comparison point -- these fields are left out of the scoreboard
+    # entirely for it, and fill_table.py's Column keys-fallback reads the plain rate.
+    escalated_v6v7 = wrong_silently_v6v7 = None
+    if any(r.get("verification_outcome") is not None for r in rows):
+
+        def _v6v7_extra_catch(r: dict[str, Any]) -> bool:
+            return r.get("v6_argument_grounding_passed") is False or r.get("v7_claims_from_tools_passed") is False
+
+        escalated_v6v7 = bm.rate([bool(r.get("escalated") or _v6v7_extra_catch(r)) for r in rows])
+        wrong_silently_v6v7 = bm.rate([bool(r.get("wrong_silently") and not _v6v7_extra_catch(r)) for r in rows])
     safe = bm.rate([r.get("safe_failure") for r in rows])
     claimed = bm.rate([r.get("claimed_success_on_failure") for r in rows])
     stale = bm.rate([r.get("stale_state") for r in rows])
@@ -1353,6 +1377,21 @@ def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "wrong_silently_rate": wrong_silently["rate"],
         "wrong_silently_count": wrong_silently["count"],
         "wrong_silently_total": wrong_silently["total"],
+        # Present only where V6/V7 gating actually applies (see above); named with the
+        # _v6v7 suffix so a reader of the CSV can tell which rate -- gated or not --
+        # they are looking at, rather than silently overloading the plain field.
+        **(
+            {
+                "escalated_rate_v6v7": escalated_v6v7["rate"],
+                "escalated_count_v6v7": escalated_v6v7["count"],
+                "escalated_total_v6v7": escalated_v6v7["total"],
+                "wrong_silently_rate_v6v7": wrong_silently_v6v7["rate"],
+                "wrong_silently_count_v6v7": wrong_silently_v6v7["count"],
+                "wrong_silently_total_v6v7": wrong_silently_v6v7["total"],
+            }
+            if escalated_v6v7 is not None
+            else {}
+        ),
         "stale_state_rate": stale["rate"],
         "stale_state_count": stale["count"],
         "stale_state_total": stale["total"],

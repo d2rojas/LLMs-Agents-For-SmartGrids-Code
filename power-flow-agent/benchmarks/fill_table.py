@@ -108,8 +108,13 @@ COLUMNS: tuple[Column, ...] = (
     # or answered wrong with nothing flagging it (wrong_silently_rate). Escalated and
     # Wrong-unflagged, together with Solved, are where the mission (notes/
     # mision_cero_erroneas.md) wants Solved+Escalated=100, Wrong-unflagged=0.
-    Column("Escalated", ("escalated_rate",), "pct"),
-    Column("Wrong-unflagged", ("wrong_silently_rate",), "pct"),
+    # escalated_rate_v6v7 / wrong_silently_rate_v6v7 (2026-09-21) prefer the V6/V7-
+    # gated recomputation over the plain rate -- present only for a group that went
+    # through the task-level verification gate (PFAgent today; see _aggregate_group),
+    # so a no-gate architecture (react_nogate, plan_act_nogate) always falls through
+    # to its plain rate and is not silently turned into a gated system.
+    Column("Escalated", ("escalated_rate_v6v7", "escalated_rate"), "pct"),
+    Column("Wrong-unflagged", ("wrong_silently_rate_v6v7", "wrong_silently_rate"), "pct"),
     # Traceable: per-answer, every unit-bearing number traces to a tool output from the
     # last solve (V4 faithfulness AND V5 currency together) -- not the mean of each
     # answer's own traceable-number share (faithful_numbers_mean), which lets a handful

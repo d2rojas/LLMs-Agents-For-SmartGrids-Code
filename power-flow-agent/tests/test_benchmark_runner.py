@@ -70,6 +70,54 @@ def test_aggregate_group_includes_token_and_core_metrics():
     assert agg["cost_usd_total"] == pytest.approx(0.003)
 
 
+def test_aggregate_group_gates_escalated_wrong_silently_with_v6v7_only_where_a_gate_exists():
+    """2026-09-21 (Daniela's decision, notes/mision_cero_erroneas.md): escalated_rate_v6v7
+    / wrong_silently_rate_v6v7 recompute the outcome split as if a V6 or V7 failure were
+    an escalation -- but only for a group that actually went through the task-level
+    verification gate (PFAgent today, identified by verification_outcome not being None
+    on at least one row). A no-gate architecture (react_nogate, plan_act_nogate) has
+    nowhere to route a V6/V7 catch, so it must not get these fields at all: applying the
+    gate offline to it would fabricate an escalation capability it does not have and
+    erase its meaning as the no-gate comparison point."""
+    gated_rows = [
+        # v6/v7 both pass -> stays wrong_silently, not caught
+        {"escalated": False, "wrong_silently": True, "verification_outcome": "pass_first",
+         "v6_argument_grounding_passed": True, "v7_claims_from_tools_passed": True},
+        # v6 fails -> a V6/V7 gate would have escalated this instead of leaving it silently wrong
+        {"escalated": False, "wrong_silently": True, "verification_outcome": "pass_first",
+         "v6_argument_grounding_passed": False, "v7_claims_from_tools_passed": True},
+        # already escalated through the existing path, untouched by V6/V7
+        {"escalated": True, "wrong_silently": False, "verification_outcome": "abstained",
+         "v6_argument_grounding_passed": True, "v7_claims_from_tools_passed": True},
+    ]
+    agg = _aggregate_group(gated_rows)
+    assert agg["escalated_rate"] == pytest.approx(1 / 3)  # plain rate: unaffected by V6/V7
+    assert agg["wrong_silently_rate"] == pytest.approx(2 / 3)
+    assert agg["escalated_rate_v6v7"] == pytest.approx(2 / 3)  # rows 2 and 3 now count as escalated
+    assert agg["wrong_silently_rate_v6v7"] == pytest.approx(1 / 3)  # only row 1 remains
+    assert agg["escalated_count_v6v7"] == 2 and agg["escalated_total_v6v7"] == 3
+    assert agg["wrong_silently_count_v6v7"] == 1 and agg["wrong_silently_total_v6v7"] == 3
+
+    # a V6 failure on an already-escalated row changes nothing (still escalated either way)
+    already_escalated_and_v6_failed = _aggregate_group([
+        {"escalated": True, "wrong_silently": False, "verification_outcome": "abstained",
+         "v6_argument_grounding_passed": False, "v7_claims_from_tools_passed": True},
+    ])
+    assert already_escalated_and_v6_failed["escalated_rate_v6v7"] == 1.0
+
+    no_gate_rows = [
+        {"escalated": False, "wrong_silently": True, "verification_outcome": None,
+         "v6_argument_grounding_passed": False, "v7_claims_from_tools_passed": True},
+        {"escalated": False, "wrong_silently": False, "verification_outcome": None,
+         "v6_argument_grounding_passed": True, "v7_claims_from_tools_passed": True},
+    ]
+    no_gate_agg = _aggregate_group(no_gate_rows)
+    assert no_gate_agg["escalated_rate"] == 0.0 and no_gate_agg["wrong_silently_rate"] == pytest.approx(0.5)
+    for k in ("escalated_rate_v6v7", "escalated_count_v6v7", "escalated_total_v6v7",
+              "wrong_silently_rate_v6v7", "wrong_silently_count_v6v7", "wrong_silently_total_v6v7"):
+        assert k not in no_gate_agg
+
+
 def test_flatten_scoreboard_keeps_core_fields():
     flat = _flatten_scoreboard([
         {
