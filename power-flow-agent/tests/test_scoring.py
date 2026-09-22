@@ -509,6 +509,53 @@ def test_escalation_check_recognizes_the_round_limit_as_a_declared_failure():
     ) is True
 
 
+def test_escalation_check_recognizes_declared_inability_in_the_answer_text():
+    """2026-09-21, Daniela's decision after reviewing the no-tool rows' census: an answer
+    that explicitly says it cannot compute or lacks the means escalates, for any method --
+    the same declared-failure family as a verification abstention or the round limit, just
+    written by the model itself instead of the harness. Pinned against three real
+    committed items and one synthetic control.
+
+    Bin one (escalates): gpt-4o-mini llm_only:cot, case14-parameterized-001-s0 and
+    case14-parameterized-025-s0 -- generic "I cannot compute this" refusals. Also sol
+    llm_only:cot, case14-plain-004-s0 -- inability tied to a specific missing input (no
+    ranking criterion given), not a blanket refusal, still counts.
+
+    Bin two (stays wrong_silently): the identical structured-prompt JSON stub every
+    no-tool "Structured" row returns on every item (gpt-4o-mini and sol alike) --
+    asserts a false state with no accompanying inability language, an autonomous wrong
+    claim, not a declared refusal."""
+    mini_cot_1 = (
+        "...Given the complexity of the calculations and the need for iterative methods to solve the power flow "
+        "equations, I cannot provide the exact numerical results for the AC power flow analysis. Therefore, I will "
+        'set `converged` to false and provide an empty array for the results.\n\n```json\n{"converged": false}\n```'
+    )
+    mini_cot_25 = (
+        "...Since I cannot perform the actual power flow calculations, I will set `converged` to false and provide "
+        'the structure I can output.\n\n```json\n{"converged": false}\n```'
+    )
+    sol_cot_missing_input = (
+        "A unique worst outage cannot be determined from the supplied data because no worst-case ranking criterion "
+        "is specified, transformer tap positions are omitted, and the treatment of the bus-8 island following "
+        "outage of transformer T1 is not defined."
+    )
+    structured_stub = '{"converged": false, "bus_voltages": [], "line_flows": [], "total_generation_mw": 0.0, "total_load_mw": 0.0, "total_loss_mw": 0.0}'
+
+    for text in (mini_cot_1, mini_cot_25, sol_cot_missing_input):
+        assert bs.escalation_check(
+            method_name="llm_only:cot", verification_outcome=None, formulation_error_type=None, answer_text=text
+        ) is True
+
+    assert bs.escalation_check(
+        method_name="llm_only:structured", verification_outcome=None, formulation_error_type=None, answer_text=structured_stub
+    ) is False
+    # applies identically to every method, not just the no-tool rows
+    assert bs.escalation_check(
+        method_name="react_nogate", verification_outcome=None, formulation_error_type=None,
+        answer_text="I am unable to determine this without an N-1 ranking criterion.",
+    ) is True
+
+
 def test_escalated_and_wrong_silently_partition_every_item_via_score_row():
     # An abstention from a final_gate method: escalated, not solved, and therefore not
     # counted as "wrong, unflagged" -- it told someone.

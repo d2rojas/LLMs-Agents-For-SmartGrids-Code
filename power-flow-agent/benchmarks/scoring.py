@@ -76,12 +76,21 @@ escalated / solved_autonomously / wrong_silently
 (escalated_rate / solved_autonomously_rate / wrong_silently_rate)
     Every item lands in exactly one of three outcomes (they sum to 100%):
     ``solved_autonomously`` (the system answered, unprompted, and was right),
-    ``escalated`` (the method explicitly handed the item to a person -- see
-    ``escalation_check``: only the task-level verification gate's abstention and
-    the deterministic parser's cannot-parse refusal count; a method with no
-    handoff mechanism is always False here, even when its free text happens to
-    read as uncertain), or ``wrong_silently`` (autonomous and wrong, with nothing
-    flagging it -- the outcome an operator most needs to see).
+    ``escalated`` (the item was handed to a person -- see ``escalation_check``:
+    the task-level verification gate's abstention, the tool-round budget running
+    out before a final answer was ever produced, the deterministic parser's
+    cannot-parse refusal, or the answer text itself explicitly declaring inability
+    or lack of means, e.g. "I cannot provide the exact numerical results..." or "A
+    unique worst outage cannot be determined... because no worst-case ranking
+    criterion is specified" -- applied identically to every method, 2026-09-21),
+    or ``wrong_silently`` (autonomous and wrong, with nothing flagging it -- the
+    outcome an operator most needs to see). An answer that merely *asserts* a
+    false state with no accompanying inability language (a no-tool method's
+    ``{"converged": false, ...}`` stub on every item, say) is not an escalation:
+    it is an autonomous wrong claim, not a declared refusal, and stays
+    wrong_silently. A method with no handoff mechanism and no declared-inability
+    language in its answer is always False here, even when its free text
+    otherwise reads as uncertain.
     ``solved`` (no suffix) and ``escalated`` are NOT mutually exclusive on their
     own: a verification abstention can land on an item whose underlying computed
     state was in fact correct (verification rejected a right answer, or rejected
@@ -613,6 +622,27 @@ def method_has_tools(method_name: Optional[str]) -> bool:
 
 _ESCALATION_VERIFICATION_OUTCOMES = ("abstained", "abstained_retry_mutation")
 
+# Explicit inability/refusal language (2026-09-21, Daniela's decision after reviewing
+# the no-tool rows' answers: an answer that says in words that it cannot compute or
+# lacks the means is a declared failure and escalates, for any method, the same as a
+# verification abstention or the round limit -- it is not the model being uncertain
+# in a way that only trips an unrelated heuristic, it is the system's own output
+# declaring the handoff). Deliberately narrow: "cannot"/"can't"/"unable to"/"not able
+# to"/"do not have the ability or access to" -- a first-person statement of
+# incapacity, not any hedge or uncertainty phrasing. This is NOT the same signal as
+# failure_reporting's `abstained` (a broader JSON/regex heuristic used for SFR/claimed
+# success, kept unchanged): a method with no handoff mechanism whose answer merely
+# *reads* uncertain without this specific language still lands in wrong_silently, as
+# documented below. Verified against the four-row split-tool launch plus the no-tool
+# rows census (2026-09-21): whole-text search reproduces the census counts exactly
+# (gpt-4o-mini CoT 32/40, sol CoT 2/40 non-converged-claiming items), so no
+# closing-paragraph extraction is needed -- every occurrence found was already the
+# model's own explicit, final declaration, not an incidental mention earlier in its
+# reasoning.
+_DECLARED_INABILITY_RE = re.compile(
+    r"\b(cannot|can't|unable to|do not have (?:the ability|access)|not able to)\b", re.IGNORECASE
+)
+
 
 def escalation_check(
     *,
@@ -620,6 +650,7 @@ def escalation_check(
     verification_outcome: Optional[str],
     formulation_error_type: Optional[str],
     round_limit_exceeded: bool = False,
+    answer_text: Optional[str] = None,
 ) -> bool:
     """Whether this row ended in an explicit handoff to a person, as opposed to an
     autonomous answer (right or wrong). Every request lands in exactly one of three
@@ -627,22 +658,27 @@ def escalation_check(
     or wrong with nothing flagging it (the complement, ``not solved and not
     escalated``) -- see notes/tabla_objetivo_pfagent.md.
 
-    Only architectures with a built-in escalation path can produce True here: the
-    task-level verification gate's abstention (``final_gate=True``, see
-    ``llm.engine.verify_final_answer`` / its ``verification_outcome``), the
+    Four ways a row escalates, applied identically to every method: the task-level
+    verification gate's abstention (``final_gate=True``, see
+    ``llm.engine.verify_final_answer`` / its ``verification_outcome``); the
     tool-round budget running out before a final answer was ever produced
     (``round_limit_exceeded``, ``llm.engine``'s ``MAX_ROUNDS_EXCEEDED_TEXT`` --
     ``trace["status"] == "max_rounds"``: the run says in words that no result is
     reported, the same declared-failure shape as a verification abstention, just
-    from a different exhaustion point), and the deterministic parser's refusal
-    when it cannot map the request to any tool call. Every other method has
-    nowhere to route an "I don't know" -- so it is False by construction, not
-    derived from free text a model happened to write. "I cannot determine..."
-    trips the regex/JSON abstention heuristic in ``failure_reporting`` (see its
-    ``abstained`` field) for a method with no handoff mechanism too, but that is
-    the model being uncertain, not the system escalating; those rows belong in
-    "wrong, unflagged" instead. This is why ``escalated`` is its own check rather
-    than reusing ``abstained``.
+    from a different exhaustion point); the deterministic parser's refusal when it
+    cannot map the request to any tool call; and, since 2026-09-21, the answer text
+    itself explicitly declaring inability or lack of means (``_DECLARED_INABILITY_RE``
+    -- "I cannot provide the exact numerical results...", "A unique worst outage
+    cannot be determined... because no worst-case ranking criterion is specified").
+    This last path is the only one derived from free text a model wrote, and it is
+    deliberately narrow: an answer that merely *asserts* a false state (a no-tool
+    method's ``{"converged": false, ...}`` stub with no accompanying inability
+    language, say) is not this -- it stays "wrong, unflagged", since it is an
+    autonomous (wrong) claim, not a declared refusal. This is also not the same
+    signal as ``failure_reporting``'s ``abstained`` (a broader JSON/regex heuristic
+    that also catches this same false-state stub, used for SFR/claimed-success, kept
+    unchanged): a method whose answer merely reads uncertain without this specific
+    first-person incapacity language still lands in wrong_silently, not escalated.
 
     ``round_limit_exceeded`` is deliberately not folded into
     ``verification_outcome`` upstream: the round budget can run out before
@@ -659,6 +695,8 @@ def escalation_check(
     if round_limit_exceeded:
         return True
     if str(method_name or "") == "rule_based" and formulation_error_type == "unparsed":
+        return True
+    if answer_text and _DECLARED_INABILITY_RE.search(str(answer_text)):
         return True
     return False
 
@@ -703,6 +741,7 @@ def score_row(row: Dict[str, Any], *, truth_answer: Any = None, round_limit_exce
         verification_outcome=row.get("verification_outcome"),
         formulation_error_type=row.get("formulation_error_type"),
         round_limit_exceeded=round_limit_exceeded,
+        answer_text=row.get("raw_response"),
     )
     return {
         "is_failure": failure["is_failure"],
