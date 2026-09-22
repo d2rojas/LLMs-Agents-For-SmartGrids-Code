@@ -19,6 +19,7 @@ from llm.engine import (  # noqa: E402
     _verification_abstention_text,
     _verification_retry_message,
 )
+from benchmarks import scoring as bs  # noqa: E402
 
 
 def _pf_json(*, converged=True, gen=100.0, load=95.0, loss=5.0, bus_voltages=None, line_flows=None):
@@ -440,3 +441,53 @@ def test_pfagent_live_gate_v7_self_corrects_a_wrong_claim_on_retry():
     assert trace["verification"][0]["conditions"]["claims_from_tools"]["passed"] is False
     assert trace["verification"][1]["conditions"]["claims_from_tools"]["passed"] is True
     assert "bus 3" in text
+
+
+def test_live_v7_verdict_matches_an_independent_offline_recomputation():
+    """2026-09-21 (Daniela's question on case14-multistep-034-s0, gpt-4o-mini PFAgent
+    solving one fewer than ReAct): checked whether the live gate's V7 verdict could
+    disagree with an offline recomputation on the exact same reconstructed trace and
+    candidate text -- the candidate mechanisms were the live in-progress trace shape
+    differing from the saved-report shape, the n1_report plot-envelope nesting
+    (aadc1b3), truncated tool outputs, or the request-text claim-shape derivation
+    reading a compound request differently offline. Audited all 14 real abstentions
+    in the split-tool launch (12 mini + 2 sol PFAgent, every verification attempt in
+    each): 0 disagreements -- claims_from_tools_check is a pure function of (trace,
+    text, request_text), so live and an offline call with the same three inputs agree
+    by construction; there is no separate "live path" for V7 to diverge in the first
+    place, at least not one exercised by any committed trace. This test pins the
+    invariant for a real end-to-end run rather than only auditing the passing_tests set:
+    a first-attempt answer that is genuinely correct passes live, and calling
+    claims_from_tools_check directly on the same pre-answer trace and text (the
+    reconstruction rescore.py/an auditor would do from a saved report) must also pass."""
+    from models.schemas import SessionState
+
+    pf = {
+        "case_name": "case14",
+        "converged": True,
+        "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0}, {"bus_id": 3, "vm_pu": 0.94, "va_deg": 0.0}],
+        "line_flows": [],
+        "voltage_violations": [],
+        "thermal_violations": [],
+    }
+    dispatcher = _FakeDispatcher(_pf_json(bus_voltages=pf["bus_voltages"]))
+    request_text = "Load case14 and report the bus with the lowest voltage magnitude."
+    answer_text = "The bus with the lowest voltage magnitude is bus 3."
+
+    def _call(id_, name, args_json):
+        return {"id": id_, "type": "function", "function": {"name": name, "arguments": args_json}}
+
+    client = _ScriptedToolClient([(None, [_call("1", "run_powerflow", "{}")]), (answer_text, [])])
+    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True))
+    text, trace = engine.run_with_trace(request_text, SessionState())
+
+    assert trace["verification_outcome"] == "pass_first"
+    live_v7 = trace["verification"][0]["conditions"]["claims_from_tools"]
+    assert live_v7["passed"] is True
+
+    # reconstruct exactly what a saved report / an auditor would see: the trace up to
+    # (not including) the answer round, and the answer text, then call the same
+    # function used inside verify_final_answer directly
+    pre_answer_trace = {"rounds": trace["rounds"][:1]}
+    offline_v7 = bs.claims_from_tools_check(pre_answer_trace, answer_text, request_text)
+    assert offline_v7["passed"] is live_v7["passed"] and offline_v7["applicable"] is live_v7["applicable"]
