@@ -1,6 +1,6 @@
 # Informe de experimento: `results_validation_gpt-5.4_stress_rule_based`
 
-Generado el 2026-09-21 18:59 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-5.4_stress_rule_based (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-22 10:43 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio results_validation_gpt-5.4_stress_rule_based (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 

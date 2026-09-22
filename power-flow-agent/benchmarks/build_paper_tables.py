@@ -191,7 +191,42 @@ def _require_rescored(model: str, method: str, src_dir: Path) -> Optional[Path]:
     return None
 
 
-def _retag(scratch: Path, model: str, method: str, src_dir: Path) -> Optional[Path]:
+def _backfill_kcl_solved(data: dict[str, Any]) -> None:
+    """``kcl_mean_mismatch_mw_formulation_exact_mean`` (the paper's "B_mean solved"
+    column) is null/absent on every GPT-5.4 row (2026-09-22, editor finding): GPT-5.4
+    is frozen, so it never picked up this field, added to evaluate_llms.py's aggregate
+    after GPT-5.4's reports were last written. The value is fully recoverable from data
+    already stored per item -- `ok`, `formulation_exact`, `metrics.kcl_mean_mismatch_mw`
+    -- using the exact formula evaluate_llms.py's own live aggregate uses (see
+    `form_exact_ok_rows` there: `ok` rows where `formulation_exact is not False`, mean
+    of `metrics.kcl_mean_mismatch_mw` excluding None). Verified to reproduce the stored
+    value exactly on gpt-4o-mini/sol rows that already have it (e.g. sol llm_only:cot's
+    stored 0.16862075317710834 against 32 formulation-exact-or-null items). This is a
+    pure post-hoc aggregation of already-computed per-item fields, not a rescore: no
+    score, judgement, or verification outcome changes, so it does not touch the
+    GPT-5.4 freeze. Mutates `data` in place; only fills a row's field when it is
+    currently missing/null and recoverable, in-memory, on a scratch copy -- never
+    written back to the frozen source file."""
+    runs = data.get("runs") or []
+    for key in ("scoreboard", "scoreboard_per_case"):
+        for row in data.get(key) or []:
+            if row.get("kcl_mean_mismatch_mw_formulation_exact_mean") is not None:
+                continue
+            method = row.get("method") or row.get("task")
+            case_name = row.get("case_name")
+            matching = [
+                r for r in runs
+                if (r.get("method") or r.get("task")) == method
+                and (case_name is None or r.get("case_name") == case_name)
+                and r.get("ok")
+                and r.get("formulation_exact") is not False
+            ]
+            vals = [v for v in ((r.get("metrics") or {}).get("kcl_mean_mismatch_mw") for r in matching) if v is not None]
+            if vals:
+                row["kcl_mean_mismatch_mw_formulation_exact_mean"] = sum(vals) / len(vals)
+
+
+def _retag(scratch: Path, model: str, method: str, src_dir: Path, patch_gpt54: bool = True) -> Optional[Path]:
     """Copy src_dir's report.rescored.json into its own scratch sub-directory, keeping
     only `method`'s own rows (a source file can hold other methods too -- e.g. a
     stress-set report with react_nogate/pfagent rows alongside rule_based's; copying
@@ -213,35 +248,61 @@ def _retag(scratch: Path, model: str, method: str, src_dir: Path) -> Optional[Pa
         for row in rows:
             row["model"] = model
         data[key] = rows
+    if patch_gpt54 and model == "openrouter:openai/gpt-5.4":
+        _backfill_kcl_solved(data)
     dest_dir = scratch / model.replace(":", "_").replace("/", "_") / method.replace(":", "_")
     dest_dir.mkdir(parents=True, exist_ok=True)
     (dest_dir / "report.json").write_text(json.dumps(data), encoding="utf-8")
     return dest_dir
 
 
-def _resolve_sources(scratch: Path, sources: dict[str, dict[str, str]], base: Path) -> list[str]:
+def _patch_gpt54(scratch: Path, method: str, src_dir: Path, src: Path) -> Path:
+    """Scratch copy of a GPT-5.4 (non-rule_based) source with kcl_mean_mismatch_mw_
+    formulation_exact_mean backfilled -- see _backfill_kcl_solved. Every other GPT-5.4
+    method (llm_only:*, react_nogate, plan_act_nogate, pfagent, single_call:structured)
+    passes through here unlike rule_based's dedicated _retag path, since this backfill
+    is needed on all of them, not just the retagged one."""
+    data: dict[str, Any] = json.loads(src.read_text(encoding="utf-8"))
+    _backfill_kcl_solved(data)
+    dest_dir = scratch / "openrouter_openai_gpt-5.4" / method.replace(":", "_")
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    (dest_dir / "report.json").write_text(json.dumps(data), encoding="utf-8")
+    return dest_dir
+
+
+def _resolve_sources(scratch: Path, sources: dict[str, dict[str, str]], base: Path, patch_gpt54: bool = True) -> list[str]:
     """Real directories, deduplicated (react_nogate and pfagent often share one stress
     directory; passing the same path twice makes fill_table.py's loader see a genuine
     duplicate), except rule_based, which gets one retagged scratch copy per model block so
     fill_supertable.py's --block-by model can pick it up per block -- those are always
-    distinct paths (one per model), so no dedup is needed or wanted there."""
+    distinct paths (one per model), so no dedup is needed or wanted there.
+
+    ``patch_gpt54``: apply _backfill_kcl_solved to GPT-5.4 sources (2026-09-22 fix for
+    the missing "B_mean solved" column -- see that function). Default True for the
+    validation composite; STRESS_SOURCES passes False explicitly (2026-09-22, Daniela's
+    call pending on the stress table's display -- do not let an unrelated fix change
+    it in the meantime; a future full rebuild must not silently reintroduce this)."""
     resolved: list[str] = []
     seen: set[str] = set()
     for model, methods in sources.items():
         for method, rel in methods.items():
             src_dir = base / rel
             if method == "rule_based":
-                retagged = _retag(scratch, model, method, src_dir)
+                retagged = _retag(scratch, model, method, src_dir, patch_gpt54=patch_gpt54)
                 if retagged is not None:
                     resolved.append(str(retagged))
                 continue
             key = str(src_dir)
             if key in seen:
                 continue
-            if _require_rescored(model, method, src_dir) is None:
+            src = _require_rescored(model, method, src_dir)
+            if src is None:
                 continue
             seen.add(key)
-            resolved.append(key)
+            if patch_gpt54 and model == "openrouter:openai/gpt-5.4":
+                resolved.append(str(_patch_gpt54(scratch, method, src_dir, src)))
+            else:
+                resolved.append(key)
     return resolved
 
 
@@ -264,7 +325,7 @@ def build_composite_tables(scratch: Path) -> None:
         "--out", str(OUT_PER_SYSTEM),
     ])
 
-    stress_dirs = _resolve_sources(scratch, STRESS_SOURCES, base)
+    stress_dirs = _resolve_sources(scratch, STRESS_SOURCES, base, patch_gpt54=False)
     _run([
         VENV_PY, "benchmarks/fill_supertable.py", *stress_dirs,
         "--block-by", "model", "--layout", "blocks", "--wrap", "rows",
