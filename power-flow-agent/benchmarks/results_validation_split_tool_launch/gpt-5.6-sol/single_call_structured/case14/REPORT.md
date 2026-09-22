@@ -1,6 +1,6 @@
 # Informe de experimento: `case14`
 
-Generado el 2026-09-21 17:07 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio case14 (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-21 17:29 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio case14 (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -145,8 +145,8 @@ Columnas del protocolo (medias por método × caso, del `scoreboard_per_case`), 
 ### Por método × caso
 
 | Method | Case | N | Form. | V_MAE solved | V_MAE all | B_mean solved | B_mean all | Solved | Escalated | Wrong-unflagged | Traceable | Tokens | Time (s) | Claim | Escalated | Wrong (silent) | $ |
-|---------------------------|------|----|-------------|---------------|---------|----------------|----------|-------------|----------|------------------|---------|------|--------|-----|----------|-----------------|----|
-| single_call:structured | case14 | 40 | 20.0 (8/40) | 0 | 1.77e-03 | 0 | 0 | 12.5 (5/40) | 0.0 (0/40) | 87.5 | 95.0 | 4930 | 7.76 | -- | 0.0 (0/40) | 87.5 (35/40) | -- |
+|---------------------------|------|----|-------------|---------------|---------|----------------|----------|-------------|---------------|------------------|---------|------|--------|-----|---------------|-----------------|----|
+| single_call:structured | case14 | 40 | 20.0 (8/40) | 0 | 1.77e-03 | 0 | 0 | 12.5 (5/40) | 50.0 (20/40) | 42.5 | 95.0 | 4930 | 7.76 | -- | 50.0 (20/40) | 42.5 (17/40) | -- |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 
