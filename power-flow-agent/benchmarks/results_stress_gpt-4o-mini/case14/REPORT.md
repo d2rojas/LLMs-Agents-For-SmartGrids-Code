@@ -1,6 +1,6 @@
 # Informe de experimento: `case14`
 
-Generado el 2026-09-21 17:29 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio case14 (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
+Generado el 2026-09-21 18:59 por benchmarks/experiment_report.py a partir de 1 report(s) del directorio case14 (ruta completa en la sección 1). Prosa en español; identificadores (métodos, métricas, campos) en inglés tal como aparecen en los datos.
 
 ## 1. Qué se corrió
 
@@ -236,9 +236,9 @@ Modelos: M1 = `none:rule_based`; M2 = `openrouter:openai/gpt-4o-mini`
 | Model | Method | Case | N | Form. | V_MAE solved | V_MAE all | B_mean solved | B_mean all | Solved | Escalated | Wrong-unflagged | Traceable | Tokens | Time (s) | Claim | Escalated | Wrong (silent) | $ |
 |-----|---------------------------|------|----|----------------|---------------|---------|----------------|----------|---------------|---------------|------------------|---------|------|--------|---------------|---------------|-----------------|------|
 | M1 | rule_based | case14 | 40 | 40.0 (16/40) | -- | -- | 0 | 0 | 0.0 (0/40) | 55.0 (22/40) | 45.0 | 97.5 | 0 | 0.11 | 45.0 (18/40) | 55.0 (22/40) | 45.0 (18/40) | 0.0000 |
-| M2 | single_call:structured | case14 | 40 | 97.5 (39/40) | -- | -- | 0 | 0 | 57.5 (23/40) | 25.0 (10/40) | 40.0 | 95.0 | 10522 | 3.17 | 40.0 (16/40) | 25.0 (10/40) | 40.0 (16/40) | 0.0663 |
-| M2 | react_nogate | case14 | 40 | 100.0 (40/40) | -- | -- | 0 | 0 | 60.0 (24/40) | 15.0 (6/40) | 40.0 | 80.0 | 7679 | 3.91 | 40.0 (16/40) | 15.0 (6/40) | 40.0 (16/40) | 0.0501 |
-| M2 | pfagent | case14 | 40 | 100.0 (40/40) | -- | -- | 0 | 0 | 60.0 (24/40) | 15.0 (6/40) | 40.0 | 80.0 | 7440 | 3.92 | 40.0 (16/40) | 15.0 (6/40) | 40.0 (16/40) | 0.0487 |
+| M2 | single_call:structured | case14 | 40 | 97.5 (39/40) | -- | -- | 0 | 0 | 57.5 (23/40) | 2.5 (1/40) | 40.0 | 95.0 | 10522 | 3.17 | 40.0 (16/40) | 2.5 (1/40) | 40.0 (16/40) | 0.0663 |
+| M2 | react_nogate | case14 | 40 | 100.0 (40/40) | -- | -- | 0 | 0 | 60.0 (24/40) | 0.0 (0/40) | 40.0 | 80.0 | 7679 | 3.91 | 40.0 (16/40) | 0.0 (0/40) | 40.0 (16/40) | 0.0501 |
+| M2 | pfagent | case14 | 40 | 100.0 (40/40) | -- | -- | 0 | 0 | 60.0 (24/40) | 0.0 (0/40) | 40.0 | 80.0 | 7440 | 3.92 | 40.0 (16/40) | 0.0 (0/40) | 40.0 (16/40) | 0.0487 |
 
 ### Formulación exacta por dificultad (items con etapa de tools; `n/a` = sin tools)
 
