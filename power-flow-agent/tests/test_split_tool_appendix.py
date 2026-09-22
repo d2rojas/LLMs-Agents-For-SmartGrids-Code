@@ -28,16 +28,60 @@ def test_every_split_tool_source_dir_has_a_rescored_report():
 def test_split_tool_appendix_rows_sum_to_100():
     """Every before/after cell group (Solved + Escalated + Wrong-unflagged, using the
     full aggregate even though only Form./Solved/Wrong-unflagged are printed) sums to
-    100% within rounding, for every model/method/side SPLIT_TOOL_SOURCES declares."""
+    100% within rounding, for every model/method/side SPLIT_TOOL_SOURCES declares.
+
+    2026-09-22: this check alone did NOT catch the editor's before-side bug (gpt-4o-mini
+    and sol PFAgent before printing Wrong-unflagged=0.0 instead of 27.5/37.5) because the
+    wrong (v6v7) triple is ALSO internally self-consistent -- it sums to 100% against
+    solved_rate on its own, just describing a different, counterfactual gated re-scoring
+    instead of the plain as-run one. A sums check can never distinguish "the right triple"
+    from "a different but still-consistent triple"; see
+    test_before_side_reads_plain_fields_even_when_v6v7_present for the check that does."""
     checked = 0
     for model, methods in bpt.SPLIT_TOOL_SOURCES.items():
         for method, paths in methods.items():
             for side in ("before", "after"):
-                agg = bsta._aggregate(model, method, paths[side])
+                agg = bsta._aggregate(model, method, paths[side], side)
                 assert agg is not None, f"{model}/{method}/{side}: no aggregate (source missing or empty)"
                 bsta._check_sums(f"{model}/{method}/{side}", agg)  # raises SystemExit if not ~1.0
                 checked += 1
     assert checked >= 10
+
+
+def test_before_side_reads_plain_fields_even_when_v6v7_present():
+    """Regression for the editor's finding: results_validation_gpt-4o-mini_agents and
+    results_validation_sol_n40_clean/pfagent/case14 (both PFAgent "before" sources) carry
+    an offline escalated_rate_v6v7/wrong_silently_rate_v6v7 pair from a later, interim
+    rescore pass, alongside the plain escalated_rate/wrong_silently_rate the run actually
+    produced under V1-V5. fill_table.COLUMNS prefers the v6v7 key when present (correct
+    for a live/"after" row), which silently turned both these "before" rows' real
+    Wrong-unflagged (27.5 and 37.5) into 0.0 -- erasing the largest effect in the table
+    and making the redesign look like it changed nothing. A "before" aggregate must
+    always equal what the plain fields say, never the v6v7 ones, whenever both are
+    present on the same source."""
+    import json
+
+    cases = [
+        ("openrouter:openai/gpt-4o-mini", "pfagent", "results_validation_gpt-4o-mini_agents", 0.275),
+        ("openrouter:openai/gpt-5.6-sol", "pfagent", "results_validation_sol_n40_clean/pfagent/case14", 0.375),
+    ]
+    checked = 0
+    for model, method, rel, expected_wrong in cases:
+        raw = json.loads((PROJECT_ROOT / "benchmarks" / rel / "report.rescored.json").read_text(encoding="utf-8"))
+        rows = [r for r in (raw.get("scoreboard_per_case") or raw.get("scoreboard") or []) if (r.get("method") or r.get("task")) == method]
+        assert rows, f"{rel}: no {method} row in the raw report"
+        row = rows[0]
+        assert row.get("wrong_silently_rate_v6v7") is not None, f"{rel}: fixture assumption broken -- no v6v7 field present to guard against"
+        assert row.get("wrong_silently_rate_v6v7") != row.get("wrong_silently_rate"), f"{rel}: plain and v6v7 happen to agree -- this case no longer exercises the bug"
+
+        agg = bsta._aggregate(model, method, rel, "before")
+        assert agg is not None
+        assert abs((agg.get("Wrong-unflagged") or 0.0) - expected_wrong) < 1e-9, (
+            f"{model}/{method} before: Wrong-unflagged={agg.get('Wrong-unflagged')}, expected the plain "
+            f"rate {expected_wrong}, not the v6v7 one ({row.get('wrong_silently_rate_v6v7')})"
+        )
+        checked += 1
+    assert checked == len(cases)
 
 
 def test_gpt4o_mini_and_sol_after_side_points_at_the_launch_not_load_split():

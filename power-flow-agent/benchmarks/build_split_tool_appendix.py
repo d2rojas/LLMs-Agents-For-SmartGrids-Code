@@ -44,10 +44,26 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from benchmarks import build_paper_tables as bpt  # noqa: E402
 from benchmarks.fill_table import (  # noqa: E402
+    COLUMNS,
+    Column,
     aggregate_all,
     find_reports,
     format_cell,
     load_case_rows,
+)
+
+# A "before" run predates V6/V7, so its escalated_rate_v6v7/wrong_silently_rate_v6v7
+# fields (added by a later, uniform rescore pass over every directory, this one
+# included) are a counterfactual "what if V6/V7 had applied" score, not what the run
+# actually did -- but they are internally self-consistent (they still sum to 100%
+# against solved_rate), so a sums-to-100 guard alone cannot tell them apart from the
+# correct plain fields. fill_table.COLUMNS prefers the v6v7 key when present (matching
+# what the main table's "after"/live rows should show); a "before" row must instead
+# always read the plain key, gated field or not. This tuple is COLUMNS with Escalated
+# and Wrong-unflagged's v6v7 alternative removed, used only for "before" aggregation.
+BEFORE_COLUMNS: tuple[Column, ...] = tuple(
+    Column(c.name, c.keys[-1:], c.fmt, c.weight, c.scale) if c.name in ("Escalated", "Wrong-unflagged") else c
+    for c in COLUMNS
 )
 
 OUT_APPENDIX = PROJECT_ROOT / "benchmarks" / "tab_pf_split_tool_before_after_validation.tex"
@@ -76,11 +92,21 @@ CAPTION = (
     r"than a construction argument. ReAct, which has no gate, is the clean "
     r"before-and-after for the tool-set change alone on Solved and Wrong-unflagged. "
     r"GPT-5.4 has no split-tool run for single-call or Plan-and-Act on either side, so "
-    r"those architectures are not shown in this table."
+    r"those architectures are not shown in this table. "
+    r"On the PFAgent before sides, ``before'' means the run as it ran under V1 to V5, "
+    r"plain escalated\_rate/wrong\_silently\_rate -- those directories also hold an "
+    r"offline V6/V7 aggregate from a later, interim rescoring pass "
+    r"(escalated\_rate\_v6v7/wrong\_silently\_rate\_v6v7), which is not what this column "
+    r"shows. "
+    r"gpt-4o-mini's ``before'' rows come from exactly the two directories Table 6 used "
+    r"before the split-tool switch -- results\_validation\_gpt-4o-mini\_agents for "
+    r"PFAgent, results\_matrix\_gpt-4o-mini/react\_nogate/case14 for ReAct -- rather than "
+    r"one shared directory; their configs agree on case, N=40, seed, max\_rounds, "
+    r"temperature and solver bounds and differ only in method/task name."
 )
 
 
-def _aggregate(model: str, method: str, rel: str) -> Optional[dict]:
+def _aggregate(model: str, method: str, rel: str, side: str) -> Optional[dict]:
     d = PROJECT_ROOT / "benchmarks" / rel
     rescored = d / "report.rescored.json"
     if not rescored.is_file():
@@ -94,7 +120,8 @@ def _aggregate(model: str, method: str, rel: str) -> Optional[dict]:
     rows = [r for r in load_case_rows(find_reports([str(d)])) if r["method"] == method]
     if not rows:
         return None
-    return aggregate_all(rows).get(method)
+    columns = BEFORE_COLUMNS if side == "before" else COLUMNS
+    return aggregate_all(rows, columns=columns).get(method)
 
 
 def _check_sums(label: str, agg: dict) -> None:
@@ -130,7 +157,7 @@ def build_appendix() -> None:
             for side in ("before", "after"):
                 rel = paths[side]
                 csv_row[f"{side}_dir"] = rel
-                agg = _aggregate(model, method, rel)
+                agg = _aggregate(model, method, rel, side)
                 if agg is None:
                     cells.extend(["--"] * len(PRINTED_COLUMNS))
                     for col_name in PRINTED_COLUMNS:
