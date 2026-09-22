@@ -651,6 +651,7 @@ def escalation_check(
     formulation_error_type: Optional[str],
     round_limit_exceeded: bool = False,
     answer_text: Optional[str] = None,
+    solved: Optional[bool] = None,
 ) -> bool:
     """Whether this row ended in an explicit handoff to a person, as opposed to an
     autonomous answer (right or wrong). Every request lands in exactly one of three
@@ -689,6 +690,22 @@ def escalation_check(
     That is a real fairness question for a gated architecture's round budget, not
     something this check should paper over by inferring it from V6/V7 (or any
     other condition) happening to read the round-limit text as a claim mismatch.
+
+    ``solved`` gates only the declared-inability path (2026-09-21 fix, found by the
+    editor: gpt-5.6-sol single_call:structured's Solved+Escalated+Wrong-unflagged
+    summed to 105% because two items -- case14-parameterized-029-s0 and -037-s0 --
+    both delivered the correct numeric answer (``solved=True``,
+    ``solved_reason="numeric_and_answer_ok"``) AND hedged about a *different*,
+    unrequested part of the answer in the same text ("...but no power-flow result
+    was returned, so lines loaded above 80% cannot be identified" -- the request's
+    checkable answer never needed the power-flow result at all). The three outcomes
+    are exclusive with precedence solved, then escalated, then wrong_silently: an
+    answer that both hedges and delivers the right result is solved, not escalated,
+    so a solved item's own hedge never overrides it. The pre-existing verification-
+    abstention/round-limit/rule_based-refusal paths above are unaffected by
+    ``solved`` and keep their own documented overlap with it (an abstention can
+    reject an answer whose underlying computed state was in fact correct) -- that is
+    an established, different design point this fix does not touch.
     """
     if verification_outcome in _ESCALATION_VERIFICATION_OUTCOMES:
         return True
@@ -696,7 +713,7 @@ def escalation_check(
         return True
     if str(method_name or "") == "rule_based" and formulation_error_type == "unparsed":
         return True
-    if answer_text and _DECLARED_INABILITY_RE.search(str(answer_text)):
+    if not solved and answer_text and _DECLARED_INABILITY_RE.search(str(answer_text)):
         return True
     return False
 
@@ -742,6 +759,7 @@ def score_row(row: Dict[str, Any], *, truth_answer: Any = None, round_limit_exce
         formulation_error_type=row.get("formulation_error_type"),
         round_limit_exceeded=round_limit_exceeded,
         answer_text=row.get("raw_response"),
+        solved=solved["solved"],
     )
     return {
         "is_failure": failure["is_failure"],

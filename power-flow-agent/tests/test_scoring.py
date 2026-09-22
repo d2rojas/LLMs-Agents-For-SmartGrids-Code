@@ -556,6 +556,53 @@ def test_escalation_check_recognizes_declared_inability_in_the_answer_text():
     ) is True
 
 
+def test_declared_inability_does_not_override_a_solved_answer():
+    """2026-09-21, editor-found defect: gpt-5.6-sol single_call:structured's
+    Solved+Escalated+Wrong-unflagged summed to 105% because two real items
+    (case14-parameterized-029-s0, -037-s0) delivered the correct answer to what was
+    actually asked (solved=True, solved_reason=numeric_and_answer_ok) while also
+    hedging about a *different*, unrequested part of the response in the same text
+    ("...but no power-flow result was returned, so lines loaded above 80% cannot be
+    identified" -- the request's checkable claim never needed the power-flow result).
+    The three outcomes are exclusive with precedence solved, then escalated, then
+    wrong_silently: solved=True must suppress the declared-inability path entirely,
+    the same way it is not itself in question for the pre-existing
+    verification-abstention path's own (different, accepted) overlap."""
+    hedges_on_something_unrequested = (
+        "The IEEE 14-bus case was loaded successfully, but no power-flow result was returned, "
+        "so lines loaded above 80% cannot be identified. Total load: 259.035 MW."
+    )
+    assert bs.escalation_check(
+        method_name="single_call:structured", verification_outcome=None, formulation_error_type=None,
+        answer_text=hedges_on_something_unrequested, solved=True,
+    ) is False
+
+    # the same text, item not actually solved (the usual case) -- still escalates
+    assert bs.escalation_check(
+        method_name="single_call:structured", verification_outcome=None, formulation_error_type=None,
+        answer_text=hedges_on_something_unrequested, solved=False,
+    ) is True
+
+
+def test_declared_inability_on_the_actually_requested_claim_still_escalates_when_not_solved():
+    """Editor's edge case: solved-first must not silently absorb a genuine partial --
+    an answer that gives one requested quantity correctly but declares it cannot give
+    the specific thing the request asked to be checked against. solved_check's own
+    conjunction (the final answer text must name the checkable quantity ground truth
+    names) already makes such an answer solved=False on its own, so the
+    declared-inability path is not blocked and correctly escalates it -- this is not
+    "solved absorbing a hedge", it is "a hedge on the actual question keeps solved
+    False, so escalation still applies"."""
+    correct_numbers_but_declines_the_asked_claim = (
+        "Total load: 262.9676 MW. Total generation and losses were not computed, and no power-flow "
+        "result was returned, so the bus with the lowest voltage magnitude cannot be determined."
+    )
+    assert bs.escalation_check(
+        method_name="single_call:structured", verification_outcome=None, formulation_error_type=None,
+        answer_text=correct_numbers_but_declines_the_asked_claim, solved=False,
+    ) is True
+
+
 def test_escalated_and_wrong_silently_partition_every_item_via_score_row():
     # An abstention from a final_gate method: escalated, not solved, and therefore not
     # counted as "wrong, unflagged" -- it told someone.
@@ -748,3 +795,46 @@ def test_rescore_stored_truth_and_out_dir(synthetic_report, tmp_path):
     # tool row without a recomputed truth keeps its stored (missing) metrics and cannot be solved
     assert react["metrics"] is None and react["solved"] is False and react["solved_reason"] in ("voltage_error", "incomplete_coverage")
     assert new["rescore"]["n_solver_runs"] == 0
+
+
+def test_every_committed_row_sums_solved_escalated_wrong_silently_to_100():
+    """2026-09-21, editor-found defect and the guard requested against its class
+    recurring: the paper's Solved/Escalated/Wrong-unflagged columns must always sum to
+    100% (within rounding) for every currently-committed, non-frozen VALIDATION source
+    directory -- if a future rescore reintroduces an overlap between solved and
+    escalated (the declared-inability fix, or any other path), this fails before the
+    table does. GPT-5.4 is excluded: frozen, nothing computed or rescored for it.
+
+    Scope is deliberately SOURCES only, not STRESS_SOURCES. The stress composite's
+    PFAgent rows carry a separate, pre-existing, ACCEPTED overlap: under stress
+    (near-100% non-convergence), an item can be both `solved=True` (declared_failure
+    correctly recognised as the right call) and `escalated=True` via the verification
+    gate's own abstention on the same non-convergent case -- escalation_check's paths
+    1-3 (verification abstention, round-limit, rule_based-unparsed) are explicitly
+    documented as unaffected by `solved` and keep that overlap by design; only path 4
+    (declared-inability) was gated. That means raw solved_rate+escalated_rate can
+    legitimately exceed 100% on stress PFAgent rows (see results_validation_gpt-4o-mini_stress
+    and results_validation_gpt-5.4_stress, already reflected in the committed
+    tab_pf_protocol_stress_gpt-5.4-and-4o-mini_validation.tex before this fix) and is not
+    the defect class this guard targets. Reported to the orchestrator separately;
+    do not silently broaden this check to paper over it."""
+    import benchmarks.build_paper_tables as bpt
+
+    dirs = set()
+    for model, methods in bpt.SOURCES.items():
+        if "gpt-5.4" in model:
+            continue
+        dirs.update(methods.values())
+
+    checked = 0
+    for rel in sorted(dirs):
+        d = PROJECT_ROOT / "benchmarks" / rel
+        rescored = d / "report.rescored.json"
+        if not rescored.exists():
+            continue  # a method not yet landed (e.g. mid-launch) -- nothing to check
+        data = json.loads(rescored.read_text(encoding="utf-8"))
+        for sc in data.get("scoreboard_per_case") or []:
+            total = (sc.get("solved_rate") or 0.0) + (sc.get("escalated_rate") or 0.0) + (sc.get("wrong_silently_rate") or 0.0)
+            assert abs(total - 1.0) < 1e-6, f"{rel} ({sc.get('model')}/{sc.get('task')}): solved+escalated+wrong_silently = {total}, not 1.0"
+            checked += 1
+    assert checked >= 15  # sanity: this actually iterated real committed rows, not an empty set
