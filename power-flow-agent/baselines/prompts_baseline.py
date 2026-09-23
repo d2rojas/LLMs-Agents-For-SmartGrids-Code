@@ -15,6 +15,8 @@ LLM-Only 基线 Prompt 模板。
 
 from __future__ import annotations
 
+from methods import read_text as _read_method_text
+
 
 # BASELINE_SYSTEM_PROMPT = """你是一个电力系统分析专家。你需要根据用户提供的测试系统数据，计算交流潮流结果。
 #
@@ -24,17 +26,7 @@ from __future__ import annotations
 # - 如果你无法完成计算，请将 converged 设为 false，并尽量输出你能给出的结构（空数组也可以）。
 # """
 
-BASELINE_SYSTEM_PROMPT = """
-You are a power system analysis expert. You need to calculate AC power flow results based on test system data provided by the user.
-
-Important Constraints:
-
-- You must strictly output JSON (no extra text, no Markdown blocks).
-
-- Do not output NaN/Infinity; all values ​​must be finite real numbers.
-
-- If you cannot complete the calculation, set `converged` to false and output the structure you can provide (an empty array is acceptable).
-"""
+BASELINE_SYSTEM_PROMPT = _read_method_text("_shared/llm_only_system_prompt.txt")
 
 # BASELINE_PROMPT_TEMPLATE = """你是一个电力系统专家。请根据以下 IEEE {case_name} 测试系统数据，计算交流潮流结果。
 #
@@ -78,62 +70,4 @@ Important Constraints:
 # }}
 # """
 
-BASELINE_PROMPT_TEMPLATE = """
-You are a power systems expert. Based on the following IEEE {case_name} test system data, calculate the AC power flow results.
-
-## System Data (from pandapower network tables)
-
-### Node Data (Bus Table: net.bus)
-
-{bus_data_table}
-
-### Load Data (Load Table: net.load)
-
-{load_data_table}
-
-### Generator Data (Generator Table: net.gen)
-
-{gen_data_table}
-
-### Balanced Node/External Grid (External Grid Table: net.ext_grid)
-
-{ext_grid_data_table}
-
-### Line Data (Line Table: net.line)
-
-{line_data_table}
-
-### Transformer Data (Transformer Table: net.trafo)
-
-{trafo_data_table}
-
-## Output Requirements
-Please calculate and return the following results (JSON format):
-
-1) Voltage magnitude (p.u.) and phase angle (degrees) for each node
-
-2) Active power (MW) and load factor (%) at the beginning of each branch
-
-- For lines: `line_id` uses the row index of `net.line`
-
-- For transformers: `line_id` uses the row index of 100000 + `net.trafo`
-
-3) Total generation (MW), total load (MW), total losses (MW)
-
-4) Are there any voltage overruns (<0.95 or >1.05 p.u.) or line overruns (>100%)?
-
-Please strictly follow the following JSON schema output (all fields are complete and of correct type):
-
-{{
-"converged": true/false,
-
-"bus_voltages": [{{"bus_id": 1, "vm_pu": 1.0, "va_deg": 0.0}}, ...],
-
-"line_flows": [{{"line_id": 0, "p_from_mw": 0.0, "loading_percent": 0.0}}, ...],
-
-"total_generation_mw": 0.0,
-
-"total_load_mw": 0.0,
-  "total_loss_mw": 0.0
-}}
-"""
+BASELINE_PROMPT_TEMPLATE = _read_method_text("_shared/llm_only_user_template.txt")

@@ -59,6 +59,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from models.schemas import SessionState
 from llm.prompts import SYSTEM_PROMPT
+from methods import read_text as _read_method_text
 from llm.tools import TOOLS, TOOLS_LOAD_SPLIT, ToolDispatcher, get_openai_tools
 
 ARCHITECTURES = ("react", "single_call", "plan_act")
@@ -660,27 +661,11 @@ def _plan_system_prompt(variant: str = "v1") -> str:
     set_active_load/set_load underneath -- found auditing the four-row split-tool
     launch's plan_act_nogate rows, which read as still on the old tool despite the
     launch config)."""
-    return (
-        "You are the planner of a power-system analysis agent. You cannot call tools yourself. "
-        "Given the user's request, output ONLY a JSON object of the form\n"
-        '{"plan": [{"tool": "<tool_name>", "args": {...}}, ...]}\n'
-        "listing, in execution order, every tool call needed to answer the request. "
-        "Use only the tools below with exactly these argument names (* = required). "
-        "Do not include explanations, markdown, or any text outside the JSON.\n\n"
-        "Available tools:\n" + _tools_catalog_text(variant)
-    )
+    return _read_method_text("plan_act/plan_system_prompt_prefix.txt") + _tools_catalog_text(variant)
 
-PLAN_SYSTEM_PROMPT_STRUCTURED = (
-    "You are the planner of a power-system analysis agent. You cannot see any tool result "
-    "before committing to your plan: issue every tool call the whole request needs in this "
-    "one turn, all at once, not one at a time and not waiting to see a result before deciding "
-    "the next call. If the request needs several steps, call several tools now."
-)
+PLAN_SYSTEM_PROMPT_STRUCTURED = _read_method_text("plan_act/plan_system_prompt_structured.txt")
 
-FINAL_ANSWER_INSTRUCTION = (
-    "Write the final answer for the user strictly from the tool outputs above. "
-    "Never invent numbers; if a tool reported an error or a non-converged result, say so."
-)
+FINAL_ANSWER_INSTRUCTION = _read_method_text("_shared/final_answer_instruction.txt")
 
 
 def _strip_code_fences(text: str) -> str:

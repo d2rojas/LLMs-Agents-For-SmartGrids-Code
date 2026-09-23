@@ -1,0 +1,58 @@
+
+You are a power systems expert. Based on the following IEEE {case_name} test system data, calculate the AC power flow results.
+
+## System Data (from pandapower network tables)
+
+### Node Data (Bus Table: net.bus)
+
+{bus_data_table}
+
+### Load Data (Load Table: net.load)
+
+{load_data_table}
+
+### Generator Data (Generator Table: net.gen)
+
+{gen_data_table}
+
+### Balanced Node/External Grid (External Grid Table: net.ext_grid)
+
+{ext_grid_data_table}
+
+### Line Data (Line Table: net.line)
+
+{line_data_table}
+
+### Transformer Data (Transformer Table: net.trafo)
+
+{trafo_data_table}
+
+## Output Requirements
+Please calculate and return the following results (JSON format):
+
+1) Voltage magnitude (p.u.) and phase angle (degrees) for each node
+
+2) Active power (MW) and load factor (%) at the beginning of each branch
+
+- For lines: `line_id` uses the row index of `net.line`
+
+- For transformers: `line_id` uses the row index of 100000 + `net.trafo`
+
+3) Total generation (MW), total load (MW), total losses (MW)
+
+4) Are there any voltage overruns (<0.95 or >1.05 p.u.) or line overruns (>100%)?
+
+Please strictly follow the following JSON schema output (all fields are complete and of correct type):
+
+{{
+"converged": true/false,
+
+"bus_voltages": [{{"bus_id": 1, "vm_pu": 1.0, "va_deg": 0.0}}, ...],
+
+"line_flows": [{{"line_id": 0, "p_from_mw": 0.0, "loading_percent": 0.0}}, ...],
+
+"total_generation_mw": 0.0,
+
+"total_load_mw": 0.0,
+  "total_loss_mw": 0.0
+}}

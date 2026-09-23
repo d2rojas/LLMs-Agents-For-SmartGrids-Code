@@ -28,6 +28,7 @@ from baselines.llm_only import build_baseline_prompt
 from baselines.prompts_baseline import BASELINE_PROMPT_TEMPLATE, BASELINE_SYSTEM_PROMPT
 from llm.prompts import SYSTEM_PROMPT_EN as SYSTEM_PROMPT
 from llm.tools import TOOLS
+from methods import read_text as _read_method_text
 
 STRATEGIES: Tuple[str, ...] = ("structured", "few_shot", "cot", "rag", "nr")
 MODES: Tuple[str, ...] = ("llm_only", "single_call")
@@ -59,39 +60,16 @@ def _split_baseline_template() -> Tuple[str, str]:
 # exactly as ``build_baseline_prompt`` does for the structured baseline.
 _BASELINE_OUTPUT_SECTION = _split_baseline_template()[1].format().strip()
 
-LLM_ONLY_BUS_ID_NOTE = (
-    "[Important] bus_id must use the `name` column of net.bus (the usual IEEE/MATPOWER "
-    "1..N numbering), not the row index of net.bus."
-)
+LLM_ONLY_BUS_ID_NOTE = _read_method_text("_shared/llm_only_bus_id_note.txt")
 
 LLM_ONLY_OUTPUT_SECTION = _BASELINE_OUTPUT_SECTION + "\n\n" + LLM_ONLY_BUS_ID_NOTE
 
-SINGLE_CALL_OUTPUT_SECTION = (
-    OUTPUT_HEADING
-    + "\n"
-    + "Answer by emitting tool calls (function calling) in THIS single response:\n"
-    + "- Use only the provided tools, with their exact names and argument names.\n"
-    + "- Emit every tool call the request needs, in execution order, in one round; "
-    + "there is no second turn and no memory of earlier turns.\n"
-    + "- bus_id / from_bus / to_bus are IEEE display ids (1..N), as printed in the system data.\n"
-    + "- Never invent numerical results; numbers come only from tool outputs.\n"
-    + "- If the request needs a case other than the loaded one, call load_case first."
-)
+SINGLE_CALL_OUTPUT_SECTION = _read_method_text("single_call_structured/output_section.txt")
 
-SINGLE_CALL_TASK_STATEMENT = (
-    "## Single-call mode\n"
-    "You are evaluated in single-call mode: the network named in the user message is already "
-    "loaded. Read the request, decide which tools to call and with which arguments, and emit "
-    "all tool calls in this one response. Do not ask clarifying questions, do not plan across "
-    "turns, and do not fabricate numbers."
-)
+SINGLE_CALL_TASK_STATEMENT = _read_method_text("single_call_structured/task_statement.txt")
 
-FORCED_ESCAPE_CLAUSE = "- If you cannot complete the calculation, set `converged` to false and output the structure you can provide (an empty array is acceptable)."
-FORCED_REPLACEMENT = (
-    "- You must compute and report your best numerical estimate for every bus voltage and every branch flow. "
-    "`converged` must be true and every array must be complete (one entry per bus and per branch). "
-    "Do not leave arrays empty and do not state that you cannot compute."
-)
+FORCED_ESCAPE_CLAUSE = _read_method_text("llm_only_forced_structured/escape_clause_removed.txt")
+FORCED_REPLACEMENT = _read_method_text("llm_only_forced_structured/forced_replacement.txt")
 
 
 def forced_system_prompt(base: str) -> str:
@@ -101,56 +79,13 @@ def forced_system_prompt(base: str) -> str:
     return base.rstrip() + "\n" + FORCED_REPLACEMENT
 
 
-COT_SYSTEM_SUFFIX = (
-    "\n\nReasoning mode: you MAY write a short step-by-step reasoning in plain text before the "
-    "answer. The final JSON object must be the LAST thing in the response, inside a single "
-    "```json fenced block, and it must be the only JSON object in the response. Do not use "
-    "curly braces in the reasoning text."
-)
+COT_SYSTEM_SUFFIX = _read_method_text("_shared/cot_system_suffix.txt")
 
-LLM_ONLY_COT_SECTION = (
-    REASONING_HEADING
-    + "\n"
-    + "Before producing the final JSON, reason step by step:\n"
-    + "1. Which buses does the request refer to (display ids, slack bus, load and generator buses)?\n"
-    + "2. Which lines/branches are involved (from_bus-to_bus, line_id convention)?\n"
-    + "3. Which quantities and units are asked for (MW, Mvar, p.u., degrees, % loading)?\n"
-    + "4. What changes with respect to the base case, and which power balance must hold?\n"
-    + "Write the reasoning first, then the final JSON as the last part of the response."
-)
+LLM_ONLY_COT_SECTION = _read_method_text("llm_only_cot/reasoning_section.txt")
 
-LLM_ONLY_NR_SECTION = (
-    REASONING_HEADING
-    + "\n"
-    + "Solve this with the Newton-Raphson power-flow procedure, worked by hand in the "
-    "reasoning text before the final JSON:\n"
-    + "1. Build the bus admittance matrix Ybus (per unit, on the stated system base) from "
-    "the r_pu/x_pu/b_pu of every line and transformer (series admittance 1/(r_pu+j*x_pu), "
-    "plus the shunt charging b_pu split half to each end bus).\n"
-    + "2. Classify each bus as slack (ext_grid), PV (gen) or PQ (load only); PV/slack voltage "
-    "magnitudes are the given setpoints, not unknowns.\n"
-    + "3. Flat-start the unknowns: angle 0 at every non-slack bus, magnitude 1.0 p.u. at every "
-    "PQ bus.\n"
-    + "4. At each iteration: compute the power mismatch (Delta P at every non-slack bus, Delta "
-    "Q at every PQ bus) from the current voltage estimate, form the Jacobian, solve for the "
-    "angle/magnitude correction, and update the voltage estimate. Show the mismatch vector "
-    "and the updated voltages at each iteration explicitly.\n"
-    + "5. Repeat until the largest mismatch is below 1e-3 p.u. (report the iteration count), "
-    "or state explicitly that you are not iterating further and why.\n"
-    + "Do not skip straight to a final answer without showing at least one iteration's "
-    "mismatch and update; a plausible-looking answer with no shown iteration is not an "
-    "acceptable substitute."
-)
+LLM_ONLY_NR_SECTION = _read_method_text("llm_only_nr/reasoning_section.txt")
 
-SINGLE_CALL_COT_SECTION = (
-    REASONING_HEADING
-    + "\n"
-    + "Before emitting tool calls, reason step by step and write a SHORT numbered plan in the "
-    + "message content:\n"
-    + "1. Which buses (display ids), lines/branches and quantities/units the request refers to.\n"
-    + "2. Which tools are needed and in which order, with the exact argument values.\n"
-    + "Then, in the same response, emit the tool calls that implement the plan."
-)
+SINGLE_CALL_COT_SECTION = _read_method_text("single_call_cot/reasoning_section.txt")
 
 
 # ---------------------------------------------------------------------------

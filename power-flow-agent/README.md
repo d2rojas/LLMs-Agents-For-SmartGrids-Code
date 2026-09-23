@@ -1,61 +1,92 @@
 # Power Flow Agent (PFAgent)
 
-A conversational agent that delegates AC power flow to **PandaPower's Newton–Raphson
-solver**, while the LLM parses multi-step natural-language queries, sequences tools,
-tracks network state across turns, and synthesizes operator-readable responses.
-For evaluation, an LLM-only baseline and PFAgent see the same cases and metrics; only
-PFAgent can call the PandaPower toolchain.
+A conversational agent that delegates AC power flow to **PandaPower's Newton-Raphson
+solver**, while the LLM parses natural-language requests, sequences tools, tracks network
+state, and writes operator-readable answers. For the paper (§6.3), every method is evaluated
+on the same requests and metrics: LLM-only prompting, single-call tool use, a rule-based
+parser with no LLM, multi-step agents, and PFAgent, which adds a task-level verification gate
+so that only numbers traceable to a solver output are reported.
 
-> Detailed architecture notes and a full file inventory live in
-> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). This page is a summary.
+> Architecture notes and the module inventory: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-## Components
-1. **Streamlit frontend** — user interaction, session state, undo/redo snapshots.
-2. **Agentic layer** — multi-turn conversation engine + tool dispatcher (≤8 rounds).
-3. **Solver backend** — PandaPower AC power flow, N-1 contingency, remedial actions.
-4. **Visualization** — topology, voltage heat maps, flow diagrams.
+## Layout
 
-## Quick start
-```bash
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-
-# Set API keys (only needed for the LLM chat / baseline, not for the solver):
-export OPENAI_API_KEY=...        # GPT-5.4 / GPT-5.5
-export GEMINI_API_KEY=...        # Gemini (optional)
-
-# Interactive UI:
-streamlit run app.py
-
-# Batch evaluation (LLM-only vs PFAgent across IEEE cases):
-python benchmarks/evaluate_llms.py
+```
+run.py            the front door: run a method on a case, then render the results
+methods/          one folder per method: method.json + the prompt .txt files it uses   (methods/README.md)
+results/          every run: <case>/<date>/<model>/<method>/ with traces, summary, REPORT   (results/README.md)
+data/             MATPOWER case files                                                        (data/README.md)
+solver/  llm/  baselines/  models/   the engine (PandaPower tools, LLM engine, baselines, schemas)
+benchmarks/       evaluate_llms.py (runner), rescore.py, postprocess.py, scoring, paper-table builders,
+                  and results_* (the raw archive the paper tables are built from)
+scripts/          run_pf_matrix.sh (full matrix), migrate_paper_results.py, fetch_matpower_cases.py
+viz/  app.py      the Streamlit UI
+tests/            pytest suite, no API keys needed
 ```
 
-## Data / protocol
-MATPOWER IEEE 14/30/57/118-bus cases (bundled in [`data/`](data/) and
-[`solver/cases/`](solver/cases/)). Loads and generator setpoints are perturbed around the base case to
-mitigate memorization (`k = 1`, `N = 40` seeds per system). Ground truth is the
-PandaPower Newton–Raphson solution of each perturbed case.
+## Quick start
 
-## LLM models
-The committed benchmark tables in [`benchmarks/`](benchmarks/) (paper §VI-C) were
-generated with **`openai:gpt-4o-mini`** and **`gemini:gemini-2.5-flash-lite`** —
-the defaults in `config.py`. Other providers can be swept with
-`benchmarks/evaluate_llms.py --model <provider:model>`; the Streamlit UI also
-exposes GPT-4.1 / GPT-4.1 Mini and the Gemini 3 Flash / 3.1 Pro previews.
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+export OPENAI_API_KEY=...          # or OPENROUTER_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY, or a .env file
 
-## Metrics (three tiers; the paper reports one per tier)
-- **Tier I — state:** voltage-magnitude MAE (`V_MAE`, p.u.), V-RMSE, angle RMSE, max V error.
-- **Tier II — flow:** branch active-power MAE (`F_MAE`, MW), F-RMSE, P95 flow error, branch-loading RMSE (%).
-- **Tier III — physical:** bus-level active-power-balance / KCL residual (`B_mean`, MW).
+python run.py list-methods
+python run.py show-prompt --method pfagent
+python run.py run --method pfagent --model openrouter:openai/gpt-4o-mini --case ieee14 --n 40 --dry-run
+python run.py run --method pfagent --method react_nogate --model openrouter:openai/gpt-4o-mini --case ieee14 --n 40
+open results/INDEX.md              # then the run folder's REPORT.md and traces/
+```
 
-Reproduces the power-flow results table in the paper (§VI-C).
+`run` calls `benchmarks/evaluate_llms.py` with the flags the paper runs used, rescores the
+report offline, and renders one folder per (method, model, case): a per-run transcript
+(every message, tool call and tool output), a per-run narrative (steps, tokens, formulation
+check, verification, outcome), `summary.csv`, and `REPORT.md` with the counts per metric.
+Models are `provider:model` strings; the runs behind the current paper tables used
+`openrouter:openai/gpt-4o-mini`, `openrouter:openai/gpt-5.6-sol` and `openrouter:openai/gpt-5.4`.
 
-## Verification
-Newton–Raphson convergence + KCL self-consistency + schema-valid success rate gate
-what is reported.
+Interactive UI: `streamlit run app.py`.
+
+## Data and protocol
+
+MATPOWER IEEE 14/30/57/118-bus cases (bundled in [`data/`](data/) and [`solver/cases/`](solver/cases/)).
+Loads and generator setpoints are perturbed around the base case (`--k 1`) to mitigate
+memorization; requests are generated deterministically from (case, N, seed) by
+`benchmarks/requests.py`, N = 40 per case. Ground truth is the PandaPower solution of the
+intended tool calls on the same perturbed case.
+
+## Metrics
+
+Three groups, as in the paper. Definitions and code: `benchmarks/scoring.py`, `benchmarks/metrics.py`.
+
+- **Task utility**: formulation exactness (did the executed tool calls match the request), voltage
+  MAE (`V_MAE`, p.u.) and branch-flow MAE against the reference, both over all runs and over
+  formulation-exact runs, KCL residual (`B_mean`, MW).
+- **Solver-grounded correctness**: where every request ended, as three exclusive outcomes that
+  sum to 100%: solved autonomously, escalated to a person, wrong and unflagged; V-pass (all
+  verification conditions, checked offline for every method); traceable answers (every number in
+  the answer appears in a tool output from the solve after the last network change); safe failure
+  on the stress set.
+- **Cost and time**: LLM and tool calls, prompt and completion tokens, cost from `pricing.json`,
+  wall time.
+
+## Verification gate (PFAgent)
+
+Conditions V1 to V7 in `llm/engine.py:verify_final_answer`: converged, power balance, no isolated
+buses, faithfulness of reported numbers, currency (numbers come from the solve after the last
+mutation), argument grounding (every mutating-tool argument traces to the request or a prior tool
+output), and claims consistent with the agent's own last solved state. A rejected answer is
+retried once with the failed conditions spelled out; an answer that still fails is escalated.
+
+## Paper tables
+
+`benchmarks/build_paper_tables.py` renders `benchmarks/tab_pf_*.tex` from the runs it names in
+`SOURCES`, `STRESS_SOURCES` and `SPLIT_TOOL_SOURCES`. The same runs are mirrored, readable, under
+`results/` (see `results/README.md`, "Provenance").
 
 ## Tests
+
 ```bash
-pip install pytest && pytest                  # solver/N-1/remedial tests run without API keys
+pip install pytest && pytest        # solver, tools, scoring, prompts, post-processing; no API keys
+pytest tests/test_methods_prompts.py    # the prompt texts still hash to the values stamped on the paper runs
 ```
