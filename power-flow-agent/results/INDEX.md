@@ -1,11 +1,26 @@
 # Results index
 
-Generated 2026-09-23 11:52 by `run.py index`. One line per run directory, newest first. Counts are runs; Form. and Trace. are percentages. Open the folder for `REPORT.md`, `summary.csv` and `traces/`.
+Generated 2026-09-23 16:27 by `run.py index`. One line per run directory, newest first. Counts are runs; Form. and Trace. are percentages. Open the folder for `REPORT.md`, `summary.csv` and `traces/`.
 
 ## ieee14
 
 | date | model | method | cond. | tools | n | solved | escalated | wrong unflagged | Form. % | Trace. % | tokens/run | cost $ | in the paper | folder |
 |---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 2026-09-23 | gpt-5.6-sol | formulation_probe_structured | normal | load_split | 40 | 0 | 0 | 40 | 95.0 | 97.5 | 2415 | 0.23 | new run | [formulation_probe_structured__enums](ieee14/2026-09-23/gpt-5.6-sol/formulation_probe_structured__enums/REPORT.md) |
+| 2026-09-23 | gpt-5.6-sol | formulation_probe_structured | normal | load_split | 40 | 0 | 0 | 40 | 75.0 | 97.5 | 2358 | 0.23 | new run | [formulation_probe_structured](ieee14/2026-09-23/gpt-5.6-sol/formulation_probe_structured/REPORT.md) |
+| 2026-09-23 | gpt-5.6-sol | formulation_probe_cot | normal | load_split | 40 | 0 | 0 | 40 | 95.0 | 97.5 | 2660 | 0.28 | new run | [formulation_probe_cot__enums](ieee14/2026-09-23/gpt-5.6-sol/formulation_probe_cot__enums/REPORT.md) |
+| 2026-09-23 | gpt-5.6-sol | formulation_probe_cot | normal | load_split | 40 | 0 | 0 | 40 | 77.5 | 97.5 | 2642 | 0.28 | new run | [formulation_probe_cot](ieee14/2026-09-23/gpt-5.6-sol/formulation_probe_cot/REPORT.md) |
+| 2026-09-23 | gpt-4o-mini | single_call_cot | normal | load_split | 40 | 26 | 0 | 14 | 95.0 | 95.0 | 10626 | 0.07 | new run | [single_call_cot](ieee14/2026-09-23/gpt-4o-mini/single_call_cot/REPORT.md) |
+| 2026-09-23 | gpt-4o-mini | llm_only_structured | normal | load_split | 40 | 0 | 0 | 40 | 77.5 | 5.0 | 2824 | 0.02 | new run | [llm_only_structured__f2](ieee14/2026-09-23/gpt-4o-mini/llm_only_structured__f2/REPORT.md) |
+| 2026-09-23 | gpt-4o-mini | llm_only_structured | normal | load_split | 40 | 0 | 0 | 40 | 80.0 | 5.0 | 2717 | 0.02 | new run | [llm_only_structured](ieee14/2026-09-23/gpt-4o-mini/llm_only_structured/REPORT.md) |
+| 2026-09-23 | gpt-4o-mini | llm_only_forced_structured | normal | load_split | 40 | 0 | 0 | 40 | 75.0 | 0.0 | 3755 | 0.04 | new run | [llm_only_forced_structured__f2](ieee14/2026-09-23/gpt-4o-mini/llm_only_forced_structured__f2/REPORT.md) |
+| 2026-09-23 | gpt-4o-mini | llm_only_forced_cot | normal | load_split | 40 | 0 | 0 | 40 | 40.0 | 0.0 | 4118 | 0.05 | new run | [llm_only_forced_cot__f2](ieee14/2026-09-23/gpt-4o-mini/llm_only_forced_cot__f2/REPORT.md) |
+| 2026-09-23 | gpt-4o-mini | llm_only_cot | normal | load_split | 40 | 0 | 1 | 39 | 72.5 | 0.0 | 3440 | 0.03 | new run | [llm_only_cot__f2](ieee14/2026-09-23/gpt-4o-mini/llm_only_cot__f2/REPORT.md) |
+| 2026-09-23 | gpt-4o-mini | llm_only_cot | normal | load_split | 40 | 0 | 1 | 39 | 45.0 | 2.5 | 3412 | 0.03 | new run | [llm_only_cot](ieee14/2026-09-23/gpt-4o-mini/llm_only_cot/REPORT.md) |
+| 2026-09-23 | gpt-4o-mini | formulation_probe_structured | normal | load_split | 40 | 0 | 0 | 40 | 95.0 | 97.5 | 2344 | 0.02 | new run | [formulation_probe_structured__enums](ieee14/2026-09-23/gpt-4o-mini/formulation_probe_structured__enums/REPORT.md) |
+| 2026-09-23 | gpt-4o-mini | formulation_probe_structured | normal | load_split | 40 | 0 | 0 | 40 | 77.5 | 97.5 | 2298 | 0.01 | new run | [formulation_probe_structured](ieee14/2026-09-23/gpt-4o-mini/formulation_probe_structured/REPORT.md) |
+| 2026-09-23 | gpt-4o-mini | formulation_probe_cot | normal | load_split | 40 | 0 | 0 | 40 | 92.5 | 95.0 | 2752 | 0.02 | new run | [formulation_probe_cot__enums](ieee14/2026-09-23/gpt-4o-mini/formulation_probe_cot__enums/REPORT.md) |
+| 2026-09-23 | gpt-4o-mini | formulation_probe_cot | normal | load_split | 40 | 0 | 0 | 40 | 75.0 | 95.0 | 2708 | 0.02 | new run | [formulation_probe_cot](ieee14/2026-09-23/gpt-4o-mini/formulation_probe_cot/REPORT.md) |
 | 2026-09-21 | no-llm | rule_based | normal | v1 | 40 | 22 | 9 | 9 | 72.5 | 100.0 | 0 | 0.00 | main protocol table (Table 5 / S8) | [rule_based](ieee14/2026-09-21/no-llm/rule_based/REPORT.md) |
 | 2026-09-21 | gpt-5.6-sol | single_call_structured | normal | load_split | 40 | 5 | 18 | 17 | 20.0 | 95.0 | 4930 | – | main protocol table (Table 5 / S8) | [single_call_structured](ieee14/2026-09-21/gpt-5.6-sol/single_call_structured/REPORT.md) |
 | 2026-09-21 | gpt-5.6-sol | react_nogate | normal | v1 | 40 | 25 | 0 | 15 | 62.5 | 90.0 | 13465 | 1.25 | split-tool appendix, before side (original modify_load tool) | [react_nogate__v1](ieee14/2026-09-21/gpt-5.6-sol/react_nogate__v1/REPORT.md) |

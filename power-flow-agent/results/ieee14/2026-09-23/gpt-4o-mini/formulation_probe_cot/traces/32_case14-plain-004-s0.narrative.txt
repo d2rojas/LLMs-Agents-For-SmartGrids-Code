@@ -1,0 +1,21 @@
+RUN 32  |  case14-plain-004-s0  |  formulation_probe:cot  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty plain
+Request: Load case14 and run an N-1 contingency analysis and report the worst single outage.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): 1. The request refers to the IEEE case14 test system, which includes buses (1 to 14), with bus 1 being the slack bus and buses 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, and 14 having loads and generators. 2. ...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 2403 in / 314 out tokens, $0.0005, 3.4 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> run_n1_contingency()
+  declared: load_case(case_name="case14") -> run_powerflow() -> run_n1_contingency(top_k=1, criteria="loading", max_candidates=1)   [no tools: the model states the operations, nothing is executed]
+  verdict:  NOT EXACT (invalid_value): declared formulation: run_n1_contingency: criteria='loading' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default)
+
+REPORTING
+  numbers in the answer: 0, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: run_failed
+  raw trace: case14-plain-004-s0_run0.json

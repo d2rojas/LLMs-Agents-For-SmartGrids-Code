@@ -1,0 +1,21 @@
+RUN 16  |  case14-multistep-022-s0  |  formulation_probe:structured  |  gpt-5.6-sol  |  IEEE 14-bus  |  seed 0  |  difficulty multistep
+Request: Load case14, disconnect the line between bus 9 and bus 10, set the active load at bus 3 to 118.6 MW, set the active load at bus 4 to 53.6 MW, and finally run an N-1 contingency analysis ranked by max violations and report the 8 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): {"formulation":[{"tool":"load_case","args":{"case_name":"case14"}},{"tool":"disconnect_line","args":{"from_bus":9,"to_bus":10}},{"tool":"set_active_load","args":{"bus_id":3,"p_mw":118.6}},{"tool":"set...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 2322 in / 109 out tokens, $0.0057, 1.8 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> disconnect_line(from_bus=9, to_bus=10) -> modify_load(bus_id=3, p_mw=118.6) -> modify_load(bus_id=4, p_mw=53.6) -> run_n1_contingency(top_k=8, criteria="max_violations")
+  declared: load_case(case_name="case14") -> disconnect_line(from_bus=9, to_bus=10) -> set_active_load(bus_id=3, p_mw=118.6) -> set_active_load(bus_id=4, p_mw=53.6) -> run_n1_contingency(top_k=8, criteria="max_violations")   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 2, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: run_failed
+  raw trace: case14-multistep-022-s0_run0.json

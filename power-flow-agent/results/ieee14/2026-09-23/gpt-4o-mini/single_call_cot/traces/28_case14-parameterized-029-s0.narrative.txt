@@ -1,0 +1,26 @@
+RUN 28  |  case14-parameterized-029-s0  |  single_call:cot  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty parameterized
+Request: Load the 14-bus test case (case14) and run the power flow, then list every line whose loading is above 80%.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called run_powerflow(); get_most_loaded_branch()   (2604 in / 43 out tokens, 1.1 s)
+       tool run_powerflow -> case_name="case14", converged=true, total_load_mw=259.035, total_generation_mw=272.3982, total_loss_mw=13.3632, bus_voltages[14], line_flows[20], voltage_violations[7], thermal_violations[0]  [gate pass]
+       tool get_most_loaded_branch -> {"branch_id": 0, "branch_type": "line", "from_bus": 1, "to_bus": 2, "loading_percent": 1.5121502813814243}
+  2. LLM wrote the final answer   (4806 in / 95 out tokens, 1.8 s)
+  Totals: 2 LLM calls, 2 tool calls, 1 tool rounds, 7410 in / 138 out tokens, $0.0012, 2.9 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> run_powerflow()
+  executed: run_powerflow() -> get_most_loaded_branch()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 4, untraceable: 1 -> traceable answer: no
+  untraceable values: ['151.22%']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: answer_mismatch
+  against the reference: voltage MAE 0 p.u., flow MAE 0 MW, KCL mismatch 0 MW, power-balance error 6.41e-09
+  raw trace: case14-parameterized-029-s0_run0.json

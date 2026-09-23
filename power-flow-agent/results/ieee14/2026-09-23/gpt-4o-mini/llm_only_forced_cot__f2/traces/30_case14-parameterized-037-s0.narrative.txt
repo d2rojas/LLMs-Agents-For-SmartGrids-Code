@@ -1,0 +1,23 @@
+RUN 30  |  case14-parameterized-037-s0  |  llm_only_forced:cot  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty parameterized
+Request: Load the IEEE 14-bus system and run the power flow, then list every line whose loading is above 100%.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): 1. The request refers to the following buses: - Slack bus: 1 - Load buses: 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14 - Generator buses: 2, 3, 6, 8 2. The lines/branches involved are: - 1-2 (line_id 0) - 1-...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 2845 in / 1318 out tokens, $0.0012, 15.6 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> run_powerflow()
+  declared: load_case(case_name="case14") -> run_powerflow()   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 65, untraceable: 63 -> traceable answer: no
+  untraceable values: ['0.95', '1.05 p.u.', '1.06', '0.0', '1.045', '-2.0', '1.01', '-4.0', '1.0', '-6.0', '1.0', '-8.0', '1.07', '-10.0', '1.0', '-12.0', '1.09', '-14.0', '1.0', '-16.0']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: voltage_error
+  against the reference: voltage MAE 0.0287 p.u., flow MAE 37.3309 MW, KCL mismatch 12.7972 MW, power-balance error 163.5074
+  raw trace: case14-parameterized-037-s0_run0.json

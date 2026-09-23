@@ -1,0 +1,23 @@
+RUN 23  |  case14-parameterized-009-s0  |  llm_only:structured  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty parameterized
+Request: Load the 14-bus test case (case14) and run an N-1 contingency analysis ranked by max violations and report the 3 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): { "converged": false, "formulation": [ {"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_powerflow", "args": {}}, {"tool": "run_n1_contingency", "args": {"top_k": 3, "criteria": "m...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 2575 in / 138 out tokens, $0.0005, 2.3 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> run_n1_contingency(top_k=3, criteria="max_violations")
+  declared: load_case(case_name="case14") -> run_powerflow() -> run_n1_contingency(top_k=3, criteria="max violations", max_candidates=100)   [no tools: the model states the operations, nothing is executed]
+  verdict:  NOT EXACT (invalid_value): declared formulation: run_n1_contingency: criteria='max violations' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default)
+
+REPORTING
+  numbers in the answer: 3, untraceable: 3 -> traceable answer: no
+  untraceable values: ['0.0', '0.0', '0.0']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: convergence_mismatch
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error 0
+  raw trace: case14-parameterized-009-s0_run0.json

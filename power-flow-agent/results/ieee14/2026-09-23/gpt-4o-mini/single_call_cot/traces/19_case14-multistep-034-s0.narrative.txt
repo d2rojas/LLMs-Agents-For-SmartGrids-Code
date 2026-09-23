@@ -1,0 +1,25 @@
+RUN 19  |  case14-multistep-034-s0  |  single_call:cot  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty multistep
+Request: Load case14, disconnect the line between bus 2 and bus 5, set the active load at bus 9 to 19.9 MW, and finally rerun the power flow, then list every line whose loading is above 100%.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called disconnect_line(from_bus=2, to_bus=5); set_active_load(bus_id=9, p_mw=19.9)   (2627 in / 60 out tokens, 1.1 s)
+       tool disconnect_line -> case_name="case14", converged=true, total_load_mw=253.6704, total_generation_mw=267.4348, total_loss_mw=13.7644, bus_voltages[14], line_flows[20], voltage_violations[7], thermal_violations[0]  [gate pass]
+       tool set_active_load -> case_name="case14", converged=true, total_load_mw=243.6165, total_generation_mw=256.2109, total_loss_mw=12.5944, bus_voltages[14], line_flows[20], voltage_violations[8], thermal_violations[0]  [gate pass]
+  2. LLM wrote the final answer   (7476 in / 144 out tokens, 3.1 s)
+  Totals: 2 LLM calls, 2 tool calls, 1 tool rounds, 10103 in / 204 out tokens, $0.0016, 4.3 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> disconnect_line(from_bus=2, to_bus=5) -> modify_load(bus_id=9, p_mw=19.9) -> run_powerflow()
+  executed: disconnect_line(from_bus=2, to_bus=5) -> set_active_load(bus_id=9, p_mw=19.9)
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 3, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [0, 1] after disconnect_line at call 0)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: answer_mismatch
+  against the reference: voltage MAE 0 p.u., flow MAE 0 MW, KCL mismatch 0 MW, power-balance error 1.24e-08
+  raw trace: case14-multistep-034-s0_run0.json
