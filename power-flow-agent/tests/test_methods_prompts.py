@@ -23,7 +23,7 @@ PINNED_TEXTS = {
     "_shared/agent_system_prompt.txt": "7da5e2a37ec4",
     "_shared/agent_system_prompt_zh_ui.txt": "96e8ca25a690",
     "_shared/llm_only_system_prompt.txt": "e6649caa90af",
-    "_shared/llm_only_user_template.txt": "27694cb49698",
+    "_shared/llm_only_user_template.txt": "8e9d31ea8e05",
     "_shared/llm_only_bus_id_note.txt": "2fe74c2cfcd8",
     "_shared/cot_system_suffix.txt": "1847f5d898fb",
     "_shared/final_answer_instruction.txt": "98fdc16e073d",
@@ -35,8 +35,8 @@ PINNED_TEXTS = {
     "single_call_structured/output_section.txt": "2304fa83ea46",
     "single_call_cot/reasoning_section.txt": "e0bd7a11b9d9",
     "plan_act/plan_system_prompt_structured.txt": "5e9fee34a0db",
-    "_shared/llm_only_formulation_clause.txt": "2a6447dea3dc",
-    "_shared/llm_only_formulation_section.txt": "7d1f1fd10910",
+    "_shared/llm_only_formulation_clause.txt": "e5c85f81c019",
+    "_shared/llm_only_formulation_section.txt": "b4cbc9e6d6c3",
 }
 
 # ``system_prompt_hash`` values found on the rows of the N=40 case14 runs that fill Table 5
@@ -48,13 +48,13 @@ PINNED_SYSTEM_PROMPTS = {
     "plan_act_nogate": "7da5e2a37ec4",
     "pfagent": "7da5e2a37ec4",
     "single_call:structured": "23e5d9b407f9",
-    # 2026-09-23: the llm_only system prompt gained the formulation clause
+    # 2026-09-23: the llm_only system prompt gained the formulation clause (second wording, f2: field first, abstention kept visible)
     # (methods/_shared/llm_only_formulation_clause.txt), so the prompting rows can be
     # scored on Formulation. Runs stamped 1b4712c641b5 / 063482ad676f predate it.
-    "llm_only:structured": "b8c145abf676",
-    "llm_only:cot": "48c8c90e8107",
-    "llm_only_forced:structured": "f7c22bdb68b9",
-    "llm_only_forced:cot": "9aadd6a772ca",
+    "llm_only:structured": "92a45f4872b0",
+    "llm_only:cot": "5578bc093459",
+    "llm_only_forced:structured": "f5dac0c56d8b",
+    "llm_only_forced:cot": "650972f0de23",
 }
 
 PINNED_PLANNER_PROMPTS = {"v1": "6dfbc78e5795", "load_split": "a82318af7571"}
