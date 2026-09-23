@@ -94,6 +94,8 @@ def test_postprocess_writes_every_artifact_and_filters_by_method(run_dir: Path) 
     assert len([t for t in traces if t.endswith(".transcript.txt")]) == 3
     assert len([t for t in traces if t.endswith(".narrative.txt")]) == 3
     assert len([t for t in traces if t.endswith(".json")]) == 3
+    assert len([t for t in traces if t.endswith(".png")]) == 3
+    assert (run_dir / "overview.png").is_file()
     assert traces[0].startswith("01_case14-multistep-003-s0")  # sorted by request id, numbered
 
     with (run_dir / "summary.csv").open(encoding="utf-8") as fh:

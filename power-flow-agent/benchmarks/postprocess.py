@@ -538,7 +538,7 @@ def render_report(header: Dict[str, Any], rows: List[Dict[str, Any]], agg: Dict[
     out.append("")
     out.append("| field | value |")
     out.append("|---|---|")
-    for k in ("date", "model", "method", "case", "condition", "n", "seed", "k", "max_rounds", "tool_variant", "plan_variant", "temperature", "system_prompt_hash", "source", "source_commit", "role_in_paper", "notes"):
+    for k in ("date", "model", "method", "case", "condition", "n", "seed", "k", "max_rounds", "tool_variant", "plan_variant", "temperature", "system_prompt_hash", "source", "source_commit", "role_in_paper", "notes"):  # _run_dir stays out
         if header.get(k) not in (None, "", []):
             out.append(f"| {k} | {header[k]} |")
     try:
@@ -549,6 +549,11 @@ def render_report(header: Dict[str, Any], rows: List[Dict[str, Any]], agg: Dict[
         pass
     out.append("")
 
+    if (run_dir_for_report := header.get("_run_dir")) and (Path(run_dir_for_report) / "overview.png").is_file():
+        out.append("![overview of the runs](overview.png)")
+        out.append("")
+        out.append("One row per request, one cell per step (blue LLM call, teal tool call, purple planner, gold verification; green or red edge is the gate verdict), then formulation and where the request ended. Each run also has its own figure next to its traces: `traces/NN_<request>.png`.")
+        out.append("")
     out.append("## Where every request ended")
     out.append("")
     out.append("The three outcomes are exclusive and sum to the run count. Escalation takes precedence: a run the method handed to a person is not an autonomous answer, right or wrong.")
@@ -644,6 +649,8 @@ def render_report(header: Dict[str, Any], rows: List[Dict[str, Any]], agg: Dict[
     out.append("- `summary.csv`: one line per run, the fields above plus tokens and time.")
     out.append("- `traces/NN_<request>.narrative.txt`: what happened in each run, step by step, with the verdicts.")
     out.append("- `traces/NN_<request>.transcript.txt`: the raw exchange, every message, tool call and tool output.")
+    out.append("- `traces/NN_<request>.png`: the run as a picture: steps, gate verdicts, formulation, verification, outcome, with a two-line narrative.")
+    out.append("- `overview.png`: all runs of this folder on one page.")
     out.append("- `traces/NN_<request>.json`: the raw trace the runner wrote.")
     out.append("- `raw/`: the runner's own outputs (report.json, rescored report, logs).")
     out.append("- `requests.jsonl`: the request set, with the intended tool calls that define formulation exactness.")
@@ -675,7 +682,7 @@ def _header_from(report: Dict[str, Any], rows: List[Dict[str, Any]], config_json
     return h
 
 
-def postprocess(run_dir: Path, *, method: Optional[str] = None, model: Optional[str] = None, case: Optional[str] = None, condition: Optional[str] = None, quiet: bool = False) -> Dict[str, Any]:
+def postprocess(run_dir: Path, *, method: Optional[str] = None, model: Optional[str] = None, case: Optional[str] = None, condition: Optional[str] = None, quiet: bool = False, figures: bool = True) -> Dict[str, Any]:
     run_dir = Path(run_dir)
     raw = run_dir / "raw"
     report = load_report(raw)
@@ -690,6 +697,7 @@ def postprocess(run_dir: Path, *, method: Optional[str] = None, model: Optional[
     if not rows:
         raise SystemExit(f"no rows in {report['_source_file']} for method={method} model={model} case={case} condition={condition}")
     header = _header_from(report, rows, config_json, run_dir)
+    header["_run_dir"] = str(run_dir)
 
     traces_dir = run_dir / "traces"
     traces_dir.mkdir(parents=True, exist_ok=True)
@@ -698,8 +706,15 @@ def postprocess(run_dir: Path, *, method: Optional[str] = None, model: Optional[
     have_raw_traces = (raw / "traces").is_dir()
     trace_names: Dict[str, str] = {}
     summary_rows: List[Dict[str, Any]] = []
+    payloads: List[Dict[str, Any]] = []
+    if figures:
+        from benchmarks import trace_figures
+
+        for old in traces_dir.glob("*.png"):
+            old.unlink()
     for i, row in enumerate(rows, start=1):
         payload = load_full_trace(raw, row)
+        payloads.append(payload)
         stem = f"{i:02d}_{re.sub(r'[^A-Za-z0-9_.-]+', '_', str(row.get('request_id')))}"
         if int(row.get("run") or 0):
             stem += f"_run{row.get('run')}"
@@ -709,6 +724,8 @@ def postprocess(run_dir: Path, *, method: Optional[str] = None, model: Optional[
         if payload.get("_trace_file") and have_raw_traces and Path(payload["_trace_file"]).resolve() != (traces_dir / f"{stem}.json").resolve():
             shutil.copyfile(payload["_trace_file"], traces_dir / f"{stem}.json")
         summary_rows.append(summary_row(i, row))
+        if figures:
+            trace_figures.render_run_figure(i, row, payload, header, traces_dir / f"{stem}.png")
 
     with (run_dir / "summary.csv").open("w", encoding="utf-8", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=SUMMARY_COLUMNS)
@@ -727,6 +744,8 @@ def postprocess(run_dir: Path, *, method: Optional[str] = None, model: Optional[
         if (not method or sb.get("method") == method or sb.get("task") == method) and (not model or sb.get("model") == model) and (not condition or (sb.get("condition") or "normal") == condition):
             scoreboard = sb
             break
+    if figures:
+        trace_figures.render_overview(rows, payloads, header, run_dir / "overview.png")
     (run_dir / "REPORT.md").write_text(render_report(header, rows, agg, scoreboard, trace_names), encoding="utf-8")
     summary = {"header": header, "aggregate": agg, "postprocessed_at": _dt.datetime.now().isoformat(timespec="seconds")}
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
@@ -743,9 +762,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--case", default=None)
     ap.add_argument("--condition", default=None, choices=[None, "normal", "stress"])
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--no-figures", action="store_true", help="skip the PNGs")
     args = ap.parse_args(argv)
     for d in args.run_dirs:
-        postprocess(Path(d), method=args.method, model=args.model, case=args.case, condition=args.condition, quiet=args.quiet)
+        postprocess(Path(d), method=args.method, model=args.model, case=args.case, condition=args.condition, quiet=args.quiet, figures=not args.no_figures)
     return 0
 
 

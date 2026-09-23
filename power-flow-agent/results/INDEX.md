@@ -1,6 +1,6 @@
 # Results index
 
-Generated 2026-09-23 11:18 by `run.py index`. One line per run directory, newest first. Counts are runs; Form. and Trace. are percentages. Open the folder for `REPORT.md`, `summary.csv` and `traces/`.
+Generated 2026-09-23 11:52 by `run.py index`. One line per run directory, newest first. Counts are runs; Form. and Trace. are percentages. Open the folder for `REPORT.md`, `summary.csv` and `traces/`.
 
 ## ieee14
 

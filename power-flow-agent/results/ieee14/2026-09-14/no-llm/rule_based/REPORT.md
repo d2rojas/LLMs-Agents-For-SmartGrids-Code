@@ -1,6 +1,6 @@
 # rule_based on IEEE 14-bus with no-llm
 
-Generated 2026-09-23 11:18 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
+Generated 2026-09-23 11:44 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
 
 ## Run
 
@@ -22,6 +22,10 @@ Generated 2026-09-23 11:18 by benchmarks/postprocess.py from `report.rescored.js
 | notes | Copied from benchmarks/results_* by scripts/migrate_paper_results.py; the date is the write time of the source report.json. |
 | description | Deterministic regex parser maps the request to tool calls, no LLM (baselines/rule_based.py). The conventional-workflow row. |
 | prompt files | none (no LLM) |
+
+![overview of the runs](overview.png)
+
+One row per request, one cell per step (blue LLM call, teal tool call, purple planner, gold verification; green or red edge is the gate verdict), then formulation and where the request ended. Each run also has its own figure next to its traces: `traces/NN_<request>.png`.
 
 ## Where every request ended
 
@@ -133,6 +137,8 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 - `summary.csv`: one line per run, the fields above plus tokens and time.
 - `traces/NN_<request>.narrative.txt`: what happened in each run, step by step, with the verdicts.
 - `traces/NN_<request>.transcript.txt`: the raw exchange, every message, tool call and tool output.
+- `traces/NN_<request>.png`: the run as a picture: steps, gate verdicts, formulation, verification, outcome, with a two-line narrative.
+- `overview.png`: all runs of this folder on one page.
 - `traces/NN_<request>.json`: the raw trace the runner wrote.
 - `raw/`: the runner's own outputs (report.json, rescored report, logs).
 - `requests.jsonl`: the request set, with the intended tool calls that define formulation exactness.

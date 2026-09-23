@@ -19,7 +19,9 @@ results/
           traces/
             NN_<request-id>.narrative.txt   what happened, step by step, with the verdicts
             NN_<request-id>.transcript.txt  the raw exchange: system prompt, request, every LLM message, tool call, tool output, gate verdict, final answer
+            NN_<request-id>.png             the run as a picture: colored steps, gate verdicts, formulation, verification, outcome, narrative
             NN_<request-id>.json            the raw trace the runner wrote
+          overview.png                      all runs of the folder: one row per request, one cell per step, outcome at the right
           raw/                              the runner's own outputs: report.json, report.rescored.json, traces/<method>/<case>/*.json, run logs
 ```
 
@@ -28,9 +30,9 @@ in every method's folder for a given case and request set.
 
 ## Reading a run
 
-Start at `INDEX.md`, open the folder's `REPORT.md`, then the narrative of any run listed
-under "Wrong and unflagged" or "Escalated". The transcript is the evidence for what the
-narrative says.
+Start at `INDEX.md`, open the folder's `REPORT.md` (it embeds `overview.png`), then the figure or
+narrative of any run listed under "Wrong and unflagged" or "Escalated". The transcript is the
+evidence for what the figure and the narrative say.
 
 The three outcomes in every report are exclusive and sum to the run count:
 
