@@ -82,7 +82,7 @@ retried once with the failed conditions spelled out; an answer that still fails 
 
 `benchmarks/build_paper_tables.py` renders `benchmarks/tab_pf_*.tex` from the runs it names in
 `SOURCES`, `STRESS_SOURCES` and `SPLIT_TOOL_SOURCES`. The same runs are mirrored, readable, under
-`results/` (see `results/README.md`, "Provenance").
+`results/` (see `results/README.md`, "Provenance"), where every raw report and trace is tracked in git.
 
 ## Tests
 
