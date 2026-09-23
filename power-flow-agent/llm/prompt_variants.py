@@ -92,7 +92,7 @@ FORMULATION_PROBE_OUTPUT_SECTION = _read_method_text("_shared/formulation_probe_
 
 def formulation_probe_section(tool_variant: str = "load_split") -> str:
     """The probe's '## Formulation' section: fixed instruction plus the tool catalogue of ``tool_variant``."""
-    return FORMULATION_PROBE_SECTION + tools_catalog_text(tool_variant)
+    return FORMULATION_PROBE_SECTION + tools_catalog_text(tool_variant, with_enums=True)
 
 LLM_ONLY_COT_SECTION = _read_method_text("llm_only_cot/reasoning_section.txt")
 

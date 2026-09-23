@@ -121,6 +121,7 @@ def test_answer_prompts_unchanged_and_probe_asks_only_for_formulation() -> None:
         user = probe[1]["content"]
         assert user.count("## Formulation") == 1 and "## Output Requirements" in user and "bus_voltages" not in user
         assert "- set_active_load(bus_id: integer*, p_mw: number*)" in user  # load_split catalogue by default
+        assert "criteria: string in {" in user  # the probe sees the enum values, like the tool schema does
         assert "do not compute anything" in probe[0]["content"]
     v1 = build_messages("structured", "llm_only", req, net, "case14", probe=True, tool_variant="v1")[1]["content"]
     assert "- modify_load(" in v1 and "set_active_load" not in v1

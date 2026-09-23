@@ -1,4 +1,4 @@
-﻿"""LLM callable tools and dispatcher bindings."""
+"""LLM callable tools and dispatcher bindings."""
 
 from __future__ import annotations
 
@@ -189,16 +189,23 @@ TOOLS_LOAD_SPLIT: list[dict[str, Any]] = [t for t in TOOLS if t["name"] != "modi
 ]
 
 
-def tools_catalog_text(variant: str = "v1") -> str:
+def tools_catalog_text(variant: str = "v1", *, with_enums: bool = False) -> str:
     """One line per tool: name(arg: type*, ...): description. Used by the Plan-and-Act planner
-    prompt and by the LLM-only formulation section (the vocabulary a no-tools answer uses to
-    declare which solver operations the request needs)."""
+    prompt (``with_enums=False``, byte-identical to every committed planner run) and by the
+    formulation probe (``with_enums=True``: an enum argument lists its allowed values, the same
+    information the tool-calling rows receive through the function schema)."""
     tools = TOOLS if variant == "v1" else TOOLS_LOAD_SPLIT
     lines = []
     for t in tools:
         props = t.get("parameters", {}).get("properties", {}) or {}
         req = t.get("parameters", {}).get("required", []) or []
-        params = ", ".join(f"{k}: {v.get('type', 'any')}{'*' if k in req else ''}" for k, v in props.items()) or "(none)"
+        parts = []
+        for k, v in props.items():
+            typ = v.get("type", "any")
+            if with_enums and v.get("enum"):
+                typ = f"{typ} in {{{', '.join(str(e) for e in v['enum'])}}}"
+            parts.append(f"{k}: {typ}{'*' if k in req else ''}")
+        params = ", ".join(parts) or "(none)"
         lines.append(f"- {t['name']}({params}): {t.get('description', '')}")
     return "\n".join(lines)
 
