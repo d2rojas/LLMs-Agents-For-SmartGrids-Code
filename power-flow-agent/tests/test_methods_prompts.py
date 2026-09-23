@@ -23,7 +23,7 @@ PINNED_TEXTS = {
     "_shared/agent_system_prompt.txt": "7da5e2a37ec4",
     "_shared/agent_system_prompt_zh_ui.txt": "96e8ca25a690",
     "_shared/llm_only_system_prompt.txt": "e6649caa90af",
-    "_shared/llm_only_user_template.txt": "8e9d31ea8e05",
+    "_shared/llm_only_user_template.txt": "27694cb49698",
     "_shared/llm_only_bus_id_note.txt": "2fe74c2cfcd8",
     "_shared/cot_system_suffix.txt": "1847f5d898fb",
     "_shared/final_answer_instruction.txt": "98fdc16e073d",
@@ -35,8 +35,9 @@ PINNED_TEXTS = {
     "single_call_structured/output_section.txt": "2304fa83ea46",
     "single_call_cot/reasoning_section.txt": "e0bd7a11b9d9",
     "plan_act/plan_system_prompt_structured.txt": "5e9fee34a0db",
-    "_shared/llm_only_formulation_clause.txt": "e5c85f81c019",
-    "_shared/llm_only_formulation_section.txt": "b4cbc9e6d6c3",
+    "_shared/formulation_probe_system_prompt.txt": "dc7bdf5c5b61",
+    "_shared/formulation_probe_section.txt": "537f737bee76",
+    "_shared/formulation_probe_output_section.txt": "7781da365dcd",
 }
 
 # ``system_prompt_hash`` values found on the rows of the N=40 case14 runs that fill Table 5
@@ -48,13 +49,13 @@ PINNED_SYSTEM_PROMPTS = {
     "plan_act_nogate": "7da5e2a37ec4",
     "pfagent": "7da5e2a37ec4",
     "single_call:structured": "23e5d9b407f9",
-    # 2026-09-23: the llm_only system prompt gained the formulation clause (second wording, f2: field first, abstention kept visible)
-    # (methods/_shared/llm_only_formulation_clause.txt), so the prompting rows can be
-    # scored on Formulation. Runs stamped 1b4712c641b5 / 063482ad676f predate it.
-    "llm_only:structured": "92a45f4872b0",
-    "llm_only:cot": "5578bc093459",
-    "llm_only_forced:structured": "f5dac0c56d8b",
-    "llm_only_forced:cot": "650972f0de23",
+    "llm_only:structured": "1b4712c641b5",
+    "llm_only:cot": "063482ad676f",
+    "llm_only_forced:structured": "3fdf007e43a0",
+    "llm_only_forced:cot": "563a38e7a450",
+    # 2026-09-23: Formulation for the prompting rows comes from this companion probe (no numbers asked)
+    "formulation_probe:structured": "dc7bdf5c5b61",
+    "formulation_probe:cot": "ecf6dde0930c",
 }
 
 PINNED_PLANNER_PROMPTS = {"v1": "6dfbc78e5795", "load_split": "a82318af7571"}
@@ -107,19 +108,21 @@ def test_every_method_folder_is_registered_and_runnable() -> None:
 # --------------------------------------------------------------------------- declared formulation (2026-09-23)
 
 
-def test_llm_only_prompt_carries_the_formulation_section() -> None:
+def test_answer_prompts_unchanged_and_probe_asks_only_for_formulation() -> None:
     from benchmarks.evaluate_llms import perturbed_case
     from llm.prompt_variants import build_messages
 
     net = perturbed_case("case14", seed=0, k=1)
+    req = "Load case14 and disconnect the line between bus 10 and bus 11."
     for strategy in ("structured", "cot"):
-        msgs = build_messages(strategy, "llm_only", "Load case14 and disconnect the line between bus 10 and bus 11.", net, "case14")
-        user = msgs[1]["content"]
-        assert user.count("## Formulation") == 1
-        assert user.index("## Formulation") < user.index("## Output Requirements")
+        answer = build_messages(strategy, "llm_only", req, net, "case14")
+        assert "formulation" not in answer[0]["content"].lower() and "## Formulation" not in answer[1]["content"]
+        probe = build_messages(strategy, "llm_only", req, net, "case14", probe=True)
+        user = probe[1]["content"]
+        assert user.count("## Formulation") == 1 and "## Output Requirements" in user and "bus_voltages" not in user
         assert "- set_active_load(bus_id: integer*, p_mw: number*)" in user  # load_split catalogue by default
-        assert "`formulation` field" in msgs[0]["content"]
-    v1 = build_messages("structured", "llm_only", "x", net, "case14", tool_variant="v1")[1]["content"]
+        assert "do not compute anything" in probe[0]["content"]
+    v1 = build_messages("structured", "llm_only", req, net, "case14", probe=True, tool_variant="v1")[1]["content"]
     assert "- modify_load(" in v1 and "set_active_load" not in v1
 
 

@@ -248,7 +248,7 @@ def _formulation_aware_hashes() -> set[str]:
 
     out: set[str] = set()
     for m in methods.list_methods():
-        if m.kind == "llm_only":
+        if m.kind == "llm_only" and m.probe:
             sp = methods.system_prompt_for(m)
             if sp:
                 out.add(methods.prompt_hash(sp))

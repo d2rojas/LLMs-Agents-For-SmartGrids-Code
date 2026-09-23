@@ -56,6 +56,7 @@ class Method:
     architecture: Optional[str] = None
     memory: bool = False
     forced: bool = False
+    probe: bool = False
     preload_case: bool = False
     prompt_files: List[str] = field(default_factory=list)
     dynamic_parts: List[str] = field(default_factory=list)
@@ -76,7 +77,7 @@ def list_methods() -> List[Method]:
     found = {p.parent.name: _load_method(p.parent) for p in METHODS_DIR.glob("*/method.json")}
     order = [
         "llm_only_structured", "llm_only_few_shot", "llm_only_cot", "llm_only_rag", "llm_only_nr",
-        "llm_only_forced_structured", "llm_only_forced_cot",
+        "llm_only_forced_structured", "llm_only_forced_cot", "formulation_probe_structured", "formulation_probe_cot",
         "single_call_structured", "single_call_few_shot", "single_call_cot", "single_call_rag",
         "rule_based", "react", "react_nogate", "plan_act", "plan_act_nogate", "pfagent", "pfagent_obsgate",
     ]
@@ -113,6 +114,8 @@ def system_prompt_for(method: str | Method, *, tool_variant: str = "v1") -> Opti
     m = method if isinstance(method, Method) else get_method(method)
     if m.kind == "rule_based":
         return None
+    if m.kind == "llm_only" and m.probe:
+        return read_text("_shared/formulation_probe_system_prompt.txt") + (read_text("_shared/cot_system_suffix.txt") if m.strategy == "cot" else "")
     if m.kind == "llm_only":
         # Same assembly as llm.prompt_variants._build_llm_only.
         base = read_text("_shared/llm_only_system_prompt.txt").strip()
@@ -120,7 +123,6 @@ def system_prompt_for(method: str | Method, *, tool_variant: str = "v1") -> Opti
             clause = read_text("llm_only_forced_structured/escape_clause_removed.txt")
             repl = read_text("llm_only_forced_structured/forced_replacement.txt")
             base = base.replace(clause, repl) if clause in base else base.rstrip() + "\n" + repl
-        base += read_text("_shared/llm_only_formulation_clause.txt")
         if m.strategy in ("cot", "nr"):
             base += read_text("_shared/cot_system_suffix.txt")
         return base

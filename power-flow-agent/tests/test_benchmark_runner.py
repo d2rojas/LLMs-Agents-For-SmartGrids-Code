@@ -506,9 +506,7 @@ def test_llm_only_strategy_methods_use_prompt_variants():
     rows = {r["method"]: r for r in report["runs"]}
     assert set(rows) == {"llm_only:structured", "llm_only:rag"}
     assert all(r["ok"] for r in rows.values())
-    # 2026-09-23: no-tools rows are scored on the `formulation` field they declare; this fake
-    # answer declares none, so the comparator reports "unparsed" (False), not "no tool stage".
-    assert all(r["formulation_exact"] is False and r["formulation_error_type"] == "unparsed" for r in rows.values())
+    assert all(r["formulation_exact"] is None for r in rows.values())  # no tool stage, no declared formulation
     assert all(r["declared_formulation"] is None for r in rows.values())
     assert all(r["n_tool_calls"] == 0 and r["n_llm_calls"] == 1 for r in rows.values())
     assert DEFAULT_REQUEST_TEXT.format(case_name="case14") in client.prompts[0]

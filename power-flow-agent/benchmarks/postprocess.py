@@ -250,6 +250,42 @@ def _gate_text(tool: Dict[str, Any]) -> str:
 
 # --------------------------------------------------------------------------- transcript
 
+_NET_CACHE: Dict[tuple, Any] = {}
+
+
+def rebuild_user_message(row: Dict[str, Any], header: Dict[str, Any]) -> Optional[str]:
+    """The exact user message a no-tools or single-call row received, rebuilt offline.
+
+    The runner stores only the request text; the case tables, examples, catalogue and output
+    schema are rebuilt here from (case, perturbation seed, k, strategy) with the same code the
+    runner used, so the transcript is complete. Returns None when the method has no such
+    message (multi-step agents receive the bare request) or when the rebuilt system prompt
+    does not hash to the one stamped on the row (prompt changed since the run)."""
+    method_name = str(row.get("method") or row.get("task") or "")
+    try:
+        m = methods.get_method(method_name)
+    except KeyError:
+        return None
+    if m.kind != "llm_only" and m.architecture != "single_call":
+        return None
+    try:
+        from benchmarks.evaluate_llms import perturbed_case
+        from llm.prompt_variants import build_messages
+
+        key = (str(row.get("case_name")), int(row.get("seed") or 0), int(row.get("k") or 0))
+        if key not in _NET_CACHE:
+            _NET_CACHE[key] = perturbed_case(key[0], seed=key[1], k=key[2])
+        mode = "llm_only" if m.kind == "llm_only" else "single_call"
+        msgs = build_messages(m.strategy or "structured", mode, str(row.get("request_text") or ""), _NET_CACHE[key], key[0],
+                              forced=bool(m.forced), probe=bool(m.probe), tool_variant=str(header.get("tool_variant") or "load_split"))
+    except Exception:
+        return None
+    stamped = row.get("system_prompt_hash")
+    if stamped and methods.prompt_hash(msgs[0]["content"]) != stamped:
+        return None
+    return msgs[1]["content"]
+
+
 
 def render_transcript(row: Dict[str, Any], payload: Dict[str, Any], header: Dict[str, Any]) -> str:
     tr = payload.get("trace") or {}
@@ -276,10 +312,22 @@ def render_transcript(row: Dict[str, Any], payload: Dict[str, Any], header: Dict
     elif method_name == "rule_based":
         out += ["[system]   no LLM; deterministic parser (baselines/rule_based.py)", ""]
 
-    out += ["[user]", str(payload.get("request_text") or row.get("request_text") or "").rstrip()]
-    if (tr.get("architecture") or "") == "llm_only" or not tr.get("rounds") and method_name.startswith("llm_only"):
-        out.append("(the user message also carries the case tables and the output schema; rebuild it with: run.py show-prompt --method " + method_name + ")")
-    out.append("")
+    stored = [m for m in (tr.get("messages") or []) if isinstance(m, dict)]
+    stored_user = next((m.get("content") for m in stored if m.get("role") == "user"), None)
+    full_user = stored_user if stored_user is not None else rebuild_user_message(row, header)
+    if stored_user is not None:
+        out += ["[user]   (complete message, stored at run time)", str(full_user).rstrip(), ""]
+    elif full_user is not None:
+        out += ["[user]   (complete message, rebuilt offline from the same case, seed and prompt code; the request is under '## Task')", full_user.rstrip(), ""]
+    else:
+        out += ["[user]", str(payload.get("request_text") or row.get("request_text") or "").rstrip()]
+        try:
+            _m = methods.get_method(method_name)
+            if _m.kind == "llm_only" or _m.architecture == "single_call":
+                out.append("(the user message also carried the case tables and the output schema; they could not be rebuilt because the prompt text changed since this run: run.py show-prompt --method " + method_name + ")")
+        except KeyError:
+            pass
+        out.append("")
 
     plan = tr.get("plan")
     if plan:
@@ -553,6 +601,12 @@ def render_report(header: Dict[str, Any], rows: List[Dict[str, Any]], agg: Dict[
         pass
     out.append("")
 
+    try:
+        if methods.get_method(method_name).probe:
+            out.append("> **Formulation probe.** This companion run asks the model only for the declared formulation of each request, never for numbers. Only the Formulation metrics below are meaningful; the outcome, error, and reporting rows are not, since no answer was requested.")
+            out.append("")
+    except KeyError:
+        pass
     if (run_dir_for_report := header.get("_run_dir")) and (Path(run_dir_for_report) / "overview.png").is_file():
         out.append("![overview of the runs](overview.png)")
         out.append("")

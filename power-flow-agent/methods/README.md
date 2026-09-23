@@ -21,6 +21,8 @@ committed ones. Do not strip or reflow whitespace in these files.
 | `llm_only_nr` | `llm_only:nr` | Newton-Raphson worked by hand in the reasoning. Exploratory, not in the paper. | no | no |
 | `llm_only_forced_structured` | `llm_only_forced:structured` | Structured without the abstention clause. The "LLM only, forced" row. | no | no |
 | `llm_only_forced_cot` | `llm_only_forced:cot` | Chain-of-thought without the abstention clause. | no | no |
+| `formulation_probe_structured` | `formulation_probe:structured` | Companion probe: declares the formulation only, no numbers. | no | no |
+| `formulation_probe_cot` | `formulation_probe:cot` | Same, reasoning step by step first. | no | no |
 | `single_call_structured` | `single_call:structured` | One function-calling round: every tool call at once, no memory, no second turn. | yes | observation gate |
 | `single_call_few_shot` | `single_call:few_shot` | Single call plus two worked tool-call examples. | yes | observation gate |
 | `single_call_cot` | `single_call:cot` | Single call plus a short numbered plan before the calls. | yes | observation gate |
@@ -33,10 +35,12 @@ committed ones. Do not strip or reflow whitespace in these files.
 | `pfagent` | `pfagent` | ReAct loop, no in-loop gate, plus the task-level verification gate V1 to V7 on the final answer. The solver-grounded row. | yes | final gate |
 | `pfagent_obsgate` | `pfagent_obsgate` | Pre-verification PFAgent kept for the old stress numbers. | yes | observation gate |
 
-Since 2026-09-23 every `llm_only` prompt also asks for a `formulation` field: the ordered solver
-operations the request needs, in the tool vocabulary of `--tool-variant`, declared but not executed.
-It is scored with the same comparator as the tool rows, so Formulation exists for the prompting rows.
-Texts: `_shared/llm_only_formulation_clause.txt` (system) and `_shared/llm_only_formulation_section.txt` (user).
+Formulation for the prompting rows comes from a companion probe, `formulation_probe_structured` and
+`formulation_probe_cot`: same case tables and request as the `llm_only` rows, but the only output is the
+declared formulation (the ordered solver operations, in the tool vocabulary of `--tool-variant`), scored
+with the same comparator as the tool rows. The answer prompts stay byte-identical to the paper runs:
+asking for the formulation inside the answer made gpt-4o-mini's chain-of-thought stop abstaining
+(2026-09-23, runs kept under `results/ieee14/2026-09-23/gpt-4o-mini/llm_only_*` and `*__f2`).
 
 ## Reading a method
 
