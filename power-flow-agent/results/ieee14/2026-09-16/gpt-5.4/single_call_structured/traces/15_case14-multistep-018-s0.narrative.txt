@@ -1,0 +1,24 @@
+RUN 15  |  case14-multistep-018-s0  |  single_call:structured  |  gpt-5.4  |  IEEE 14-bus  |  seed 0  |  difficulty multistep
+Request: Load the IEEE 14-bus system, disconnect the line between bus 4 and bus 5, then rerun the power flow, then list every line whose loading is above 90%.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case14")   (2371 in / 20 out tokens, 0.8 s)
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=257.6848
+  2. LLM wrote the final answer   (2096 in / 197 out tokens, 3.8 s)
+  Totals: 2 LLM calls, 1 tool calls, 1 tool rounds, 4467 in / 217 out tokens, $0.0144, 4.8 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> disconnect_line(from_bus=4, to_bus=5) -> run_powerflow()
+  executed: load_case(case_name="case14")
+  verdict:  NOT EXACT (missed_step): missing tools: ['disconnect_line']
+
+REPORTING
+  numbers in the answer: 4, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: formulation
+  against the reference: voltage MAE 0.0026 p.u., flow MAE 14.0249 MW, KCL mismatch 0.1863 MW, power-balance error 6.17e-09
+  raw trace: case14-multistep-018-s0_run0.json

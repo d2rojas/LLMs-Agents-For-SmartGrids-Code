@@ -1,0 +1,24 @@
+RUN 16  |  case14-multistep-022-s0  |  llm_only:cot  |  gpt-5.6-sol  |  IEEE 14-bus  |  seed 0  |  difficulty multistep
+Request: Load case14, disconnect the line between bus 9 and bus 10, set the active load at bus 3 to 118.6 MW, set the active load at bus 4 to 53.6 MW, and finally run an N-1 contingency analysis ranked by max violations and report the 8 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): 1. Display buses are 1–14. Bus 1 is slack; generators are at buses 2, 3, 6, and 8; loads are at buses 2–6 and 9–14 except buses 7 and 8. 2. Line row 10, connecting buses 9 and 10, is disconnected. Lin...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 2232 in / 2392 out tokens, $0.0284, 47.6 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> disconnect_line(from_bus=9, to_bus=10) -> modify_load(bus_id=3, p_mw=118.6) -> modify_load(bus_id=4, p_mw=53.6) -> run_n1_contingency(top_k=8, criteria="max_violations")
+  executed: (none)
+  verdict:  n/a (no tool calls in this method)
+
+REPORTING
+  numbers in the answer: 4, untraceable: 4 -> traceable answer: no
+  untraceable values: ['286.749703 MW', '0.0', '286.749703', '0.0']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: ESCALATED TO A PERSON
+  computation correct (solved): no   reason: convergence_mismatch
+  escalation detected via: json
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error 286.7497
+  raw trace: case14-multistep-022-s0_run0.json

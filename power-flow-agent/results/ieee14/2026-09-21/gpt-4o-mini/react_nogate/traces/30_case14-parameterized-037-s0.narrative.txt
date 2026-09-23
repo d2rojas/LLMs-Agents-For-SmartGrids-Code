@@ -1,0 +1,27 @@
+RUN 30  |  case14-parameterized-037-s0  |  react_nogate  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty parameterized
+Request: Load the IEEE 14-bus system and run the power flow, then list every line whose loading is above 100%.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case14")   (933 in / 16 out tokens, 0.6 s)
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=262.9676
+  2. LLM called run_powerflow()   (1027 in / 11 out tokens, 0.8 s)
+       tool run_powerflow -> case_name="case14", converged=true, total_load_mw=262.9676, total_generation_mw=277.033, total_loss_mw=14.0654, bus_voltages[14], line_flows[20], voltage_violations[8], thermal_violations[0]  [gate pass]
+  3. LLM replied without tool calls: The power flow analysis for the IEEE 14-bus system has been completed successfully. - **Key numbers**: Total load: 262.97 MW, Total generation: 277.03 MW, Total   (3696 in / 184 out tokens, 2.5 s)
+  Totals: 3 LLM calls, 2 tool calls, 2 tool rounds, 5656 in / 211 out tokens, 4.2 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> run_powerflow()
+  executed: load_case(case_name="case14") -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 8, untraceable: 1 -> traceable answer: no
+  untraceable values: ['156.60%']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: answer_mismatch
+  against the reference: voltage MAE 0 p.u., flow MAE 0 MW, KCL mismatch 0 MW, power-balance error 5.88e-09
+  raw trace: case14-parameterized-037-s0_run0.json

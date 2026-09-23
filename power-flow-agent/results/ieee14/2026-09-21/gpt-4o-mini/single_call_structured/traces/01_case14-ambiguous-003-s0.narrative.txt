@@ -1,0 +1,24 @@
+RUN 01  |  case14-ambiguous-003-s0  |  single_call:structured  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty ambiguous
+Request: Load case14 and disconnect the line between bus ten and bus eleven.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called disconnect_line(from_bus=10, to_bus=11)   (2513 in / 20 out tokens, 0.8 s)
+       tool disconnect_line -> case_name="case14", converged=true, total_load_mw=253.8458, total_generation_mw=266.5103, total_loss_mw=12.6645, bus_voltages[14], line_flows[20], voltage_violations[6], thermal_violations[0]  [gate pass]
+  2. LLM wrote the final answer   (4572 in / 131 out tokens, 3.1 s)
+  Totals: 2 LLM calls, 1 tool calls, 1 tool rounds, 7085 in / 151 out tokens, 3.9 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> disconnect_line(from_bus=10, to_bus=11)
+  executed: disconnect_line(from_bus=10, to_bus=11)
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 5, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [0] after disconnect_line at call 0)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: numeric_and_answer_ok
+  against the reference: voltage MAE 0 p.u., flow MAE 0 MW, KCL mismatch 0 MW, power-balance error 7.85e-09
+  raw trace: case14-ambiguous-003-s0_run0.json

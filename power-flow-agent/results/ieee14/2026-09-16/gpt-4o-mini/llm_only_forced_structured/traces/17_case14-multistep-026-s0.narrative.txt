@@ -1,0 +1,23 @@
+RUN 17  |  case14-multistep-026-s0  |  llm_only_forced:structured  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty multistep
+Request: Load the 14-bus test case (case14), disconnect the line between bus 2 and bus 4, then rerun the power flow, then report the bus with the lowest voltage magnitude.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): { "converged": true, "bus_voltages": [ {"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0}, {"bus_id": 2, "vm_pu": 1.02, "va_deg": -5.0}, {"bus_id": 3, "vm_pu": 1.01, "va_deg": -10.0}, {"bus_id": 4, "vm_pu": ...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 2057 in / 864 out tokens, $0.0008, 16.7 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> disconnect_line(from_bus=2, to_bus=4) -> run_powerflow()
+  executed: (none)
+  verdict:  n/a (no tool calls in this method)
+
+REPORTING
+  numbers in the answer: 61, untraceable: 59 -> traceable answer: no
+  untraceable values: ['1.06', '0.0', '1.02', '-5.0', '1.01', '-10.0', '0.98', '-15.0', '1.00', '-8.0', '1.07', '-2.0', '1.03', '-3.0', '1.09', '1.0', '1.01', '-6.0', '1.00', '-4.0']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: voltage_error
+  against the reference: voltage MAE 0.0268 p.u., flow MAE 32.3745 MW, KCL mismatch 8.9692 MW, power-balance error 164.9479
+  raw trace: case14-multistep-026-s0_run0.json

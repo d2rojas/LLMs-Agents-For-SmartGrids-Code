@@ -1,0 +1,28 @@
+RUN 06  |  case14-ambiguous-023-s0  |  plan_act_nogate  |  gpt-5.4  |  IEEE 14-bus  |  seed 0  |  difficulty ambiguous
+Request: Load the IEEE 14-bus system and set the active load at bus 5 (1-based) to 5.9 MW.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 2-step plan: load_case(case_name="ieee14") -> modify_load(bus_id=5, p_mw=5.9, q_mvar=0)
+  2. LLM replied without tool calls: {"plan":[{"tool":"load_case","args":{"case_name":"ieee14"}},{"tool":"modify_load","args":{"bus_id":5,"p_mw":5.9,"q_mvar":0}}]}   (363 in / 50 out tokens, 2.5 s)
+  3. parser called load_case(case_name="ieee14")
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=271.5788
+  4. parser called modify_load(bus_id=5, p_mw=5.9, q_mvar=0)
+       tool modify_load -> case_name="case14", converged=true, total_load_mw=270.2232, total_generation_mw=285.0902, total_loss_mw=14.8669, bus_voltages[14], line_flows[20], voltage_violations[9], thermal_violations[0]  [gate pass]
+  5. LLM wrote the final answer   (3363 in / 374 out tokens, 3.2 s)
+  Totals: 2 LLM calls, 2 tool calls, 1 tool rounds, 3726 in / 424 out tokens, $0.0157, 6 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> modify_load(bus_id=5, p_mw=5.9)
+  executed: load_case(case_name="ieee14") -> modify_load(bus_id=5, p_mw=5.9, q_mvar=0)
+  verdict:  NOT EXACT (extra_arg_changes_result): modify_load: extra argument q_mvar=0.0 changes the solver outcome (request did not ask for it)
+
+REPORTING
+  numbers in the answer: 15, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1] after modify_load at call 1)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: formulation
+  against the reference: voltage MAE 1.23e-04 p.u., flow MAE 0.0156 MW, KCL mismatch n/a MW, power-balance error 5.58e-09
+  raw trace: case14-ambiguous-023-s0_run0.json

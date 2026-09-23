@@ -1,0 +1,28 @@
+RUN 28  |  case14-parameterized-029-s0  |  plan_act_nogate  |  gpt-5.6-sol  |  IEEE 14-bus  |  seed 0  |  difficulty parameterized
+Request: Load the 14-bus test case (case14) and run the power flow, then list every line whose loading is above 80%.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 2-step plan: load_case(case_name="case14") -> run_powerflow()
+  2. LLM replied without tool calls: {"plan":[{"tool":"load_case","args":{"case_name":"case14"}},{"tool":"run_powerflow","args":{}}]}   (490 in / 118 out tokens, 2.5 s)
+  3. parser called load_case(case_name="case14")
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=259.035
+  4. parser called run_powerflow()
+       tool run_powerflow -> case_name="case14", converged=true, total_load_mw=259.035, total_generation_mw=272.3982, total_loss_mw=13.3632, bus_voltages[14], line_flows[20], voltage_violations[7], thermal_violations[0]  [gate pass]
+  5. LLM wrote the final answer   (3218 in / 312 out tokens, 4.2 s)
+  Totals: 2 LLM calls, 2 tool calls, 1 tool rounds, 3708 in / 430 out tokens, 7 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> run_powerflow()
+  executed: load_case(case_name="case14") -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 7, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: numeric_and_answer_ok
+  against the reference: voltage MAE 0 p.u., flow MAE 0 MW, KCL mismatch 0 MW, power-balance error 6.41e-09
+  raw trace: case14-parameterized-029-s0_run0.json

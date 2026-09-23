@@ -1,0 +1,25 @@
+RUN 40  |  case14-plain-036-s0  |  single_call:structured  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty plain
+Request: Load case14 and set the active load at bus 2 to 21.7 MW.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called set_active_load(bus_id=2, p_mw=21.7); run_powerflow()   (2518 in / 53 out tokens, 1.0 s)
+       tool set_active_load -> case_name="case14", converged=true, total_load_mw=259.1007, total_generation_mw=272.4478, total_loss_mw=13.3471, bus_voltages[14], line_flows[20], voltage_violations[7], thermal_violations[0]  [gate pass]
+       tool run_powerflow -> case_name="case14", converged=true, total_load_mw=259.1007, total_generation_mw=272.4478, total_loss_mw=13.3471, bus_voltages[14], line_flows[20], voltage_violations[7], thermal_violations[0]  [gate pass]
+  2. LLM wrote the final answer   (7295 in / 136 out tokens, 3.3 s)
+  Totals: 2 LLM calls, 2 tool calls, 1 tool rounds, 9813 in / 189 out tokens, 4.4 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> modify_load(bus_id=2, p_mw=21.7)
+  executed: set_active_load(bus_id=2, p_mw=21.7) -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 6, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: numeric_and_answer_ok
+  against the reference: voltage MAE 0 p.u., flow MAE 0 MW, KCL mismatch 0 MW, power-balance error 6.77e-09
+  raw trace: case14-plain-036-s0_run0.json

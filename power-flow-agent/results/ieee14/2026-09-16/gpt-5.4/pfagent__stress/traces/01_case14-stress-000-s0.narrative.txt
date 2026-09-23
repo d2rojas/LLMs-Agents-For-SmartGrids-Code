@@ -1,0 +1,38 @@
+RUN 01  |  case14-stress-000-s0  |  pfagent  |  gpt-5.4  |  IEEE 14-bus  |  seed 0  |  difficulty stress
+Request: Load the IEEE 14-bus system and disconnect the transformer branch between bus 7 and bus 8.
+Expected outcome: islanded   (reference solvable: no, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case14")   (763 in / 20 out tokens, 1.0 s)
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=252.6562
+  2. LLM called disconnect_line(from_bus=7, to_bus=8)   (864 in / 24 out tokens, 1.1 s)
+       tool disconnect_line -> case_name="case14", converged=true, total_load_mw=252.6562, total_generation_mw=265.4629, total_loss_mw=12.8066, bus_voltages[14], line_flows[20], voltage_violations[4], thermal_violations[0]  [gate FAIL]
+  3. LLM replied without tool calls: 1. One-sentence summary The IEEE 14-bus system was loaded, and the branch between bus 7 and bus 8 was disconnected; the power flow converged, but bus 8 became e   (3305 in / 284 out tokens, 3.1 s)
+  4. LLM replied without tool calls: 1. One-sentence summary The IEEE 14-bus system was loaded and the 7–8 transformer branch was disconnected; although the solver returned a converged state, the r   (3652 in / 297 out tokens, 4.1 s)
+  Totals: 4 LLM calls, 2 tool calls, 2 tool rounds, 8584 in / 625 out tokens, $0.0308, 9.6 s
+  Status: verification_failed
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> disconnect_line(from_bus=7, to_bus=8)
+  executed: load_case(case_name="case14") -> disconnect_line(from_bus=7, to_bus=8)
+  verdict:  EXACT
+
+VERIFICATION GATE  (task-level, on the final answer)
+      converged              pass  residual 0
+      balance                pass  residual 9.78e-09
+      no_isolated_buses      FAIL  residual 1
+      faithfulness           pass  residual 0
+      currency               pass  residual 0
+  outcome: abstained after 2 attempt(s)
+
+REPORTING
+  numbers in the answer: 0, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1] after disconnect_line at call 1)
+  V-pass (all five conditions, checked offline for every method): no
+  safe failure declared on a real failure: yes
+
+OUTCOME: ESCALATED TO A PERSON
+  computation correct (solved): yes   reason: declared_failure
+  escalation detected via: text
+  against the reference: voltage MAE nan p.u., flow MAE 0 MW, KCL mismatch 0 MW, power-balance error 9.78e-09
+  raw trace: case14-stress-000-s0_run0.json

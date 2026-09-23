@@ -1,0 +1,41 @@
+RUN 11  |  case14-stress-010-s0  |  pfagent  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty stress
+Request: Load the IEEE 14-bus system, set the active load at bus 11 to 1.8 MW, disconnect the transformer branch between bus 7 and bus 8, and finally rerun the power flow, then list every line whose loading is above 90%.
+Expected outcome: islanded   (reference solvable: no, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case14")   (794 in / 16 out tokens, 0.7 s)
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=248.4888
+  2. LLM called modify_load(bus_id=11, p_mw=1.8); disconnect_line(from_bus=7, to_bus=8)   (888 in / 59 out tokens, 0.9 s)
+       tool modify_load -> case_name="case14", converged=true, total_load_mw=246.9637, total_generation_mw=258.9231, total_loss_mw=11.9594, bus_voltages[14], line_flows[20], voltage_violations[9], thermal_violations[0]  [gate pass]
+       tool disconnect_line -> case_name="case14", converged=true, total_load_mw=246.9637, total_generation_mw=259.0383, total_loss_mw=12.0746, bus_voltages[14], line_flows[20], voltage_violations[4], thermal_violations[0]  [gate FAIL]
+  3. LLM replied without tool calls: The power flow analysis has been completed after modifying the load and disconnecting the specified line. 1. **Summary**: The power flow converged successfully    (6084 in / 157 out tokens, 1.7 s)
+  4. LLM called run_powerflow()   (6428 in / 11 out tokens, 1.2 s)
+       tool run_powerflow -> case_name="case14", converged=true, total_load_mw=246.9637, total_generation_mw=259.0383, total_loss_mw=12.0746, bus_voltages[14], line_flows[20], voltage_violations[4], thermal_violations[0]  [gate FAIL]
+  5. LLM replied without tool calls: The power flow analysis has been re-evaluated after the network changes, and the results are as follows: 1. **Summary**: The power flow converged successfully,    (8871 in / 215 out tokens, 1.8 s)
+  Totals: 5 LLM calls, 4 tool calls, 3 tool rounds, 23065 in / 458 out tokens, $0.0037, 6.7 s
+  Status: verification_failed
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> modify_load(bus_id=11, p_mw=1.8) -> disconnect_line(from_bus=7, to_bus=8) -> run_powerflow()
+  executed: load_case(case_name="case14") -> modify_load(bus_id=11, p_mw=1.8) -> disconnect_line(from_bus=7, to_bus=8) -> run_powerflow()
+  verdict:  EXACT
+
+VERIFICATION GATE  (task-level, on the final answer)
+      converged              pass  residual 0
+      balance                pass  residual 8.79e-09
+      no_isolated_buses      FAIL  residual 1
+      faithfulness           pass  residual 0
+      currency               pass  residual 0
+  outcome: abstained after 2 attempt(s)
+
+REPORTING
+  numbers in the answer: 0, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [2, 3] after disconnect_line at call 2)
+  V-pass (all five conditions, checked offline for every method): no
+  safe failure declared on a real failure: yes
+
+OUTCOME: ESCALATED TO A PERSON
+  computation correct (solved): yes   reason: declared_failure
+  escalation detected via: text
+  against the reference: voltage MAE nan p.u., flow MAE 0 MW, KCL mismatch 0 MW, power-balance error 8.79e-09
+  raw trace: case14-stress-010-s0_run0.json

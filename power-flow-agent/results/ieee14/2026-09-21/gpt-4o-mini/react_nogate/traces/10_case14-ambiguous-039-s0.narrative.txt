@@ -1,0 +1,25 @@
+RUN 10  |  case14-ambiguous-039-s0  |  react_nogate  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty ambiguous
+Request: Load the 14-bus test case (case14) and set the active load at bus 1 (0-based) to 11 MW.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case14"); set_active_load(bus_id=2, p_mw=11)   (938 in / 54 out tokens, 1.2 s)
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=252.8331
+       tool set_active_load -> case_name="case14", converged=true, total_load_mw=243.8581, total_generation_mw=256.0649, total_loss_mw=12.2068, bus_voltages[14], line_flows[20], voltage_violations[8], thermal_violations[0]  [gate pass]
+  2. LLM replied without tool calls: The 14-bus test case has been loaded, and the active load at bus 1 has been set to 11 MW. - **Total Load:** 243.86 MW - **Total Generation:** 256.06 MW - **Tota   (3771 in / 141 out tokens, 1.8 s)
+  Totals: 2 LLM calls, 2 tool calls, 1 tool rounds, 4709 in / 195 out tokens, 3.3 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> modify_load(bus_id=2, p_mw=11.0)
+  executed: load_case(case_name="case14") -> set_active_load(bus_id=2, p_mw=11)
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 6, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: numeric_and_answer_ok
+  against the reference: voltage MAE 0 p.u., flow MAE 0 MW, KCL mismatch 0 MW, power-balance error 6.15e-09
+  raw trace: case14-ambiguous-039-s0_run0.json

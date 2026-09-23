@@ -1,0 +1,23 @@
+RUN 25  |  case14-parameterized-017-s0  |  llm_only_forced:structured  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty parameterized
+Request: Load case14 and run an N-1 contingency analysis ranked by max violations and report the 8 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): { "converged": true, "bus_voltages": [ {"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0}, {"bus_id": 2, "vm_pu": 1.045, "va_deg": -0.5}, {"bus_id": 3, "vm_pu": 1.01, "va_deg": -1.0}, {"bus_id": 4, "vm_pu": ...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 2039 in / 865 out tokens, $0.0008, 12.4 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> run_n1_contingency(top_k=8, criteria="max_violations")
+  executed: (none)
+  verdict:  n/a (no tool calls in this method)
+
+REPORTING
+  numbers in the answer: 61, untraceable: 54 -> traceable answer: no
+  untraceable values: ['1.06', '0.0', '1.045', '-0.5', '1.01', '-1.0', '1.02', '-2.0', '1.015', '-3.0', '1.07', '-4.0', '-5.0', '1.09', '-6.0', '-7.0', '-8.0', '-9.0', '-10.0', '-11.0']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: voltage_error
+  against the reference: voltage MAE 0.0266 p.u., flow MAE 34.7144 MW, KCL mismatch 12.4891 MW, power-balance error 105.7943
+  raw trace: case14-parameterized-017-s0_run0.json

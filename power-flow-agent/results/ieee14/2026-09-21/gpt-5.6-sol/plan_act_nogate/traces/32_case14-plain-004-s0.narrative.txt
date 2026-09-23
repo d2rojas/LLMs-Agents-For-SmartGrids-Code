@@ -1,0 +1,28 @@
+RUN 32  |  case14-plain-004-s0  |  plan_act_nogate  |  gpt-5.6-sol  |  IEEE 14-bus  |  seed 0  |  difficulty plain
+Request: Load case14 and run an N-1 contingency analysis and report the worst single outage.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 2-step plan: load_case(case_name="case14") -> run_n1_contingency(top_k=1, criteria="severity", max_candidates=100)
+  2. LLM replied without tool calls: {"plan":[{"tool":"load_case","args":{"case_name":"case14"}},{"tool":"run_n1_contingency","args":{"top_k":1,"criteria":"severity","max_candidates":100}}]}   (479 in / 102 out tokens, 3.7 s)
+  3. parser called load_case(case_name="case14")
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=261.9932
+  4. parser called run_n1_contingency(top_k=1, criteria="severity", max_candidates=100)
+       tool run_n1_contingency -> N-1 completed over 20 branches. Worst outage: 1-5 (line), V violations=9 (delta=0), thermal violations=0 (delta=0).
+  5. LLM wrote the final answer   (4139 in / 322 out tokens, 8.7 s)
+  Totals: 2 LLM calls, 2 tool calls, 1 tool rounds, 4618 in / 424 out tokens, 13.1 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> run_n1_contingency()
+  executed: load_case(case_name="case14") -> run_n1_contingency(top_k=1, criteria="severity", max_candidates=100)
+  verdict:  NOT EXACT (invalid_value): run_n1_contingency: criteria='severity' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default)
+
+REPORTING
+  numbers in the answer: 4, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: formulation
+  against the reference: voltage MAE 0 p.u., flow MAE 0 MW, KCL mismatch n/a MW, power-balance error 4.70e-09
+  raw trace: case14-plain-004-s0_run0.json

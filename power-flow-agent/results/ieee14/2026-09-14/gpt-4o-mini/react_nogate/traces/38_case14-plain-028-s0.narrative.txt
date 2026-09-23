@@ -1,0 +1,26 @@
+RUN 38  |  case14-plain-028-s0  |  react_nogate  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty plain
+Request: Load case14 and run the AC power flow.
+Expected outcome: None   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case14")   (748 in / 16 out tokens, 1.0 s)
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=259.7717
+  2. LLM called run_powerflow()   (842 in / 11 out tokens, 0.8 s)
+       tool run_powerflow -> case_name="case14", converged=true, total_load_mw=259.7717, total_generation_mw=273.4138, total_loss_mw=13.6421, bus_voltages[14], line_flows[20], voltage_violations[7], thermal_violations[0]  [gate pass]
+  3. LLM replied without tool calls: The AC power flow for the IEEE 14-bus system has been successfully solved, but there are several voltage violations present. - **Total Load:** 259.77 MW - **Tot   (3482 in / 132 out tokens, 1.8 s)
+  Totals: 3 LLM calls, 2 tool calls, 2 tool rounds, 5072 in / 159 out tokens, $0.0009, 3.8 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> run_powerflow()
+  executed: load_case(case_name="case14") -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 5, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: numeric_and_answer_ok
+  against the reference: voltage MAE 0 p.u., flow MAE 0 MW, KCL mismatch 0 MW, power-balance error 6.08e-09
+  raw trace: case14-plain-028-s0_run0.json

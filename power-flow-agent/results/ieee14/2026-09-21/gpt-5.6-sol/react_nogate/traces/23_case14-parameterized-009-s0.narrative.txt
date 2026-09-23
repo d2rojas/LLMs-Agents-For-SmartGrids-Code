@@ -1,0 +1,28 @@
+RUN 23  |  case14-parameterized-009-s0  |  react_nogate  |  gpt-5.6-sol  |  IEEE 14-bus  |  seed 0  |  difficulty parameterized
+Request: Load the 14-bus test case (case14) and run an N-1 contingency analysis ranked by max violations and report the 3 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case14")   (943 in / 56 out tokens, 2.3 s)
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=251.3526
+  2. LLM called run_powerflow()   (1044 in / 49 out tokens, 3.5 s)
+       tool run_powerflow -> case_name="case14", converged=true, total_load_mw=251.3526, total_generation_mw=263.5913, total_loss_mw=12.2387, bus_voltages[14], line_flows[20], voltage_violations[9], thermal_violations[0]  [gate pass]
+  3. LLM called run_n1_contingency(top_k=3, criteria="max_violations", max_candidates=0)   (3773 in / 35 out tokens, 1.5 s)
+       tool run_n1_contingency -> N-1 completed over 20 branches. Worst outage: 3-4 (line), V violations=9 (delta=0), thermal violations=0 (delta=0).
+  4. LLM replied without tool calls: The IEEE 14-bus case converged, and the N-1 analysis ranked the 3–4 line outage as the worst by maximum violations. **Key numbers — base case** - Total load: **   (8732 in / 355 out tokens, 4.7 s)
+  Totals: 4 LLM calls, 3 tool calls, 3 tool rounds, 14492 in / 495 out tokens, 12.8 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> run_n1_contingency(top_k=3, criteria="max_violations")
+  executed: load_case(case_name="case14") -> run_powerflow() -> run_n1_contingency(top_k=3, criteria="max_violations", max_candidates=0)
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 7, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: numeric_and_answer_ok
+  against the reference: voltage MAE 0 p.u., flow MAE 0 MW, KCL mismatch 0 MW, power-balance error 5.35e-09
+  raw trace: case14-parameterized-009-s0_run0.json

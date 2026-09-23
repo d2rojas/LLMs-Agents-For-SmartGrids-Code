@@ -1,0 +1,26 @@
+RUN 07  |  case14-ambiguous-027-s0  |  react_nogate  |  gpt-5.4  |  IEEE 14-bus  |  seed 0  |  difficulty ambiguous
+Request: Load the IEEE 14-bus system and set the active load at bus 10 (0-based) to 4.7 MW.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case14")   (769 in / 20 out tokens, 0.9 s)
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=263.7082
+  2. LLM called modify_load(bus_id=11, p_mw=4.7, q_mvar=0)   (869 in / 33 out tokens, 1.0 s)
+       tool modify_load -> case_name="case14", converged=true, total_load_mw=265.1988, total_generation_mw=279.3105, total_loss_mw=14.1117, bus_voltages[14], line_flows[20], voltage_violations[9], thermal_violations[0]  [gate pass]
+  3. LLM replied without tool calls: 1. One-sentence summary I loaded the IEEE 14-bus case and, interpreting your “bus 10 (0-based)” request as MATPOWER bus 11, set its active load to 4.7 MW and re   (3634 in / 203 out tokens, 2.3 s)
+  Totals: 3 LLM calls, 2 tool calls, 2 tool rounds, 5272 in / 256 out tokens, $0.0170, 4.5 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> modify_load(bus_id=11, p_mw=4.7)
+  executed: load_case(case_name="case14") -> modify_load(bus_id=11, p_mw=4.7, q_mvar=0)
+  verdict:  NOT EXACT (extra_arg_changes_result): modify_load: extra argument q_mvar=0.0 changes the solver outcome (request did not ask for it)
+
+REPORTING
+  numbers in the answer: 6, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1] after modify_load at call 1)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: formulation
+  against the reference: voltage MAE 3.74e-04 p.u., flow MAE 0.0197 MW, KCL mismatch n/a MW, power-balance error 5.66e-09
+  raw trace: case14-ambiguous-027-s0_run0.json

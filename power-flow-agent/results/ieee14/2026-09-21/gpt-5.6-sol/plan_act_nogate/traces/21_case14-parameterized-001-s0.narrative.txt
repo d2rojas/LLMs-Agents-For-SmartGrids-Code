@@ -1,0 +1,30 @@
+RUN 21  |  case14-parameterized-001-s0  |  plan_act_nogate  |  gpt-5.6-sol  |  IEEE 14-bus  |  seed 0  |  difficulty parameterized
+Request: Load the IEEE 14-bus system and run an N-1 contingency analysis ranked by min voltage and report the 3 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 3-step plan: load_case(case_name="IEEE 14-bus") -> run_powerflow() -> run_n1_contingency(top_k=3, criteria="min_voltage", max_candidates=100)
+  2. LLM replied without tool calls: {"plan":[{"tool":"load_case","args":{"case_name":"IEEE 14-bus"}},{"tool":"run_powerflow","args":{}},{"tool":"run_n1_contingency","args":{"top_k":3,"criteria":"m   (489 in / 157 out tokens, 4.4 s)
+  3. parser called load_case(case_name="IEEE 14-bus")
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=270.1362
+  4. parser called run_powerflow()
+       tool run_powerflow -> case_name="case14", converged=true, total_load_mw=270.1362, total_generation_mw=284.8915, total_loss_mw=14.7554, bus_voltages[14], line_flows[20], voltage_violations[8], thermal_violations[0]  [gate pass]
+  5. parser called run_n1_contingency(top_k=3, criteria="min_voltage", max_candidates=100)
+       tool run_n1_contingency -> N-1 completed over 20 branches. Worst outage: 5-6 (trafo), V violations=9 (delta=1), thermal violations=0 (delta=0).
+  6. LLM wrote the final answer   (8221 in / 492 out tokens, 7.5 s)
+  Totals: 2 LLM calls, 3 tool calls, 1 tool rounds, 8710 in / 649 out tokens, 12.7 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> run_n1_contingency(top_k=3, criteria="min_voltage")
+  executed: load_case(case_name="IEEE 14-bus") -> run_powerflow() -> run_n1_contingency(top_k=3, criteria="min_voltage", max_candidates=100)
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 10, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: numeric_and_answer_ok
+  against the reference: voltage MAE 0 p.u., flow MAE 0 MW, KCL mismatch 0 MW, power-balance error 6.46e-09
+  raw trace: case14-parameterized-001-s0_run0.json

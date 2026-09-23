@@ -1,0 +1,36 @@
+RUN 33  |  case14-plain-008-s0  |  pfagent  |  gpt-5.6-sol  |  IEEE 14-bus  |  seed 0  |  difficulty plain
+Request: Load case14 and set the active load at bus 2 to 21.7 MW.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case14")   (930 in / 46 out tokens, 2.9 s)
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=255.7578
+  2. LLM called set_active_load(bus_id=2, p_mw=21.7)   (1031 in / 28 out tokens, 1.5 s)
+       tool set_active_load -> case_name="case14", converged=true, total_load_mw=256.5403, total_generation_mw=269.2498, total_loss_mw=12.7095, bus_voltages[14], line_flows[20], voltage_violations[8], thermal_violations[0]  [gate pass]
+  3. LLM replied without tool calls: The IEEE 14-bus case was loaded, and bus 2 active load was set to **21.7 MW** while its reactive load remained unchanged; the AC power flow converged. **Key num   (3764 in / 199 out tokens, 3.2 s)
+  Totals: 3 LLM calls, 2 tool calls, 2 tool rounds, 5725 in / 273 out tokens, 7.8 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> modify_load(bus_id=2, p_mw=21.7)
+  executed: load_case(case_name="case14") -> set_active_load(bus_id=2, p_mw=21.7)
+  verdict:  EXACT
+
+VERIFICATION GATE  (task-level, on the final answer)
+  V1  converged              pass  residual 0
+  V2  balance                pass  residual 6.10e-09
+  V3  no_isolated_buses      pass  residual 0
+  V4  faithfulness           pass  residual 0
+  V5  currency               pass  residual 0
+  V6  argument_grounding     pass  every mutating-tool argument traces to the request or a prior tool output
+  V7  claims_from_tools      pass  answer matches the agent's own last solved state
+  outcome: pass_first after 1 attempt(s)
+
+REPORTING
+  numbers in the answer: 5, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: numeric_and_answer_ok
+  against the reference: voltage MAE 0 p.u., flow MAE 0 MW, KCL mismatch 0 MW, power-balance error 6.10e-09
+  raw trace: 33_case14-plain-008-s0.json

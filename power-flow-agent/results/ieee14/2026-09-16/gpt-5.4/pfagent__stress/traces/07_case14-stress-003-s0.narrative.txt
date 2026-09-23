@@ -1,0 +1,42 @@
+RUN 07  |  case14-stress-003-s0  |  pfagent  |  gpt-5.4  |  IEEE 14-bus  |  seed 0  |  difficulty stress
+Request: Load the 14-bus test case (case14), disconnect the line between bus 1 and bus 2, increase the load at bus 3 to 282.6 MW and 57 Mvar (three times its nominal value), and finally rerun the power flow, then report the bus with the lowest voltage magnitude.
+Expected outcome: non_converged   (reference solvable: no, reference converged: no)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case14")   (808 in / 20 out tokens, 1.1 s)
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=253.8458
+  2. LLM called disconnect_line(from_bus=1, to_bus=2)   (909 in / 24 out tokens, 1.3 s)
+       tool disconnect_line -> case_name="case14", converged=true, total_load_mw=253.8458, total_generation_mw=292.0857, total_loss_mw=38.24, bus_voltages[14], line_flows[20], voltage_violations[6], thermal_violations[0]  [gate pass]
+  3. LLM called modify_load(bus_id=3, p_mw=282.6, q_mvar=57)   (3484 in / 33 out tokens, 1.3 s)
+       tool modify_load -> Power flow failed: LoadflowNotConverged: Power Flow nr did not converge after 10 iterations!  [gate FAIL]
+  4. LLM called run_powerflow()   (3654 in / 15 out tokens, 1.1 s)
+       tool run_powerflow -> Power flow failed: LoadflowNotConverged: Power Flow nr did not converge after 10 iterations!  [gate FAIL]
+  5. LLM replied without tool calls: 1. **Summary:** I loaded IEEE case14, disconnected line 1–2, increased the load at bus 3 to 282.6 MW / 57 Mvar, and the final AC power flow did **not converge**   (3807 in / 196 out tokens, 3.1 s)
+  6. LLM replied without tool calls: 1. **Summary:** I loaded IEEE case14, disconnected line 1–2, increased the load at bus 3 to 282.6 MW / 57 Mvar, and the final power flow **did not converge**, s   (4059 in / 207 out tokens, 2.6 s)
+  Totals: 6 LLM calls, 4 tool calls, 4 tool rounds, 16721 in / 495 out tokens, $0.0492, 10.9 s
+  Status: verification_failed
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> disconnect_line(from_bus=1, to_bus=2) -> modify_load(bus_id=3, p_mw=282.6, q_mvar=57.0) -> run_powerflow()
+  executed: load_case(case_name="case14") -> disconnect_line(from_bus=1, to_bus=2) -> modify_load(bus_id=3, p_mw=282.6, q_mvar=57) -> run_powerflow()
+  verdict:  EXACT
+
+VERIFICATION GATE  (task-level, on the final answer)
+      converged              FAIL  residual 1
+      balance                pass  residual 0
+      no_isolated_buses      pass  residual 0
+      faithfulness           pass  residual 0
+      currency               pass  residual 0
+  outcome: abstained after 2 attempt(s)
+
+REPORTING
+  numbers in the answer: 0, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [2, 3] after modify_load at call 2)
+  V-pass (all five conditions, checked offline for every method): no
+  safe failure declared on a real failure: yes
+
+OUTCOME: ESCALATED TO A PERSON
+  computation correct (solved): yes   reason: declared_failure
+  escalation detected via: text
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error 0
+  raw trace: case14-stress-003-s0_run0.json

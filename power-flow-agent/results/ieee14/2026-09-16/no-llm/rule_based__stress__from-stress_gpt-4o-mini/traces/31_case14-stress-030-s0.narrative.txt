@@ -1,0 +1,27 @@
+RUN 31  |  case14-stress-030-s0  |  rule_based  |  no-llm  |  IEEE 14-bus  |  seed 0  |  difficulty stress
+Request: Load the 14-bus test case (case14) and disconnect the transformer branch between bus 7 and bus 8.
+Expected outcome: islanded   (reference solvable: no, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 2-step plan: load_case(case_name="case14") -> disconnect_line(from_bus=7, to_bus=8)
+  2. parser called load_case(case_name="case14")
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=271.9322
+  3. parser called disconnect_line(from_bus=7, to_bus=8)
+       tool disconnect_line -> case_name="case14", converged=true, total_load_mw=271.9322, total_generation_mw=287.1216, total_loss_mw=15.1893, bus_voltages[14], line_flows[20], voltage_violations[3], thermal_violations[0]  [gate pass]
+  Totals: 0 LLM calls, 2 tool calls, 1 tool rounds, 0 in / 0 out tokens, $0.0000, 0.2 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> disconnect_line(from_bus=7, to_bus=8)
+  executed: load_case(case_name="case14") -> disconnect_line(from_bus=7, to_bus=8)
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 3, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1] after disconnect_line at call 1)
+  V-pass (all five conditions, checked offline for every method): no
+  safe failure declared on a real failure: no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: failure_not_declared
+  against the reference: voltage MAE nan p.u., flow MAE 0 MW, KCL mismatch 0 MW, power-balance error 1.21e-08
+  raw trace: case14-stress-030-s0_run0.json

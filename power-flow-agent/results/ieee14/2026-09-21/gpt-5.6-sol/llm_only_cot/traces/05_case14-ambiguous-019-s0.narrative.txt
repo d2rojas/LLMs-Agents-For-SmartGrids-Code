@@ -1,0 +1,23 @@
+RUN 05  |  case14-ambiguous-019-s0  |  llm_only:cot  |  gpt-5.6-sol  |  IEEE 14-bus  |  seed 0  |  difficulty ambiguous
+Request: Load the 14-bus test case (case14) and disconnect the line between bus 9 and bus 14 (1-based).
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): {"converged":true,"bus_voltages":[{"bus_id":1,"vm_pu":1.06,"va_deg":0.0},{"bus_id":2,"vm_pu":1.045,"va_deg":-5.12},{"bus_id":3,"vm_pu":1.01,"va_deg":-13.35},{"bus_id":4,"vm_pu":1.015,"va_deg":-10.72},...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 2193 in / 18386 out tokens, $0.1882, 404.3 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> disconnect_line(from_bus=9, to_bus=14)
+  executed: (none)
+  verdict:  n/a (no tool calls in this method)
+
+REPORTING
+  numbers in the answer: 71, untraceable: 69 -> traceable answer: no
+  untraceable values: ['1.06', '0.0', '1.045', '-5.12', '1.01', '-13.35', '1.015', '-10.72', '1.017', '-9.2', '1.07', '-15.4', '1.058', '-13.57', '1.09', '-13.57', '1.052', '-15.05', '1.047', '-15.39']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: voltage_error
+  against the reference: voltage MAE 0.003 p.u., flow MAE 0.6221 MW, KCL mismatch 0.0324 MW, power-balance error 4.09e-14
+  raw trace: case14-ambiguous-019-s0_run0.json

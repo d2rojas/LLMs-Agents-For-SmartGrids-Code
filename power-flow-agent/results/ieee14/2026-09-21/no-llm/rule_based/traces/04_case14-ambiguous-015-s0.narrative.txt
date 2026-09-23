@@ -1,0 +1,26 @@
+RUN 04  |  case14-ambiguous-015-s0  |  rule_based  |  no-llm  |  IEEE 14-bus  |  seed 0  |  difficulty ambiguous
+Request: Load the 14-bus test case (case14) and set the active load at bus 5 to 4.4 MVA.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 2-step plan: load_case(case_name="case14") -> modify_load(bus_id=5, p_mw=4.4)
+  2. parser called load_case(case_name="case14")
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=263.7914
+  3. parser called modify_load(bus_id=5, p_mw=4.4)
+       tool modify_load -> case_name="case14", converged=true, total_load_mw=261.2387, total_generation_mw=275.0833, total_loss_mw=13.8446, bus_voltages[14], line_flows[20], voltage_violations[8], thermal_violations[0]  [gate pass]
+  Totals: 0 LLM calls, 2 tool calls, 1 tool rounds, 0 in / 0 out tokens, $0.0000, 0.2 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> modify_load(bus_id=5, p_mw=4.4)
+  executed: load_case(case_name="case14") -> modify_load(bus_id=5, p_mw=4.4)
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 3, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1] after modify_load at call 1)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: numeric_and_answer_ok
+  against the reference: voltage MAE 0 p.u., flow MAE 0 MW, KCL mismatch 0 MW, power-balance error 5.15e-09
+  raw trace: case14-ambiguous-015-s0_run0.json

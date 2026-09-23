@@ -1,0 +1,23 @@
+RUN 01  |  case14-ambiguous-003-s0  |  llm_only:cot  |  gpt-5.4  |  IEEE 14-bus  |  seed 0  |  difficulty ambiguous
+Request: Load case14 and disconnect the line between bus ten and bus eleven.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): Bus ids are the bus name values 1 through 14. Slack bus is bus 1 with fixed 1.06 p.u. and 0 degrees. PV generator buses are 2, 3, 6, and 8 with specified voltage magnitudes. Load buses are 4, 5, 9, 10...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 2179 in / 404 out tokens, $0.0115, 5 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> disconnect_line(from_bus=10, to_bus=11)
+  executed: (none)
+  verdict:  n/a (no tool calls in this method)
+
+REPORTING
+  numbers in the answer: 5, untraceable: 5 -> traceable answer: no
+  untraceable values: ['1.06 p.u.', '0 degrees', '0.0', '0.0', '0.0']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: convergence_mismatch
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error 0
+  raw trace: case14-ambiguous-003-s0_run0.json

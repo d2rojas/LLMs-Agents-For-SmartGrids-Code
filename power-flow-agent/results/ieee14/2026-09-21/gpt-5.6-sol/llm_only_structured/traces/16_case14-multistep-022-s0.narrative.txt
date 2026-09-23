@@ -1,0 +1,23 @@
+RUN 16  |  case14-multistep-022-s0  |  llm_only:structured  |  gpt-5.6-sol  |  IEEE 14-bus  |  seed 0  |  difficulty multistep
+Request: Load case14, disconnect the line between bus 9 and bus 10, set the active load at bus 3 to 118.6 MW, set the active load at bus 4 to 53.6 MW, and finally run an N-1 contingency analysis ranked by max violations and report the 8 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): {"converged":true,"bus_voltages":[{"bus_id":1,"vm_pu":1.06,"va_deg":0.0},{"bus_id":2,"vm_pu":1.045,"va_deg":-5.65},{"bus_id":3,"vm_pu":1.01,"va_deg":-15.2},{"bus_id":4,"vm_pu":1.003,"va_deg":-11.65},{...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 2056 in / 8763 out tokens, $0.0917, 229.3 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> disconnect_line(from_bus=9, to_bus=10) -> modify_load(bus_id=3, p_mw=118.6) -> modify_load(bus_id=4, p_mw=53.6) -> run_n1_contingency(top_k=8, criteria="max_violations")
+  executed: (none)
+  verdict:  n/a (no tool calls in this method)
+
+REPORTING
+  numbers in the answer: 71, untraceable: 69 -> traceable answer: no
+  untraceable values: ['1.06', '0.0', '1.045', '-5.65', '1.01', '-15.2', '-11.65', '-10.02', '1.07', '-16.56', '1.064', '-14.68', '1.09', '-14.68', '1.056', '-16.28', '1.023', '-19.02', '1.042', '-18.01']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: voltage_error
+  against the reference: voltage MAE 0.004 p.u., flow MAE 0.799 MW, KCL mismatch 0.4131 MW, power-balance error 1.42e-14
+  raw trace: case14-multistep-022-s0_run0.json

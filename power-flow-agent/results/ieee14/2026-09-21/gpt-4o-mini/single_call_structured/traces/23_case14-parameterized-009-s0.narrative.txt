@@ -1,0 +1,24 @@
+RUN 23  |  case14-parameterized-009-s0  |  single_call:structured  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty parameterized
+Request: Load the 14-bus test case (case14) and run an N-1 contingency analysis ranked by max violations and report the 3 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called run_n1_contingency(top_k=3, criteria="max_violations")   (2531 in / 26 out tokens, 0.8 s)
+       tool run_n1_contingency -> N-1 completed over 20 branches. Worst outage: 3-4 (line), V violations=9 (delta=0), thermal violations=0 (delta=0).
+  2. LLM wrote the final answer   (6975 in / 199 out tokens, 2.4 s)
+  Totals: 2 LLM calls, 1 tool calls, 1 tool rounds, 9506 in / 225 out tokens, 4.8 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> run_n1_contingency(top_k=3, criteria="max_violations")
+  executed: run_n1_contingency(top_k=3, criteria="max_violations")
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 6, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: numeric_and_answer_ok
+  against the reference: voltage MAE 0 p.u., flow MAE 0 MW, KCL mismatch 0 MW, power-balance error 5.35e-09
+  raw trace: case14-parameterized-009-s0_run0.json

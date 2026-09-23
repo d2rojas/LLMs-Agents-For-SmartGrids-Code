@@ -1,0 +1,23 @@
+RUN 03  |  case14-ambiguous-011-s0  |  llm_only:cot  |  gpt-5.4  |  IEEE 14-bus  |  seed 0  |  difficulty ambiguous
+Request: Load case14 and set the active load at bus 6 to 14,700 kw.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): Bus ids are the IEEE display ids 1 through 14 from the bus name column. Bus 1 is the slack bus with fixed voltage magnitude 1.06 per unit and angle 0 degrees. Generator buses are 2, 3, 6, and 8 with r...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 2184 in / 1556 out tokens, $0.0288, 11.8 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> modify_load(bus_id=6, p_mw=14.7)
+  executed: (none)
+  verdict:  n/a (no tool calls in this method)
+
+REPORTING
+  numbers in the answer: 83, untraceable: 83 -> traceable answer: no
+  untraceable values: ['1.06', '0 degrees', '1.045', '1.01', '1.07', '1.09', '14.700 MW', '10.690739 MW', '0.95', '1.05', '100 percent', '4.009261 MW', '1.06', '0.0', '1.045', '-4.99', '1.01', '-12.73', '1.017', '-10.31']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: numeric_and_answer_ok
+  against the reference: voltage MAE 4.61e-04 p.u., flow MAE 2.1965 MW, KCL mismatch 2.866 MW, power-balance error 2.66e-14
+  raw trace: case14-ambiguous-011-s0_run0.json

@@ -1,0 +1,29 @@
+RUN 07  |  case14-stress-003-s0  |  rule_based  |  no-llm  |  IEEE 14-bus  |  seed 0  |  difficulty stress
+Request: Load the 14-bus test case (case14), disconnect the line between bus 1 and bus 2, increase the load at bus 3 to 282.6 MW and 57 Mvar (three times its nominal value), and finally rerun the power flow, then report the bus with the lowest voltage magnitude.
+Expected outcome: non_converged   (reference solvable: no, reference converged: no)
+
+WHAT THE METHOD DID
+  1. planner emitted a 3-step plan: load_case(case_name="case14") -> disconnect_line(from_bus=1, to_bus=2) -> run_powerflow()
+  2. parser called load_case(case_name="case14")
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=253.8458
+  3. parser called disconnect_line(from_bus=1, to_bus=2)
+       tool disconnect_line -> case_name="case14", converged=true, total_load_mw=253.8458, total_generation_mw=292.0857, total_loss_mw=38.24, bus_voltages[14], line_flows[20], voltage_violations[6], thermal_violations[0]  [gate pass]
+  4. parser called run_powerflow()
+       tool run_powerflow -> case_name="case14", converged=true, total_load_mw=253.8458, total_generation_mw=292.0857, total_loss_mw=38.24, bus_voltages[14], line_flows[20], voltage_violations[6], thermal_violations[0]  [gate pass]
+  Totals: 0 LLM calls, 3 tool calls, 1 tool rounds, 0 in / 0 out tokens, $0.0000, 0.3 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> disconnect_line(from_bus=1, to_bus=2) -> modify_load(bus_id=3, p_mw=282.6, q_mvar=57.0) -> run_powerflow()
+  executed: load_case(case_name="case14") -> disconnect_line(from_bus=1, to_bus=2) -> run_powerflow()
+  verdict:  NOT EXACT (missed_step): missing tools: ['modify_load']
+
+REPORTING
+  numbers in the answer: 7, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1, 2] after disconnect_line at call 1)
+  V-pass (all five conditions, checked offline for every method): yes
+  safe failure declared on a real failure: no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: formulation
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error 2.49e-13
+  raw trace: case14-stress-003-s0_run0.json
