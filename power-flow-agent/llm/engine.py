@@ -643,14 +643,9 @@ def _withhold_numbers(tool_output: str, verdict: Dict[str, Any]) -> str:
 
 
 def _tools_catalog_text(variant: str = "v1") -> str:
-    tools = TOOLS if variant == "v1" else TOOLS_LOAD_SPLIT
-    lines = []
-    for t in tools:
-        props = t.get("parameters", {}).get("properties", {}) or {}
-        req = t.get("parameters", {}).get("required", []) or []
-        params = ", ".join(f"{k}: {v.get('type', 'any')}{'*' if k in req else ''}" for k, v in props.items()) or "(none)"
-        lines.append(f"- {t['name']}({params}): {t.get('description', '')}")
-    return "\n".join(lines)
+    from llm.tools import tools_catalog_text
+
+    return tools_catalog_text(variant)
 
 
 def _plan_system_prompt(variant: str = "v1") -> str:

@@ -76,7 +76,7 @@ def list_methods() -> List[Method]:
     found = {p.parent.name: _load_method(p.parent) for p in METHODS_DIR.glob("*/method.json")}
     order = [
         "llm_only_structured", "llm_only_few_shot", "llm_only_cot", "llm_only_rag", "llm_only_nr",
-        "llm_only_forced_structured",
+        "llm_only_forced_structured", "llm_only_forced_cot",
         "single_call_structured", "single_call_few_shot", "single_call_cot", "single_call_rag",
         "rule_based", "react", "react_nogate", "plan_act", "plan_act_nogate", "pfagent", "pfagent_obsgate",
     ]
@@ -120,6 +120,7 @@ def system_prompt_for(method: str | Method, *, tool_variant: str = "v1") -> Opti
             clause = read_text("llm_only_forced_structured/escape_clause_removed.txt")
             repl = read_text("llm_only_forced_structured/forced_replacement.txt")
             base = base.replace(clause, repl) if clause in base else base.rstrip() + "\n" + repl
+        base += read_text("_shared/llm_only_formulation_clause.txt")
         if m.strategy in ("cot", "nr"):
             base += read_text("_shared/cot_system_suffix.txt")
         return base

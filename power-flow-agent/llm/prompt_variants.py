@@ -27,7 +27,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 from baselines.llm_only import build_baseline_prompt
 from baselines.prompts_baseline import BASELINE_PROMPT_TEMPLATE, BASELINE_SYSTEM_PROMPT
 from llm.prompts import SYSTEM_PROMPT_EN as SYSTEM_PROMPT
-from llm.tools import TOOLS
+from llm.tools import TOOLS, tools_catalog_text
 from methods import read_text as _read_method_text
 
 STRATEGIES: Tuple[str, ...] = ("structured", "few_shot", "cot", "rag", "nr")
@@ -80,6 +80,17 @@ def forced_system_prompt(base: str) -> str:
 
 
 COT_SYSTEM_SUFFIX = _read_method_text("_shared/cot_system_suffix.txt")
+
+# 2026-09-23: the no-tools answer also declares its formulation (which solver operations the
+# request needs), so Formulation is measured for the prompting rows too. Both texts are part
+# of every llm_only prompt; the system-prompt hash changes accordingly.
+LLM_ONLY_FORMULATION_CLAUSE = _read_method_text("_shared/llm_only_formulation_clause.txt")
+LLM_ONLY_FORMULATION_SECTION = _read_method_text("_shared/llm_only_formulation_section.txt")
+
+
+def llm_only_formulation_section(tool_variant: str = "load_split") -> str:
+    """The '## Formulation' section: fixed instruction plus the tool catalogue of ``tool_variant``."""
+    return LLM_ONLY_FORMULATION_SECTION + tools_catalog_text(tool_variant)
 
 LLM_ONLY_COT_SECTION = _read_method_text("llm_only_cot/reasoning_section.txt")
 
@@ -560,7 +571,7 @@ def _llm_only_role_and_context(strategy: str, request_text: str, net: Any, case_
     return _join([role, context]), ctx
 
 
-def _build_llm_only(strategy: str, request_text: str, net: Any, case_name: str, k_rows: int, forced: bool = False) -> List[Dict[str, str]]:
+def _build_llm_only(strategy: str, request_text: str, net: Any, case_name: str, k_rows: int, forced: bool = False, tool_variant: str = "load_split") -> List[Dict[str, str]]:
     role_ctx, _ = _llm_only_role_and_context(strategy, request_text, net, case_name, k_rows)
     sections: List[str] = [role_ctx]
     if strategy == "few_shot":
@@ -570,10 +581,11 @@ def _build_llm_only(strategy: str, request_text: str, net: Any, case_name: str, 
         sections.append(LLM_ONLY_COT_SECTION)
     elif strategy == "nr":
         sections.append(LLM_ONLY_NR_SECTION)
+    sections.append(llm_only_formulation_section(tool_variant))
     sections.append(LLM_ONLY_OUTPUT_SECTION)
 
     base = forced_system_prompt(BASELINE_SYSTEM_PROMPT.strip()) if forced else BASELINE_SYSTEM_PROMPT.strip()
-    system = base + (COT_SYSTEM_SUFFIX if strategy in ("cot", "nr") else "")
+    system = base + LLM_ONLY_FORMULATION_CLAUSE + (COT_SYSTEM_SUFFIX if strategy in ("cot", "nr") else "")
     return [{"role": "system", "content": system}, {"role": "user", "content": _join(sections)}]
 
 
@@ -619,6 +631,7 @@ def build_messages(
     *,
     k_rows: Optional[int] = None,
     forced: bool = False,
+    tool_variant: str = "load_split",
 ) -> List[Dict[str, str]]:
     """Build OpenAI-style chat messages for one (strategy, mode) on ``request_text``.
 
@@ -630,7 +643,7 @@ def build_messages(
         raise ValueError("request_text must be non-empty")
     k = 8 if k_rows is None else int(k_rows)
     if mode == "llm_only":
-        return _build_llm_only(strategy, request_text, net, case_name, k, forced=forced)
+        return _build_llm_only(strategy, request_text, net, case_name, k, forced=forced, tool_variant=tool_variant)
     return _build_single_call(strategy, request_text, net, case_name, k)
 
 

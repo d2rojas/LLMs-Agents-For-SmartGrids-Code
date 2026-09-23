@@ -109,6 +109,8 @@ def narrative_lines(row: Dict[str, Any], steps: List[Dict[str, Any]]) -> List[st
     fe = row.get("formulation_exact")
     if fe is None:
         second = "No tool calls, so there is no formulation to check; every reported number is the model's own arithmetic."
+    elif fe and row.get("declared_formulation") is not None:
+        second = "The operations the model declared match the request exactly; the numbers are still its own arithmetic."
     elif fe:
         second = "The executed calls match the request exactly."
     else:
@@ -194,13 +196,17 @@ def render_run_figure(nn: int, row: Dict[str, Any], payload: Dict[str, Any], hea
         ax.add_patch(FancyBboxPatch((x0, y_panel), w, panel_h, boxstyle="round,pad=0.1,rounding_size=0.8", fc=C["panel"], ec="#E1E4E8"))
     intended = payload.get("intended_calls") or row.get("intended_calls") or []
     executed = payload.get("executed_calls") or row.get("executed_calls") or []
+    declared = row.get("declared_formulation")
+    exec_label = "executed: "
+    if declared is not None or (not executed and row.get("formulation_exact") is not None):
+        executed, exec_label = (declared or []), "declared: "
     fe = row.get("formulation_exact")
     fcol = C["na"] if fe is None else (C["pass"] if fe else C["fail"])
     ftxt = "n/a (no tools)" if fe is None else ("EXACT" if fe else f"NOT EXACT: {row.get('formulation_error_type')}")
     ax.text(2, y_panel_top - H(0.1), "FORMULATION", fontsize=9.5, weight="bold", color=C["text"], va="top")
     ax.text(14.5, y_panel_top - H(0.1), ftxt, fontsize=9.5, weight="bold", color=fcol, va="top")
     ax.text(2, y_panel_top - H(0.42), "intended: " + _wrap(" → ".join(_fmt_call(str(c.get("tool")), c.get("args"), 60) for c in intended) or "(none)", 76), fontsize=7.8, color=C["text"], va="top", family="monospace")
-    ax.text(2, y_panel_top - H(0.95), "executed: " + _wrap(" → ".join(_fmt_call(str(c.get("tool")), c.get("args"), 60) for c in executed) or "(none)", 76), fontsize=7.8, color=C["text"], va="top", family="monospace")
+    ax.text(2, y_panel_top - H(0.95), exec_label + _wrap(" → ".join(_fmt_call(str(c.get("tool")), c.get("args"), 60) for c in executed) or "(none)", 76), fontsize=7.8, color=C["text"], va="top", family="monospace")
 
     ax.text(52, y_panel_top - H(0.1), "VERIFICATION", fontsize=9.5, weight="bold", color=C["text"], va="top")
     ver = tr.get("verification") or []

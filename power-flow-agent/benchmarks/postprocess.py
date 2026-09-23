@@ -393,8 +393,12 @@ def render_narrative(nn: int, row: Dict[str, Any], payload: Dict[str, Any], head
     out.append("FORMULATION  (did the executed tool calls match the request?)")
     intended = payload.get("intended_calls") or row.get("intended_calls") or []
     executed = payload.get("executed_calls") or row.get("executed_calls") or []
+    declared = row.get("declared_formulation")
     out.append("  intended: " + (" -> ".join(_fmt_call(c) for c in intended) if intended else "(none)"))
-    out.append("  executed: " + (" -> ".join(_fmt_call(c) for c in executed) if executed else "(none)"))
+    if declared is not None or (not executed and row.get("formulation_exact") is not None):
+        out.append("  declared: " + (" -> ".join(_fmt_call(c) for c in declared) if declared else "(no formulation field in the answer)") + "   [no tools: the model states the operations, nothing is executed]")
+    else:
+        out.append("  executed: " + (" -> ".join(_fmt_call(c) for c in executed) if executed else "(none)"))
     fe = row.get("formulation_exact")
     if fe is None:
         out.append("  verdict:  n/a (no tool calls in this method)")

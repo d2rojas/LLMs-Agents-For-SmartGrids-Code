@@ -189,6 +189,20 @@ TOOLS_LOAD_SPLIT: list[dict[str, Any]] = [t for t in TOOLS if t["name"] != "modi
 ]
 
 
+def tools_catalog_text(variant: str = "v1") -> str:
+    """One line per tool: name(arg: type*, ...): description. Used by the Plan-and-Act planner
+    prompt and by the LLM-only formulation section (the vocabulary a no-tools answer uses to
+    declare which solver operations the request needs)."""
+    tools = TOOLS if variant == "v1" else TOOLS_LOAD_SPLIT
+    lines = []
+    for t in tools:
+        props = t.get("parameters", {}).get("properties", {}) or {}
+        req = t.get("parameters", {}).get("required", []) or []
+        params = ", ".join(f"{k}: {v.get('type', 'any')}{'*' if k in req else ''}" for k, v in props.items()) or "(none)"
+        lines.append(f"- {t['name']}({params}): {t.get('description', '')}")
+    return "\n".join(lines)
+
+
 def get_openai_tools(variant: str = "v1") -> list[dict[str, Any]]:
     """``variant="v1"`` (default, used by every committed run) is modify_load as it always was.
 

@@ -451,6 +451,49 @@ def _extract_first_json_object(text: str) -> Optional[dict[str, Any]]:
 # ---------------------------------------------------------------------------- legacy tasks
 
 
+def declared_formulation(raw_text: str) -> Optional[list[dict[str, Any]]]:
+    """The ``formulation`` list a no-tools answer declares (2026-09-23 prompt), normalized to
+    ``[{"tool", "args"}]``; None when the JSON has no such field."""
+    obj = _extract_first_json_object(raw_text or "")
+    if not isinstance(obj, dict):
+        return None
+    decl = obj.get("formulation")
+    if decl is None:
+        return None
+    if isinstance(decl, dict):
+        decl = decl.get("plan") or decl.get("steps") or [decl]
+    if not isinstance(decl, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for step in decl:
+        if isinstance(step, str):
+            out.append({"tool": step.strip(), "args": {}})
+            continue
+        if not isinstance(step, dict):
+            continue
+        name = step.get("tool") or step.get("name") or step.get("operation") or (step.get("function") or {}).get("name")
+        args = step.get("args", step.get("arguments", {}))
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except Exception:
+                args = {}
+        if name:
+            out.append({"tool": str(name).strip(), "args": args if isinstance(args, dict) else {}})
+    return out
+
+
+def declared_formulation_check(raw_text: str, intended_calls: list[Any], case_name: str) -> tuple[dict[str, Any], Optional[list[dict[str, Any]]]]:
+    """Score a no-tools answer's declared formulation against the intended calls with the same
+    comparator as the tool rows. A missing field counts as nothing formulated (``unparsed``).
+    The case is treated as preloaded: its tables are in the prompt, so declaring load_case is
+    optional on both sides."""
+    decl = declared_formulation(raw_text)
+    fm = bm.formulation_check(list(intended_calls or []), decl, preloaded_case=case_name)
+    fm["detail"] = ("declared formulation: " if decl is not None else "no formulation field in the answer: ") + str(fm.get("detail") or "")
+    return fm, decl
+
+
 def _baseline_parser(raw_text: str, _ctx: dict[str, Any]) -> BaselineParsed:
     from baselines.llm_only import BaselineParsed, parse_llm_baseline_json
 
@@ -893,6 +936,7 @@ def evaluate_item(
     preloaded_case: Optional[str] = None
 
     try:
+        declared: Optional[list[dict[str, Any]]] = None
         if item.truth_error:
             raise RuntimeError(item.truth_error)
 
@@ -908,7 +952,7 @@ def evaluate_item(
             else:
                 from llm.prompt_variants import build_messages
 
-                msgs = build_messages(method.strategy, "llm_only", item.text, net, item.case_name, forced=bool(getattr(method, "forced", False)))
+                msgs = build_messages(method.strategy, "llm_only", item.text, net, item.case_name, forced=bool(getattr(method, "forced", False)), tool_variant=tool_variant)
                 system_prompt, user_prompt = msgs[0]["content"], msgs[1]["content"]
                 parser_ctx = {"net": net}
                 parser = _baseline_parser
@@ -933,7 +977,10 @@ def evaluate_item(
             }
             try:
                 parsed = parser(raw_text, parser_ctx)
-                formulation = {"formulation_exact": None, "formulation_error_type": None, "detail": "no tool stage"}
+                if method.kind == "llm_only":
+                    formulation, declared = declared_formulation_check(raw_text, item.intended_calls, item.case_name)
+                else:
+                    formulation = {"formulation_exact": None, "formulation_error_type": None, "detail": "no tool stage"}
             except Exception as exc:
                 parsed = None
                 formulation = {
@@ -1187,6 +1234,7 @@ def evaluate_item(
         "raw_response": raw_text,
         "intended_calls": item.intended_calls,
         "executed_calls": executed,
+        "declared_formulation": declared,
         "formulation_exact": formulation.get("formulation_exact"),
         "formulation_error_type": formulation.get("formulation_error_type"),
         "formulation_detail": formulation.get("detail"),

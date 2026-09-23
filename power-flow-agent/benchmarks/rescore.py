@@ -241,6 +241,21 @@ def reconstruct_final_state(
 # --------------------------------------------------------------------------- per-row rescoring
 
 
+def _formulation_aware_hashes() -> set[str]:
+    """System-prompt hashes of the llm_only methods as assembled today (they carry the
+    formulation clause), so a rescored old row is never penalized for a field it was never asked for."""
+    import methods
+
+    out: set[str] = set()
+    for m in methods.list_methods():
+        if m.kind == "llm_only":
+            sp = methods.system_prompt_for(m)
+            if sp:
+                out.add(methods.prompt_hash(sp))
+    return out
+
+
+
 def rescore_row(
     row: dict[str, Any],
     *,
@@ -268,8 +283,14 @@ def rescore_row(
         raw = payload.get("answer")
     request_text = row.get("request_text")
 
-    # formulation (tool methods only; LLM-only rows keep their "no tool stage" fields)
+    # formulation: tool methods from the trace; LLM-only rows from the declared `formulation`
+    # field when the row was produced with the formulation-aware prompt (2026-09-23); older
+    # LLM-only rows keep their "no tool stage" fields.
     formulation_exact = row.get("formulation_exact")
+    if spec.kind == "llm_only" and (str(row.get("system_prompt_hash")) in _formulation_aware_hashes() or row.get("declared_formulation") is not None):
+        fm, decl = ev.declared_formulation_check(str(raw or ""), list(row.get("intended_calls") or []), str(row.get("case_name")))
+        formulation_exact = fm.get("formulation_exact")
+        new.update({"declared_formulation": decl, "formulation_exact": formulation_exact, "formulation_error_type": fm.get("formulation_error_type"), "formulation_detail": fm.get("detail")})
     if has_tools:
         if trace is not None:
             executed = None if trace.get("formulation_failure") else bm.executed_calls_from_trace(trace)

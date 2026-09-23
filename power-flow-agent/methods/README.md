@@ -20,6 +20,7 @@ committed ones. Do not strip or reflow whitespace in these files.
 | `llm_only_rag` | `llm_only:rag` | Structured, but the system-data block holds only the rows retrieved for the request. | no | no |
 | `llm_only_nr` | `llm_only:nr` | Newton-Raphson worked by hand in the reasoning. Exploratory, not in the paper. | no | no |
 | `llm_only_forced_structured` | `llm_only_forced:structured` | Structured without the abstention clause. The "LLM only, forced" row. | no | no |
+| `llm_only_forced_cot` | `llm_only_forced:cot` | Chain-of-thought without the abstention clause. | no | no |
 | `single_call_structured` | `single_call:structured` | One function-calling round: every tool call at once, no memory, no second turn. | yes | observation gate |
 | `single_call_few_shot` | `single_call:few_shot` | Single call plus two worked tool-call examples. | yes | observation gate |
 | `single_call_cot` | `single_call:cot` | Single call plus a short numbered plan before the calls. | yes | observation gate |
@@ -31,6 +32,11 @@ committed ones. Do not strip or reflow whitespace in these files.
 | `plan_act_nogate` | `plan_act_nogate` | Plan-and-Act, no gate. | yes | none |
 | `pfagent` | `pfagent` | ReAct loop, no in-loop gate, plus the task-level verification gate V1 to V7 on the final answer. The solver-grounded row. | yes | final gate |
 | `pfagent_obsgate` | `pfagent_obsgate` | Pre-verification PFAgent kept for the old stress numbers. | yes | observation gate |
+
+Since 2026-09-23 every `llm_only` prompt also asks for a `formulation` field: the ordered solver
+operations the request needs, in the tool vocabulary of `--tool-variant`, declared but not executed.
+It is scored with the same comparator as the tool rows, so Formulation exists for the prompting rows.
+Texts: `_shared/llm_only_formulation_clause.txt` (system) and `_shared/llm_only_formulation_section.txt` (user).
 
 ## Reading a method
 
