@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>PFAgent trace viewer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--line:#e2e5ea;--text:#1b1f24;--muted:#6b7280;--acc:#3b6fd4;--ok:#2e9e5b;--esc:#e58f1a;--bad:#d63b3b;--na:#9a9a9a}
+*{box-sizing:border-box}body{margin:0;font:13px/1.45 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:var(--text);background:var(--bg);height:100vh;display:grid;grid-template-columns:300px 300px 1fr;grid-template-rows:auto 1fr}
+header{grid-column:1/-1;display:flex;gap:14px;align-items:center;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+header h1{font-size:15px;margin:0 12px 0 0}header .hint{color:var(--muted)}header button,header select{font:inherit;padding:4px 8px}
+aside{overflow:auto;border-right:1px solid var(--line);background:var(--panel)}
+main{overflow:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+.run{padding:6px 10px;border-bottom:1px solid var(--line);cursor:pointer}.run:hover{background:#f0f3f8}.run.sel{background:#e6eefc}
+.run .t{font-weight:600}.run .m{color:var(--muted);font-size:12px}
+.grp{padding:6px 10px;background:#eef1f5;font-weight:600;color:var(--muted);position:sticky;top:0}
+.req{padding:6px 10px;border-bottom:1px solid var(--line);cursor:pointer;display:grid;grid-template-columns:28px 1fr auto;gap:6px;align-items:start}.req:hover{background:#f0f3f8}.req.sel{background:#e6eefc}
+.req .nn{color:var(--muted)}.req .txt{font-size:12px}.pill{display:inline-block;padding:1px 6px;border-radius:9px;color:#fff;font-size:11px;font-weight:600;white-space:nowrap}
+.pill.solved{background:var(--ok)}.pill.escalated{background:var(--esc)}.pill.wrong_unflagged{background:var(--bad)}.pill.other,.pill.error{background:var(--na)}
+.pill.note{background:#7b4fbf}
+.filters{padding:8px 10px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:6px;position:sticky;top:0;background:var(--panel)}.filters label{font-size:12px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}.tabs button{font:inherit;padding:6px 12px;border:1px solid var(--line);border-bottom:none;background:#eef1f5;cursor:pointer;border-radius:6px 6px 0 0}.tabs button.on{background:var(--panel);font-weight:600}
+pre{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;white-space:pre-wrap;word-break:break-word;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;margin:0;max-height:70vh;overflow:auto}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}.cols h4{margin:0 0 4px;color:var(--muted);font-size:12px}
+img.fig{max-width:100%;border:1px solid var(--line);border-radius:6px;background:#fff}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px}.card h3{margin:0 0 6px;font-size:14px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:12px}.kv b{color:var(--muted);font-weight:500}
+textarea{width:100%;min-height:80px;font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px}
+.small{color:var(--muted);font-size:12px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.summary{display:flex;gap:14px;flex-wrap:wrap;font-size:12px}.summary span b{font-size:15px}
+</style></head><body>
+<header><h1>PFAgent trace viewer</h1>
+<span class="hint" id="status">loading INDEX.json…</span>
+<span style="flex:1"></span>
+<label class="small">compare with: <select id="cmpSel"><option value="">(none)</option></select></label>
+<button id="exportBtn" title="download all annotations as JSON">Export annotations</button>
+<button id="importBtn" title="load an annotations JSON">Import</button><input type="file" id="importFile" accept="application/json" hidden>
+</header>
+<aside id="runs"></aside>
+<aside id="reqs"><div class="small" style="padding:10px">Pick a run on the left.</div></aside>
+<main id="main"><div class="card"><h3>How to use</h3>
+<p>Left: every run folder under <code>results/</code>, grouped by case, date and model. Middle: its 40 requests with outcome and formulation verdict; filter by outcome. Right: the request's narrative, raw transcript, figure and raw JSON, plus a box for your annotation. Annotations are saved in this browser; use <b>Export annotations</b> to hand them over as a JSON file.</p>
+<p>Pick a second run under <b>compare with</b> to see the same request side by side (before / after a prompt change, or two models).</p></div></main>
+<script>
+const $=s=>document.querySelector(s);const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+let INDEX=null,run=null,cmp=null,rows=[],cmpRows=[],cur=null,tab='narrative',filt={outcome:'',form:'',notes:false};
+const ANN_KEY='pfagent-annotations-v1';let ANN=JSON.parse(localStorage.getItem(ANN_KEY)||'{}');
+function saveAnn(){localStorage.setItem(ANN_KEY,JSON.stringify(ANN));}
+function annKey(r,rid){return r.path+'::'+(rid||'__run__');}
+function parseCSV(t){const out=[];let row=[],f='',q=false;for(let i=0;i<t.length;i++){const c=t[i];if(q){if(c=='"'){if(t[i+1]=='"'){f+='"';i++;}else q=false;}else f+=c;}else{if(c=='"')q=true;else if(c==','){row.push(f);f='';}else if(c=='\n'){row.push(f);out.push(row);row=[];f='';}else if(c!='\r')f+=c;}}if(f.length||row.length){row.push(f);out.push(row);}const h=out.shift();return out.filter(r=>r.length>1).map(r=>Object.fromEntries(h.map((k,i)=>[k,r[i]])));}
+async function load(){INDEX=await (await fetch('INDEX.json')).json();$('#status').textContent=`${INDEX.runs.length} runs · generated ${INDEX.generated}`;renderRuns();const sel=$('#cmpSel');INDEX.runs.forEach(r=>{const o=document.createElement('option');o.value=r.path;o.textContent=`${r.date} ${r.model} ${r.dir}`;sel.appendChild(o);});}
+function renderRuns(){const el=$('#runs');el.innerHTML='';let g='';INDEX.runs.forEach(r=>{const gk=`${r.case} · ${r.date} · ${r.model}`;if(gk!=g){g=gk;const d=document.createElement('div');d.className='grp';d.textContent=gk;el.appendChild(d);}const d=document.createElement('div');d.className='run'+(run&&run.path==r.path?' sel':'');const n=Object.keys(ANN).filter(k=>k.startsWith(r.path+'::')).length;d.innerHTML=`<div class="t">${esc(r.dir)} ${n?`<span class="pill note">${n} notes</span>`:''}</div><div class="m">${esc(r.method)} · ${r.condition} · tools ${esc(r.tool_variant)} · n=${r.n}<br><span class="pill solved">${r.solved}</span> <span class="pill escalated">${r.escalated}</span> <span class="pill wrong_unflagged">${r.wrong}</span> form ${r.form==null?'–':Number(r.form).toFixed(1)}%${r.role?`<br><i>${esc(r.role)}</i>`:''}</div>`;d.onclick=()=>selectRun(r);el.appendChild(d);});}
+async function fetchRows(r){const t=await (await fetch(r.path+'/summary.csv')).text();return parseCSV(t);}
+async function selectRun(r){run=r;cur=null;rows=await fetchRows(r);renderRuns();renderReqs();renderRunCard();}
+function stem(row){return `${String(row.nn).padStart(2,'0')}_${row.request_id.replace(/[^A-Za-z0-9_.-]+/g,'_')}`;}
+function renderReqs(){const el=$('#reqs');el.innerHTML='';const f=document.createElement('div');f.className='filters';f.innerHTML=`<label><select id="fo"><option value="">all outcomes</option><option value="solved">solved</option><option value="escalated">escalated</option><option value="wrong_unflagged">wrong unflagged</option></select></label><label><select id="ff"><option value="">all formulation</option><option value="True">exact</option><option value="False">not exact</option></select></label><label><input type="checkbox" id="fn"> with notes</label>`;el.appendChild(f);f.querySelector('#fo').value=filt.outcome;f.querySelector('#ff').value=filt.form;f.querySelector('#fn').checked=filt.notes;f.querySelector('#fo').onchange=e=>{filt.outcome=e.target.value;renderReqs();};f.querySelector('#ff').onchange=e=>{filt.form=e.target.value;renderReqs();};f.querySelector('#fn').onchange=e=>{filt.notes=e.target.checked;renderReqs();};
+rows.filter(r=>(!filt.outcome||r.outcome==filt.outcome)&&(!filt.form||r.formulation_exact==filt.form)&&(!filt.notes||ANN[annKey(run,r.request_id)])).forEach(r=>{const d=document.createElement('div');d.className='req'+(cur&&cur.request_id==r.request_id?' sel':'');const fe=r.formulation_exact==='True'?'✓':r.formulation_exact==='False'?'✗ '+r.formulation_error_type:'·';d.innerHTML=`<span class="nn">${r.nn}</span><span class="txt">${esc(r.request_text)}<br><span class="small">${esc(r.request_id)} · form ${esc(fe)}${ANN[annKey(run,r.request_id)]?' · <b>note</b>':''}</span></span><span class="pill ${r.outcome}">${r.outcome.replace('_',' ')}</span>`;d.onclick=()=>selectReq(r);el.appendChild(d);});}
+function renderRunCard(){const m=$('#main');m.innerHTML=`<div class="card"><h3>${esc(run.dir)} · ${esc(run.model)} · ${esc(run.date)}</h3><div class="summary"><span><b>${run.solved}</b> solved</span><span><b>${run.escalated}</b> escalated</span><span><b>${run.wrong}</b> wrong unflagged</span><span><b>${run.form==null?'–':Number(run.form).toFixed(1)}%</b> formulation</span><span><b>${run.trace==null?'–':Number(run.trace).toFixed(1)}%</b> traceable</span><span><b>${run.tokens==null?'–':Math.round(run.tokens)}</b> tokens/run</span></div><p class="small">${esc(run.role||'')} · <a href="${run.path}/REPORT.md" target="_blank">REPORT.md</a> · <a href="${run.path}/config.json" target="_blank">config.json</a> · <a href="${run.path}/summary.csv" target="_blank">summary.csv</a></p><img class="fig" src="${run.path}/overview.png" alt="overview"><h4 class="small">Note on this run</h4><textarea id="runNote" placeholder="what you see in this run as a whole">${esc(ANN[annKey(run)]||'')}</textarea></div>`;$('#runNote').oninput=e=>{ANN[annKey(run)]=e.target.value;if(!e.target.value)delete ANN[annKey(run)];saveAnn();renderRuns();};}
+async function selectReq(r){cur=r;renderReqs();await renderReq();}
+async function text(url){const x=await fetch(url);return x.ok?await x.text():`(missing: ${url})`;}
+async function renderReq(){const m=$('#main');const st=stem(cur);const base=`${run.path}/traces/${st}`;const tabs=['narrative','transcript','figure','json'];let html=`<div class="card"><h3>${cur.nn}. ${esc(cur.request_text)}</h3><div class="kv"><b>request</b><span>${esc(cur.request_id)} · ${esc(cur.difficulty)} · expected ${esc(cur.expected_outcome)}</span><b>outcome</b><span><span class="pill ${cur.outcome}">${cur.outcome.replace('_',' ')}</span> solved=${cur.solved} (${esc(cur.solved_reason)}) escalated=${cur.escalated} via ${esc(cur.failure_detection_path)}</span><b>formulation</b><span>${cur.formulation_exact==='True'?'EXACT':cur.formulation_exact==='False'?`NOT EXACT (${esc(cur.formulation_error_type)}): ${esc(cur.formulation_detail)}`:'n/a'}</span><b>reporting</b><span>numbers ${cur.n_numbers}, untraceable ${cur.n_untraceable_numbers}, traceable answer ${cur.faithful_answers}, V-pass ${cur.v_pass}, verification ${esc(cur.verification_outcome)}</span><b>vs reference</b><span>V_MAE ${cur.voltage_mae_pu||'n/a'} p.u. · flow MAE ${cur.flow_mae_mw||'n/a'} MW · KCL ${cur.kcl_mismatch_mw||'n/a'} MW</span><b>cost</b><span>${cur.n_llm_calls} LLM calls, ${cur.n_tool_calls} tool calls, ${cur.prompt_tokens} in / ${cur.completion_tokens} out, ${Number(cur.wall_time_s||0).toFixed(1)} s${cur.cost_usd?`, $${Number(cur.cost_usd).toFixed(4)}`:''}</span></div></div>`;
+html+=`<div class="card"><h4 class="small">Your annotation on this request</h4><textarea id="reqNote" placeholder="what is wrong or right here, in your words">${esc(ANN[annKey(run,cur.request_id)]||'')}</textarea></div>`;
+html+=`<div class="tabs">${tabs.map(t=>`<button data-t="${t}" class="${t==tab?'on':''}">${t}</button>`).join('')}</div><div id="tabBody"></div>`;m.innerHTML=html;$('#reqNote').oninput=e=>{ANN[annKey(run,cur.request_id)]=e.target.value;if(!e.target.value)delete ANN[annKey(run,cur.request_id)];saveAnn();renderReqs();renderRuns();};m.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;renderReq();});
+const body=$('#tabBody');const cmpRow=cmp?cmpRows.find(x=>x.request_id==cur.request_id):null;const cbase=cmpRow?`${cmp.path}/traces/${stem(cmpRow)}`:null;
+const one=async(b,label)=>{if(tab=='figure')return `<h4>${label}</h4><img class="fig" src="${b}.png">`;if(tab=='json')return `<h4>${label}</h4><pre>${esc(await text(b+'.json'))}</pre>`;return `<h4>${label}</h4><pre>${esc(await text(b+'.'+tab+'.txt'))}</pre>`;};
+if(cbase){body.innerHTML=`<div class="cols"><div>${await one(base,`A: ${esc(run.dir)} (${esc(run.model)}, ${esc(run.date)}) — ${cur.outcome}`)}</div><div>${await one(cbase,`B: ${esc(cmp.dir)} (${esc(cmp.model)}, ${esc(cmp.date)}) — ${cmpRow.outcome}`)}</div></div>`;}else{body.innerHTML=await one(base,'');}}
+$('#cmpSel').onchange=async e=>{cmp=INDEX.runs.find(r=>r.path==e.target.value)||null;cmpRows=cmp?await fetchRows(cmp):[];if(cur)renderReq();};
+$('#exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify({exported:new Date().toISOString(),annotations:ANN},null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`pfagent_annotations_${new Date().toISOString().slice(0,10)}.json`;a.click();};
+$('#importBtn').onclick=()=>$('#importFile').click();$('#importFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;const j=JSON.parse(await f.text());Object.assign(ANN,j.annotations||j);saveAnn();renderRuns();if(run)renderReqs();};
+load();
+</script></body></html>
