@@ -14,9 +14,121 @@ Important Constraints:
 
 - You must compute and report your best numerical estimate for every bus voltage and every branch flow. `converged` must be true and every array must be complete (one entry per bus and per branch). Do not leave arrays empty and do not state that you cannot compute.
 
-[user]
+[user]   (complete message, rebuilt offline from the same case, seed and prompt code; the request is under '## Task')
+System base: 100 MVA. Every per-unit quantity below (r_pu, x_pu, b_pu) is defined on this base. Line and transformer impedances (r_pu, x_pu, b_pu) are already in per unit on this base, not ohms per km; do not convert them further. Branch thermal ratings are not defined for this case, so branch loading is undefined: report loading_percent as 0 for every branch.
+
+You are a power systems expert. Based on the following IEEE case14 test system data, calculate the AC power flow results.
+
+## System Data (from pandapower network tables)
+
+### Node Data (Bus Table: net.bus)
+
+   name type zone  in_service
+0     1    b  1.0        True
+1     2    b  1.0        True
+2     3    b  1.0        True
+3     4    b  1.0        True
+4     5    b  1.0        True
+5     6    b  1.0        True
+6     7    b  1.0        True
+7     8    b  1.0        True
+8     9    b  1.0        True
+9    10    b  1.0        True
+10   11    b  1.0        True
+11   12    b  1.0        True
+12   13    b  1.0        True
+13   14    b  1.0        True
+
+### Load Data (Load Table: net.load)
+
+    bus       p_mw     q_mvar  in_service
+0     2  20.917473  12.242023        True
+1     3  86.470821  17.441036        True
+2     4  51.426293  -4.195869        True
+3     5   8.321659   1.751928        True
+4     6  10.311066   6.904732        True
+5     9  32.117954  18.073154        True
+6    10   8.819360   5.683588        True
+7    11   3.791720   1.950027        True
+8    12   6.070501   1.592262        True
+9    13  13.794550   5.926547        True
+10   14  13.716387   4.602814        True
+
+### Generator Data (Generator Table: net.gen)
+
+   bus       p_mw  vm_pu  min_p_mw  max_p_mw  min_q_mvar  max_q_mvar  in_service
+0    2  43.948942  1.045       0.0     140.0       -40.0        50.0        True
+1    3   0.000000  1.010       0.0     100.0         0.0        40.0        True
+2    6   0.000000  1.070       0.0     100.0        -6.0        24.0        True
+3    8   0.000000  1.090       0.0     100.0        -6.0        24.0        True
+
+### Balanced Node/External Grid (External Grid Table: net.ext_grid)
+
+   bus  vm_pu  va_degree  in_service
+0    1   1.06        0.0        True
+
+### Line Data (Line Table: net.line)
+
+    from_bus  to_bus     r_pu     x_pu    b_pu  parallel  in_service
+0          1       2  0.01938  0.05917  0.0528         1        True
+1          1       5  0.05403  0.22304  0.0492         1        True
+2          2       3  0.04699  0.19797  0.0438         1        True
+3          2       4  0.05811  0.17632  0.0340         1        True
+4          2       5  0.05695  0.17388  0.0346         1        True
+5          3       4  0.06701  0.17103  0.0128         1        True
+6          4       5  0.01335  0.04211  0.0000         1        True
+7          6      11  0.09498  0.19890  0.0000         1        True
+8          6      12  0.12291  0.25581  0.0000         1        True
+9          6      13  0.06615  0.13027  0.0000         1        True
+10         9      10  0.03181  0.08450  0.0000         1        True
+11         9      14  0.12711  0.27038  0.0000         1        True
+12        10      11  0.08205  0.19207  0.0000         1        True
+13        12      13  0.22092  0.19988  0.0000         1        True
+14        13      14  0.17093  0.34802  0.0000         1        True
+
+### Transformer Data (Transformer Table: net.trafo)
+
+   hv_bus  lv_bus  r_pu     x_pu  shift_degree tap_side  tap_neutral  tap_min  tap_max  tap_step_percent  in_service
+0       4       7   0.0  0.20912           0.0       hv          0.0      NaN      NaN               2.2        True
+1       4       9   0.0  0.55618           0.0       hv          0.0      NaN      NaN               3.1        True
+2       5       6   0.0  0.25202           0.0       hv          0.0      NaN      NaN               6.8        True
+3       7       8   0.0  0.17615           0.0     None          NaN      NaN      NaN               NaN        True
+4       7       9   0.0  0.11001           0.0     None          NaN      NaN      NaN               NaN        True
+
+## Task
 Load case14 and set the active load at bus 2 to 21.7 MW.
-(the user message also carries the case tables and the output schema; rebuild it with: run.py show-prompt --method llm_only_forced:structured)
+
+## Output Requirements
+Please calculate and return the following results (JSON format):
+
+1) Voltage magnitude (p.u.) and phase angle (degrees) for each node
+
+2) Active power (MW) and load factor (%) at the beginning of each branch
+
+- For lines: `line_id` uses the row index of `net.line`
+
+- For transformers: `line_id` uses the row index of 100000 + `net.trafo`
+
+3) Total generation (MW), total load (MW), total losses (MW)
+
+4) Are there any voltage overruns (<0.95 or >1.05 p.u.) or line overruns (>100%)?
+
+Please strictly follow the following JSON schema output (all fields are complete and of correct type):
+
+{
+"converged": true/false,
+
+"bus_voltages": [{"bus_id": 1, "vm_pu": 1.0, "va_deg": 0.0}, ...],
+
+"line_flows": [{"line_id": 0, "p_from_mw": 0.0, "loading_percent": 0.0}, ...],
+
+"total_generation_mw": 0.0,
+
+"total_load_mw": 0.0,
+  "total_loss_mw": 0.0
+}
+
+[Important] bus_id must use the `name` column of net.bus (the usual IEEE/MATPOWER 1..N numbering), not the row index of net.bus.
 
 [assistant]
 {"converged":true,"bus_voltages":[{"bus_id":1,"vm_pu":1.06,"va_deg":0.0},{"bus_id":2,"vm_pu":1.045,"va_deg":-4.99},{"bus_id":3,"vm_pu":1.01,"va_deg":-12.72},{"bus_id":4,"vm_pu":1.017,"va_deg":-10.33},{"bus_id":5,"vm_pu":1.02,"va_deg":-8.78},{"bus_id":6,"vm_pu":1.07,"va_deg":-14.22},{"bus_id":7,"vm_pu":1.062,"va_deg":-13.37},{"bus_id":8,"vm_pu":1.09,"va_deg":-13.36},{"bus_id":9,"vm_pu":1.056,"va_deg":-14.94},{"bus_id":10,"vm_pu":1.051,"va_deg":-15.1},{"bus_id":11,"vm_pu":1.057,"va_deg":-14.79},{"bus_id":12,"vm_pu":1.055,"va_deg":-15.08},{"bus_id":13,"vm_pu":1.05,"va_deg":-15.16},{"bus_id":14,"vm_pu":1.036,"va_deg":-16.04}],"line_flows":[{"line_id":0,"p_from_mw":156.88,"loading_percent":0.0},{"line_id":1,"p_from_mw":75.51,"loading_percent":0.0},{"line_id":2,"p_from_mw":73.24,"loading_percent":0.0},{"line_id":3,"p_from_mw":56.13,"loading_percent":0.0},{"line_id":4,"p_from_mw":41.52,"loading_percent":0.0},{"line_id":5,"p_from_mw":-23.29,"loading_percent":0.0},{"line_id":6,"p_from_mw":-61.16,"loading_percent":0.0},{"line_id":7,"p_from_mw":7.81,"loading_percent":0.0},{"line_id":8,"p_from_mw":7.27,"loading_percent":0.0},{"line_id":9,"p_from_mw":17.55,"loading_percent":0.0},{"line_id":10,"p_from_mw":5.23,"loading_percent":0.0},{"line_id":11,"p_from_mw":9.43,"loading_percent":0.0},{"line_id":12,"p_from_mw":2.91,"loading_percent":0.0},{"line_id":13,"p_from_mw":1.36,"loading_percent":0.0},{"line_id":14,"p_from_mw":5.83,"loading_percent":0.0},{"line_id":100000,"p_from_mw":28.19,"loading_percent":0.0},{"line_id":100001,"p_from_mw":16.08,"loading_percent":0.0},{"line_id":100002,"p_from_mw":44.73,"loading_percent":0.0},{"line_id":100003,"p_from_mw":0.0,"loading_percent":0.0},{"line_id":100004,"p_from_mw":28.04,"loading_percent":0.0}],"total_generation_mw":272.11,"total_load_mw":277.46,"total_loss_mw":10.66}

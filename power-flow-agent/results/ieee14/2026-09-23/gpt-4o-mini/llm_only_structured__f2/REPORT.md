@@ -1,6 +1,6 @@
 # llm_only:structured on IEEE 14-bus with gpt-4o-mini
 
-Generated 2026-09-23 13:52 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
+Generated 2026-09-24 07:05 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
 
 ## Run
 
@@ -20,7 +20,7 @@ Generated 2026-09-23 13:52 by benchmarks/postprocess.py from `report.rescored.js
 | temperature | 0.0 |
 | system_prompt_hash | 92a45f4872b0 |
 | description | LLM answers from the case tables in the prompt. No tools. Structured prompt: role, full case tables as system data, task, JSON output schema. |
-| prompt files | _shared/llm_only_system_prompt.txt, _shared/llm_only_user_template.txt, _shared/llm_only_bus_id_note.txt, _shared/llm_only_formulation_clause.txt, _shared/llm_only_formulation_section.txt |
+| prompt files | _shared/llm_only_system_prompt.txt, _shared/llm_only_user_template.txt, _shared/llm_only_bus_id_note.txt |
 
 ![overview of the runs](overview.png)
 

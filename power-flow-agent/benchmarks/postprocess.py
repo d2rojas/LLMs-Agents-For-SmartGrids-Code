@@ -329,8 +329,40 @@ def render_transcript(row: Dict[str, Any], payload: Dict[str, Any], header: Dict
             pass
         out.append("")
 
+    # the tool schemas the API received (function calling), for every tool-using row
+    try:
+        _m = methods.get_method(method_name)
+        if _m.uses_tools and _m.uses_llm:
+            from llm.tools import get_openai_tools
+
+            variant = str(header.get("tool_variant") or "v1")
+            out.append(f"[tools available to the model]   (function-calling schema, --tool-variant {variant}; enum values and defaults as sent)")
+            for t in get_openai_tools(variant=variant):
+                fn = t.get("function", t)
+                props = (fn.get("parameters") or {}).get("properties") or {}
+                req = set((fn.get("parameters") or {}).get("required") or [])
+                args = []
+                for k, v in props.items():
+                    a = f"{k}: {v.get('type')}" + ("*" if k in req else "")
+                    if v.get("enum"):
+                        a += " in {" + ", ".join(str(e) for e in v["enum"]) + "}"
+                    if "default" in v:
+                        a += f" (default {v['default']})"
+                    args.append(a)
+                out.append(f"  {fn.get('name')}({', '.join(args)})  {fn.get('description', '')}")
+            out.append("")
+    except KeyError:
+        pass
+
     plan = tr.get("plan")
     if plan:
+        planner = None
+        try:
+            planner = methods.planner_prompt_for(method_name, tool_variant=str(header.get("tool_variant") or "v1"))
+        except Exception:
+            planner = None
+        if planner:
+            out += [f"[planner system prompt]   (hash {methods.prompt_hash(planner)}; as assembled today from methods/plan_act; the planning call sends this plus the request)", planner.rstrip(), ""]
         out += ["[planner output]", json.dumps(plan, ensure_ascii=False, indent=1), ""]
 
     rounds = tr.get("rounds") or []

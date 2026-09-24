@@ -1,6 +1,6 @@
 # react_nogate on IEEE 14-bus with gpt-5.4
 
-Generated 2026-09-23 11:46 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 10.
+Generated 2026-09-23 22:50 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 10.
 
 ## Run
 

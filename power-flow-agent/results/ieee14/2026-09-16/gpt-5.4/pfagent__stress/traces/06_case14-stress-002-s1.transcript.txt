@@ -34,6 +34,19 @@ After each analysis, reply in this structure:
 [user]
 Load the IEEE 14-bus system, disconnect the line between bus 10 and bus 11, increase the load at bus 13 to 81 MW and 34.8 Mvar (six times its nominal value), increase the load at bus 3 to 565.2 MW and 114 Mvar (six times its nominal value), increase the active load at bus 4 to 286.8 MW (six times its nominal value), and finally rerun the power flow, then report the bus with the lowest voltage magnitude.
 
+[tools available to the model]   (function-calling schema, --tool-variant v1; enum values and defaults as sent)
+  load_case(case_name: string* in {case14, case30, case57, case118, case300})  Load IEEE test case.
+  run_powerflow()  Run power flow on current case.
+  modify_load(bus_id: integer*, p_mw: number*, q_mvar: number)  Modify bus load and recompute.
+  disconnect_line(from_bus: integer*, to_bus: integer*)  Disconnect line/branch between two buses and recompute.
+  reconnect_line(from_bus: integer*, to_bus: integer*)  Reconnect line/branch between two buses and recompute.
+  get_most_loaded_branch()  Get most loaded branch.
+  run_n1_contingency(top_k: integer (default 5), criteria: string in {max_violations, max_overload, min_voltage} (default max_violations), max_candidates: integer (default 0))  Run N-1 contingency analysis.
+  recommend_remedial_actions(max_actions: integer (default 5), allow_load_shed: boolean (default True), allow_voltage_control: boolean (default True), include_best_comparison: boolean (default True))  Recommend remedial actions.
+  apply_remedial_action(action_index: integer*, confirmed: boolean (default False))  Apply one remedial action by index.
+  get_status()  Get current network status.
+  generate_plot(plot_type: string* in {voltage_heatmap, flow_diagram, violation_overview, comparison})  Generate one plot.
+
 --- round 1 ---
 [assistant]   (851 in / 20 out tokens, 1.1 s)
 (no text)

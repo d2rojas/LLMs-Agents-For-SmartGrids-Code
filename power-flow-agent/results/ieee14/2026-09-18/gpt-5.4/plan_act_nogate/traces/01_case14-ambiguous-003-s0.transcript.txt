@@ -34,6 +34,37 @@ After each analysis, reply in this structure:
 [user]
 Load case14 and disconnect the line between bus ten and bus eleven.
 
+[tools available to the model]   (function-calling schema, --tool-variant v1; enum values and defaults as sent)
+  load_case(case_name: string* in {case14, case30, case57, case118, case300})  Load IEEE test case.
+  run_powerflow()  Run power flow on current case.
+  modify_load(bus_id: integer*, p_mw: number*, q_mvar: number)  Modify bus load and recompute.
+  disconnect_line(from_bus: integer*, to_bus: integer*)  Disconnect line/branch between two buses and recompute.
+  reconnect_line(from_bus: integer*, to_bus: integer*)  Reconnect line/branch between two buses and recompute.
+  get_most_loaded_branch()  Get most loaded branch.
+  run_n1_contingency(top_k: integer (default 5), criteria: string in {max_violations, max_overload, min_voltage} (default max_violations), max_candidates: integer (default 0))  Run N-1 contingency analysis.
+  recommend_remedial_actions(max_actions: integer (default 5), allow_load_shed: boolean (default True), allow_voltage_control: boolean (default True), include_best_comparison: boolean (default True))  Recommend remedial actions.
+  apply_remedial_action(action_index: integer*, confirmed: boolean (default False))  Apply one remedial action by index.
+  get_status()  Get current network status.
+  generate_plot(plot_type: string* in {voltage_heatmap, flow_diagram, violation_overview, comparison})  Generate one plot.
+
+[planner system prompt]   (hash 7f71af6e03f2; as assembled today from methods/plan_act; the planning call sends this plus the request)
+You are the planner of a power-system analysis agent. You cannot call tools yourself. Given the user's request, output ONLY a JSON object of the form
+{"plan": [{"tool": "<tool_name>", "args": {...}}, ...]}
+listing, in execution order, every tool call needed to answer the request. Use only the tools below with exactly these argument names (* = required); where an argument lists allowed values, use one of them verbatim. Bus and line identifiers in the request are MATPOWER 1-based ids; pass them to the tools as given, unless the request itself states a different indexing convention for that identifier (e.g. "(0-based)"), in which case convert it to the MATPOWER 1-based id. Do not include explanations, markdown, or any text outside the JSON.
+
+Available tools:
+- load_case(case_name: string in {case14, case30, case57, case118, case300}*): Load IEEE test case.
+- run_powerflow((none)): Run power flow on current case.
+- modify_load(bus_id: integer*, p_mw: number*, q_mvar: number): Modify bus load and recompute.
+- disconnect_line(from_bus: integer*, to_bus: integer*): Disconnect line/branch between two buses and recompute.
+- reconnect_line(from_bus: integer*, to_bus: integer*): Reconnect line/branch between two buses and recompute.
+- get_most_loaded_branch((none)): Get most loaded branch.
+- run_n1_contingency(top_k: integer, criteria: string in {max_violations, max_overload, min_voltage}, max_candidates: integer): Run N-1 contingency analysis.
+- recommend_remedial_actions(max_actions: integer, allow_load_shed: boolean, allow_voltage_control: boolean, include_best_comparison: boolean): Recommend remedial actions.
+- apply_remedial_action(action_index: integer*, confirmed: boolean): Apply one remedial action by index.
+- get_status((none)): Get current network status.
+- generate_plot(plot_type: string in {voltage_heatmap, flow_diagram, violation_overview, comparison}*): Generate one plot.
+
 [planner output]
 [
  {

@@ -1,6 +1,6 @@
 # formulation_probe:cot on IEEE 14-bus with gpt-5.6-sol
 
-Generated 2026-09-23 16:03 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
+Generated 2026-09-24 07:29 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
 
 ## Run
 
