@@ -35,7 +35,8 @@ PINNED_TEXTS = {
     "single_call_structured/output_section.txt": "2304fa83ea46",
     "single_call_cot/reasoning_section.txt": "e0bd7a11b9d9",
     "plan_act/plan_system_prompt_structured.txt": "5e9fee34a0db",
-    "_shared/formulation_probe_system_prompt.txt": "dc7bdf5c5b61",
+    "plan_act/plan_system_prompt_prefix.txt": "6519a84e612a",
+    "_shared/formulation_probe_system_prompt.txt": "4f70e94323e1",
     "_shared/formulation_probe_section.txt": "537f737bee76",
     "_shared/formulation_probe_output_section.txt": "7781da365dcd",
 }
@@ -54,11 +55,13 @@ PINNED_SYSTEM_PROMPTS = {
     "llm_only_forced:structured": "3fdf007e43a0",
     "llm_only_forced:cot": "563a38e7a450",
     # 2026-09-23: Formulation for the prompting rows comes from this companion probe (no numbers asked)
-    "formulation_probe:structured": "dc7bdf5c5b61",
-    "formulation_probe:cot": "ecf6dde0930c",
+    "formulation_probe:structured": "4f70e94323e1",
+    "formulation_probe:cot": "324529448686",
 }
 
-PINNED_PLANNER_PROMPTS = {"v1": "6dfbc78e5795", "load_split": "a82318af7571"}
+# 2026-09-23: planner prompt carries the enum values and the indexing rule (matched information with ReAct);
+# the runs behind the 2026-09-21 tables used 6dfbc78e5795 / a82318af7571.
+PINNED_PLANNER_PROMPTS = {"v1": "7f71af6e03f2", "load_split": "76ea681e520a"}
 
 
 @pytest.mark.parametrize("rel,expected", sorted(PINNED_TEXTS.items()))

@@ -139,9 +139,9 @@ def planner_prompt_for(method: str | Method, *, tool_variant: str = "v1", plan_v
         return None
     if plan_variant == "structured":
         return read_text("plan_act/plan_system_prompt_structured.txt")
-    from llm.engine import _tools_catalog_text  # local import: llm imports this package
+    from llm.tools import tools_catalog_text  # local import: llm imports this package
 
-    return read_text("plan_act/plan_system_prompt_prefix.txt") + _tools_catalog_text(tool_variant)
+    return read_text("plan_act/plan_system_prompt_prefix.txt") + tools_catalog_text(tool_variant, with_enums=True)
 
 
 def describe(method: str | Method, *, tool_variant: str = "v1") -> str:

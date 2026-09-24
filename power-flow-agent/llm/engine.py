@@ -656,7 +656,13 @@ def _plan_system_prompt(variant: str = "v1") -> str:
     set_active_load/set_load underneath -- found auditing the four-row split-tool
     launch's plan_act_nogate rows, which read as still on the old tool despite the
     launch config)."""
-    return _read_method_text("plan_act/plan_system_prompt_prefix.txt") + _tools_catalog_text(variant)
+    # 2026-09-23: the planner sees the same information as the tool-calling rows: the enum
+    # values of each argument (the schema gives them to ReAct) and the indexing rule of the
+    # agent system prompt. Before this, every Plan-and-Act formulation miss was an invalid
+    # free-text criterion or an unconverted 0-based index, neither of which ReAct can make.
+    from llm.tools import tools_catalog_text
+
+    return _read_method_text("plan_act/plan_system_prompt_prefix.txt") + tools_catalog_text(variant, with_enums=True)
 
 PLAN_SYSTEM_PROMPT_STRUCTURED = _read_method_text("plan_act/plan_system_prompt_structured.txt")
 
