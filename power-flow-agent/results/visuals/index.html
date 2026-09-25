@@ -13,12 +13,22 @@ aside a{display:block;padding:8px 18px 8px 46px;color:var(--sidetext);text-decor
 aside a:hover{background:#1e2f49;color:#fff}aside a.on{background:#243a5c;color:#fff;border-left-color:#7aa2ff;font-weight:600}
 aside .off{display:block;padding:8px 18px 8px 46px;font-size:13px;color:#6f7d93}aside .off small{display:block;font-size:11.5px}
 aside hr{border:0;border-top:1px solid #22314a;margin:10px 18px}
-main{flex:1;min-width:0;display:flex}iframe{border:0;width:100%;height:100%;background:var(--bg)}
+main{flex:1;min-width:0;display:flex;overflow:auto}iframe{border:0;width:100%;height:100%;background:var(--bg)}
+#home{display:none;padding:34px 40px;max-width:1100px;width:100%}#home.on{display:block}#home[hidden]{display:none}
+#home h1{margin:0 0 6px;font-size:24px}#home .lead{color:var(--muted);margin:0 0 26px;font-size:15px;max-width:760px}
+.stages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}@media(max-width:800px){.stages{grid-template-columns:1fr}#home{padding:20px 16px}}
+.stg{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;text-decoration:none;color:var(--text);box-shadow:0 1px 2px rgba(15,23,42,.06),0 4px 14px rgba(15,23,42,.05);position:relative}
+.stg:hover{border-color:var(--acc)}.stg .n{display:inline-flex;width:26px;height:26px;border-radius:50%;background:var(--side);color:#fff;align-items:center;justify-content:center;font-weight:700;font-size:12px;margin-bottom:10px}
+.stg h3{margin:0 0 6px;font-size:16px}.stg p{margin:0;color:var(--muted);font-size:13.5px}.stg .st{margin-top:12px;font-size:12px;font-weight:600;color:var(--acc)}
+.stg.off{opacity:.55;cursor:default}.stg.off:hover{border-color:var(--line)}.stg.off .st{color:var(--muted)}
+#home .why{margin-top:26px;background:#eef2fb;border:1px solid #d6e0f7;border-radius:12px;padding:14px 18px;color:#1e293b;font-size:13.5px;max-width:900px}
 @media(max-width:800px){aside{position:fixed;top:48px;bottom:0;left:0;transform:translateX(-100%);transition:transform .2s;z-index:10}aside.open{transform:none}.top .burger{display:block}.top .note{display:none}}
 </style></head><body>
 <div class='top'><button class='burger' id='burger'>☰</button><span class='brand'>PFAgent · Evaluation</span><span class='crumb' id='crumb'></span><span class='sp'></span><span class='note' id='note'></span></div>
 <div class='wrap'>
 <aside id='side'>
+<a href='#home' data-r='home' style='padding-left:18px;font-weight:600'>Home</a>
+<hr>
 <div class='grp'><span class='n'>1</span>Design</div>
 <a href='#design/overview' data-r='design/overview'>Overview</a>
 <a href='#design/methods' data-r='design/methods'>Methods</a>
@@ -35,15 +45,25 @@ main{flex:1;min-width:0;display:flex}iframe{border:0;width:100%;height:100%;back
 <div class='grp'><span class='n'>3</span>Analysis</div>
 <span class='off'>Comparisons &amp; conclusions<small>written after the results exist</small></span>
 </aside>
-<main><iframe id='frame' title='content'></iframe></main>
+<main><section id='home'><h1>PFAgent · IEEE 14-bus evaluation</h1><p class='lead'>Six ways to answer the same 40 power-flow requests, from a deterministic parser to the solver-grounded agent, scored by one evaluator. The work is kept in three stages, so that conclusions come from recorded results and not from expectations.</p>
+<div class='stages'>
+<a class='stg' href='#design/overview'><span class='n'>1</span><h3>Design</h3><p>Methods, prompts, the answer object every method returns, the evaluator and the run plan with its cost. Written before any run: no numbers, no verdicts.</p><div class='st'>Open the design →</div></a>
+<a class='stg' href='#results/table'><span class='n'>2</span><h3>Results</h3><p>The numbers and every trace, exactly as the runs produced them. The table, the same scenario under each method, and a viewer for any run.</p><div class='st'>Open the results →</div></a>
+<span class='stg off'><span class='n'>3</span><h3>Analysis</h3><p>Comparisons, failure catalogue and conclusions, written only from the results. Comes last.</p><div class='st'>After the runs</div></span>
+</div>
+<div class='why'><b>Why three stages.</b> The design is approved before the money is spent. The results are recorded before anyone interprets them. The conclusions cite the results.</div>
+</section><iframe id='frame' title='content' hidden></iframe></main>
 </div>
 <script>
-const ROUTES={'design':{src:'design.html',label:'Design',note:'Generated from the code that will run. For approval; nothing runs yet.'},
+const ROUTES={'design':{src:'design.html',label:'Design',note:''},
  'results/table':{src:'results.html',note:'Numbers and traces exactly as the runs produced them.'},
  'results/traces':{src:'viewer.html',note:'Any run, any request, the real trace.'}};
 const frame=document.getElementById('frame'),crumb=document.getElementById('crumb'),note=document.getElementById('note'),side=document.getElementById('side');
 let cur='';
-function go(){const r=(location.hash||'#design/overview').slice(1);const [sec,sub]=r.split('/');
+const home=document.getElementById('home');
+function go(){const r=(location.hash||'#home').slice(1);const [sec,sub]=r.split('/');
+ if(sec==='home'){home.classList.add('on');frame.hidden=true;document.querySelectorAll('aside a').forEach(a=>a.classList.toggle('on',a.dataset.r==='home'));crumb.innerHTML='';note.textContent='';side.classList.remove('open');return;}
+ home.classList.remove('on');frame.hidden=false;
  const route=sec==='design'?ROUTES.design:(ROUTES[r]||ROUTES.design);
  if(cur!==route.src){frame.src=sec==='design'?'design.html#'+(sub||'overview'):route.src;cur=route.src;}
  else if(sec==='design'){try{frame.contentWindow.location.hash=sub||'overview';}catch(e){}}
