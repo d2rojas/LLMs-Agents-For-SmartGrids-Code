@@ -554,6 +554,20 @@ _TEMPLATES = {
 # --------------------------------------------------------------------------- stress template
 
 
+def _reference_converges(case_name: str, calls: list[dict[str, Any]], *, seed: int, k: int) -> bool:
+    """True when the reference of ``calls`` on the seed-perturbed case converges without isolating a bus."""
+    try:
+        net = copy.deepcopy(_load_base_net(case_name))
+        perturb_network(net, seed=seed, k=k)
+        base_isolated = _isolated_buses(net)
+        for call in calls:
+            _apply_call_to_net(net, call)
+        final = run_power_flow(net)
+        return bool(final.converged) and not (_isolated_buses(net) - base_isolated)
+    except Exception:
+        return False
+
+
 class _StressVerifier:
     """Runs candidate operations with PandaPower on the seed-perturbed case.
 
@@ -772,7 +786,15 @@ def generate_requests(
         if difficulty == STRESS_DIFFICULTY:
             text, calls, query, notes, expected = _template_stress(random.Random(req_seed), facts, seed=req_seed)
         else:
-            text, calls, query, notes = _TEMPLATES[difficulty](random.Random(req_seed), facts)
+            # A normal request must have a converged, connected reference (that is what its
+            # expected_outcome promises). Topology alone does not guarantee it: two outages on the
+            # 57-bus system left a request whose reference never converged (2026-09-25). Verify with
+            # the solver at generation time and redraw the request when the reference fails.
+            for _attempt in range(25):
+                text, calls, query, notes = _TEMPLATES[difficulty](random.Random(req_seed), facts)
+                if _reference_converges(facts.case_name, calls, seed=req_seed, k=STRESS_VERIFY_K):
+                    break
+                req_seed = rng.randrange(1, 2**31 - 1)
             expected = "converged"
         out.append(
             Request(
