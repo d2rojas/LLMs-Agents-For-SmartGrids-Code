@@ -145,7 +145,8 @@ def test_react_default_history_shape_and_trace_usage():
                 tool_calls=[_tool_call("c1", "load_case", {"case_name": "case14"}), _tool_call("c2", "run_powerflow", {})],
                 usage={"prompt_tokens": 100, "completion_tokens": 10},
             ),
-            _resp(content="Total load 259.000 MW.", usage={"prompt_tokens": 300, "completion_tokens": 20}),
+            _resp(content="Done; total load 259.000 MW.", usage={"prompt_tokens": 300, "completion_tokens": 20}),
+            _resp(content='{"formulation": [], "answer": "Total load 259.000 MW."}', usage={"prompt_tokens": 500, "completion_tokens": 30}),
         ]
     )
     engine = LLMEngine(client=client, dispatcher=tools.dispatcher(), config=EngineConfig(model="fake"))
@@ -153,15 +154,17 @@ def test_react_default_history_shape_and_trace_usage():
 
     text, trace = engine.run_with_trace("run case14", session)
 
-    assert text == "Total load 259.000 MW."
+    # the reply to the final-answer instruction is the answer (same closing step as Plan-and-Act)
+    assert text == '{"formulation": [], "answer": "Total load 259.000 MW."}'
     roles = [m["role"] for m in session.conversation_history]
-    # identical to the pre-R1 loop: user, assistant(tool_calls), tool, tool, assistant(final)
-    assert roles == ["user", "assistant", "tool", "tool", "assistant"]
-    assert trace["prompt_tokens"] == 400 and trace["completion_tokens"] == 30
-    assert trace["n_llm_calls"] == 2 and trace["n_tool_calls"] == 2 and trace["n_tool_rounds"] == 1
+    assert roles == ["user", "assistant", "tool", "tool", "assistant", "user", "assistant"]
+    assert session.conversation_history[-2]["content"].startswith("Write the final answer")
+    assert trace["prompt_tokens"] == 900 and trace["completion_tokens"] == 60
+    assert trace["n_llm_calls"] == 3 and trace["n_tool_calls"] == 2 and trace["n_tool_rounds"] == 1
+    assert trace["rounds"][-1].get("final") is True
     assert trace["gate_checked"] == 1 and trace["gate_failed"] == 0 and trace["gate_enforced"] == 0
     assert trace["wall_time_s"] >= 0.0
-    assert engine.run("again", SessionState()) == "Total load 259.000 MW."  # run() still returns str
+    assert engine.run("again", SessionState()) == '{"formulation": [], "answer": "Total load 259.000 MW."}'  # run() still returns str
 
 
 # ----------------------------------------------------------------------------- single_call

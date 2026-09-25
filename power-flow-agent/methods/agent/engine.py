@@ -82,7 +82,88 @@ CONDITION_LABELS: Dict[str, str] = {
     "currency": "V5",
     "argument_grounding": "V6",
     "claims_from_tools": "V7",
+    "request_applied": "V8",
+    "plausible_state": "V9",
 }
+_MUTATING_TOOLS = ("set_active_load", "set_load", "modify_load", "disconnect_line", "reconnect_line", "apply_remedial_action")
+
+
+def _args_of(rec: Dict[str, Any]) -> Dict[str, Any]:
+    a = rec.get("arguments") or {}
+    if isinstance(a, str):
+        try:
+            a = json.loads(a)
+        except Exception:
+            a = {}
+    return a if isinstance(a, dict) else {}
+
+
+def _request_applied_check(records: List[Dict[str, Any]], pf: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """V8: every network change the agent made after the last load_case took effect (the tool did
+    not report an error, a load change landed on the bus that was asked) and is reflected in the
+    state the answer was written from (a disconnected branch carries no flow there, a reconnected
+    one does). Read from the trace only."""
+    from evaluation import metrics as bm
+
+    start = 0
+    for i, rec in enumerate(records):
+        if str(rec.get("name") or "") == "load_case":
+            start = i + 1
+    muts = [rec for rec in records[start:] if str(rec.get("name") or "") in _MUTATING_TOOLS]
+    if not muts:
+        return {"passed": True, "applicable": False, "detail": "no network change was made"}
+    problems: List[str] = []
+    want: Dict[Any, str] = {}
+    for rec in muts:
+        name = str(rec.get("name") or "")
+        out = bm._parse_output(rec.get("output"))
+        args = _args_of(rec)
+        if not isinstance(out, dict) or out.get("error"):
+            problems.append(f"{name}: the tool reported an error, so the change was not applied")
+            continue
+        if name in ("set_active_load", "set_load", "modify_load"):
+            got, asked = out.get("resolved_bus_id"), args.get("bus_id")
+            if got is not None and asked is not None and int(got) != int(asked):
+                problems.append(f"{name}: the load change landed on bus {got}, not bus {asked}")
+        elif name in ("disconnect_line", "reconnect_line"):
+            try:
+                key = frozenset((int(args.get("from_bus")), int(args.get("to_bus"))))
+            except (TypeError, ValueError):
+                continue
+            want[key] = "out" if name == "disconnect_line" else "in"
+    if want:
+        if pf is None:
+            problems.append("no solved state after the network changes")
+        else:
+            for key, state in want.items():
+                a, b = sorted(key)
+                flows = [f for f in (pf.get("line_flows") or []) if isinstance(f, dict) and frozenset((f.get("from_bus"), f.get("to_bus"))) == key]
+                carrying = any(abs(float(f.get("p_from_mw") or 0.0)) > 1e-6 or abs(float(f.get("q_from_mvar") or 0.0)) > 1e-6 for f in flows)
+                if not flows:
+                    problems.append(f"branch {a}-{b} is missing from the final state")
+                elif state == "out" and carrying:
+                    problems.append(f"branch {a}-{b} still carries flow in the final state although it was disconnected")
+                elif state == "in" and not carrying:
+                    problems.append(f"branch {a}-{b} carries no flow in the final state although it was reconnected")
+    return {"passed": not problems, "applicable": True, "detail": "; ".join(problems) or "every change applied and reflected in the final state"}
+
+
+def _plausible_state_check(pf: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """V9, advisory: what an engineer glances at before trusting a solve. Voltages between 0.8 and
+    1.2 p.u., losses below 10 % of the load. Recorded on the verdict (``plausible``), never enforced:
+    a stressed perturbed case can be right and implausible-looking at the same time."""
+    if not pf:
+        return {"passed": True, "applicable": False, "enforced": False, "plausible": None, "detail": "no solved state"}
+    notes: List[str] = []
+    vms = [float(b.get("vm_pu")) for b in (pf.get("bus_voltages") or []) if isinstance(b, dict) and isinstance(b.get("vm_pu"), (int, float))]
+    if vms and (min(vms) < 0.8 or max(vms) > 1.2):
+        notes.append(f"voltages span {min(vms):.3f} to {max(vms):.3f} p.u.")
+    gen, load = pf.get("total_generation_mw"), pf.get("total_load_mw")
+    if isinstance(gen, (int, float)) and isinstance(load, (int, float)) and load > 0:
+        loss_pct = 100.0 * (float(gen) - float(load)) / float(load)
+        if loss_pct > 10.0 or loss_pct < -1.0:
+            notes.append(f"losses are {loss_pct:.1f} % of the load")
+    return {"passed": True, "applicable": True, "enforced": False, "plausible": not notes, "detail": "; ".join(notes) or "voltages within 0.8 to 1.2 p.u., losses below 10 % of the load"}
 
 MAX_ROUNDS_EXCEEDED_TEXT = (
     "The tool-call round limit was reached before an answer could be verified. "
@@ -137,6 +218,10 @@ class EngineConfig:
     temperature: float = 0.2
     max_tool_rounds: int = 8
     max_history_messages: int = 40  # 约等于 20 轮（user+assistant）
+    # ReAct (and PFAgent) close like Plan-and-Act: when the model stops calling tools, the
+    # final-answer instruction (methods/_shared/final_answer_instruction.txt, the shared answer
+    # object) is sent and the reply to it is the answer. False keeps the free-text reply (the UI).
+    final_answer_instruction: bool = True
     timeout_s: float = 60.0
 
     architecture: str = "react"
@@ -494,6 +579,10 @@ def verify_final_answer(
         v7 = bs.claims_from_tools_check(trace, final_answer_text, request_text)
         conditions["claims_from_tools"] = {"passed": v7["passed"], "applicable": v7["applicable"], "detail": v7["detail"]}
 
+    if enforce_v6v7:
+        conditions["request_applied"] = _request_applied_check(records, pf)
+    conditions["plausible_state"] = _plausible_state_check(pf)
+
     for key, label in CONDITION_LABELS.items():
         if key in conditions:
             conditions[key]["label"] = label
@@ -563,6 +652,9 @@ def _condition_plain_text(name: str, cond: Dict[str, Any], verdict: Dict[str, An
             a = mutation.get("args") or {}
             text += f" Suggested next step: reconnect the branch between bus {a.get('from_bus')} and bus {a.get('to_bus')}, or analyse the connected part separately."
         return text
+
+    if name == "request_applied":
+        return str(cond.get("detail") or "a requested network change is not reflected in the final state")
 
     if name == "traceability":
         r = cond.get("residual") or 0.0
@@ -996,6 +1088,21 @@ class LLMEngine:
                 continue
 
             final_text = (msg.get("content") or "").strip()
+            if self.config.final_answer_instruction:
+                # Same closing step as Plan-and-Act: the answer object is written in reply to the
+                # final-answer instruction, from the tool outputs above, without tools.
+                final_rec: Dict[str, Any] = {"round": tool_round + 1, "final": True}
+                trace["rounds"].append(final_rec)
+                messages.append({"role": "user", "content": FINAL_ANSWER_INSTRUCTION})
+                session.conversation_history.append({"role": "user", "content": FINAL_ANSWER_INSTRUCTION})
+                try:
+                    final_msg = self._call_llm(messages, with_tools=False, trace=trace, round_rec=final_rec)
+                except _LLMCallError as e:
+                    return self._finish(e.text, session, trace, "llm_error")
+                final_entry = self._assistant_entry(final_msg)
+                session.conversation_history.append(final_entry)
+                messages.append(final_entry)
+                final_text = (final_msg.get("content") or "").strip()
             if not self.config.final_gate:
                 trace["status"] = "ok"
                 return final_text

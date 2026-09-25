@@ -226,6 +226,9 @@ def run_power_flow(net: object, *, config: SolverConfig = SolverConfig()) -> Pow
 
     try:
         pp.runpp(net, algorithm=config.algorithm)
+        from solver.ratings import apply_rating_loading
+
+        apply_rating_loading(net)  # one loading definition everywhere: S_from / rating_mva
         converged = bool(getattr(net, "converged", True))
     except Exception as e:
         return PowerFlowResult(

@@ -246,7 +246,7 @@ def test_final_gate_retries_once_then_abstains_on_repeated_failure():
     # Two LLM turns, neither ever calls a tool: both final answers fail verification
     # (no run_powerflow output exists in the trace at all).
     client = _ScriptedClient(["First answer with a number: 1.05 pu.", "Second answer, still bad: 1.05 pu."])
-    engine = LLMEngine(client=client, dispatcher=_FakeDispatcher(bad_pf), config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True))
+    engine = LLMEngine(client=client, dispatcher=_FakeDispatcher(bad_pf), config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True, final_answer_instruction=False))
     text, trace = engine.run_with_trace("Run the power flow.", SessionState())
     assert trace["verification_outcome"] == "abstained"
     assert trace["verification_attempts"] == 2
@@ -304,7 +304,7 @@ def test_mutating_tool_during_retry_is_blocked_not_executed():
             (None, reconnect_call),  # attempts to undo the disconnection instead of reporting it
         ]
     )
-    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True))
+    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True, final_answer_instruction=False))
     text, trace = engine.run_with_trace("Disconnect the branch between bus 7 and bus 8.", SessionState())
 
     assert "reconnect_line" not in dispatcher.calls  # never executed
@@ -342,7 +342,7 @@ def test_split_tool_load_mutations_are_blocked_during_retry_too():
     )
     engine = LLMEngine(
         client=client, dispatcher=dispatcher,
-        config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True, tool_variant="load_split"),
+        config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True, tool_variant="load_split", final_answer_instruction=False),
     )
     text, trace = engine.run_with_trace("Disconnect the branch between bus 7 and bus 8.", SessionState())
 
@@ -401,7 +401,7 @@ def test_pfagent_live_gate_abstains_on_a_v6_argument_grounding_failure():
             ("Bus 1 is now at 100.0 MW; generation 100.0 MW, load 95.0 MW, losses 5.0 MW.", []),  # retry: same tainted call, nothing to fix
         ]
     )
-    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True))
+    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True, final_answer_instruction=False))
     text, trace = engine.run_with_trace("Load case14 and set the active load at bus 1 to 100 MW.", SessionState())
 
     assert trace["verification_outcome"] == "abstained"
@@ -433,7 +433,7 @@ def test_pfagent_live_gate_v7_self_corrects_a_wrong_claim_on_retry():
             ("On review, the bus with the lowest voltage magnitude is bus 3.", []),  # self-corrected, no new tool call
         ]
     )
-    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True))
+    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True, final_answer_instruction=False))
     text, trace = engine.run_with_trace("Load case14 and report the bus with the lowest voltage magnitude.", SessionState())
 
     assert trace["verification_outcome"] == "pass_retry"
@@ -478,7 +478,7 @@ def test_live_v7_verdict_matches_an_independent_offline_recomputation():
         return {"id": id_, "type": "function", "function": {"name": name, "arguments": args_json}}
 
     client = _ScriptedToolClient([(None, [_call("1", "run_powerflow", "{}")]), (answer_text, [])])
-    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True))
+    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True, final_answer_instruction=False))
     text, trace = engine.run_with_trace(request_text, SessionState())
 
     assert trace["verification_outcome"] == "pass_first"

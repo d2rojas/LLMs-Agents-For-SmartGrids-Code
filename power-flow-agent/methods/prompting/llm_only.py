@@ -142,8 +142,8 @@ def export_case_tables(net: Any) -> Dict[str, str]:
         "in_service",
     ]
     ext_cols = ["bus", "vm_pu", "va_degree", "in_service"]
-    line_cols = ["from_bus", "to_bus", "r_pu", "x_pu", "b_pu", "parallel", "in_service"]
-    trafo_cols = ["hv_bus", "lv_bus", "r_pu", "x_pu", "shift_degree", "tap_side", "tap_neutral", "tap_min", "tap_max", "tap_step_percent", "in_service"]
+    line_cols = ["from_bus", "to_bus", "r_pu", "x_pu", "b_pu", "rating_mva", "parallel", "in_service"]
+    trafo_cols = ["hv_bus", "lv_bus", "r_pu", "x_pu", "rating_mva", "shift_degree", "tap_side", "tap_neutral", "tap_min", "tap_max", "tap_step_percent", "in_service"]
 
     def _translated(df: Any, col: str) -> Any:
         df = df.copy()
@@ -166,6 +166,8 @@ def export_case_tables(net: Any) -> Dict[str, str]:
         line_df["r_pu"] = [round(pu[k]["r_pu"], 5) for k in keys]
         line_df["x_pu"] = [round(pu[k]["x_pu"], 5) for k in keys]
         line_df["b_pu"] = [round(pu[k]["b_pu"], 6) for k in keys]
+        if "rating_mva" in line_df.columns:
+            line_df["rating_mva"] = [round(float(v), 2) for v in line_df["rating_mva"]]
 
     trafo_df = getattr(net, "trafo", None)
     trafo_df = trafo_df.copy() if trafo_df is not None else None
@@ -175,6 +177,8 @@ def export_case_tables(net: Any) -> Dict[str, str]:
         trafo_df["lv_bus"] = [k[1] for k in keys]
         trafo_df["r_pu"] = [round(pu[k]["r_pu"], 5) for k in keys]
         trafo_df["x_pu"] = [round(pu[k]["x_pu"], 5) for k in keys]
+        if "rating_mva" in trafo_df.columns:
+            trafo_df["rating_mva"] = [round(float(v), 2) for v in trafo_df["rating_mva"]]
 
     return {
         "bus": _df_to_text(bus_df, columns=bus_cols),
@@ -199,8 +203,9 @@ def build_baseline_prompt(case_name: str, net: Any) -> str:
         f"\nSystem base: {float(net.sn_mva):.0f} MVA. Every per-unit quantity below (r_pu, x_pu, "
         "b_pu) is defined on this base. Line and transformer impedances (r_pu, x_pu, b_pu) are "
         "already in per unit on this base, not ohms per km; do not convert them further. Branch "
-        "thermal ratings are not defined for this case, so branch loading is undefined: report "
-        "loading_percent as 0 for every branch.\n"
+        "thermal ratings are the rating_mva column (MVA). loading_percent of a branch is "
+        "100 * sqrt(p_from_mw^2 + q_from_mvar^2) / rating_mva on its from side (hv side for a "
+        "transformer); a branch is overloaded above 100 %.\n"
     )
     return (
         per_unit_note

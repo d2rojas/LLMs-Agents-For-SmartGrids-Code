@@ -848,6 +848,7 @@ def _build_engine() -> Optional[LLMEngine]:
         model=model,
         temperature=float(st.session_state.get("llm_temperature", OPENAI_TEMPERATURE)),
         timeout_s=float(st.session_state.get("llm_timeout_s", OPENAI_TIMEOUT_S)),
+        final_answer_instruction=False,  # the chat shows the model's own reply, not the benchmark's answer object
     )
     return LLMEngine(client=client, dispatcher=dispatcher, config=cfg)
 

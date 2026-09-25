@@ -171,5 +171,8 @@ def load(case_name: str):
     except Exception:
         pass
 
+    from solver.ratings import assign_branch_ratings
+
+    assign_branch_ratings(net)  # every system gets ratings by the same rule (solver/ratings.py)
     info = _calc_network_info(net, canonical)
     return net, info
