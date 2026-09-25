@@ -1,6 +1,6 @@
 # rule_based on IEEE 14-bus with no-llm
 
-Generated 2026-09-23 22:51 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 10.
+Generated 2026-09-24 20:28 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 10.
 
 ## Run
 

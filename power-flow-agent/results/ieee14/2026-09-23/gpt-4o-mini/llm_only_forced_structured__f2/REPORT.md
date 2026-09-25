@@ -1,6 +1,6 @@
 # llm_only_forced:structured on IEEE 14-bus with gpt-4o-mini
 
-Generated 2026-09-24 06:53 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
+Generated 2026-09-24 20:50 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
 
 ## Run
 
@@ -41,12 +41,12 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 
 | group | metric | value |
 |---|---|---|
-| Task utility | Formulation exact | 30/40 (75.0%) |
-| Task utility | Formulation error types | invalid_value: 5, unparsed: 3, wrong_id: 2 |
+| Task utility | Formulation exact | 28/37 (75.7%) |
+| Task utility | Formulation error types | invalid_value: 5, wrong_id: 2, extra_arg_changes_result: 2 |
 | Task utility | Voltage MAE, all runs | 0.0286 p.u. |
 | Task utility | Voltage MAE, formulation-exact runs | 0.0286 p.u. |
 | Task utility | Flow MAE, all runs | 34.8681 MW |
-| Task utility | Flow MAE, formulation-exact runs | 34.9361 MW |
+| Task utility | Flow MAE, formulation-exact runs | 34.8664 MW |
 | Task utility | KCL mismatch, mean | 12.6233 MW |
 | Solver-grounded correctness | Solved (computation right, any path) | 0/40 (0.0%) |
 | Solver-grounded correctness | V-pass (all conditions, offline) | 0/40 (0.0%) |
@@ -67,7 +67,7 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 | solved_autonomously_count | 0 | 0 |
 | escalated_count | 0 | 0 |
 | wrong_silently_count | 40 | 40 |
-| formulation_exact_count | 30 | 30 |
+| formulation_exact_count | 28 | 28 |
 | v_pass_count | 0 | 0 |
 | faithful_answers_count | 0 | 0 |
 | n_items | 40 | 40 |
@@ -77,15 +77,15 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 | difficulty | n | solved | escalated | wrong unflagged | formulation exact |
 |---|---:|---:|---:|---:|---:|
 | ambiguous | 10 | 0 | 0 | 10 | 7 |
-| multistep | 10 | 0 | 0 | 10 | 9 |
-| parameterized | 10 | 0 | 0 | 10 | 7 |
+| multistep | 10 | 0 | 0 | 10 | 8 |
+| parameterized | 10 | 0 | 0 | 10 | 6 |
 | plain | 10 | 0 | 0 | 10 | 7 |
 
 ## Wrong and unflagged (40)
 
 - `case14-ambiguous-003-s0` formulation exact; declared formulation:  ([narrative](traces/01_case14-ambiguous-003-s0.narrative.txt), [transcript](traces/01_case14-ambiguous-003-s0.transcript.txt))
 - `case14-ambiguous-007-s0` formulation exact; declared formulation:  ([narrative](traces/02_case14-ambiguous-007-s0.narrative.txt), [transcript](traces/02_case14-ambiguous-007-s0.transcript.txt))
-- `case14-ambiguous-011-s0` formulation unparsed; no formulation field in the answer: no tool calls could be formulated  ([narrative](traces/03_case14-ambiguous-011-s0.narrative.txt), [transcript](traces/03_case14-ambiguous-011-s0.transcript.txt))
+- `case14-ambiguous-011-s0` formulation unparsed; ValueError: json_parse_failed  ([narrative](traces/03_case14-ambiguous-011-s0.narrative.txt), [transcript](traces/03_case14-ambiguous-011-s0.transcript.txt))
 - `case14-ambiguous-015-s0` formulation exact; declared formulation:  ([narrative](traces/04_case14-ambiguous-015-s0.narrative.txt), [transcript](traces/04_case14-ambiguous-015-s0.transcript.txt))
 - `case14-ambiguous-019-s0` formulation exact; declared formulation:  ([narrative](traces/05_case14-ambiguous-019-s0.narrative.txt), [transcript](traces/05_case14-ambiguous-019-s0.transcript.txt))
 - `case14-ambiguous-023-s0` formulation exact; declared formulation:  ([narrative](traces/06_case14-ambiguous-023-s0.narrative.txt), [transcript](traces/06_case14-ambiguous-023-s0.transcript.txt))
@@ -98,44 +98,43 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 - `case14-multistep-010-s0` formulation exact; declared formulation:  ([narrative](traces/13_case14-multistep-010-s0.narrative.txt), [transcript](traces/13_case14-multistep-010-s0.transcript.txt))
 - `case14-multistep-014-s0` formulation exact; declared formulation:  ([narrative](traces/14_case14-multistep-014-s0.narrative.txt), [transcript](traces/14_case14-multistep-014-s0.transcript.txt))
 - `case14-multistep-018-s0` formulation exact; declared formulation:  ([narrative](traces/15_case14-multistep-018-s0.narrative.txt), [transcript](traces/15_case14-multistep-018-s0.transcript.txt))
-- `case14-multistep-022-s0` formulation unparsed; no formulation field in the answer: no tool calls could be formulated  ([narrative](traces/16_case14-multistep-022-s0.narrative.txt), [transcript](traces/16_case14-multistep-022-s0.transcript.txt))
+- `case14-multistep-022-s0` formulation unparsed; ValueError: json_parse_failed  ([narrative](traces/16_case14-multistep-022-s0.narrative.txt), [transcript](traces/16_case14-multistep-022-s0.transcript.txt))
 - `case14-multistep-026-s0` formulation exact; declared formulation:  ([narrative](traces/17_case14-multistep-026-s0.narrative.txt), [transcript](traces/17_case14-multistep-026-s0.transcript.txt))
-- `case14-multistep-030-s0` formulation exact; declared formulation:  ([narrative](traces/18_case14-multistep-030-s0.narrative.txt), [transcript](traces/18_case14-multistep-030-s0.transcript.txt))
+- `case14-multistep-030-s0` formulation extra_arg_changes_result; declared formulation: run_n1_contingency: max_candidates=14 scans only 14 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/18_case14-multistep-030-s0.narrative.txt), [transcript](traces/18_case14-multistep-030-s0.transcript.txt))
 - `case14-multistep-034-s0` formulation exact; declared formulation:  ([narrative](traces/19_case14-multistep-034-s0.narrative.txt), [transcript](traces/19_case14-multistep-034-s0.transcript.txt))
 - `case14-multistep-038-s0` formulation exact; declared formulation:  ([narrative](traces/20_case14-multistep-038-s0.narrative.txt), [transcript](traces/20_case14-multistep-038-s0.transcript.txt))
-- `case14-parameterized-001-s0` formulation exact; declared formulation:  ([narrative](traces/21_case14-parameterized-001-s0.narrative.txt), [transcript](traces/21_case14-parameterized-001-s0.transcript.txt))
+- `case14-parameterized-001-s0` formulation extra_arg_changes_result; declared formulation: run_n1_contingency: max_candidates=14 scans only 14 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/21_case14-parameterized-001-s0.narrative.txt), [transcript](traces/21_case14-parameterized-001-s0.transcript.txt))
 - `case14-parameterized-005-s0` formulation exact; declared formulation:  ([narrative](traces/22_case14-parameterized-005-s0.narrative.txt), [transcript](traces/22_case14-parameterized-005-s0.transcript.txt))
 - `case14-parameterized-009-s0` formulation invalid_value; declared formulation: run_n1_contingency: criteria='max violations' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default)  ([narrative](traces/23_case14-parameterized-009-s0.narrative.txt), [transcript](traces/23_case14-parameterized-009-s0.transcript.txt))
 - `case14-parameterized-013-s0` formulation exact; declared formulation:  ([narrative](traces/24_case14-parameterized-013-s0.narrative.txt), [transcript](traces/24_case14-parameterized-013-s0.transcript.txt))
-- `case14-parameterized-017-s0` formulation invalid_value; declared formulation: run_n1_contingency: criteria='max violations' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default)  ([narrative](traces/25_case14-parameterized-017-s0.narrative.txt), [transcript](traces/25_case14-parameterized-017-s0.transcript.txt))
-- `case14-parameterized-021-s0` formulation invalid_value; declared formulation: run_n1_contingency: criteria='max violations' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default)  ([narrative](traces/26_case14-parameterized-021-s0.narrative.txt), [transcript](traces/26_case14-parameterized-021-s0.transcript.txt))
+- `case14-parameterized-017-s0` formulation invalid_value; declared formulation: run_n1_contingency: criteria='max violations' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default); run_n1_contingency: max_candidates=14 scans only 14 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/25_case14-parameterized-017-s0.narrative.txt), [transcript](traces/25_case14-parameterized-017-s0.transcript.txt))
+- `case14-parameterized-021-s0` formulation invalid_value; declared formulation: run_n1_contingency: criteria='max violations' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default); run_n1_contingency: max_candidates=14 scans only 14 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/26_case14-parameterized-021-s0.narrative.txt), [transcript](traces/26_case14-parameterized-021-s0.transcript.txt))
 - `case14-parameterized-025-s0` formulation exact; declared formulation:  ([narrative](traces/27_case14-parameterized-025-s0.narrative.txt), [transcript](traces/27_case14-parameterized-025-s0.transcript.txt))
 - `case14-parameterized-029-s0` formulation exact; declared formulation:  ([narrative](traces/28_case14-parameterized-029-s0.narrative.txt), [transcript](traces/28_case14-parameterized-029-s0.transcript.txt))
 - `case14-parameterized-033-s0` formulation exact; declared formulation:  ([narrative](traces/29_case14-parameterized-033-s0.narrative.txt), [transcript](traces/29_case14-parameterized-033-s0.transcript.txt))
 - `case14-parameterized-037-s0` formulation exact; declared formulation:  ([narrative](traces/30_case14-parameterized-037-s0.narrative.txt), [transcript](traces/30_case14-parameterized-037-s0.transcript.txt))
 - `case14-plain-000-s0` formulation exact; declared formulation:  ([narrative](traces/31_case14-plain-000-s0.narrative.txt), [transcript](traces/31_case14-plain-000-s0.transcript.txt))
-- `case14-plain-004-s0` formulation invalid_value; declared formulation: run_n1_contingency: criteria='worst' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default)  ([narrative](traces/32_case14-plain-004-s0.narrative.txt), [transcript](traces/32_case14-plain-004-s0.transcript.txt))
+- `case14-plain-004-s0` formulation invalid_value; declared formulation: run_n1_contingency: criteria='worst' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default); run_n1_contingency: max_candidates=1 scans only 1 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/32_case14-plain-004-s0.narrative.txt), [transcript](traces/32_case14-plain-004-s0.transcript.txt))
 - `case14-plain-008-s0` formulation exact; declared formulation:  ([narrative](traces/33_case14-plain-008-s0.narrative.txt), [transcript](traces/33_case14-plain-008-s0.transcript.txt))
 - `case14-plain-012-s0` formulation exact; declared formulation:  ([narrative](traces/34_case14-plain-012-s0.narrative.txt), [transcript](traces/34_case14-plain-012-s0.transcript.txt))
-- `case14-plain-016-s0` formulation invalid_value; declared formulation: run_n1_contingency: criteria='worst' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default)  ([narrative](traces/35_case14-plain-016-s0.narrative.txt), [transcript](traces/35_case14-plain-016-s0.transcript.txt))
+- `case14-plain-016-s0` formulation invalid_value; declared formulation: run_n1_contingency: criteria='worst' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default); run_n1_contingency: max_candidates=1 scans only 1 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/35_case14-plain-016-s0.narrative.txt), [transcript](traces/35_case14-plain-016-s0.transcript.txt))
 - `case14-plain-020-s0` formulation exact; declared formulation:  ([narrative](traces/36_case14-plain-020-s0.narrative.txt), [transcript](traces/36_case14-plain-020-s0.transcript.txt))
 - `case14-plain-024-s0` formulation exact; declared formulation:  ([narrative](traces/37_case14-plain-024-s0.narrative.txt), [transcript](traces/37_case14-plain-024-s0.transcript.txt))
 - `case14-plain-028-s0` formulation exact; declared formulation:  ([narrative](traces/38_case14-plain-028-s0.narrative.txt), [transcript](traces/38_case14-plain-028-s0.transcript.txt))
 - `case14-plain-032-s0` formulation exact; declared formulation:  ([narrative](traces/39_case14-plain-032-s0.narrative.txt), [transcript](traces/39_case14-plain-032-s0.transcript.txt))
-- `case14-plain-036-s0` formulation unparsed; no formulation field in the answer: no tool calls could be formulated  ([narrative](traces/40_case14-plain-036-s0.narrative.txt), [transcript](traces/40_case14-plain-036-s0.transcript.txt))
+- `case14-plain-036-s0` formulation unparsed; ValueError: json_parse_failed  ([narrative](traces/40_case14-plain-036-s0.narrative.txt), [transcript](traces/40_case14-plain-036-s0.transcript.txt))
 
-## Formulation not exact (10)
+## Formulation not exact (9)
 
-- `case14-ambiguous-011-s0` unparsed: no formulation field in the answer: no tool calls could be formulated  ([narrative](traces/03_case14-ambiguous-011-s0.narrative.txt), [transcript](traces/03_case14-ambiguous-011-s0.transcript.txt))
 - `case14-ambiguous-027-s0` wrong_id: declared formulation: modify_load: bus_id intended 11 != executed 10  ([narrative](traces/07_case14-ambiguous-027-s0.narrative.txt), [transcript](traces/07_case14-ambiguous-027-s0.transcript.txt))
 - `case14-ambiguous-039-s0` wrong_id: declared formulation: modify_load: bus_id intended 2 != executed 1  ([narrative](traces/10_case14-ambiguous-039-s0.narrative.txt), [transcript](traces/10_case14-ambiguous-039-s0.transcript.txt))
-- `case14-multistep-022-s0` unparsed: no formulation field in the answer: no tool calls could be formulated  ([narrative](traces/16_case14-multistep-022-s0.narrative.txt), [transcript](traces/16_case14-multistep-022-s0.transcript.txt))
+- `case14-multistep-030-s0` extra_arg_changes_result: declared formulation: run_n1_contingency: max_candidates=14 scans only 14 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/18_case14-multistep-030-s0.narrative.txt), [transcript](traces/18_case14-multistep-030-s0.transcript.txt))
+- `case14-parameterized-001-s0` extra_arg_changes_result: declared formulation: run_n1_contingency: max_candidates=14 scans only 14 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/21_case14-parameterized-001-s0.narrative.txt), [transcript](traces/21_case14-parameterized-001-s0.transcript.txt))
 - `case14-parameterized-009-s0` invalid_value: declared formulation: run_n1_contingency: criteria='max violations' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default)  ([narrative](traces/23_case14-parameterized-009-s0.narrative.txt), [transcript](traces/23_case14-parameterized-009-s0.transcript.txt))
-- `case14-parameterized-017-s0` invalid_value: declared formulation: run_n1_contingency: criteria='max violations' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default)  ([narrative](traces/25_case14-parameterized-017-s0.narrative.txt), [transcript](traces/25_case14-parameterized-017-s0.transcript.txt))
-- `case14-parameterized-021-s0` invalid_value: declared formulation: run_n1_contingency: criteria='max violations' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default)  ([narrative](traces/26_case14-parameterized-021-s0.narrative.txt), [transcript](traces/26_case14-parameterized-021-s0.transcript.txt))
-- `case14-plain-004-s0` invalid_value: declared formulation: run_n1_contingency: criteria='worst' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default)  ([narrative](traces/32_case14-plain-004-s0.narrative.txt), [transcript](traces/32_case14-plain-004-s0.transcript.txt))
-- `case14-plain-016-s0` invalid_value: declared formulation: run_n1_contingency: criteria='worst' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default)  ([narrative](traces/35_case14-plain-016-s0.narrative.txt), [transcript](traces/35_case14-plain-016-s0.transcript.txt))
-- `case14-plain-036-s0` unparsed: no formulation field in the answer: no tool calls could be formulated  ([narrative](traces/40_case14-plain-036-s0.narrative.txt), [transcript](traces/40_case14-plain-036-s0.transcript.txt))
+- `case14-parameterized-017-s0` invalid_value: declared formulation: run_n1_contingency: criteria='max violations' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default); run_n1_contingency: max_candidates=14 scans only 14 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/25_case14-parameterized-017-s0.narrative.txt), [transcript](traces/25_case14-parameterized-017-s0.transcript.txt))
+- `case14-parameterized-021-s0` invalid_value: declared formulation: run_n1_contingency: criteria='max violations' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default); run_n1_contingency: max_candidates=14 scans only 14 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/26_case14-parameterized-021-s0.narrative.txt), [transcript](traces/26_case14-parameterized-021-s0.transcript.txt))
+- `case14-plain-004-s0` invalid_value: declared formulation: run_n1_contingency: criteria='worst' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default); run_n1_contingency: max_candidates=1 scans only 1 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/32_case14-plain-004-s0.narrative.txt), [transcript](traces/32_case14-plain-004-s0.transcript.txt))
+- `case14-plain-016-s0` invalid_value: declared formulation: run_n1_contingency: criteria='worst' not in ['max_violations', 'max_overload', 'min_voltage'] (tool falls back to its default); run_n1_contingency: max_candidates=1 scans only 1 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/35_case14-plain-016-s0.narrative.txt), [transcript](traces/35_case14-plain-016-s0.transcript.txt))
 
 ## Untraceable numbers in the answer (40)
 

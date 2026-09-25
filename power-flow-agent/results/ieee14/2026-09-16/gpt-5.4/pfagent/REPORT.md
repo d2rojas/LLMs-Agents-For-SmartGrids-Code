@@ -1,6 +1,6 @@
 # pfagent on IEEE 14-bus with gpt-5.4
 
-Generated 2026-09-23 22:49 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
+Generated 2026-09-24 20:26 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
 
 ## Run
 

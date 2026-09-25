@@ -1,6 +1,6 @@
 # react_nogate on IEEE 14-bus with gpt-5.4
 
-Generated 2026-09-23 22:50 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 10.
+Generated 2026-09-24 20:27 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 10.
 
 ## Run
 
@@ -35,8 +35,8 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 | outcome | count | share |
 |---|---:|---:|
 | Solved autonomously | 5 | 50.0% |
-| Escalated to a person | 0 | 0.0% |
-| Wrong, unflagged | 5 | 50.0% |
+| Escalated to a person | 3 | 30.0% |
+| Wrong, unflagged | 2 | 20.0% |
 | **Total** | **10** | 100% |
 
 ## Metrics
@@ -61,13 +61,16 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 | Cost and time | Cost, total | $0.4563 |
 | Cost and time | Wall time, mean | 9.5 s |
 
-## Wrong and unflagged (5)
+## Wrong and unflagged (2)
 
 - `case14-stress-001-s1` formulation extra_arg_changes_result; modify_load: extra argument q_mvar=-3.9 changes the solver outcome (request did not ask for it)  ([narrative](traces/04_case14-stress-001-s1.narrative.txt), [transcript](traces/04_case14-stress-001-s1.transcript.txt))
 - `case14-stress-002-s0` formulation extra_arg_changes_result; modify_load: extra argument q_mvar=16.6 changes the solver outcome (request did not ask for it)  ([narrative](traces/05_case14-stress-002-s0.narrative.txt), [transcript](traces/05_case14-stress-002-s0.transcript.txt))
-- `case14-stress-002-s1` formulation extra_arg_changes_result; modify_load: extra argument q_mvar=-3.9 changes the solver outcome (request did not ask for it)  ([narrative](traces/06_case14-stress-002-s1.narrative.txt), [transcript](traces/06_case14-stress-002-s1.transcript.txt))
-- `case14-stress-004-s0` formulation extra_arg_changes_result; modify_load: extra argument q_mvar=0.0 changes the solver outcome (request did not ask for it)  ([narrative](traces/09_case14-stress-004-s0.narrative.txt), [transcript](traces/09_case14-stress-004-s0.transcript.txt))
-- `case14-stress-004-s1` formulation extra_arg_changes_result; modify_load: extra argument q_mvar=-3.9 changes the solver outcome (request did not ask for it)  ([narrative](traces/10_case14-stress-004-s1.narrative.txt), [transcript](traces/10_case14-stress-004-s1.transcript.txt))
+
+## Escalated (3)
+
+- `case14-stress-002-s1` detected via text; formulation extra_arg_changes_result; modify_load: extra argument q_mvar=-3.9 changes the solver outcome (request did not ask for it)  ([narrative](traces/06_case14-stress-002-s1.narrative.txt), [transcript](traces/06_case14-stress-002-s1.transcript.txt))
+- `case14-stress-004-s0` detected via text; formulation extra_arg_changes_result; modify_load: extra argument q_mvar=0.0 changes the solver outcome (request did not ask for it)  ([narrative](traces/09_case14-stress-004-s0.narrative.txt), [transcript](traces/09_case14-stress-004-s0.transcript.txt))
+- `case14-stress-004-s1` detected via text; formulation extra_arg_changes_result; modify_load: extra argument q_mvar=-3.9 changes the solver outcome (request did not ask for it)  ([narrative](traces/10_case14-stress-004-s1.narrative.txt), [transcript](traces/10_case14-stress-004-s1.transcript.txt))
 
 ## Formulation not exact (5)
 

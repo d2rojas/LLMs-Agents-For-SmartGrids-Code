@@ -1,6 +1,6 @@
 # react_nogate on IEEE 14-bus with gpt-5.6-sol
 
-Generated 2026-09-24 04:57 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
+Generated 2026-09-24 20:41 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
 
 ## Run
 
@@ -37,8 +37,8 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 | outcome | count | share |
 |---|---:|---:|
 | Solved autonomously | 25 | 62.5% |
-| Escalated to a person | 0 | 0.0% |
-| Wrong, unflagged | 15 | 37.5% |
+| Escalated to a person | 1 | 2.5% |
+| Wrong, unflagged | 14 | 35.0% |
 | **Total** | **40** | 100% |
 
 ## Metrics
@@ -69,8 +69,8 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 | metric | runner scoreboard | this report |
 |---|---:|---:|
 | solved_autonomously_count | 25 | 25 |
-| escalated_count | 0 | 0 |
-| wrong_silently_count | 15 | 15 |
+| escalated_count | 1 | 1 |
+| wrong_silently_count | 14 | 14 |
 | formulation_exact_count | 25 | 25 |
 | v_pass_count | 36 | 36 |
 | faithful_answers_count | 36 | 36 |
@@ -81,11 +81,11 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 | difficulty | n | solved | escalated | wrong unflagged | formulation exact |
 |---|---:|---:|---:|---:|---:|
 | ambiguous | 10 | 4 | 0 | 6 | 4 |
-| multistep | 10 | 4 | 0 | 6 | 4 |
+| multistep | 10 | 4 | 1 | 5 | 4 |
 | parameterized | 10 | 9 | 0 | 1 | 9 |
 | plain | 10 | 8 | 0 | 2 | 8 |
 
-## Wrong and unflagged (15)
+## Wrong and unflagged (14)
 
 - `case14-ambiguous-011-s0` formulation extra_arg_changes_result; modify_load: extra argument q_mvar=7.5 changes the solver outcome (request did not ask for it)  ([narrative](traces/03_case14-ambiguous-011-s0.narrative.txt), [transcript](traces/03_case14-ambiguous-011-s0.transcript.txt))
 - `case14-ambiguous-015-s0` formulation extra_arg_changes_result; modify_load: extra argument q_mvar=1.6 changes the solver outcome (request did not ask for it)  ([narrative](traces/04_case14-ambiguous-015-s0.narrative.txt), [transcript](traces/04_case14-ambiguous-015-s0.transcript.txt))
@@ -95,13 +95,16 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 - `case14-ambiguous-039-s0` formulation extra_arg_changes_result; modify_load: extra argument q_mvar=12.7 changes the solver outcome (request did not ask for it)  ([narrative](traces/10_case14-ambiguous-039-s0.narrative.txt), [transcript](traces/10_case14-ambiguous-039-s0.transcript.txt))
 - `case14-multistep-006-s0` formulation extra_arg_changes_result; modify_load: extra argument q_mvar=-3.9 changes the solver outcome (request did not ask for it)  ([narrative](traces/12_case14-multistep-006-s0.narrative.txt), [transcript](traces/12_case14-multistep-006-s0.transcript.txt))
 - `case14-multistep-014-s0` formulation extra_arg_changes_result; modify_load: extra argument q_mvar=5.8 changes the solver outcome (request did not ask for it)  ([narrative](traces/14_case14-multistep-014-s0.narrative.txt), [transcript](traces/14_case14-multistep-014-s0.transcript.txt))
-- `case14-multistep-022-s0` formulation extra_step; unintended tools: ['modify_load']  ([narrative](traces/16_case14-multistep-022-s0.narrative.txt), [transcript](traces/16_case14-multistep-022-s0.transcript.txt))
 - `case14-multistep-030-s0` formulation extra_arg_changes_result; modify_load: extra argument q_mvar=5.0 changes the solver outcome (request did not ask for it)  ([narrative](traces/18_case14-multistep-030-s0.narrative.txt), [transcript](traces/18_case14-multistep-030-s0.transcript.txt))
 - `case14-multistep-034-s0` formulation extra_arg_changes_result; modify_load: extra argument q_mvar=16.6 changes the solver outcome (request did not ask for it)  ([narrative](traces/19_case14-multistep-034-s0.narrative.txt), [transcript](traces/19_case14-multistep-034-s0.transcript.txt))
 - `case14-multistep-038-s0` formulation extra_arg_changes_result; modify_load: extra argument q_mvar=7.5 changes the solver outcome (request did not ask for it)  ([narrative](traces/20_case14-multistep-038-s0.narrative.txt), [transcript](traces/20_case14-multistep-038-s0.transcript.txt))
 - `case14-parameterized-033-s0` formulation extra_arg_changes_result; modify_load: extra argument q_mvar=5.0 changes the solver outcome (request did not ask for it)  ([narrative](traces/29_case14-parameterized-033-s0.narrative.txt), [transcript](traces/29_case14-parameterized-033-s0.transcript.txt))
 - `case14-plain-008-s0` formulation extra_arg_changes_result; modify_load: extra argument q_mvar=12.7 changes the solver outcome (request did not ask for it)  ([narrative](traces/33_case14-plain-008-s0.narrative.txt), [transcript](traces/33_case14-plain-008-s0.transcript.txt))
 - `case14-plain-036-s0` formulation extra_arg_changes_result; modify_load: extra argument q_mvar=12.7 changes the solver outcome (request did not ask for it)  ([narrative](traces/40_case14-plain-036-s0.narrative.txt), [transcript](traces/40_case14-plain-036-s0.transcript.txt))
+
+## Escalated (1)
+
+- `case14-multistep-022-s0` detected via text; formulation extra_step; unintended tools: ['modify_load']  ([narrative](traces/16_case14-multistep-022-s0.narrative.txt), [transcript](traces/16_case14-multistep-022-s0.transcript.txt))
 
 ## Formulation not exact (15)
 

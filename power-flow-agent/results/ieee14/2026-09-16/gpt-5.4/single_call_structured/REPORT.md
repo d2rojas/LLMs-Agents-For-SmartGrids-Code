@@ -1,6 +1,6 @@
 # single_call:structured on IEEE 14-bus with gpt-5.4
 
-Generated 2026-09-23 22:50 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
+Generated 2026-09-24 20:28 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
 
 ## Run
 
@@ -35,8 +35,8 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 | outcome | count | share |
 |---|---:|---:|
 | Solved autonomously | 4 | 10.0% |
-| Escalated to a person | 0 | 0.0% |
-| Wrong, unflagged | 36 | 90.0% |
+| Escalated to a person | 17 | 42.5% |
+| Wrong, unflagged | 19 | 47.5% |
 | **Total** | **40** | 100% |
 
 ## Metrics
@@ -67,8 +67,8 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 | metric | runner scoreboard | this report |
 |---|---:|---:|
 | solved_autonomously_count | 4 | 4 |
-| escalated_count | 0 | 0 |
-| wrong_silently_count | 36 | 36 |
+| escalated_count | 17 | 17 |
+| wrong_silently_count | 19 | 19 |
 | formulation_exact_count | 8 | 8 |
 | v_pass_count | 35 | 35 |
 | faithful_answers_count | 35 | 35 |
@@ -79,11 +79,11 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 | difficulty | n | solved | escalated | wrong unflagged | formulation exact |
 |---|---:|---:|---:|---:|---:|
 | ambiguous | 10 | 0 | 0 | 10 | 0 |
-| multistep | 10 | 0 | 0 | 10 | 0 |
-| parameterized | 10 | 1 | 0 | 9 | 2 |
-| plain | 10 | 3 | 0 | 7 | 6 |
+| multistep | 10 | 0 | 9 | 1 | 0 |
+| parameterized | 10 | 1 | 4 | 5 | 2 |
+| plain | 10 | 3 | 4 | 3 | 6 |
 
-## Wrong and unflagged (36)
+## Wrong and unflagged (19)
 
 - `case14-ambiguous-003-s0` formulation missed_step; missing tools: ['disconnect_line']  ([narrative](traces/01_case14-ambiguous-003-s0.narrative.txt), [transcript](traces/01_case14-ambiguous-003-s0.transcript.txt))
 - `case14-ambiguous-007-s0` formulation missed_step; missing tools: ['disconnect_line']  ([narrative](traces/02_case14-ambiguous-007-s0.narrative.txt), [transcript](traces/02_case14-ambiguous-007-s0.transcript.txt))
@@ -95,32 +95,35 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 - `case14-ambiguous-031-s0` formulation missed_step; missing tools: ['disconnect_line']  ([narrative](traces/08_case14-ambiguous-031-s0.narrative.txt), [transcript](traces/08_case14-ambiguous-031-s0.transcript.txt))
 - `case14-ambiguous-035-s0` formulation missed_step; missing tools: ['modify_load']  ([narrative](traces/09_case14-ambiguous-035-s0.narrative.txt), [transcript](traces/09_case14-ambiguous-035-s0.transcript.txt))
 - `case14-ambiguous-039-s0` formulation missed_step; missing tools: ['modify_load']  ([narrative](traces/10_case14-ambiguous-039-s0.narrative.txt), [transcript](traces/10_case14-ambiguous-039-s0.transcript.txt))
-- `case14-multistep-002-s0` formulation missed_step; missing tools: ['disconnect_line', 'disconnect_line']  ([narrative](traces/11_case14-multistep-002-s0.narrative.txt), [transcript](traces/11_case14-multistep-002-s0.transcript.txt))
-- `case14-multistep-006-s0` formulation missed_step; missing tools: ['modify_load', 'disconnect_line', 'reconnect_line']  ([narrative](traces/12_case14-multistep-006-s0.narrative.txt), [transcript](traces/12_case14-multistep-006-s0.transcript.txt))
-- `case14-multistep-010-s0` formulation missed_step; missing tools: ['disconnect_line', 'disconnect_line']  ([narrative](traces/13_case14-multistep-010-s0.narrative.txt), [transcript](traces/13_case14-multistep-010-s0.transcript.txt))
-- `case14-multistep-014-s0` formulation missed_step; missing tools: ['modify_load', 'modify_load', 'modify_load']  ([narrative](traces/14_case14-multistep-014-s0.narrative.txt), [transcript](traces/14_case14-multistep-014-s0.transcript.txt))
-- `case14-multistep-018-s0` formulation missed_step; missing tools: ['disconnect_line']  ([narrative](traces/15_case14-multistep-018-s0.narrative.txt), [transcript](traces/15_case14-multistep-018-s0.transcript.txt))
 - `case14-multistep-022-s0` formulation missed_step; missing tools: ['disconnect_line', 'modify_load', 'modify_load', 'run_n1_contingency']  ([narrative](traces/16_case14-multistep-022-s0.narrative.txt), [transcript](traces/16_case14-multistep-022-s0.transcript.txt))
-- `case14-multistep-026-s0` formulation missed_step; missing tools: ['disconnect_line']  ([narrative](traces/17_case14-multistep-026-s0.narrative.txt), [transcript](traces/17_case14-multistep-026-s0.transcript.txt))
-- `case14-multistep-030-s0` formulation missed_step; missing tools: ['modify_load', 'disconnect_line', 'reconnect_line', 'run_n1_contingency']  ([narrative](traces/18_case14-multistep-030-s0.narrative.txt), [transcript](traces/18_case14-multistep-030-s0.transcript.txt))
-- `case14-multistep-034-s0` formulation missed_step; missing tools: ['disconnect_line', 'modify_load']  ([narrative](traces/19_case14-multistep-034-s0.narrative.txt), [transcript](traces/19_case14-multistep-034-s0.transcript.txt))
-- `case14-multistep-038-s0` formulation missed_step; missing tools: ['modify_load', 'modify_load']  ([narrative](traces/20_case14-multistep-038-s0.narrative.txt), [transcript](traces/20_case14-multistep-038-s0.transcript.txt))
 - `case14-parameterized-001-s0` formulation missed_step; missing tools: ['run_n1_contingency']  ([narrative](traces/21_case14-parameterized-001-s0.narrative.txt), [transcript](traces/21_case14-parameterized-001-s0.transcript.txt))
-- `case14-parameterized-005-s0` formulation missed_step; missing tools: ['disconnect_line']  ([narrative](traces/22_case14-parameterized-005-s0.narrative.txt), [transcript](traces/22_case14-parameterized-005-s0.transcript.txt))
-- `case14-parameterized-009-s0` formulation missed_step; missing tools: ['run_n1_contingency']  ([narrative](traces/23_case14-parameterized-009-s0.narrative.txt), [transcript](traces/23_case14-parameterized-009-s0.transcript.txt))
-- `case14-parameterized-013-s0` formulation missed_step; missing tools: ['disconnect_line']  ([narrative](traces/24_case14-parameterized-013-s0.narrative.txt), [transcript](traces/24_case14-parameterized-013-s0.transcript.txt))
 - `case14-parameterized-017-s0` formulation missed_step; missing tools: ['run_n1_contingency']  ([narrative](traces/25_case14-parameterized-017-s0.narrative.txt), [transcript](traces/25_case14-parameterized-017-s0.transcript.txt))
 - `case14-parameterized-021-s0` formulation missed_step; missing tools: ['run_n1_contingency']  ([narrative](traces/26_case14-parameterized-021-s0.narrative.txt), [transcript](traces/26_case14-parameterized-021-s0.transcript.txt))
 - `case14-parameterized-025-s0` formulation missed_step; missing tools: ['disconnect_line']  ([narrative](traces/27_case14-parameterized-025-s0.narrative.txt), [transcript](traces/27_case14-parameterized-025-s0.transcript.txt))
-- `case14-parameterized-029-s0` formulation exact  ([narrative](traces/28_case14-parameterized-029-s0.narrative.txt), [transcript](traces/28_case14-parameterized-029-s0.transcript.txt))
 - `case14-parameterized-033-s0` formulation missed_step; missing tools: ['modify_load']  ([narrative](traces/29_case14-parameterized-033-s0.narrative.txt), [transcript](traces/29_case14-parameterized-033-s0.transcript.txt))
-- `case14-plain-000-s0` formulation exact  ([narrative](traces/31_case14-plain-000-s0.narrative.txt), [transcript](traces/31_case14-plain-000-s0.transcript.txt))
 - `case14-plain-004-s0` formulation missed_step; missing tools: ['run_n1_contingency']  ([narrative](traces/32_case14-plain-004-s0.narrative.txt), [transcript](traces/32_case14-plain-004-s0.transcript.txt))
 - `case14-plain-008-s0` formulation missed_step; missing tools: ['modify_load']  ([narrative](traces/33_case14-plain-008-s0.narrative.txt), [transcript](traces/33_case14-plain-008-s0.transcript.txt))
-- `case14-plain-016-s0` formulation missed_step; missing tools: ['run_n1_contingency']  ([narrative](traces/35_case14-plain-016-s0.narrative.txt), [transcript](traces/35_case14-plain-016-s0.transcript.txt))
-- `case14-plain-020-s0` formulation exact  ([narrative](traces/36_case14-plain-020-s0.narrative.txt), [transcript](traces/36_case14-plain-020-s0.transcript.txt))
-- `case14-plain-028-s0` formulation exact  ([narrative](traces/38_case14-plain-028-s0.narrative.txt), [transcript](traces/38_case14-plain-028-s0.transcript.txt))
 - `case14-plain-036-s0` formulation missed_step; missing tools: ['modify_load']  ([narrative](traces/40_case14-plain-036-s0.narrative.txt), [transcript](traces/40_case14-plain-036-s0.transcript.txt))
+
+## Escalated (17)
+
+- `case14-multistep-002-s0` detected via text; formulation missed_step; missing tools: ['disconnect_line', 'disconnect_line']  ([narrative](traces/11_case14-multistep-002-s0.narrative.txt), [transcript](traces/11_case14-multistep-002-s0.transcript.txt))
+- `case14-multistep-006-s0` detected via text; formulation missed_step; missing tools: ['modify_load', 'disconnect_line', 'reconnect_line']  ([narrative](traces/12_case14-multistep-006-s0.narrative.txt), [transcript](traces/12_case14-multistep-006-s0.transcript.txt))
+- `case14-multistep-010-s0` detected via text; formulation missed_step; missing tools: ['disconnect_line', 'disconnect_line']  ([narrative](traces/13_case14-multistep-010-s0.narrative.txt), [transcript](traces/13_case14-multistep-010-s0.transcript.txt))
+- `case14-multistep-014-s0` detected via text; formulation missed_step; missing tools: ['modify_load', 'modify_load', 'modify_load']  ([narrative](traces/14_case14-multistep-014-s0.narrative.txt), [transcript](traces/14_case14-multistep-014-s0.transcript.txt))
+- `case14-multistep-018-s0` detected via text; formulation missed_step; missing tools: ['disconnect_line']  ([narrative](traces/15_case14-multistep-018-s0.narrative.txt), [transcript](traces/15_case14-multistep-018-s0.transcript.txt))
+- `case14-multistep-026-s0` detected via text; formulation missed_step; missing tools: ['disconnect_line']  ([narrative](traces/17_case14-multistep-026-s0.narrative.txt), [transcript](traces/17_case14-multistep-026-s0.transcript.txt))
+- `case14-multistep-030-s0` detected via text; formulation missed_step; missing tools: ['modify_load', 'disconnect_line', 'reconnect_line', 'run_n1_contingency']  ([narrative](traces/18_case14-multistep-030-s0.narrative.txt), [transcript](traces/18_case14-multistep-030-s0.transcript.txt))
+- `case14-multistep-034-s0` detected via text; formulation missed_step; missing tools: ['disconnect_line', 'modify_load']  ([narrative](traces/19_case14-multistep-034-s0.narrative.txt), [transcript](traces/19_case14-multistep-034-s0.transcript.txt))
+- `case14-multistep-038-s0` detected via text; formulation missed_step; missing tools: ['modify_load', 'modify_load']  ([narrative](traces/20_case14-multistep-038-s0.narrative.txt), [transcript](traces/20_case14-multistep-038-s0.transcript.txt))
+- `case14-parameterized-005-s0` detected via text; formulation missed_step; missing tools: ['disconnect_line']  ([narrative](traces/22_case14-parameterized-005-s0.narrative.txt), [transcript](traces/22_case14-parameterized-005-s0.transcript.txt))
+- `case14-parameterized-009-s0` detected via text; formulation missed_step; missing tools: ['run_n1_contingency']  ([narrative](traces/23_case14-parameterized-009-s0.narrative.txt), [transcript](traces/23_case14-parameterized-009-s0.transcript.txt))
+- `case14-parameterized-013-s0` detected via text; formulation missed_step; missing tools: ['disconnect_line']  ([narrative](traces/24_case14-parameterized-013-s0.narrative.txt), [transcript](traces/24_case14-parameterized-013-s0.transcript.txt))
+- `case14-parameterized-029-s0` detected via text; formulation exact  ([narrative](traces/28_case14-parameterized-029-s0.narrative.txt), [transcript](traces/28_case14-parameterized-029-s0.transcript.txt))
+- `case14-plain-000-s0` detected via text; formulation exact  ([narrative](traces/31_case14-plain-000-s0.narrative.txt), [transcript](traces/31_case14-plain-000-s0.transcript.txt))
+- `case14-plain-016-s0` detected via text; formulation missed_step; missing tools: ['run_n1_contingency']  ([narrative](traces/35_case14-plain-016-s0.narrative.txt), [transcript](traces/35_case14-plain-016-s0.transcript.txt))
+- `case14-plain-020-s0` detected via text; formulation exact  ([narrative](traces/36_case14-plain-020-s0.narrative.txt), [transcript](traces/36_case14-plain-020-s0.transcript.txt))
+- `case14-plain-028-s0` detected via text; formulation exact  ([narrative](traces/38_case14-plain-028-s0.narrative.txt), [transcript](traces/38_case14-plain-028-s0.transcript.txt))
 
 ## Formulation not exact (32)
 

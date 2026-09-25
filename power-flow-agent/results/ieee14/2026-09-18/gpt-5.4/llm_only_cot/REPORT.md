@@ -1,6 +1,6 @@
 # llm_only:cot on IEEE 14-bus with gpt-5.4
 
-Generated 2026-09-23 22:52 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
+Generated 2026-09-24 20:31 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
 
 ## Run
 
@@ -35,8 +35,8 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 | outcome | count | share |
 |---|---:|---:|
 | Solved autonomously | 6 | 15.0% |
-| Escalated to a person | 0 | 0.0% |
-| Wrong, unflagged | 34 | 85.0% |
+| Escalated to a person | 6 | 15.0% |
+| Wrong, unflagged | 28 | 70.0% |
 | **Total** | **40** | 100% |
 
 ## Metrics
@@ -66,8 +66,8 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 | metric | runner scoreboard | this report |
 |---|---:|---:|
 | solved_autonomously_count | 6 | 6 |
-| escalated_count | 0 | 0 |
-| wrong_silently_count | 34 | 34 |
+| escalated_count | 6 | 6 |
+| wrong_silently_count | 28 | 28 |
 | formulation_exact_count | 0 | 0 |
 | v_pass_count | 0 | 0 |
 | faithful_answers_count | 0 | 0 |
@@ -77,25 +77,21 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 | difficulty | n | solved | escalated | wrong unflagged | formulation exact |
 |---|---:|---:|---:|---:|---:|
-| ambiguous | 10 | 1 | 0 | 9 | 0 |
-| multistep | 10 | 1 | 0 | 9 | 0 |
+| ambiguous | 10 | 1 | 3 | 6 | 0 |
+| multistep | 10 | 1 | 1 | 8 | 0 |
 | parameterized | 10 | 0 | 0 | 10 | 0 |
-| plain | 10 | 4 | 0 | 6 | 0 |
+| plain | 10 | 4 | 2 | 4 | 0 |
 
-## Wrong and unflagged (34)
+## Wrong and unflagged (28)
 
 - `case14-ambiguous-003-s0` formulation None; no tool stage  ([narrative](traces/01_case14-ambiguous-003-s0.narrative.txt), [transcript](traces/01_case14-ambiguous-003-s0.transcript.txt))
-- `case14-ambiguous-007-s0` formulation None; no tool stage  ([narrative](traces/02_case14-ambiguous-007-s0.narrative.txt), [transcript](traces/02_case14-ambiguous-007-s0.transcript.txt))
-- `case14-ambiguous-015-s0` formulation None; no tool stage  ([narrative](traces/04_case14-ambiguous-015-s0.narrative.txt), [transcript](traces/04_case14-ambiguous-015-s0.transcript.txt))
 - `case14-ambiguous-019-s0` formulation None; no tool stage  ([narrative](traces/05_case14-ambiguous-019-s0.narrative.txt), [transcript](traces/05_case14-ambiguous-019-s0.transcript.txt))
 - `case14-ambiguous-023-s0` formulation None; no tool stage  ([narrative](traces/06_case14-ambiguous-023-s0.narrative.txt), [transcript](traces/06_case14-ambiguous-023-s0.transcript.txt))
 - `case14-ambiguous-027-s0` formulation None; no tool stage  ([narrative](traces/07_case14-ambiguous-027-s0.narrative.txt), [transcript](traces/07_case14-ambiguous-027-s0.transcript.txt))
 - `case14-ambiguous-031-s0` formulation None; no tool stage  ([narrative](traces/08_case14-ambiguous-031-s0.narrative.txt), [transcript](traces/08_case14-ambiguous-031-s0.transcript.txt))
 - `case14-ambiguous-035-s0` formulation None; no tool stage  ([narrative](traces/09_case14-ambiguous-035-s0.narrative.txt), [transcript](traces/09_case14-ambiguous-035-s0.transcript.txt))
-- `case14-ambiguous-039-s0` formulation None; no tool stage  ([narrative](traces/10_case14-ambiguous-039-s0.narrative.txt), [transcript](traces/10_case14-ambiguous-039-s0.transcript.txt))
 - `case14-multistep-002-s0` formulation None; no tool stage  ([narrative](traces/11_case14-multistep-002-s0.narrative.txt), [transcript](traces/11_case14-multistep-002-s0.transcript.txt))
 - `case14-multistep-006-s0` formulation None; no tool stage  ([narrative](traces/12_case14-multistep-006-s0.narrative.txt), [transcript](traces/12_case14-multistep-006-s0.transcript.txt))
-- `case14-multistep-010-s0` formulation None; no tool stage  ([narrative](traces/13_case14-multistep-010-s0.narrative.txt), [transcript](traces/13_case14-multistep-010-s0.transcript.txt))
 - `case14-multistep-014-s0` formulation None; no tool stage  ([narrative](traces/14_case14-multistep-014-s0.narrative.txt), [transcript](traces/14_case14-multistep-014-s0.transcript.txt))
 - `case14-multistep-018-s0` formulation None; no tool stage  ([narrative](traces/15_case14-multistep-018-s0.narrative.txt), [transcript](traces/15_case14-multistep-018-s0.transcript.txt))
 - `case14-multistep-022-s0` formulation None; no tool stage  ([narrative](traces/16_case14-multistep-022-s0.narrative.txt), [transcript](traces/16_case14-multistep-022-s0.transcript.txt))
@@ -112,12 +108,19 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 - `case14-parameterized-029-s0` formulation None; no tool stage  ([narrative](traces/28_case14-parameterized-029-s0.narrative.txt), [transcript](traces/28_case14-parameterized-029-s0.transcript.txt))
 - `case14-parameterized-033-s0` formulation None; no tool stage  ([narrative](traces/29_case14-parameterized-033-s0.narrative.txt), [transcript](traces/29_case14-parameterized-033-s0.transcript.txt))
 - `case14-parameterized-037-s0` formulation None; no tool stage  ([narrative](traces/30_case14-parameterized-037-s0.narrative.txt), [transcript](traces/30_case14-parameterized-037-s0.transcript.txt))
-- `case14-plain-004-s0` formulation None; no tool stage  ([narrative](traces/32_case14-plain-004-s0.narrative.txt), [transcript](traces/32_case14-plain-004-s0.transcript.txt))
 - `case14-plain-008-s0` formulation None; no tool stage  ([narrative](traces/33_case14-plain-008-s0.narrative.txt), [transcript](traces/33_case14-plain-008-s0.transcript.txt))
 - `case14-plain-012-s0` formulation None; no tool stage  ([narrative](traces/34_case14-plain-012-s0.narrative.txt), [transcript](traces/34_case14-plain-012-s0.transcript.txt))
-- `case14-plain-016-s0` formulation None; no tool stage  ([narrative](traces/35_case14-plain-016-s0.narrative.txt), [transcript](traces/35_case14-plain-016-s0.transcript.txt))
 - `case14-plain-028-s0` formulation None; no tool stage  ([narrative](traces/38_case14-plain-028-s0.narrative.txt), [transcript](traces/38_case14-plain-028-s0.transcript.txt))
 - `case14-plain-036-s0` formulation None; no tool stage  ([narrative](traces/40_case14-plain-036-s0.narrative.txt), [transcript](traces/40_case14-plain-036-s0.transcript.txt))
+
+## Escalated (6)
+
+- `case14-ambiguous-007-s0` detected via json; formulation None; no tool stage  ([narrative](traces/02_case14-ambiguous-007-s0.narrative.txt), [transcript](traces/02_case14-ambiguous-007-s0.transcript.txt))
+- `case14-ambiguous-015-s0` detected via json; formulation None; no tool stage  ([narrative](traces/04_case14-ambiguous-015-s0.narrative.txt), [transcript](traces/04_case14-ambiguous-015-s0.transcript.txt))
+- `case14-ambiguous-039-s0` detected via json; formulation None; no tool stage  ([narrative](traces/10_case14-ambiguous-039-s0.narrative.txt), [transcript](traces/10_case14-ambiguous-039-s0.transcript.txt))
+- `case14-multistep-010-s0` detected via json; formulation None; no tool stage  ([narrative](traces/13_case14-multistep-010-s0.narrative.txt), [transcript](traces/13_case14-multistep-010-s0.transcript.txt))
+- `case14-plain-004-s0` detected via json; formulation None; no tool stage  ([narrative](traces/32_case14-plain-004-s0.narrative.txt), [transcript](traces/32_case14-plain-004-s0.transcript.txt))
+- `case14-plain-016-s0` detected via json; formulation None; no tool stage  ([narrative](traces/35_case14-plain-016-s0.narrative.txt), [transcript](traces/35_case14-plain-016-s0.transcript.txt))
 
 ## Untraceable numbers in the answer (40)
 

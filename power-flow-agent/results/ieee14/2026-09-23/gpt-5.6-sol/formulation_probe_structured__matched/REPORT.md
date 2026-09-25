@@ -1,6 +1,6 @@
 # formulation_probe:structured on IEEE 14-bus with gpt-5.6-sol
 
-Generated 2026-09-24 08:27 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
+Generated 2026-09-24 20:58 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
 
 ## Run
 

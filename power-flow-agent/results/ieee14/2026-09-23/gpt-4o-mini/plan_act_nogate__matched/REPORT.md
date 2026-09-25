@@ -1,6 +1,6 @@
 # plan_act_nogate on IEEE 14-bus with gpt-4o-mini
 
-Generated 2026-09-24 07:05 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
+Generated 2026-09-24 20:53 by benchmarks/postprocess.py from `report.rescored.json`. Runs: 40.
 
 ## Run
 
@@ -41,8 +41,8 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 
 | group | metric | value |
 |---|---|---|
-| Task utility | Formulation exact | 39/40 (97.5%) |
-| Task utility | Formulation error types | wrong_id: 1 |
+| Task utility | Formulation exact | 35/40 (87.5%) |
+| Task utility | Formulation error types | extra_arg_changes_result: 4, wrong_id: 1 |
 | Task utility | Voltage MAE, all runs | 1.90e-07 p.u. |
 | Task utility | Voltage MAE, formulation-exact runs | 0 p.u. |
 | Task utility | Flow MAE, all runs | 0.0152 MW |
@@ -67,7 +67,7 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 | solved_autonomously_count | 23 | 23 |
 | escalated_count | 0 | 0 |
 | wrong_silently_count | 17 | 17 |
-| formulation_exact_count | 39 | 39 |
+| formulation_exact_count | 35 | 35 |
 | v_pass_count | 36 | 36 |
 | faithful_answers_count | 36 | 36 |
 | n_items | 40 | 40 |
@@ -78,8 +78,8 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 |---|---:|---:|---:|---:|---:|
 | ambiguous | 10 | 9 | 0 | 1 | 9 |
 | multistep | 10 | 2 | 0 | 8 | 10 |
-| parameterized | 10 | 6 | 0 | 4 | 10 |
-| plain | 10 | 6 | 0 | 4 | 10 |
+| parameterized | 10 | 6 | 0 | 4 | 8 |
+| plain | 10 | 6 | 0 | 4 | 8 |
 
 ## Wrong and unflagged (17)
 
@@ -92,18 +92,22 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 - `case14-multistep-026-s0` formulation exact  ([narrative](traces/17_case14-multistep-026-s0.narrative.txt), [transcript](traces/17_case14-multistep-026-s0.transcript.txt))
 - `case14-multistep-034-s0` formulation exact  ([narrative](traces/19_case14-multistep-034-s0.narrative.txt), [transcript](traces/19_case14-multistep-034-s0.transcript.txt))
 - `case14-multistep-038-s0` formulation exact  ([narrative](traces/20_case14-multistep-038-s0.narrative.txt), [transcript](traces/20_case14-multistep-038-s0.transcript.txt))
-- `case14-parameterized-009-s0` formulation exact  ([narrative](traces/23_case14-parameterized-009-s0.narrative.txt), [transcript](traces/23_case14-parameterized-009-s0.transcript.txt))
-- `case14-parameterized-021-s0` formulation exact  ([narrative](traces/26_case14-parameterized-021-s0.narrative.txt), [transcript](traces/26_case14-parameterized-021-s0.transcript.txt))
+- `case14-parameterized-009-s0` formulation extra_arg_changes_result; run_n1_contingency: max_candidates=3 scans only 3 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/23_case14-parameterized-009-s0.narrative.txt), [transcript](traces/23_case14-parameterized-009-s0.transcript.txt))
+- `case14-parameterized-021-s0` formulation extra_arg_changes_result; run_n1_contingency: max_candidates=3 scans only 3 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/26_case14-parameterized-021-s0.narrative.txt), [transcript](traces/26_case14-parameterized-021-s0.transcript.txt))
 - `case14-parameterized-029-s0` formulation exact  ([narrative](traces/28_case14-parameterized-029-s0.narrative.txt), [transcript](traces/28_case14-parameterized-029-s0.transcript.txt))
 - `case14-parameterized-037-s0` formulation exact  ([narrative](traces/30_case14-parameterized-037-s0.narrative.txt), [transcript](traces/30_case14-parameterized-037-s0.transcript.txt))
 - `case14-plain-000-s0` formulation exact  ([narrative](traces/31_case14-plain-000-s0.narrative.txt), [transcript](traces/31_case14-plain-000-s0.transcript.txt))
-- `case14-plain-004-s0` formulation exact  ([narrative](traces/32_case14-plain-004-s0.narrative.txt), [transcript](traces/32_case14-plain-004-s0.transcript.txt))
-- `case14-plain-016-s0` formulation exact  ([narrative](traces/35_case14-plain-016-s0.narrative.txt), [transcript](traces/35_case14-plain-016-s0.transcript.txt))
+- `case14-plain-004-s0` formulation extra_arg_changes_result; run_n1_contingency: max_candidates=1 scans only 1 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/32_case14-plain-004-s0.narrative.txt), [transcript](traces/32_case14-plain-004-s0.transcript.txt))
+- `case14-plain-016-s0` formulation extra_arg_changes_result; run_n1_contingency: max_candidates=1 scans only 1 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/35_case14-plain-016-s0.narrative.txt), [transcript](traces/35_case14-plain-016-s0.transcript.txt))
 - `case14-plain-020-s0` formulation exact  ([narrative](traces/36_case14-plain-020-s0.narrative.txt), [transcript](traces/36_case14-plain-020-s0.transcript.txt))
 
-## Formulation not exact (1)
+## Formulation not exact (5)
 
 - `case14-ambiguous-039-s0` wrong_id: modify_load: bus_id intended 2 != executed 1  ([narrative](traces/10_case14-ambiguous-039-s0.narrative.txt), [transcript](traces/10_case14-ambiguous-039-s0.transcript.txt))
+- `case14-parameterized-009-s0` extra_arg_changes_result: run_n1_contingency: max_candidates=3 scans only 3 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/23_case14-parameterized-009-s0.narrative.txt), [transcript](traces/23_case14-parameterized-009-s0.transcript.txt))
+- `case14-parameterized-021-s0` extra_arg_changes_result: run_n1_contingency: max_candidates=3 scans only 3 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/26_case14-parameterized-021-s0.narrative.txt), [transcript](traces/26_case14-parameterized-021-s0.transcript.txt))
+- `case14-plain-004-s0` extra_arg_changes_result: run_n1_contingency: max_candidates=1 scans only 1 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/32_case14-plain-004-s0.narrative.txt), [transcript](traces/32_case14-plain-004-s0.transcript.txt))
+- `case14-plain-016-s0` extra_arg_changes_result: run_n1_contingency: max_candidates=1 scans only 1 of 20 branches, so the ranking is over a sample and not the network (request did not ask for it)  ([narrative](traces/35_case14-plain-016-s0.narrative.txt), [transcript](traces/35_case14-plain-016-s0.transcript.txt))
 
 ## Untraceable numbers in the answer (4)
 
