@@ -30,8 +30,12 @@ METHODS_DIR = Path(__file__).resolve().parent
 
 
 def read_text(rel_path: str) -> str:
-    """Exact text of ``methods/<rel_path>`` (UTF-8, nothing stripped)."""
-    return (METHODS_DIR / rel_path).read_bytes().decode("utf-8")
+    """Exact text of ``methods/<rel_path>`` (UTF-8, nothing stripped); a method-local file of an
+    archived method is found under ``methods/_archive/`` too."""
+    p = METHODS_DIR / rel_path
+    if not p.is_file() and (METHODS_DIR / "_archive" / rel_path).is_file():
+        p = METHODS_DIR / "_archive" / rel_path
+    return p.read_bytes().decode("utf-8")
 
 
 def prompt_hash(text: str) -> str:
@@ -60,26 +64,33 @@ class Method:
     preload_case: bool = False
     prompt_files: List[str] = field(default_factory=list)
     dynamic_parts: List[str] = field(default_factory=list)
+    archived: bool = False  # under methods/_archive: runnable and scorable, but not part of the current design
 
     @property
     def path(self) -> Path:
-        return METHODS_DIR / self.folder
+        return (METHODS_DIR / "_archive" / self.folder) if self.archived else (METHODS_DIR / self.folder)
 
 
 def _load_method(folder: Path) -> Method:
     data: Dict[str, Any] = json.loads((folder / "method.json").read_text(encoding="utf-8"))
     data.setdefault("folder", folder.name)
+    data["archived"] = folder.parent.name == "_archive"
     return Method(**data)
 
 
-def list_methods() -> List[Method]:
-    """Every method with a ``method.json``, in a stable paper-table order."""
-    found = {p.parent.name: _load_method(p.parent) for p in METHODS_DIR.glob("*/method.json")}
-    order = [
-        "llm_only_structured", "llm_only_few_shot", "llm_only_cot", "llm_only_rag", "llm_only_nr",
+def list_methods(include_archived: bool = True) -> List[Method]:
+    """Every method with a ``method.json``, in a stable order. ``methods/_archive/`` holds the
+    variants that are not part of the current design (kept so their old runs still render and
+    rescore); ``include_archived=False`` lists only the current design."""
+    found = {p.parent.name: _load_method(p.parent) for p in list(METHODS_DIR.glob("*/method.json")) + list(METHODS_DIR.glob("_archive/*/method.json"))}
+    if not include_archived:
+        found = {k: v for k, v in found.items() if not v.archived}
+    order = [  # the six methods of the current design first (paper-table order), then the archive
+        "rule_based", "llm_only_structured", "llm_only_cot", "plan_act_nogate", "react_nogate", "pfagent",
+        "llm_only_few_shot", "llm_only_rag", "llm_only_nr",
         "llm_only_forced_structured", "llm_only_forced_cot", "formulation_probe_structured", "formulation_probe_cot",
         "single_call_structured", "single_call_few_shot", "single_call_cot", "single_call_rag",
-        "rule_based", "react", "react_nogate", "plan_act", "plan_act_nogate", "pfagent", "pfagent_obsgate",
+        "react", "plan_act", "pfagent_obsgate",
     ]
     ordered = [found.pop(n) for n in order if n in found]
     return ordered + [found[k] for k in sorted(found)]
@@ -138,10 +149,10 @@ def planner_prompt_for(method: str | Method, *, tool_variant: str = "v1", plan_v
     if m.architecture != "plan_act":
         return None
     if plan_variant == "structured":
-        return read_text("plan_act/plan_system_prompt_structured.txt")
+        return read_text("plan_act_nogate/plan_system_prompt_structured.txt")
     from llm.tools import tools_catalog_text  # local import: llm imports this package
 
-    return read_text("plan_act/plan_system_prompt_prefix.txt") + tools_catalog_text(tool_variant, with_enums=True)
+    return read_text("plan_act_nogate/plan_system_prompt_prefix.txt") + tools_catalog_text(tool_variant, with_enums=True)
 
 
 def describe(method: str | Method, *, tool_variant: str = "v1") -> str:

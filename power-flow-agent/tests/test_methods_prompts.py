@@ -34,8 +34,8 @@ PINNED_TEXTS = {
     "single_call_structured/task_statement.txt": "251986811430",
     "single_call_structured/output_section.txt": "2304fa83ea46",
     "single_call_cot/reasoning_section.txt": "e0bd7a11b9d9",
-    "plan_act/plan_system_prompt_structured.txt": "5e9fee34a0db",
-    "plan_act/plan_system_prompt_prefix.txt": "6519a84e612a",
+    "plan_act_nogate/plan_system_prompt_structured.txt": "5e9fee34a0db",
+    "plan_act_nogate/plan_system_prompt_prefix.txt": "6519a84e612a",
     "_shared/common_rules.txt": "95a47a1faefe",
     "_shared/output_contract.txt": "729cd991d4a6",
     "_shared/operations_section.txt": "d66817c9b4d3",
@@ -103,12 +103,14 @@ def test_every_method_folder_is_registered_and_runnable() -> None:
     from benchmarks.evaluate_llms import parse_method
 
     folders = {p.name for p in methods.METHODS_DIR.iterdir() if p.is_dir() and not p.name.startswith("_")}
-    registered = {m.folder for m in methods.list_methods()}
+    registered = {m.folder for m in methods.list_methods(include_archived=False)}
     assert folders == registered
+    archived = {p.name for p in (methods.METHODS_DIR / "_archive").iterdir() if p.is_dir()}
+    assert archived == {m.folder for m in methods.list_methods() if m.archived}
     for m in methods.list_methods():
         parse_method(m.runner_name)  # raises on an unknown runner name
         for rel in m.prompt_files:
-            assert (methods.METHODS_DIR / rel).is_file(), rel
+            assert (methods.METHODS_DIR / rel).is_file() or (methods.METHODS_DIR / "_archive" / rel).is_file(), rel
 
 
 # --------------------------------------------------------------------------- declared formulation (2026-09-23)

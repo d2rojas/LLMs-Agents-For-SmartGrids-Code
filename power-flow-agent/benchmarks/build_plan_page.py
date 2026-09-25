@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build results/v2_plan.html: the evaluation design as an app-like page.
+"""Build results/visuals/design.html: the evaluation design as an app-like page.
 
 Tabs: Overview, Methods, Scenarios, Prompts, Tools, Gate & scoring, Run plan. Everything is
 generated from the code that will run (methods/, llm/, benchmarks/requests.py, the dispatcher).
@@ -49,14 +49,18 @@ ROWS: List[Dict[str, Any]] = [
     {"key": "pfagent", "label": "PFAgent", "sub": "ReAct + verification gate", "runner": "pfagent", "formulates": "the LLM, one call at a time", "computes": "PandaPower", "sees": "yes, up to 8 rounds", "gate": "final answer, V1–V7",
      "story": "ReAct, plus a gate on the final answer: numbers must come from the last solve of a converged, connected network and every argument must trace to the request. A rejected answer is retried once, then escalated."},
 ]
-COST = {"rule_based": (0, 0), "llm_only:structured": (0.02, 0), "llm_only:cot": (0, 0), "llm_only_forced:structured": (0.05, 0), "llm_only_forced:cot": (0.05, 0), "formulation_probe:structured": (0.02, 0.25), "formulation_probe:cot": (0.02, 0.3), "plan_act_nogate": (0.05, 0.7), "react_nogate": (0.1, 1.5), "pfagent": (0.1, 1.5)}
-RUN_PLAN = [  # (runner, models, note)
-    ("rule_based", [], "free, no LLM"),
-    ("llm_only:structured", ["gpt-4o-mini"], "gpt-4o-mini rerun (its 2026-09-16 prompt predates a fix); gpt-5.6-sol reused from 2026-09-21, prompt unchanged"),
-    ("llm_only:cot", [], "both reused (gpt-4o-mini 2026-09-18, gpt-5.6-sol 2026-09-21), prompt unchanged"),
-    ("plan_act_nogate", MODELS, "planner catalogue and tool schema now explain the N-1 arguments"),
-    ("react_nogate", MODELS, "tool schema now explains the N-1 arguments; messages stored"),
-    ("pfagent", MODELS, "tool schema; V6 now covers max_candidates; messages stored"),
+# estimated cost per method and model for 40 requests, USD (gpt-4o-mini, gpt-5.6-sol): the cost_usd_total
+# recorded in summary.json of the 2026-09-21/23 runs, rounded up. On sol the prompting rows are the expensive
+# ones (about 8,000 reasoning tokens per answer); the agents mostly pay for prompt tokens.
+COST = {"rule_based": (0, 0), "llm_only:structured": (0.03, 3.6), "llm_only:cot": (0.05, 3.5), "plan_act_nogate": (0.05, 0.7), "react_nogate": (0.1, 1.3), "pfagent": (0.1, 1.7)}
+BALANCE_USD = 16.64  # OpenRouter credit on 2026-09-25
+RUN_PLAN = [  # (runner, models, why it has to run again)
+    ("rule_based", [], "free, no LLM; fills the shared answer object from the solver outputs"),
+    ("llm_only:structured", MODELS, "prompt changed: shared rules, operations catalogue and the shared answer object"),
+    ("llm_only:cot", MODELS, "same prompt change, plus the reasoning section"),
+    ("plan_act_nogate", MODELS, "planner catalogue and tool schema now explain the N-1 arguments; shared answer object"),
+    ("react_nogate", MODELS, "tool schema now explains the N-1 arguments; shared answer object; messages stored"),
+    ("pfagent", MODELS, "same as ReAct, plus V6 now covers max_candidates"),
 ]
 
 # prompt building blocks: (id, color, label, where it comes from)
@@ -75,7 +79,7 @@ BLOCKS = {
     "u_out": ("#c99a06", "user · output requirements (JSON schema)", "methods/_shared/llm_only_user_template.txt"),
     "u_out_probe": ("#c99a06", "user · output requirements (formulation only)", "methods/_shared/formulation_probe_output_section.txt"),
     "u_request": ("#1f9d55", "user · the request, verbatim", "benchmarks/requests.py"),
-    "planner": ("#6d4fc4", "planner system prompt (plan step only)", "methods/plan_act/plan_system_prompt_prefix.txt + llm/tools.py"),
+    "planner": ("#6d4fc4", "planner system prompt (plan step only)", "methods/plan_act_nogate/plan_system_prompt_prefix.txt + llm/tools.py"),
     "tools": ("#0f8f84", "tool schema (function calling)", "llm/tools.py"),
 }
 FIG = re.compile(r'"figure_json":\s*"((?:[^"\\]|\\.)*)"')
@@ -467,17 +471,17 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
     H.append("<div class='card'><h2>The code behind each step, verbatim</h2><p class='muted'>From llm/engine.py, baselines/rule_based.py, benchmarks/metrics.py and benchmarks/scoring.py in this worktree.</p>" + "".join(f"<details><summary><b>{E(t)}</b> · {E(o.__module__)}.{E(getattr(o, '__qualname__', o.__name__))} · {len(_src(o).splitlines())} lines</summary><pre>{E(_src(o))}</pre></details>" for t, o in parts) + "</div></div>")
 
     # ---------------- run plan
-    H.append("<div class='tab' id='tab-plan'><div class='card'><h2>What runs, what is reused, what it costs</h2><table><tr><th>method</th><th>gpt-4o-mini</th><th>gpt-5.6-sol</th><th>note</th></tr>")
+    H.append("<div class='tab' id='tab-plan'><div class='card'><h2>What runs and what it costs</h2><p class='muted'>Every prompt changed with the shared rules and the shared answer object, so no earlier run is comparable: all six methods run again on both models, 40 requests each, gpt-4o-mini first. Earlier runs stay under their own dates for reference only.</p><table><tr><th>method</th><th>gpt-4o-mini</th><th>gpt-5.6-sol</th><th>why</th></tr>")
     tm = ts = 0.0
     for runner, models_, note in RUN_PLAN:
         m = methods.get_method(runner)
         cm, cs = COST[runner]
-        a = "run" if (not m.uses_llm or "gpt-4o-mini" in models_) else "reuse"
-        b = "run" if (not m.uses_llm or "gpt-5.6-sol" in models_) else ("reuse" if runner in ("llm_only:structured", "llm_only:cot") else "—")
+        a = "run" if (not m.uses_llm or "gpt-4o-mini" in models_) else "skip"
+        b = "run" if (not m.uses_llm or "gpt-5.6-sol" in models_) else "skip"
         if a == "run": tm += cm
         if b == "run": ts += cs
         H.append(f"<tr><td><b>{E(m.folder)}</b></td><td><span class='chip {'acc' if a == 'run' else ''}'>{a}</span> {'$%.2f' % cm if a == 'run' else ''}</td><td><span class='chip {'acc' if b == 'run' else ''}'>{b}</span> {'$%.2f' % cs if b == 'run' else ''}</td><td class='muted'>{E(note)}</td></tr>")
-    H.append(f"</table><p>Estimated cost: gpt-4o-mini about ${tm:.2f}, gpt-5.6-sol about ${ts:.2f}, total about ${tm + ts:.2f}. Real cost on sol has run up to twice the estimate. Output goes to <code>results/ieee14/&lt;date&gt;/&lt;model&gt;/&lt;method&gt;/</code>; afterwards the results page and the table builder read only from there.</p><h3>Commands, in order (gpt-4o-mini first within each)</h3><pre>")
+    H.append(f"</table><p>Estimated cost: gpt-4o-mini about ${tm:.2f}, gpt-5.6-sol about ${ts:.2f}, total about ${tm + ts:.2f}; the recorded costs are from 40-request runs with the earlier prompts, and the shared answer object asks for a few more output tokens, so allow about 20% more. The OpenRouter balance is ${BALANCE_USD:.2f}. The EV case study still needs about $10, so after the sol runs it waits for a recharge. Output goes to <code>results/ieee14/&lt;date&gt;/&lt;model&gt;/&lt;method&gt;/</code>; afterwards the results page and the table builder read only from there.</p><h3>Order</h3><ol><li>Parser (free) and the five LLM methods on gpt-4o-mini: about ${tm:.2f}.</li><li>Check the gpt-4o-mini reports and traces in the viewer. Fix anything wrong before spending on sol.</li><li>The five LLM methods on gpt-5.6-sol: about ${ts:.2f}.</li><li>Regenerate the results page and the paper table from the new folders.</li></ol><h3>Commands</h3><pre>")
     cmds = []
     for runner, models_, _ in RUN_PLAN:
         m = methods.get_method(runner)
@@ -499,7 +503,7 @@ document.querySelectorAll('.ln').forEach(l=>l.onclick=()=>{const o=l.classList.t
 document.querySelectorAll('a[data-goto]').forEach(a=>a.onclick=e=>{e.preventDefault();mth.value=a.dataset.goto;ap();show('prompts');});
 document.querySelectorAll('a[data-scn]').forEach(a=>a.onclick=e=>{e.preventDefault();scn.value=a.dataset.scn;ap();show('prompts');});
 </script></body></html>""")
-    out = PROJECT_ROOT / "results" / "v2_plan.html"
+    out = PROJECT_ROOT / "results" / "visuals" / "design.html"
     out.write_text("".join(H), encoding="utf-8")
     return out
 

@@ -662,9 +662,9 @@ def _plan_system_prompt(variant: str = "v1") -> str:
     # free-text criterion or an unconverted 0-based index, neither of which ReAct can make.
     from llm.tools import tools_catalog_text
 
-    return _read_method_text("plan_act/plan_system_prompt_prefix.txt") + tools_catalog_text(variant, with_enums=True)
+    return _read_method_text("plan_act_nogate/plan_system_prompt_prefix.txt") + tools_catalog_text(variant, with_enums=True)
 
-PLAN_SYSTEM_PROMPT_STRUCTURED = _read_method_text("plan_act/plan_system_prompt_structured.txt")
+PLAN_SYSTEM_PROMPT_STRUCTURED = _read_method_text("plan_act_nogate/plan_system_prompt_structured.txt")
 
 FINAL_ANSWER_INSTRUCTION = _read_method_text("_shared/final_answer_instruction.txt")
 

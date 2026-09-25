@@ -36,7 +36,14 @@ python run.py show-prompt --method pfagent
 python run.py run --method pfagent --model openrouter:openai/gpt-4o-mini --case ieee14 --n 40 --dry-run
 python run.py run --method pfagent --method react_nogate --model openrouter:openai/gpt-4o-mini --case ieee14 --n 40
 open results/INDEX.md              # then the run folder's REPORT.md and traces/
+python run.py serve                # results/visuals/: design.html, results.html, viewer.html
 ```
+
+Six methods make up the evaluation design: the deterministic parser, structured prompting,
+chain-of-thought prompting, Plan-and-Act, ReAct and PFAgent. They share one rules block, one
+operations catalogue, one answer object and one evaluator (`benchmarks/common_eval.py`);
+`results/visuals/design.html` documents all of it, prompts included. Other variants are kept
+under `methods/_archive/` for their old runs.
 
 `run` calls `benchmarks/evaluate_llms.py` with the flags the paper runs used, rescores the
 report offline, and renders one folder per (method, model, case): a per-run transcript
