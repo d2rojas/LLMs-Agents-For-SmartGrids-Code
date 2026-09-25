@@ -34,3 +34,15 @@ def test_threshold_follows_the_case() -> None:
     ok = bm.formulation_check(intended, [{"tool": "load_case", "args": {"case_name": "case30"}}, {"tool": "run_n1_contingency", "args": {"max_candidates": 41}}])
     bad = bm.formulation_check(intended, [{"tool": "load_case", "args": {"case_name": "case30"}}, {"tool": "run_n1_contingency", "args": {"max_candidates": 25}}])
     assert ok["formulation_exact"] is True and bad["formulation_exact"] is False
+
+
+def test_v6_flags_an_unrequested_max_candidates() -> None:
+    trace = {"rounds": [{"round": 1, "tools": [
+        {"name": "load_case", "arguments": {"case_name": "case14"}, "output": "{}"},
+        {"name": "run_n1_contingency", "arguments": {"top_k": 1, "criteria": "max_violations", "max_candidates": 3}, "output": "{}"}]}]}
+    v6 = bm.argument_grounding_check(trace, "Load case14 and run an N-1 contingency analysis and report the worst single outage.")
+    assert v6["passed"] is False and any(a["arg"] == "max_candidates" for a in v6["invented_args"])
+    ok = bm.argument_grounding_check({"rounds": [{"round": 1, "tools": [{"name": "run_n1_contingency", "arguments": {"top_k": 3}, "output": "{}"}]}]}, "report the 3 worst outages")
+    assert ok["passed"] is True
+    stated = bm.argument_grounding_check(trace, "scan only 3 candidate branches and report the worst outage")
+    assert stated["passed"] is True

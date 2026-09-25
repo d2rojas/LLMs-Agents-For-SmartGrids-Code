@@ -61,7 +61,7 @@ PINNED_SYSTEM_PROMPTS = {
 
 # 2026-09-23: planner prompt carries the enum values and the indexing rule (matched information with ReAct);
 # the runs behind the 2026-09-21 tables used 6dfbc78e5795 / a82318af7571.
-PINNED_PLANNER_PROMPTS = {"v1": "7f71af6e03f2", "load_split": "76ea681e520a"}
+PINNED_PLANNER_PROMPTS = {"v1": "64a026212fdb", "load_split": "4e2f69255f6b"}
 
 
 @pytest.mark.parametrize("rel,expected", sorted(PINNED_TEXTS.items()))

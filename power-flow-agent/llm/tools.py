@@ -104,9 +104,9 @@ TOOLS: list[dict[str, Any]] = [
         "parameters": {
             "type": "object",
             "properties": {
-                "top_k": {"type": "integer", "default": 5},
-                "criteria": {"type": "string", "enum": ["max_violations", "max_overload", "min_voltage"], "default": "max_violations"},
-                "max_candidates": {"type": "integer", "default": 0},
+                "top_k": {"type": "integer", "default": 5, "description": "How many worst outages to return."},
+                "criteria": {"type": "string", "enum": ["max_violations", "max_overload", "min_voltage"], "default": "max_violations", "description": "Ranking criterion."},
+                "max_candidates": {"type": "integer", "default": 0, "description": "How many branches to scan; 0 scans every branch of the network. Leave 0 unless the request asks to limit the scan."},
             },
         },
     },
@@ -204,7 +204,8 @@ def tools_catalog_text(variant: str = "v1", *, with_enums: bool = False) -> str:
             typ = v.get("type", "any")
             if with_enums and v.get("enum"):
                 typ = f"{typ} in {{{', '.join(str(e) for e in v['enum'])}}}"
-            parts.append(f"{k}: {typ}{'*' if k in req else ''}")
+            desc = f" ({v['description'].rstrip('.')})" if with_enums and v.get("description") else ""
+            parts.append(f"{k}: {typ}{'*' if k in req else ''}{desc}")
         params = ", ".join(parts) or "(none)"
         lines.append(f"- {t['name']}({params}): {t.get('description', '')}")
     return "\n".join(lines)

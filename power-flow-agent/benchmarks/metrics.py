@@ -1335,6 +1335,17 @@ def argument_grounding_check(trace: Optional[Dict[str, Any]], request_text: Opti
                 if not grounded:
                     invented.append({"tool": name, "arg": key, "value": value})
 
+        if canonical == "run_n1_contingency":
+            # 2026-09-24: a positive max_candidates narrows the scan to a sample of the branches;
+            # unless the request states that number it is an invented argument (V6), the same
+            # class as an invented q_mvar. top_k stays free: "the worst outage" implies 1.
+            args = rec.get("arguments") or {}
+            if isinstance(args, str):
+                args = _safe_json_loads(args)
+            mc = (args or {}).get("max_candidates")
+            if isinstance(mc, (int, float)) and not isinstance(mc, bool) and float(mc) > 0 and float(mc) not in pool["any"]:
+                invented.append({"tool": name, "arg": "max_candidates", "value": mc})
+
         # This call's own output grounds every later call, so a value the request
         # never stated but a prior tool reported (e.g. a bus id read off get_status)
         # is not penalized. load_case's own output is excluded: it is a bulk network-
