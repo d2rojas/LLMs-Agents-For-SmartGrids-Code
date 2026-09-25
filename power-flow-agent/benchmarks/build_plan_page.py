@@ -238,6 +238,32 @@ def split_system(text: str, m: methods.Method) -> List[Tuple[str, str]]:
     return parts
 
 
+def diagram(kind: str) -> str:
+    """Small inline SVG of the method's control flow."""
+    W, H_ = 230, 250
+    box = lambda x, y, w, h, t, c="#fff", stroke="#cbd5e1": f"<rect x='{x}' y='{y}' width='{w}' height='{h}' rx='8' fill='{c}' stroke='{stroke}'/><text x='{x + w / 2}' y='{y + h / 2 + 4}' text-anchor='middle' font-size='11' font-family='Inter,Helvetica,Arial' fill='#0f172a'>{t}</text>"
+    arrow = lambda x1, y1, x2, y2, c="#64748b": f"<line x1='{x1}' y1='{y1}' x2='{x2}' y2='{y2}' stroke='{c}' stroke-width='1.6' marker-end='url(#a)'/>"
+    label = lambda x, y, t, c="#64748b": f"<text x='{x}' y='{y}' font-size='10' font-family='Inter,Helvetica,Arial' fill='{c}'>{t}</text>"
+    d = [f"<svg viewBox='0 0 {W} {H_}' width='100%' xmlns='http://www.w3.org/2000/svg'><defs><marker id='a' markerWidth='8' markerHeight='8' refX='7' refY='4' orient='auto'><path d='M0,0 L8,4 L0,8 z' fill='#64748b'/></marker></defs>"]
+    d.append(box(60, 8, 110, 26, "request", "#eef1f5"))
+    if kind == "rule_based":
+        d.append(arrow(115, 34, 115, 56)); d.append(box(45, 56, 140, 28, "regex parser", "#f3f4f6")); d.append(arrow(115, 84, 115, 108)); d.append(box(45, 108, 140, 28, "solver (PandaPower)", "#e0f2f1", "#0f8f84")); d.append(arrow(115, 136, 115, 160)); d.append(box(45, 160, 140, 28, "template answer", "#eef1f5")); d.append(label(8, 215, "no LLM · no gate"))
+    elif kind in ("llm_only:structured", "llm_only:cot"):
+        d.append(arrow(115, 34, 115, 56)); d.append(box(30, 56, 170, 40, "LLM reads the case tables", "#e8eefc", "#2f5fd0")); d.append(label(40, 90, "and computes by hand" if kind.endswith("structured") else "reasons, then computes by hand", "#2f5fd0")); d.append(arrow(115, 96, 115, 120)); d.append(box(45, 120, 140, 28, "JSON answer", "#eef1f5")); d.append(label(8, 175, "no solver · no tool calls · no gate")); d.append(label(8, 192, "may set converged=false (abstain)"))
+    elif kind == "plan_act_nogate":
+        d.append(arrow(115, 34, 115, 56)); d.append(box(30, 56, 170, 28, "LLM writes the whole plan", "#e8eefc", "#6d4fc4")); d.append(arrow(115, 84, 115, 108)); d.append(box(30, 108, 170, 28, "solver runs every step", "#e0f2f1", "#0f8f84")); d.append(arrow(115, 136, 115, 160)); d.append(box(30, 160, 170, 28, "LLM writes the answer", "#e8eefc", "#2f5fd0")); d.append(label(8, 215, "plans once, never sees results before committing"))
+    else:  # react / pfagent
+        d.append(arrow(115, 34, 115, 56)); d.append(box(30, 56, 170, 28, "LLM decides a tool call", "#e8eefc", "#2f5fd0")); d.append(arrow(115, 84, 115, 108)); d.append(box(30, 108, 170, 28, "solver executes it", "#e0f2f1", "#0f8f84"))
+        d.append(f"<path d='M200,122 C225,122 225,70 200,70' fill='none' stroke='#64748b' stroke-width='1.6' marker-end='url(#a)'/>"); d.append(label(160, 100, "up to 8 rounds", "#64748b"))
+        d.append(arrow(115, 136, 115, 160))
+        if kind == "pfagent":
+            d.append(box(30, 160, 170, 28, "verification gate V1–V7", "#fff7db", "#c99a06")); d.append(arrow(115, 188, 115, 212)); d.append(box(15, 212, 95, 26, "report", "#e6f4ea", "#1f9d55")); d.append(box(120, 212, 95, 26, "escalate", "#fdf0e3", "#e0891a"))
+        else:
+            d.append(box(30, 160, 170, 28, "LLM writes the answer", "#e8eefc", "#2f5fd0")); d.append(label(8, 215, "sees every result · no gate"))
+    d.append("</svg>")
+    return "".join(d)
+
+
 def _src(obj: Any) -> str:
     try:
         return inspect.getsource(obj)
@@ -266,7 +292,7 @@ header{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px
 header h1{font-size:17px;margin:0;letter-spacing:-.01em}.tabs{display:flex;gap:4px}.tabs button{font:inherit;font-weight:500;padding:7px 14px;border:1px solid transparent;border-radius:8px;background:transparent;cursor:pointer;color:var(--muted)}.tabs button.on{background:var(--acc);color:#fff}
 main{padding:18px 22px;max-width:1500px;margin:0 auto}.tab{display:none}.tab.on{display:block}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow);margin-bottom:12px}.card h2{font-size:16px;margin:0 0 6px}.card h3{font-size:14px;margin:12px 0 6px}
-.grid{display:grid;gap:12px}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.grid{display:grid;gap:12px}.g6{grid-template-columns:repeat(6,minmax(0,1fr))}.dg{background:#fafbfd;border:1px solid var(--line);border-radius:10px;padding:8px}.dg h4{margin:0;font-size:12.5px}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .muted{color:var(--muted);font-size:12.5px}.chip{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:600;background:#eef1f5;color:#334155;margin:2px 4px 2px 0}.chip.acc{background:var(--acc);color:#fff}.chip.ok{background:#e6f4ea;color:#166534}.chip.bad{background:#fdecec;color:#991b1b}
 .flow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}.flow .box{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 12px;box-shadow:var(--shadow)}.flow .box b{display:block;font-size:13px}.flow .box span{font-size:12px;color:var(--muted)}.flow .arr{color:var(--muted);font-size:18px}
 table{border-collapse:collapse;width:100%;font-size:13px;background:#fff}th,td{border:1px solid var(--line);padding:6px 8px;vertical-align:top;text-align:left}th{background:#f6f8fb;font-weight:600}
@@ -309,20 +335,20 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
         tools = get_openai_tools(variant=TOOLS) if (m.uses_tools and m.uses_llm) else []
         sysm = sp + (planner or "")
         matrix.append((r["label"], {cols[0]: "yes" if "### Node Data" in u0 else ("n/a" if m.kind == "rule_based" else "no"), cols[1]: "yes" if tools else ("n/a" if m.kind == "rule_based" else "no"), cols[2]: "yes" if (tools or " in {" in sysm) else ("n/a" if m.kind == "rule_based" else "no"), cols[3]: "yes" if "0-based" in sysm else ("fixed rules" if m.kind == "rule_based" else "no"), cols[4]: "yes" if m.architecture == "react" else ("no" if m.uses_tools else "n/a"), cols[5]: "yes" if "set `converged` to false" in sp else ("n/a" if m.uses_tools or m.kind == "rule_based" else "no"), cols[6]: "final V1–V7" if m.final_gate else "no"}))
-    # side-by-side comparison: aspects as rows, methods as columns
+    # diagrams row
+    H.append("<div class='card'><h2>Six ways to answer the same request</h2><div class='grid g6'>" + "".join(f"<div class='dg'><h4>{E(r['label'])}</h4><div class='muted'>{E(r['sub'])}</div>{diagram(r['runner'])}</div>" for r in ROWS) + "</div></div>")
+    # light comparison
     aspects = [("formulates the solver operations", "formulates"), ("computes the numbers", "computes"), ("sees the solver outputs before answering", "sees"), ("gate on the answer", "gate")]
-    H.append("<div class='card'><h2>Side by side</h2><table class='cmp'><tr><th></th>" + "".join(f"<th>{E(r['label'])}<br><span class='muted'>{E(r['sub'])}</span></th>" for r in ROWS) + "</tr>")
+    H.append("<div class='card'><h2>Side by side</h2><table class='cmp'><tr><th></th>" + "".join(f"<th>{E(r['label'])}</th>" for r in ROWS) + "</tr>")
     for title, key in aspects:
         H.append(f"<tr><td><b>{E(title)}</b></td>" + "".join(f"<td>{E(r[key])}</td>" for r in ROWS) + "</tr>")
+    H.append("<tr><td></td>" + "".join(f"<td><a class='lnk' href='#' data-goto='{E(r['runner'])}'>prompts →</a></td>" for r in ROWS) + "</tr></table>")
+    H.append("<details><summary>Details: what information each method receives, and the prompt blocks it is built from</summary><table class='cmp' style='margin-top:8px'><tr><th></th>" + "".join(f"<th>{E(r['label'])}</th>" for r in ROWS) + "</tr>")
     for c in cols:
         H.append(f"<tr><td><b>{E(c)}</b></td>" + "".join(f"<td style='background:{'#e6f4ea' if v.startswith('yes') or v.startswith('final') else ('#f3f4f6' if v in ('n/a', 'fixed rules') else '#fdecec')}'>{E(v)}</td>" for _, row in matrix for v in [row[c]]) + "</tr>")
-    H.append("<tr><td><b>prompt blocks</b></td>" + "".join("<td>" + (" ".join(f"<span class='chip'>{E(Path(f).name)}</span>" for f in methods.get_method(r['runner']).prompt_files) or "<span class='muted'>none, no LLM</span>") + "</td>" for r in ROWS) + "</tr>")
-    H.append("<tr><td></td>" + "".join(f"<td><a class='lnk' href='#' data-goto='{E(r['runner'])}'>see its prompts →</a></td>" for r in ROWS) + "</tr></table><p class='muted'>Derived from the assembled prompts. Green: the method receives it. Red: it does not. Grey: not applicable. The prompting methods get no tools by design: Formulation does not apply to them, and their numbers are the model's own arithmetic.</p></div>")
+    H.append("<tr><td><b>prompt blocks</b></td>" + "".join("<td>" + (" ".join(f"<span class='chip'>{E(Path(f).name)}</span>" for f in methods.get_method(r['runner']).prompt_files) or "<span class='muted'>none, no LLM</span>") + "</td>" for r in ROWS) + "</tr></table><p class='muted'>Derived from the assembled prompts. Green: the method receives it. Red: it does not. Grey: not applicable. The prompting methods get no tools by design: Formulation does not apply to them, and their numbers are the model's own arithmetic.</p></details></div>")
     H.append(examples_section(reqs))
-    H.append("<div class='grid g3'>")
-    for r in ROWS:
-        H.append(f"<div class='card'><h2>{E(r['label'])} <span class='chip'>{E(r['sub'])}</span></h2><p>{E(r['story'])}</p><p class='muted'>runner: {E(r['runner'])}</p></div>")
-    H.append("</div></div>")
+    H.append("</div>")
 
     # ---------------- scenarios
     H.append("<div class='tab' id='tab-scenarios'>")
