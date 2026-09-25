@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable, Literal, Optional
 import re
 
-from models.schemas import ContingencyOutcome, N1Report
+from solver.schemas import ContingencyOutcome, N1Report
 from solver.power_flow import SolverConfig, run_power_flow
 
 

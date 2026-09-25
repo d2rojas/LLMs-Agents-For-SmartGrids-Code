@@ -17,7 +17,7 @@ methods/          one folder per method: method.json + the prompt .txt files it 
 results/          every run: <case>/<date>/<model>/<method>/ with traces, summary, REPORT   (results/README.md)
 data/             MATPOWER case files                                                        (data/README.md)
 solver/  llm/  baselines/  models/   the engine (PandaPower tools, LLM engine, baselines, schemas)
-benchmarks/       evaluate_llms.py (runner), rescore.py, postprocess.py, scoring, paper-table builders,
+evaluation/       runner.py (runner), rescore.py, postprocess.py, scoring, paper-table builders,
                   and results_* (the raw archive the paper tables are built from)
 scripts/          run_pf_matrix.sh (full matrix), migrate_paper_results.py, fetch_matpower_cases.py
 viz/  app.py      the Streamlit UI
@@ -41,32 +41,32 @@ python run.py serve                # results/visuals/: design.html, results.html
 
 Six methods make up the evaluation design: the deterministic parser, structured prompting,
 chain-of-thought prompting, Plan-and-Act, ReAct and PFAgent. They share one rules block, one
-operations catalogue, one answer object and one evaluator (`benchmarks/common_eval.py`);
+operations catalogue, one answer object and one evaluator (`evaluation/common_eval.py`);
 `results/visuals/design.html` documents all of it, prompts included. Other variants are kept
 under `methods/_archive/` for their old runs. The design runs on five IEEE systems, 14, 30, 57, 118
 and 300 buses, with the same 40-request shape on each (`--case ieee14 | ieee30 | ieee57 | ieee118 | ieee300`);
 `run.py run` has no default case.
 
-`run` calls `benchmarks/evaluate_llms.py` with the flags the paper runs used, rescores the
+`run` calls `evaluation/runner.py` with the flags the paper runs used, rescores the
 report offline, and renders one folder per (method, model, case): a per-run transcript
 (every message, tool call and tool output), a per-run narrative (steps, tokens, formulation
 check, verification, outcome), `summary.csv`, and `REPORT.md` with the counts per metric.
 Models are `provider:model` strings; the runs behind the current paper tables used
 `openrouter:openai/gpt-4o-mini`, `openrouter:openai/gpt-5.6-sol` and `openrouter:openai/gpt-5.4`.
 
-Interactive UI: `streamlit run app.py`.
+Interactive UI: `streamlit run ui/app.py`.
 
 ## Data and protocol
 
 MATPOWER IEEE 14/30/57/118-bus cases (bundled in [`data/`](data/) and [`solver/cases/`](solver/cases/)).
 Loads and generator setpoints are perturbed around the base case (`--k 1`) to mitigate
 memorization; requests are generated deterministically from (case, N, seed) by
-`benchmarks/requests.py`, N = 40 per case. Ground truth is the PandaPower solution of the
+`evaluation/requests.py`, N = 40 per case. Ground truth is the PandaPower solution of the
 intended tool calls on the same perturbed case.
 
 ## Metrics
 
-Three groups, as in the paper. Definitions and code: `benchmarks/scoring.py`, `benchmarks/metrics.py`.
+Three groups, as in the paper. Definitions and code: `evaluation/scoring.py`, `evaluation/metrics.py`.
 
 - **Task utility**: formulation exactness (did the executed tool calls match the request), voltage
   MAE (`V_MAE`, p.u.) and branch-flow MAE against the reference, both over all runs and over
@@ -81,7 +81,7 @@ Three groups, as in the paper. Definitions and code: `benchmarks/scoring.py`, `b
 
 ## Verification gate (PFAgent)
 
-Conditions V1 to V7 in `llm/engine.py:verify_final_answer`: converged, power balance, no isolated
+Conditions V1 to V7 in `agent/engine.py:verify_final_answer`: converged, power balance, no isolated
 buses, faithfulness of reported numbers, currency (numbers come from the solve after the last
 mutation), argument grounding (every mutating-tool argument traces to the request or a prior tool
 output), and claims consistent with the agent's own last solved state. A rejected answer is
@@ -89,7 +89,7 @@ retried once with the failed conditions spelled out; an answer that still fails 
 
 ## Paper tables
 
-`benchmarks/build_paper_tables.py` renders `benchmarks/tab_pf_*.tex` from the runs it names in
+`evaluation/build_paper_tables.py` renders `evaluation/tab_pf_*.tex` from the runs it names in
 `SOURCES`, `STRESS_SOURCES` and `SPLIT_TOOL_SOURCES`. The same runs are mirrored, readable, under
 `results/` (see `results/README.md`, "Provenance"), where every raw report and trace is tracked in git.
 

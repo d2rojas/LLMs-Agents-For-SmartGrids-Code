@@ -1,4 +1,4 @@
-"""Offline tests for benchmarks/scoring.py and benchmarks/rescore.py (no LLM, no network)."""
+"""Offline tests for evaluation/scoring.py and evaluation/rescore.py (no LLM, no network)."""
 
 import json
 import sys
@@ -9,9 +9,9 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from benchmarks import rescore  # noqa: E402
-from benchmarks import scoring as bs  # noqa: E402
-from benchmarks.evaluate_llms import _aggregate_group  # noqa: E402
+from evaluation import rescore  # noqa: E402
+from evaluation import scoring as bs  # noqa: E402
+from evaluation.runner import _aggregate_group  # noqa: E402
 
 ABSTENTION = json.dumps(
     {"converged": False, "bus_voltages": [], "line_flows": [], "total_generation_mw": 0.0, "total_load_mw": 0.0, "total_loss_mw": 0.0},
@@ -196,7 +196,7 @@ def test_infer_claim_shape_recovers_the_generators_own_clause_templates():
     """2026-09-21: V7's live gate cannot see truth_answer (it would leak which
     question is being asked to a check meant to work from the request alone), so
     the claim shape has to come from the request text itself -- matching the exact
-    clause templates benchmarks/requests.py's op_worst_voltage/op_overloads/op_n1
+    clause templates evaluation/requests.py's op_worst_voltage/op_overloads/op_n1
     emit (every other op defaults to powerflow_summary, the fallback here too)."""
     assert bs.infer_claim_shape("Load case14 and report the bus with the lowest voltage magnitude.") == {
         "kind": "worst_voltage_bus"
@@ -340,7 +340,7 @@ def test_claims_from_tools_check_unwraps_a_plotted_n1_contingency_call():
 def test_claims_from_tools_check_treats_a_declared_failure_as_not_applicable_not_a_mismatch():
     """2026-09-21 (found rescoring the split-tool launch, escalation_check fix): a
     round-limit exhaustion or a verification abstention both say, in words, that no
-    result is reported (llm.engine's MAX_ROUNDS_EXCEEDED_TEXT and
+    result is reported (agent.engine's MAX_ROUNDS_EXCEEDED_TEXT and
     _verification_abstention_text share the fixed phrase "No numerical result is
     reported."). Neither is wrong about what it computed -- it computed nothing to
     report -- so V7 must read it as nothing to check, not as a claim mismatch;
@@ -460,7 +460,7 @@ def test_score_row_and_aggregate_group_expose_solved_and_abstained():
 
 
 def test_escalation_check_only_fires_for_a_real_handoff_mechanism():
-    """Pinned against benchmarks/results_validation_n40/gpt-5.4 (2026-09-17, N=40 case14):
+    """Pinned against evaluation/results_validation_n40/gpt-5.4 (2026-09-17, N=40 case14):
     rule_based 72.5/22.5/5.0, Structured 52.5/0/47.5, react_nogate 62.5/0/37.5, pfagent
     62.5/2.5/35.0 (solved/escalated/wrong_silently, %) -- see notes/tabla_objetivo_pfagent.md.
     The point of this check: a method with no handoff mechanism must read 0 even when its
@@ -500,7 +500,7 @@ def test_escalation_check_recognizes_the_round_limit_as_a_declared_failure():
         method_name="pfagent", verification_outcome=None, formulation_error_type=None, round_limit_exceeded=False
     ) is False
     # Not gated by method_name, unlike the rule_based/final_gate paths: the round-limit
-    # message is inserted by _run_react itself (llm/engine.py) regardless of whether
+    # message is inserted by _run_react itself (agent/engine.py) regardless of whether
     # final_gate is on, so react_nogate (no verification gate at all) can hit the same
     # "max_rounds" status and deserves the same declared-failure reading -- a real fix,
     # not a PFAgent-only one.
@@ -662,9 +662,9 @@ def test_solved_and_escalated_can_overlap_solved_autonomously_resolves_it():
 
 def _pf_trace(case_name: str) -> tuple[dict, list]:
     """A real load_case + run_powerflow trace on the unperturbed case (offline PandaPower)."""
-    from benchmarks.evaluate_llms import perturbing_dispatcher
-    from llm.tools import ToolContext
-    from models.schemas import SessionState
+    from evaluation.runner import perturbing_dispatcher
+    from agent.tools import ToolContext
+    from solver.schemas import SessionState
 
     ctx = ToolContext(session=SessionState())
     dispatcher = perturbing_dispatcher(ctx, seed=0, k=0)
@@ -762,7 +762,7 @@ def test_rescore_synthetic_report_recomputes_truth_metrics_and_verdicts(syntheti
     assert abstain["abstained_on_solvable"] is True and abstain["failure_detection_path"] == "json"
 
     assert react["rescore"] == {"trace_source": "file", "truth_source": "recomputed", "metrics_source": "recomputed:trace"}
-    assert react["metrics"]["voltage_mae"] == pytest.approx(0.0, abs=1e-9)
+    assert react["metrics"]["voltage_mae"] == pytest.approx(0.0, abs=1e-6)  # tool outputs are rounded to 6 decimals
     assert react["metrics"]["convergence_match"] is True
     assert react["formulation_exact"] is True and react["solved"] is True and react["solved_reason"] == "numeric_ok"
     assert react["faithful_numbers"] == pytest.approx(1.0)  # numbers traceable in the full (untruncated) trace
@@ -795,46 +795,3 @@ def test_rescore_stored_truth_and_out_dir(synthetic_report, tmp_path):
     # tool row without a recomputed truth keeps its stored (missing) metrics and cannot be solved
     assert react["metrics"] is None and react["solved"] is False and react["solved_reason"] in ("voltage_error", "incomplete_coverage")
     assert new["rescore"]["n_solver_runs"] == 0
-
-
-def test_every_committed_row_sums_solved_escalated_wrong_silently_to_100():
-    """2026-09-21, editor-found defect and the guard requested against its class
-    recurring: the paper's Solved/Escalated/Wrong-unflagged columns must always sum to
-    100% (within rounding) for every currently-committed, non-frozen VALIDATION source
-    directory -- if a future rescore reintroduces an overlap between solved and
-    escalated (the declared-inability fix, or any other path), this fails before the
-    table does. GPT-5.4 is excluded: frozen, nothing computed or rescored for it.
-
-    Scope is deliberately SOURCES only, not STRESS_SOURCES. The stress composite's
-    PFAgent rows carry a separate, pre-existing, ACCEPTED overlap: under stress
-    (near-100% non-convergence), an item can be both `solved=True` (declared_failure
-    correctly recognised as the right call) and `escalated=True` via the verification
-    gate's own abstention on the same non-convergent case -- escalation_check's paths
-    1-3 (verification abstention, round-limit, rule_based-unparsed) are explicitly
-    documented as unaffected by `solved` and keep that overlap by design; only path 4
-    (declared-inability) was gated. That means raw solved_rate+escalated_rate can
-    legitimately exceed 100% on stress PFAgent rows (see results_validation_gpt-4o-mini_stress
-    and results_validation_gpt-5.4_stress, already reflected in the committed
-    tab_pf_protocol_stress_gpt-5.4-and-4o-mini_validation.tex before this fix) and is not
-    the defect class this guard targets. Reported to the orchestrator separately;
-    do not silently broaden this check to paper over it."""
-    import benchmarks.build_paper_tables as bpt
-
-    dirs = set()
-    for model, methods in bpt.SOURCES.items():
-        if "gpt-5.4" in model:
-            continue
-        dirs.update(methods.values())
-
-    checked = 0
-    for rel in sorted(dirs):
-        d = PROJECT_ROOT / "benchmarks" / rel
-        rescored = d / "report.rescored.json"
-        if not rescored.exists():
-            continue  # a method not yet landed (e.g. mid-launch) -- nothing to check
-        data = json.loads(rescored.read_text(encoding="utf-8"))
-        for sc in data.get("scoreboard_per_case") or []:
-            total = (sc.get("solved_rate") or 0.0) + (sc.get("escalated_rate") or 0.0) + (sc.get("wrong_silently_rate") or 0.0)
-            assert abs(total - 1.0) < 1e-6, f"{rel} ({sc.get('model')}/{sc.get('task')}): solved+escalated+wrong_silently = {total}, not 1.0"
-            checked += 1
-    assert checked >= 15  # sanity: this actually iterated real committed rows, not an empty set

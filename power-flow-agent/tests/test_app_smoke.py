@@ -5,7 +5,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from app_utils import extract_tool_artifacts, pick_last_n1_report, pick_last_plot
+from ui.app_utils import extract_tool_artifacts, pick_last_n1_report, pick_last_plot
 
 
 def test_extract_plot_artifact_generate_plot():

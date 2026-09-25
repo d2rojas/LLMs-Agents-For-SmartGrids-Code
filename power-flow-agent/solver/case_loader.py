@@ -11,7 +11,7 @@ import pandapower.networks as ppn
 import importlib
 import numpy as np
 
-from models.schemas import NetworkInfo
+from solver.schemas import NetworkInfo
 
 
 @dataclass(frozen=True)

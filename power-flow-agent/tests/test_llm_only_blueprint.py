@@ -8,8 +8,8 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from llm.tools import ToolContext, build_default_dispatcher
-from models.schemas import SessionState
+from agent.tools import ToolContext, build_default_dispatcher
+from solver.schemas import SessionState
 from solver.llm_pf import PROVIDER_ERROR, solve_from_matpower_text
 from solver.matpower_meta import MatpowerMeta
 from solver.matpower_text import FETCH_CMD, get_case_m_path

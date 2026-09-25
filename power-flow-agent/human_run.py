@@ -38,7 +38,7 @@ from typing import Any, Dict, List, Optional
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from llm.engine import LLMClient  # noqa: E402
+from agent.engine import LLMClient  # noqa: E402
 
 RESULTS = PROJECT_ROOT / "results"
 ESCALATION_TEXT = "I cannot complete this request with the available tools. No numerical result is reported. This request needs review by an operator: {reason}"
@@ -201,7 +201,7 @@ class HumanClient(LLMClient):
 
 def make_requests_file(case: str, n: int, seed: int, sample: Optional[int], seed_sample: int, out: Path) -> Path:
     full = out.parent / f"requests_{case}_n{n}_s{seed}_full.jsonl"
-    subprocess.run([sys.executable, "-m", "benchmarks.requests", "--case", case, "--n", str(n), "--seed", str(seed), "--out", str(full)], cwd=PROJECT_ROOT, check=True, capture_output=True)
+    subprocess.run([sys.executable, "-m", "evaluation.requests", "--case", case, "--n", str(n), "--seed", str(seed), "--out", str(full)], cwd=PROJECT_ROOT, check=True, capture_output=True)
     lines = [json.loads(l) for l in full.read_text(encoding="utf-8").splitlines() if l.strip()]
     if sample and sample < len(lines):
         by_diff: Dict[str, List[dict]] = {}
@@ -235,8 +235,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args(argv)
 
-    from benchmarks.evaluate_llms import ModelSpec, run_benchmark, write_report
-    from benchmarks.postprocess import postprocess
+    from evaluation.runner import ModelSpec, run_benchmark, write_report
+    from evaluation.postprocess import postprocess
     from run import build_index
     from solver.case_loader import normalize_case_name
     from solver.power_flow import SolverConfig
@@ -271,7 +271,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     config["finished_at"] = _dt.datetime.now().isoformat(timespec="seconds")
     config["total_minutes"] = round((time.time() - t0) / 60, 1)
     (out / "config.json").write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    rs = subprocess.run([sys.executable, "benchmarks/rescore.py", str(raw), "--quiet"], cwd=PROJECT_ROOT, capture_output=True, text=True)
+    rs = subprocess.run([sys.executable, "evaluation/rescore.py", str(raw), "--quiet"], cwd=PROJECT_ROOT, capture_output=True, text=True)
     (raw / "rescore.log").write_text(rs.stdout + rs.stderr, encoding="utf-8")
     postprocess(out, method="react_nogate", model=spec.key, case=case)
     build_index()

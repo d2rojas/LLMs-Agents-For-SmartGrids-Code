@@ -8,7 +8,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from models.schemas import LineFlow, PowerFlowResult
+from solver.schemas import LineFlow, PowerFlowResult
 from viz.network_plot import Theme, build_graph, bus_display_id
 from viz.voltage_heatmap import _voltage_colorscale
 

@@ -7,7 +7,7 @@ import json
 import math
 import uuid
 
-from models.schemas import PowerFlowResult
+from solver.schemas import PowerFlowResult
 from viz.network_plot import build_graph, bus_display_id
 
 

@@ -9,7 +9,7 @@ import re
 import networkx as nx
 import plotly.graph_objects as go
 
-from models.schemas import PowerFlowResult
+from solver.schemas import PowerFlowResult
 
 
 Theme = Literal["light", "dark"]

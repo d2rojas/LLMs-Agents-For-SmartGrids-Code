@@ -34,9 +34,9 @@ A Streamlit-based web application that integrates **PandaPower** numerical simul
 ```
 User input (chat)
     │
-    ├─► LLM intent parsing (llm/engine.py)
+    ├─► LLM intent parsing (agent/engine.py)
     │       │
-    │       ├─► Tool dispatch (llm/tools.py)
+    │       ├─► Tool dispatch (agent/tools.py)
     │       │       │
     │       │       ├─► load_case      → solver/case_loader.py
     │       │       ├─► run_pf         → solver/power_flow.py
@@ -150,7 +150,7 @@ User input (chat)
 |------|---------|
 | `scripts/fetch_matpower_cases.py` | Download/prepare MATPOWER case data |
 | `data/matpower/` | Cached MATPOWER case files |
-| `benchmarks/` | Benchmark results |
+| `evaluation/` | Benchmark results |
 | `docs/` | Additional documentation (this file) |
 
 ---
@@ -245,7 +245,7 @@ cp .env.local.example .env.local
 ### Running
 
 ```bash
-streamlit run app.py
+streamlit run ui/app.py
 ```
 
 The app opens at `http://localhost:8501`.

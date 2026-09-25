@@ -7,7 +7,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from benchmarks.requests import (
+from evaluation.requests import (
     DIFFICULTIES,
     TOOL_NAMES,
     Request,
@@ -17,7 +17,7 @@ from benchmarks.requests import (
     generate_requests,
     to_jsonl,
 )
-from llm.tools import TOOLS
+from agent.tools import TOOLS
 
 N = 16  # 4 per difficulty
 
@@ -78,11 +78,11 @@ def test_ambiguous_requests_document_intended_reading(requests_case14):
 
 def test_zero_based_ambiguous_requests_carry_the_tag_in_visible_text():
     """The `notes` field (e.g. "Intended reading: 0-based index 4 is MATPOWER bus 5...") is
-    generator-only bookkeeping, never shown to the model (see benchmarks/requests.py::_assemble).
+    generator-only bookkeeping, never shown to the model (see evaluation/requests.py::_assemble).
     A zero-based item is only fair/solvable if the "(0-based)" tag itself is in the request
     text the model actually sees -- this pins that it is, for both templates that can carry it
     (modify_load's bus_text, disconnect's fb_text/tb_text)."""
-    from benchmarks.requests import op_disconnect, op_modify_load
+    from evaluation.requests import op_disconnect, op_modify_load
 
     op = op_modify_load(5, 20.0, bus_text="bus 4 (0-based)")
     assert "bus 4 (0-based)" in op.clause
@@ -102,18 +102,18 @@ def test_zero_based_ambiguous_requests_carry_the_tag_in_visible_text():
 
 
 def test_system_prompt_does_not_unconditionally_override_stated_indexing():
-    """llm/prompts.py:SYSTEM_PROMPT_EN used to say identifiers are always MATPOWER 1-based and
+    """agent/prompts.py:SYSTEM_PROMPT_EN used to say identifiers are always MATPOWER 1-based and
     should be "passed as given", which flatly contradicted the "(0-based)" tag above and made
     every method (LLM and rule_based alike) get those items wrong the same way -- see
     notes/failure_examples_verbatim.md, case14-ambiguous-039-s0/-027-s0 (fixed 2026-09-17)."""
-    from llm.prompts import SYSTEM_PROMPT_EN
+    from agent.prompts import SYSTEM_PROMPT_EN
 
     assert "0-based" in SYSTEM_PROMPT_EN
     assert "convert" in SYSTEM_PROMPT_EN.lower()
 
 
 def test_prompt_hash_is_stable_and_sensitive_to_wording():
-    from llm.prompts import SYSTEM_PROMPT_EN, prompt_hash
+    from agent.prompts import SYSTEM_PROMPT_EN, prompt_hash
 
     assert prompt_hash(SYSTEM_PROMPT_EN) == prompt_hash(SYSTEM_PROMPT_EN)
     assert prompt_hash(SYSTEM_PROMPT_EN) != prompt_hash(SYSTEM_PROMPT_EN + " ")
@@ -161,7 +161,7 @@ def test_jsonl_round_trip_preserves_everything(tmp_path, requests_case14, ground
 
 # ----------------------------------------------------------------------------- stress difficulty
 
-from benchmarks.requests import (  # noqa: E402
+from evaluation.requests import (  # noqa: E402
     ALL_DIFFICULTIES,
     EXPECTED_OUTCOMES,
     STRESS_DIFFICULTY,

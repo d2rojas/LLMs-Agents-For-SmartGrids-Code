@@ -12,13 +12,13 @@
 
     results/<case>/<YYYY-MM-DD>/<model>/<method>[__stress][__<tag>]/
         config.json      exact command, parameters, git commit, prompt hash
-        raw/             what benchmarks/evaluate_llms.py wrote (report.json, traces/, run.log)
+        raw/             what evaluation/runner.py wrote (report.json, traces/, run.log)
         traces/          NN_<request>.transcript.txt, NN_<request>.narrative.txt, NN_<request>.json
         summary.csv      one line per run
         REPORT.md        counts per metric, failure lists, cost
 
 and refreshes results/INDEX.md. The engine is unchanged: ``run`` shells out to
-``benchmarks/evaluate_llms.py`` with the same flags the paper runs used, so numbers stay
+``evaluation/runner.py`` with the same flags the paper runs used, so numbers stay
 comparable. Methods are folders under ``methods/``; models are ``provider:model`` strings
 (``openai:gpt-4o-mini``, ``openrouter:openai/gpt-5.6-sol``, ``anthropic:claude-sonnet-5``,
 ``gemini:gemini-2.5-flash-lite``). Keys come from the environment or ``.env``.
@@ -133,7 +133,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         for model in (["none:rule_based"] if not m.uses_llm else models):
             for case in cases:
                 out = run_dir_for(case, model, m, date=date, condition=condition, tag=args.tag)
-                cmd = [py, "benchmarks/evaluate_llms.py", "--method", m.runner_name, "--case", case,
+                cmd = [py, "evaluation/runner.py", "--method", m.runner_name, "--case", case,
                        "--k", str(args.k), "--max-rounds", str(args.max_rounds), "--temperature", str(args.temperature),
                        "--timeout-s", str(args.timeout_s), "--tool-variant", args.tool_variant, "--plan-variant", args.plan_variant,
                        "--pricing-file", "pricing.json", "--out-dir", str(out / "raw"), "--condition", condition]
@@ -210,11 +210,11 @@ def cmd_run(args: argparse.Namespace) -> int:
         if not args.no_rescore:
             # Same offline step the paper runs went through: recompute truth and every derived
             # metric with the current scoring code, writing raw/report.rescored.json.
-            rs = subprocess.run([py, "benchmarks/rescore.py", str(out / "raw"), "--quiet"], cwd=PROJECT_ROOT, capture_output=True, text=True)
+            rs = subprocess.run([py, "evaluation/rescore.py", str(out / "raw"), "--quiet"], cwd=PROJECT_ROOT, capture_output=True, text=True)
             (out / "raw" / "rescore.log").write_text(rs.stdout + rs.stderr, encoding="utf-8")
             if rs.returncode != 0:
                 print(f"warn  rescore failed for {out.relative_to(PROJECT_ROOT)} (see raw/rescore.log); rendering from report.json")
-        from benchmarks.postprocess import postprocess
+        from evaluation.postprocess import postprocess
 
         postprocess(out, method=m.runner_name, model=p["model"] if m.uses_llm else None, case=p["case"])
     build_index()
@@ -222,7 +222,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 def cmd_postprocess(args: argparse.Namespace) -> int:
-    from benchmarks.postprocess import postprocess
+    from evaluation.postprocess import postprocess
 
     for d in args.run_dirs:
         postprocess(Path(d), method=args.method, model=args.model, case=args.case, condition=args.condition)
@@ -345,7 +345,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--tag", default=None, help="suffix for the run folder (e.g. pilot)")
     r.add_argument("--dry-run", action="store_true", help="print the plan and cost estimate, run nothing")
     r.add_argument("--force", action="store_true", help="rerun even if raw/report.json exists")
-    r.add_argument("--no-rescore", action="store_true", help="skip benchmarks/rescore.py after the run")
+    r.add_argument("--no-rescore", action="store_true", help="skip evaluation/rescore.py after the run")
     r.add_argument("--quiet", action="store_true", help="do not echo the runner's output (it still goes to raw/run.log)")
     r.set_defaults(func=cmd_run)
 

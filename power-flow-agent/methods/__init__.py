@@ -1,8 +1,8 @@
 """methods/: one folder per evaluated method, holding its prompt text and a ``method.json``.
 
 This package is the single source of truth for every prompt string the benchmark and the
-Streamlit app use. ``llm/prompts.py``, ``llm/prompt_variants.py``, ``llm/engine.py`` and
-``baselines/prompts_baseline.py`` import their constants from here, so editing a ``.txt``
+Streamlit app use. ``agent/prompts.py``, ``prompting/prompt_variants.py``, ``agent/engine.py`` and
+``prompting/prompts_baseline.py`` import their constants from here, so editing a ``.txt``
 file changes the prompt everywhere, and ``tests/test_methods_prompts.py`` pins the SHA-256
 prefix of every text to the value stamped on the runs behind the paper tables. A wording
 change therefore fails a test until the pinned hash is updated on purpose.
@@ -39,13 +39,13 @@ def read_text(rel_path: str) -> str:
 
 
 def prompt_hash(text: str) -> str:
-    """12-hex-char SHA-256 prefix, the same function as ``llm.prompts.prompt_hash``."""
+    """12-hex-char SHA-256 prefix, the same function as ``agent.prompts.prompt_hash``."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
 
 
 @dataclass(frozen=True)
 class Method:
-    """One ``method.json``. ``runner_name`` is what ``benchmarks/evaluate_llms.py --method`` expects."""
+    """One ``method.json``. ``runner_name`` is what ``evaluation/runner.py --method`` expects."""
 
     folder: str
     runner_name: str
@@ -120,7 +120,7 @@ def system_prompt_for(method: str | Method, *, tool_variant: str = "v1") -> Opti
     """System message the runner uses for ``method`` (None for rule_based).
 
     The user message is built per request (case tables, retrieved rows, examples) and is not
-    reproduced here; ``benchmarks/experiment_report.py`` rebuilds one offline if needed.
+    reproduced here; ``evaluation/experiment_report.py`` rebuilds one offline if needed.
     """
     m = method if isinstance(method, Method) else get_method(method)
     if m.kind == "rule_based":
@@ -128,7 +128,7 @@ def system_prompt_for(method: str | Method, *, tool_variant: str = "v1") -> Opti
     if m.kind == "llm_only" and m.probe:
         return read_text("_shared/formulation_probe_system_prompt.txt") + (read_text("_shared/cot_system_suffix.txt") if m.strategy == "cot" else "")
     if m.kind == "llm_only":
-        # Same assembly as llm.prompt_variants._build_llm_only.
+        # Same assembly as prompting.prompt_variants._build_llm_only.
         base = read_text("_shared/llm_only_system_prompt.txt").strip()
         if m.forced:
             clause = read_text("llm_only_forced_structured/escape_clause_removed.txt")
@@ -150,7 +150,7 @@ def planner_prompt_for(method: str | Method, *, tool_variant: str = "v1", plan_v
         return None
     if plan_variant == "structured":
         return read_text("plan_act_nogate/plan_system_prompt_structured.txt")
-    from llm.tools import tools_catalog_text  # local import: llm imports this package
+    from agent.tools import tools_catalog_text  # local import: llm imports this package
 
     return read_text("plan_act_nogate/plan_system_prompt_prefix.txt") + tools_catalog_text(tool_variant, with_enums=True)
 

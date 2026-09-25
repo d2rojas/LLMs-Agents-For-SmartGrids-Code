@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from models.schemas import BusVoltage, LineFlow, PowerFlowResult, ViolationType
+from solver.schemas import BusVoltage, LineFlow, PowerFlowResult, ViolationType
 
 
 @dataclass(frozen=True)

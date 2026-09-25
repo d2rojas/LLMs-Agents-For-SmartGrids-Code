@@ -7,8 +7,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 
-from llm.tools import ToolContext, build_default_dispatcher
-from models.schemas import SessionState
+from agent.tools import ToolContext, build_default_dispatcher
+from solver.schemas import SessionState
 
 
 def test_apply_remedial_action_tool_requires_confirmation_and_updates_log():

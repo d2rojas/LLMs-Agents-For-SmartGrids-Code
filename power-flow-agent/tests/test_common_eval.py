@@ -8,8 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from benchmarks.common_eval import aggregate_common, score_common  # noqa: E402
-from benchmarks.evaluate_llms import execute_intended, perturbed_case  # noqa: E402
+from evaluation.common_eval import aggregate_common, score_common  # noqa: E402
+from evaluation.runner import execute_intended, perturbed_case  # noqa: E402
 from solver.power_flow import SolverConfig  # noqa: E402
 
 INTENDED = [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_powerflow", "args": {}}]

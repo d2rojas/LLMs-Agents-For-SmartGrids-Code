@@ -8,10 +8,10 @@ import re
 
 import pytest
 
-from baselines import rule_based
-from benchmarks.requests import generate_requests
-from llm.prompt_variants import build_messages
-from llm.tools import SessionState, ToolContext, build_default_dispatcher
+from deterministic import rule_based
+from evaluation.requests import generate_requests
+from prompting.prompt_variants import build_messages
+from agent.tools import SessionState, ToolContext, build_default_dispatcher
 from solver.case_loader import load
 from solver.power_flow import SolverConfig
 

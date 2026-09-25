@@ -16,7 +16,7 @@ from config import (
     MATPOWER_CASE_DATE,
     MATPOWER_DATA_ROOT,
 )
-from models.llm_only_schema import (
+from solver.llm_only_schema import (
     DebugRoutingStep,
     PowerFlowResultSchema,
     TotalsSchema,

@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from benchmarks import metrics as bm  # noqa: E402
+from evaluation import metrics as bm  # noqa: E402
 
 INTENDED = [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_n1_contingency", "args": {}}]
 

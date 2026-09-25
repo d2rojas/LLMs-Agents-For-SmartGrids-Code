@@ -79,7 +79,7 @@ def test_assembled_system_prompt_matches_paper_runs(name: str, expected: str) ->
 
 @pytest.mark.parametrize("variant,expected", sorted(PINNED_PLANNER_PROMPTS.items()))
 def test_planner_prompt_matches_engine(variant: str, expected: str) -> None:
-    from llm import engine
+    from agent import engine
 
     text = planner_prompt_for("plan_act", tool_variant=variant)
     assert text == engine._plan_system_prompt(variant)
@@ -88,8 +88,9 @@ def test_planner_prompt_matches_engine(variant: str, expected: str) -> None:
 
 def test_modules_import_from_methods() -> None:
     """The modules must read the same bytes as methods/ (no second copy of a prompt)."""
-    from baselines import prompts_baseline as pb
-    from llm import engine, prompt_variants as pv, prompts
+    from prompting import prompts_baseline as pb
+    from agent import engine, prompts
+    from prompting import prompt_variants as pv
 
     assert prompts.SYSTEM_PROMPT_EN == read_text("_shared/agent_system_prompt.txt")
     assert pb.BASELINE_SYSTEM_PROMPT == read_text("_shared/llm_only_system_prompt.txt")
@@ -100,7 +101,7 @@ def test_modules_import_from_methods() -> None:
 
 
 def test_every_method_folder_is_registered_and_runnable() -> None:
-    from benchmarks.evaluate_llms import parse_method
+    from evaluation.runner import parse_method
 
     folders = {p.name for p in methods.METHODS_DIR.iterdir() if p.is_dir() and not p.name.startswith("_")}
     registered = {m.folder for m in methods.list_methods(include_archived=False)}
@@ -117,8 +118,8 @@ def test_every_method_folder_is_registered_and_runnable() -> None:
 
 
 def test_answer_prompts_unchanged_and_probe_asks_only_for_formulation() -> None:
-    from benchmarks.evaluate_llms import perturbed_case
-    from llm.prompt_variants import build_messages
+    from evaluation.runner import perturbed_case
+    from prompting.prompt_variants import build_messages
 
     net = perturbed_case("case14", seed=0, k=1)
     req = "Load case14 and disconnect the line between bus 10 and bus 11."
@@ -136,7 +137,7 @@ def test_answer_prompts_unchanged_and_probe_asks_only_for_formulation() -> None:
 
 
 def test_declared_formulation_is_scored_like_executed_calls() -> None:
-    from benchmarks.evaluate_llms import declared_formulation, declared_formulation_check
+    from evaluation.runner import declared_formulation, declared_formulation_check
 
     intended = [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "disconnect_line", "args": {"from_bus": 10, "to_bus": 11}}]
     exact = '{"formulation": [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "disconnect_line", "args": {"from_bus": 10, "to_bus": 11}}], "converged": true, "bus_voltages": [], "line_flows": [], "total_generation_mw": 0, "total_load_mw": 0, "total_loss_mw": 0}'

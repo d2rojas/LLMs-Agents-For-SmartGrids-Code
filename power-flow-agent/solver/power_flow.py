@@ -8,7 +8,7 @@ import re
 
 import pandapower as pp
 
-from models.schemas import BusVoltage, LineFlow, NetworkInfo, PowerFlowResult
+from solver.schemas import BusVoltage, LineFlow, NetworkInfo, PowerFlowResult
 from solver.validators import validate_result
 
 

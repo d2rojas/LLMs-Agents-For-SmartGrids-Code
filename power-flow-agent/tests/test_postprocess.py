@@ -1,4 +1,4 @@
-"""benchmarks/postprocess.py on a synthetic run directory (no API keys, no solver)."""
+"""evaluation/postprocess.py on a synthetic run directory (no API keys, no solver)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from benchmarks.postprocess import aggregate, postprocess  # noqa: E402
+from evaluation.postprocess import aggregate, postprocess  # noqa: E402
 
 
 def _row(rid: str, *, method="pfagent", model="openai:gpt-4o-mini", solved=True, escalated=False, wrong=False, exact=True, difficulty="plain"):
