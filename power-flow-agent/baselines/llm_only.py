@@ -44,11 +44,10 @@ from baselines.prompts_baseline import (
 # ---------------------------
 
 
-def _df_to_text(df: Any, *, columns: Optional[List[str]] = None, max_rows: int = 200) -> str:
-    """将 DataFrame 转为紧凑文本。
-
-    不使用 DataFrame.to_markdown()（避免 tabulate 依赖）。
-    """
+def _df_to_text(df: Any, *, columns: Optional[List[str]] = None, max_rows: Optional[int] = None) -> str:
+    """DataFrame to compact text (no tabulate dependency). Complete by default: the case tables
+    are the only network the no-tools methods see, so every bus and branch must be there on
+    every system (the old 200-row cap silently cut the 300-bus tables)."""
 
     if df is None:
         return "<empty>"
@@ -60,7 +59,7 @@ def _df_to_text(df: Any, *, columns: Optional[List[str]] = None, max_rows: int =
         else:
             df2 = df
 
-        if len(df2) > max_rows:
+        if max_rows and len(df2) > max_rows:
             df2 = df2.head(max_rows)
             suffix = f"\n... (truncated, showing first {max_rows} rows)"
         else:

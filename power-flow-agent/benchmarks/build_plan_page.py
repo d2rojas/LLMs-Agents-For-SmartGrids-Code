@@ -31,14 +31,17 @@ from llm.tools import ToolContext, get_openai_tools  # noqa: E402
 
 E = html.escape
 CASE, N, SEED, K, ROUNDS, TOOLS = "case14", 40, 0, 1, 8, "load_split"
-CASES = ["case14", "case30", "case57", "case118"]
-CASE_LABEL = {"case14": "IEEE 14-bus", "case30": "IEEE 30-bus", "case57": "IEEE 57-bus", "case118": "IEEE 118-bus"}
-CASE_FOLDER = {"case14": "ieee14", "case30": "ieee30", "case57": "ieee57", "case118": "ieee118"}
+CASES = ["case14", "case30", "case57", "case118", "case300"]
+SIZE_CASES = CASES
+CASE_LABEL = {"case14": "IEEE 14-bus", "case30": "IEEE 30-bus", "case57": "IEEE 57-bus", "case118": "IEEE 118-bus", "case300": "IEEE 300-bus"}
+MINI_OUTPUT_CAP = 16384  # gpt-4o-mini's maximum completion tokens
+CASE_FOLDER = {"case14": "ieee14", "case30": "ieee30", "case57": "ieee57", "case118": "ieee118", "case300": "ieee300"}
+MINI_CONTEXT = 128000  # gpt-4o-mini's context window
 # (id, title, cases, models, what it answers)
 PHASES = [
     ("1", "Main table", ["case14"], ["gpt-4o-mini", "gpt-5.6-sol"], "The six methods on the 14-bus system, both models. The table the paper reports."),
-    ("2", "Scale, small model", ["case30", "case57", "case118"], ["gpt-4o-mini"], "The same six methods and the same 40-request shape on 30, 57 and 118 buses with gpt-4o-mini: where prompting breaks as the tables grow, and what long solver outputs cost the agents."),
-    ("3", "Scale, frontier model", ["case30", "case57", "case118"], ["gpt-5.6-sol"], "The same on gpt-5.6-sol. Needs a recharge first; run only what phase 2 shows is worth it."),
+    ("2", "Scale, small model", ["case30", "case57", "case118", "case300"], ["gpt-4o-mini"], "The same six methods and the same 40-request shape on 30, 57, 118 and 300 buses with gpt-4o-mini: where prompting breaks as the tables grow, and what long solver outputs cost the agents."),
+    ("3", "Scale, frontier model", ["case30", "case57", "case118", "case300"], ["gpt-5.6-sol"], "The same on gpt-5.6-sol. Needs a recharge first; run only what phase 2 shows is worth it, largest systems last."),
 ]
 # per-request token means recorded on the 14-bus runs (summary.json, 2026-09-21/23): (prompt, completion) per model.
 BASE14 = {
@@ -57,14 +60,16 @@ def case_sizes() -> Dict[str, Dict[str, int]]:
     from llm.tools import SessionState as _SS, build_default_dispatcher
     from solver.power_flow import SolverConfig
     out: Dict[str, Dict[str, int]] = {}
-    for c in CASES:
+    for c in SIZE_CASES:
         net = perturbed_case(c, seed=SEED, k=K)
         u = build_messages("structured", "llm_only", "Run the power flow and report the lowest voltage bus.", net, c, tool_variant=TOOLS)
         d = build_default_dispatcher(ToolContext(session=_SS(), solver_config=SolverConfig()))
         d.dispatch("load_case", {"case_name": c})
         r = d.dispatch("run_powerflow", {})
         r = json.loads(r) if isinstance(r, str) else r
-        out[c] = {"buses": len(net.bus), "branches": len(net.line) + len(getattr(net, "trafo", [])), "prompt_tokens": sum(len(x["content"]) for x in u) // 4, "solve_tokens": len(json.dumps(r, default=str)) // 4}
+        state = {"bus_voltages": [{"bus_id": b["bus_id"], "vm_pu": round(float(b["vm_pu"]), 4), "va_deg": round(float(b.get("va_deg", 0.0)), 2)} for b in r["bus_voltages"]],
+                 "line_flows": [{k: (round(float(v), 2) if isinstance(v, float) else v) for k, v in f.items() if k in ("from_bus", "to_bus", "p_from_mw", "q_from_mvar", "loading_percent")} for f in r["line_flows"]]}
+        out[c] = {"buses": len(net.bus), "branches": len(net.line) + len(getattr(net, "trafo", [])), "prompt_tokens": sum(len(x["content"]) for x in u) // 4, "solve_tokens": len(json.dumps(r, default=str)) // 4, "answer_tokens": len(json.dumps(state)) // 4}
     return out
 
 
@@ -74,7 +79,7 @@ def est_tokens(runner: str, model: str, case: str, sizes: Dict[str, Dict[str, in
     every answer grows with the state it must carry."""
     p14, o14 = BASE14[runner][model]
     s14, sc = sizes["case14"], sizes[case]
-    d_answer = max(0, sc["solve_tokens"] - s14["solve_tokens"])
+    d_answer = max(0, sc["answer_tokens"] - s14["answer_tokens"])
     if runner.startswith("llm_only"):
         return p14 + (sc["prompt_tokens"] - s14["prompt_tokens"]), o14 + d_answer
     ratio = sc["solve_tokens"] / s14["solve_tokens"]
@@ -390,13 +395,13 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
 
     # ---------------- overview
     H.append("<div class='tab on' id='tab-overview'>")
-    H.append("<div class='card'><h2>One question, six ways to answer it</h2><p>Every method receives the same 40 natural-language power-flow requests per system, on the same perturbed IEEE test systems (14, 30, 57 and 118 buses), answers with the same JSON object, and is scored by the same evaluator. What changes between methods is only <b>who formulates</b> the solver operations, <b>who computes</b> the numbers, whether the method <b>sees the solver's outputs</b> before answering, and whether a <b>gate</b> checks the answer before it is reported.</p>")
+    H.append("<div class='card'><h2>One question, six ways to answer it</h2><p>Every method receives the same 40 natural-language power-flow requests per system, on the same perturbed IEEE test systems (14, 30, 57, 118 and 300 buses), answers with the same JSON object, and is scored by the same evaluator. What changes between methods is only <b>who formulates</b> the solver operations, <b>who computes</b> the numbers, whether the method <b>sees the solver's outputs</b> before answering, and whether a <b>gate</b> checks the answer before it is reported.</p>")
     H.append("<div class='flow'><div class='box'><b>Request</b><span>one of 40 scenarios</span></div><span class='arr'>→</span><div class='box'><b>Formulate</b><span>which solver operations, with which arguments</span></div><span class='arr'>→</span><div class='box'><b>Compute</b><span>PandaPower, or the LLM by hand</span></div><span class='arr'>→</span><div class='box'><b>Report</b><span>the answer for the operator</span></div><span class='arr'>→</span><div class='box'><b>Verdict</b><span>solved · escalated · wrong</span></div></div></div>")
     H.append("<div class='grid g3'>")
     for r in ROWS:
         H.append(f"<div class='card'><h2>{E(r['label'])} <span class='chip'>{E(r['sub'])}</span></h2><div class='kv'><b>formulates</b><span>{E(r['formulates'])}</span><b>computes</b><span>{E(r['computes'])}</span><b>sees outputs</b><span>{E(r['sees'])}</span><b>gate</b><span>{E(r['gate'])}</span></div><p class='muted'>{E(r['story'])}</p></div>")
     H.append("</div>")
-    H.append(f"<div class='card'><h2>Common to every method</h2><span class='chip'>IEEE 14 · 30 · 57 · 118-bus</span><span class='chip'>N = {N} requests per system</span><span class='chip'>perturbation seed {SEED}, k = {K}</span><span class='chip'>≤ {ROUNDS} tool rounds</span><span class='chip'>temperature 0</span><span class='chip'>tool set {TOOLS}</span><span class='chip'>models: gpt-4o-mini · gpt-5.6-sol</span><span class='chip'>same output JSON for every method</span><span class='chip'>one evaluator for every method</span><span class='chip'>every message sent is stored in the trace</span></div>")
+    H.append(f"<div class='card'><h2>Common to every method</h2><span class='chip'>IEEE 14 · 30 · 57 · 118 · 300-bus</span><span class='chip'>N = {N} requests per system</span><span class='chip'>perturbation seed {SEED}, k = {K}</span><span class='chip'>≤ {ROUNDS} tool rounds</span><span class='chip'>temperature 0</span><span class='chip'>tool set {TOOLS}</span><span class='chip'>models: gpt-4o-mini · gpt-5.6-sol</span><span class='chip'>same output JSON for every method</span><span class='chip'>one evaluator for every method</span><span class='chip'>every message sent is stored in the trace</span></div>")
     H.append("</div>")
 
     # ---------------- methods
@@ -429,7 +434,7 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
     # ---------------- scenarios
     H.append("<div class='tab' id='tab-scenarios'>")
     H.append(f"<div class='card'><h2>{N} scenarios per system</h2><p>The same requests every method and every model see, generated by <code>benchmarks/requests.py</code> from (case, N = 40, seed 0): ten <b>plain</b>, ten <b>parameterized</b> (a value or a criterion is stated), ten <b>multistep</b> (several operations), ten <b>ambiguous</b> (numbers spelled out, units in kW, 0-based indices). The 14-bus set is the one every run has used since 2026-09-14; the other systems get the same generator, seed and mix, with bus and line ids drawn from that system.</p><p><b>Why every expected outcome is “converged”.</b> This is the normal request set: the reference solution of each request converges on a connected network, so the reference calls and the reference numbers are deterministic and every method can be judged on the same ground truth. Requests whose reference fails (islanding, non-convergence) form a separate <b>stress</b> set used to measure safe failure; it is not part of this evaluation.</p><p class='muted'>Reference calls are what a correct formulation must match: same tools, same identifiers and values, same order; read-only repeats are ignored. Click “prompts” to see how every method receives a 14-bus scenario.</p><div class='legend'><span><span class='sw' style='background:#1f9d55'></span>plain</span><span><span class='sw' style='background:#2f5fd0'></span>parameterized</span><span><span class='sw' style='background:#6d4fc4'></span>multistep</span><span><span class='sw' style='background:#e0891a'></span>ambiguous</span></div></div>")
-    H.append("<div class='card'><h2>What grows with the system</h2><table><tr><th>system</th><th>buses</th><th>branches</th><th>case tables in the prompting prompt</th><th>one solver output an agent reads, and the state the answer must carry</th></tr>" + "".join(f"<tr><td><b>{E(CASE_LABEL[c])}</b></td><td>{sizes[c]['buses']}</td><td>{sizes[c]['branches']}</td><td>~{sizes[c]['prompt_tokens']:,} tokens</td><td>~{sizes[c]['solve_tokens']:,} tokens</td></tr>" for c in CASES) + "</table><p class='muted'>Measured on the perturbed networks with the prompts and tools of this design. Nothing is truncated or summarized on purpose: the growth of the context is one of the things phase 2 measures. The 8-round limit and the answer object are the same on every system.</p></div>")
+    H.append("<div class='card'><h2>What grows with the system</h2><table><tr><th>system</th><th>buses</th><th>branches</th><th>case tables in the prompting prompt</th><th>one solver output an agent reads</th><th>the state the answer object must carry (rounded)</th></tr>" + "".join(f"<tr{' style=\'color:var(--muted)\'' if c not in CASES else ''}><td><b>{E(CASE_LABEL[c])}</b>{'' if c in CASES else ' <span class=\'chip\'>not in the plan</span>'}</td><td>{sizes[c]['buses']}</td><td>{sizes[c]['branches']}</td><td>~{sizes[c]['prompt_tokens']:,} tokens</td><td>~{sizes[c]['solve_tokens']:,} tokens</td><td>~{sizes[c]['answer_tokens']:,} tokens{' <b>&gt; gpt-4o-mini output cap (%s)</b>' % f'{MINI_OUTPUT_CAP:,}' if sizes[c]['answer_tokens'] > MINI_OUTPUT_CAP else ''}</td></tr>" for c in SIZE_CASES) + f"</table><p class='muted'>Measured on the perturbed networks with the prompts and tools of this design. Nothing is truncated or summarized on purpose: the growth of the context is one of the things phase 2 measures. The 8-round limit and the answer object are the same on every system.</p><p><b>Why the plan stops at 300 buses.</b> IEEE 300-bus is the largest standard MATPOWER case in the data. It is also where the design reaches the limits of the small model: the answer object every method must return, all bus voltages and all branch flows, needs about {sizes['case300']['answer_tokens']:,} output tokens there, under gpt-4o-mini's {MINI_OUTPUT_CAP:,}-token completion limit but close to it, and one solver output is {sizes['case300']['solve_tokens']:,} tokens, so a multistep request on the agents fills 60,000 to 90,000 of the model's {MINI_CONTEXT:,}-token context. Anything larger would not fit the contract, and a reduced answer object for big systems would change what is compared across sizes. Bus ids on the 300-bus system are the MATPOWER numbers (1 to 9533, with gaps), the same in the tables, the tools and the requests.</p></div>")
     dcol = {"plain": "#1f9d55", "parameterized": "#2f5fd0", "multistep": "#6d4fc4", "ambiguous": "#e0891a"}
     H.append("<div class='card'><p><label>System <select id='scase'>" + "".join(f"<option value='{c}'>{E(CASE_LABEL[c])}</option>" for c in CASES) + "</select></label></p>")
     for c in CASES:

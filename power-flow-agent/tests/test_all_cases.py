@@ -15,7 +15,16 @@ from llm.tools import SessionState, ToolContext, build_default_dispatcher
 from solver.case_loader import load
 from solver.power_flow import SolverConfig
 
-CASES = ["case14", "case30", "case57", "case118"]
+CASES = ["case14", "case30", "case57", "case118", "case300"]
+
+
+def _tool_ids(case):
+    d = build_default_dispatcher(ToolContext(session=SessionState(), solver_config=SolverConfig()))
+    d.dispatch("load_case", {"case_name": case})
+    r = d.dispatch("run_powerflow", {})
+    r = json.loads(r) if isinstance(r, str) else r
+    assert r["converged"]
+    return [b["bus_id"] for b in r["bus_voltages"]]
 
 
 def _net(case):
@@ -32,18 +41,16 @@ def test_prompting_tables_use_matpower_bus_ids(case):
     bus_block = user[user.index("### Node Data"):]
     bus_block = bus_block[: bus_block.index("###", 5)] if "###" in bus_block[5:] else bus_block
     ids = [int(m) for m in re.findall(r"^\s*\d+\s+(\d+)\s", bus_block, flags=re.M)]  # index column, then name
-    assert set(range(1, n + 1)) <= set(ids), f"{case}: bus table must list ids 1..{n}"
+    assert len(ids) == n and ids == _tool_ids(case), f"{case}: the bus table must show the ids the tools report (MATPOWER numbers)"
     assert "Riversde" not in user and "nan" not in bus_block.lower()
 
 
 @pytest.mark.parametrize("case", CASES)
-def test_tools_report_the_same_bus_ids(case):
-    d = build_default_dispatcher(ToolContext(session=SessionState(), solver_config=SolverConfig()))
-    d.dispatch("load_case", {"case_name": case})
-    r = d.dispatch("run_powerflow", {})
-    r = json.loads(r) if isinstance(r, str) else r
-    ids = [b["bus_id"] for b in r["bus_voltages"]]
-    assert r["converged"] and ids == list(range(1, len(ids) + 1))
+def test_tools_report_matpower_bus_ids(case):
+    ids = _tool_ids(case)
+    assert len(ids) == len(_net(case).bus) and ids == sorted(ids) and ids[0] == 1
+    if case != "case300":  # 300 keeps MATPOWER's numbering with gaps (1..9533)
+        assert ids == list(range(1, len(ids) + 1))
 
 
 @pytest.mark.parametrize("case", CASES)
@@ -53,15 +60,15 @@ def test_parser_accepts_the_case(case):
     assert steps == [{"tool": "load_case", "args": {"case_name": case}}]
 
 
-@pytest.mark.parametrize("case", ["case30", "case118"])
+@pytest.mark.parametrize("case", ["case30", "case118", "case300"])
 def test_requests_have_the_same_shape_on_every_case(case):
     reqs = generate_requests(case, 8, 0)
     assert len(reqs) == 8
     assert {r.difficulty for r in reqs} == {"plain", "parameterized", "multistep", "ambiguous"}
     assert all(r.expected_outcome == "converged" for r in reqs)
-    n = len(_net(case).bus)
+    ids = set(_tool_ids(case))
     for r in reqs:
         for c in r.intended_calls:
             for k, v in (c.get("args") or {}).items():
                 if k in ("bus_id", "from_bus", "to_bus"):
-                    assert 1 <= int(v) <= n, (case, r.id, c)
+                    assert int(v) in ids, (case, r.id, c)

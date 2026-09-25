@@ -168,7 +168,9 @@ RESULT_CHANGING_OPTIONAL_ARGS: frozenset[Tuple[str, str]] = frozenset({("modify_
 # found on gpt-4o-mini Plan-and-Act, four N-1 requests planned with max_candidates=1 or 3, scored
 # "exact" and answered with the wrong worst outage). The network state does not change, so the
 # final-state override of R8 must not apply here.
-BRANCHES_PER_CASE: Dict[str, int] = {"case14": 20, "case30": 41, "case57": 80, "case118": 186, "case300": 411}
+# in-service branches the N-1 scan iterates (solver.contingency.iter_in_service_branches: lines + trafos as
+# pandapower loads them; 118 and 300 have fewer than MATPOWER's raw branch counts, 186 and 411)
+BRANCHES_PER_CASE: Dict[str, int] = {"case14": 20, "case30": 41, "case57": 80, "case118": 184, "case300": 345}
 
 VOLTAGE_ABS_TOL = 1e-3
 RELATIVE_TOL = 0.01
