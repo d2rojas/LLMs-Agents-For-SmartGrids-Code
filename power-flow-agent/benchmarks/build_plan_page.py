@@ -171,7 +171,27 @@ def load_example(rel: str, rid: str) -> Tuple[Optional[Dict[str, Any]], Optional
     return payload, row
 
 
-def examples_section(reqs: Any) -> str:
+def prompt_for(runner: str, rid: str, reqs: Any, net: Any) -> str:
+    """The prompt v2 sends to ``runner`` for scenario ``rid``, rendered as labeled blocks."""
+    m = methods.get_method(runner)
+    r = next((x for x in reqs if x.id == rid), None)
+    if r is None or m.kind == "rule_based":
+        return "<p class='muted'>No prompt: the parser reads the request text directly.</p>"
+    sp = methods.system_prompt_for(m, tool_variant=TOOLS) or ""
+    out = [f"<div class='muted'>system prompt · hash {methods.prompt_hash(sp)}</div>", blocks_html(split_system(sp, m), collapsed=())]
+    if m.architecture == "plan_act":
+        out += ["<div class='muted'>planner system prompt (planning call only)</div>", blocks_html([("planner", methods.planner_prompt_for(m, tool_variant=TOOLS) or "")], collapsed=("planner",))]
+    if m.kind == "llm_only":
+        u = build_messages(m.strategy or "structured", "llm_only", r.text, net, CASE, forced=bool(m.forced), probe=bool(m.probe), tool_variant=TOOLS)[1]["content"]
+        out += ["<div class='muted'>user message</div>", blocks_html(split_user(u, bool(m.probe)))]
+    else:
+        out += ["<div class='muted'>user message</div>", blocks_html([("u_request", r.text)])]
+    if m.uses_tools and m.uses_llm:
+        out += ["<div class='muted'>tool schema, with every call</div>", blocks_html([("tools", json.dumps(get_openai_tools(variant=TOOLS), indent=1, ensure_ascii=False))], collapsed=("tools",))]
+    return "".join(out)
+
+
+def examples_section(reqs: Any, net: Any = None) -> str:
     verdict = lambda r: ("solved", "solved on its own") if (r.get("solved_autonomously") or (r.get("solved") and not r.get("escalated"))) else (("escalated", "escalated to a person") if r.get("escalated") else ("wrong", "wrong, unflagged"))
     out = ["<div class='card'><h2>The same request under each method, from real runs</h2><p class='muted'>Examples taken from existing runs (the ones v2 re-runs), so you can see the shape of each method before spending. Each column is a log of real steps; click a line to expand it. The verdict at the bottom is how that run was scored.</p>"
            "<p><label>Model <span class='seg' id='exm'><button data-v='gpt-5.6-sol' class='on'>gpt-5.6-sol</button><button data-v='gpt-4o-mini'>gpt-4o-mini</button></span></label> <label>Scenario <select id='exs'>" + "".join(f"<option value='{rid}'>{E(next((f'{i+1:02d} · {r.difficulty} · {r.text}' for i, r in enumerate(reqs) if r.id == rid), rid))}</option>" for rid in EXAMPLE_SCENARIOS) + "</select></label></p></div>"]
@@ -187,7 +207,8 @@ def examples_section(reqs: Any) -> str:
                 lines = example_rows(payload, row)
                 fe = row.get("formulation_exact")
                 form = "n/a" if fe is None else ("exact" if fe else f"NOT exact ({row.get('formulation_error_type')})")
-                out.append(f"<div class='col'><h4>{E(r['label'])} <span class='vd {cls}'>{lab}</span></h4><div class='log'>" + "".join(f"<div class='ln' data-full='{E(full)}'><span class='k {k}'>{k}</span><span class='s'>{E(short)}</span></div>" for k, short, full in lines) + f"</div><div class='vt'><b>formulation</b> {E(form)} · <b>numbers</b> {row.get('n_numbers')} ({row.get('n_untraceable_numbers')} untraceable) · <b>V_MAE</b> {E(str((row.get('metrics') or {}).get('voltage_mae', 'n/a')))} · {row.get('n_llm_calls')} model calls, {row.get('n_tool_calls')} solver calls<br><span class='muted'>from {E(rel)}</span></div></div>")
+                stored = bool(((payload or {}).get("trace") or {}).get("messages"))
+                out.append(f"<div class='col'><h4>{E(r['label'])} <span class='vd {cls}'>{lab}</span></h4><details class='pr'><summary>prompt sent to this method for this scenario</summary><div class='prb'>{prompt_for(r['runner'], rid, reqs, net)}</div><div class='muted' style='padding:4px 10px'>{'This example run stored exactly these messages.' if stored else 'Shown as v2 will send it; this example run stored only the request and the prompt hash (' + E(str(row.get('system_prompt_hash'))) + ').'}</div></details><div class='log'>" + "".join(f"<div class='ln' data-full='{E(full)}'><span class='k {k}'>{k}</span><span class='s'>{E(short)}</span></div>" for k, short, full in lines) + f"</div><div class='vt'><b>formulation</b> {E(form)} · <b>numbers</b> {row.get('n_numbers')} ({row.get('n_untraceable_numbers')} untraceable) · <b>V_MAE</b> {E(str((row.get('metrics') or {}).get('voltage_mae', 'n/a')))} · {row.get('n_llm_calls')} model calls, {row.get('n_tool_calls')} solver calls<br><span class='muted'>from {E(rel)}</span></div></div>")
             out.append("</div></div>")
     return "".join(out)
 
@@ -304,7 +325,8 @@ details summary{cursor:pointer;color:var(--acc);font-size:12.5px}.hid{display:no
 select{font:inherit;padding:5px 8px;max-width:760px}a.lnk{color:var(--acc);text-decoration:none;font-weight:500}a.lnk:hover{text-decoration:underline}
 .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted)}.legend span{display:inline-flex;gap:5px;align-items:center}
 .cols6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;align-items:start}.col{background:#fff;border:1px solid var(--line);border-radius:10px;min-width:0;overflow:hidden}.col h4{margin:0;padding:8px 10px;border-bottom:1px solid var(--line);font-size:12.5px;background:#fafbfd;display:flex;justify-content:space-between;gap:6px;align-items:center}.vd{display:inline-block;padding:1px 8px;border-radius:999px;color:#fff;font-size:10.5px;font-weight:600;white-space:nowrap}.vd.solved{background:var(--ok)}.vd.escalated{background:var(--esc)}.vd.wrong{background:var(--bad)}
-.log{font:11.5px/1.4 'JetBrains Mono',ui-monospace,Menlo,monospace}.ln{display:grid;grid-template-columns:44px 1fr;gap:6px;padding:4px 8px;border-bottom:1px solid #f0f2f5;cursor:pointer}.ln:hover{background:#f7f9fc}.ln .k{font-weight:600;font-size:10.5px}.ln .k.model{color:var(--acc)}.ln .k.solver{color:#0f8f84}.ln .k.plan{color:#6d4fc4}.ln .k.gate{color:#c99a06}.ln .k.final{color:var(--acc)}.ln .k.status{color:var(--muted)}.ln .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ln.open .s{white-space:pre-wrap;overflow:visible;word-break:break-word}.vt{padding:8px 10px;border-top:1px solid var(--line);font-size:11.5px;background:#fbfcfe}
+.log{font:11.5px/1.4 'JetBrains Mono',ui-monospace,Menlo,monospace}.ln{display:grid;grid-template-columns:44px 1fr;gap:6px;padding:4px 8px;border-bottom:1px solid #f0f2f5;cursor:pointer}.ln:hover{background:#f7f9fc}.ln .k{font-weight:600;font-size:10.5px}.ln .k.model{color:var(--acc)}.ln .k.solver{color:#0f8f84}.ln .k.plan{color:#6d4fc4}.ln .k.gate{color:#c99a06}.ln .k.final{color:var(--acc)}.ln .k.status{color:var(--muted)}.ln .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ln.open .s{white-space:pre-wrap;overflow:visible;word-break:break-word}details.pr{border-bottom:1px solid var(--line)}details.pr summary{padding:6px 10px;font-size:12px}.prb{padding:0 8px 6px}.prb .blk{margin:6px 0}.prb pre{max-height:260px;font-size:11px}
+.vt{padding:8px 10px;border-top:1px solid var(--line);font-size:11.5px;background:#fbfcfe}
 table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block}.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;vertical-align:middle}.seg button{font:inherit;font-weight:500;padding:4px 12px;border:none;background:#fff;cursor:pointer;color:var(--muted)}.seg button.on{background:var(--acc);color:#fff}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:13px}.kv b{color:var(--muted);font-weight:500}
 """
@@ -347,7 +369,7 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
     for c in cols:
         H.append(f"<tr><td><b>{E(c)}</b></td>" + "".join(f"<td style='background:{'#e6f4ea' if v.startswith('yes') or v.startswith('final') else ('#f3f4f6' if v in ('n/a', 'fixed rules') else '#fdecec')}'>{E(v)}</td>" for _, row in matrix for v in [row[c]]) + "</tr>")
     H.append("<tr><td><b>prompt blocks</b></td>" + "".join("<td>" + (" ".join(f"<span class='chip'>{E(Path(f).name)}</span>" for f in methods.get_method(r['runner']).prompt_files) or "<span class='muted'>none, no LLM</span>") + "</td>" for r in ROWS) + "</tr></table><p class='muted'>Derived from the assembled prompts. Green: the method receives it. Red: it does not. Grey: not applicable. The prompting methods get no tools by design: Formulation does not apply to them, and their numbers are the model's own arithmetic.</p></details></div>")
-    H.append(examples_section(reqs))
+    H.append(examples_section(reqs, net))
     H.append("</div>")
 
     # ---------------- scenarios
