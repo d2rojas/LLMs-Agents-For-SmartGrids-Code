@@ -48,8 +48,8 @@ The three outcomes in every report are exclusive and sum to the run count:
 ## Making a run
 
 ```bash
-.venv/bin/python run.py run --method pfagent --model openrouter:openai/gpt-4o-mini --case ieee14 --n 40 --dry-run
-.venv/bin/python run.py run --method pfagent --method react_nogate --model openrouter:openai/gpt-4o-mini --case ieee14 --n 40
+.venv/bin/python run.py run --method pfagent --model openrouter:openai/gpt-4o-mini --case ieee14 --n 20 --dry-run
+.venv/bin/python run.py run --method pfagent --method react_nogate --model openrouter:openai/gpt-4o-mini --case ieee14 --n 20
 .venv/bin/python run.py postprocess results/ieee14/<date>/<model>/<method>    # re-render after a scoring change
 .venv/bin/python run.py index
 ```

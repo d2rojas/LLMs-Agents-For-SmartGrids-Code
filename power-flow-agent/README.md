@@ -39,8 +39,8 @@ export OPENAI_API_KEY=...          # or OPENROUTER_API_KEY / ANTHROPIC_API_KEY /
 
 python run.py list-methods
 python run.py show-prompt --method pfagent
-python run.py run --method pfagent --model openrouter:openai/gpt-4o-mini --case ieee14 --n 40 --dry-run
-python run.py run --method pfagent --method react_nogate --model openrouter:openai/gpt-4o-mini --case ieee14 --n 40
+python run.py run --method pfagent --model openrouter:openai/gpt-4o-mini --case ieee14 --n 20 --dry-run
+python run.py run --method pfagent --method react_nogate --model openrouter:openai/gpt-4o-mini --case ieee14 --n 20
 open results/INDEX.md              # then the run folder's REPORT.md and traces/
 python run.py serve                # results/visuals/: design.html, results.html, viewer.html
 ```
