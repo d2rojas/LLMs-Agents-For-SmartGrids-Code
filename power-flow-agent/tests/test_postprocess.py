@@ -49,7 +49,7 @@ def _trace(row):
                 {"round": 3, "final": True, "llm": {"content": "Power flow converged.", "tool_calls": [], "usage": {"prompt_tokens": 3100, "completion_tokens": 250}, "latency_s": 2.0}},
             ],
             "plan": None, "n_llm_calls": 3, "n_tool_calls": 2, "n_tool_rounds": 2, "prompt_tokens": 5000, "completion_tokens": 300, "wall_time_s": 6.5,
-            "verification": [{"passed": True, "conditions": {"converged": {"passed": True, "residual": 0, "applicable": True, "label": "V1"}, "faithfulness": {"passed": True, "residual": 0.0, "label": "V4"}}}],
+            "verification": [{"passed": True, "conditions": {"converged": {"passed": True, "residual": 0, "applicable": True, "label": "V1"}, "traceability": {"passed": True, "residual": 0.0, "label": "V4"}}}],
             "verification_attempts": 1, "verification_outcome": "pass_first", "verification_retry_messages": [],
         },
     }

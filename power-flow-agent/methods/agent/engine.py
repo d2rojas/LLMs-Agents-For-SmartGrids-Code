@@ -70,14 +70,15 @@ GATE_BALANCE_REL_TOL = 1e-4         # relative to total load: 0.01 percent (case
 
 # Paper/notes labels for verify_final_answer's five conditions -- same order as V(x,c,z,y)
 # is described there: V1 the last power flow converged, V2 active-power balance, V3 no
-# isolated bus, V4 faithfulness, V5 currency. Use these labels wherever a condition is
+# isolated bus, V4 traceability, V5 currency. Use these labels wherever a condition is
 # named for a human reader (REPORT prose, notes); the internal keys below are what code
 # reads and are never replaced by them.
 CONDITION_LABELS: Dict[str, str] = {
     "converged": "V1",
     "balance": "V2",
     "no_isolated_buses": "V3",
-    "faithfulness": "V4",
+    "traceability": "V4",
+    "faithfulness": "V4",  # the same condition under its pre-2026-09-25 name, kept so older traces still render
     "currency": "V5",
     "argument_grounding": "V6",
     "claims_from_tools": "V7",
@@ -383,7 +384,7 @@ def verify_final_answer(
     Five conditions, all evaluated on the last ``run_powerflow``-shaped output at or
     after the last network mutation (or the last such output in the whole trace, when
     no mutation happened): converged, active-power balance, no isolated buses,
-    faithfulness of the answer's numbers, and currency (no stale pre-mutation numbers).
+    traceability of the answer's numbers, and currency (no stale pre-mutation numbers).
     ``passed`` requires all five (six or seven with ``enforce_v6v7``). Only ``trace``
     (the agent's own observed tool calls and outputs) and ``final_answer_text`` are
     used — never a reference solution.
@@ -471,7 +472,7 @@ def verify_final_answer(
     n_numbers = faith.get("n_numbers") or 0
     n_untraceable = faith.get("n_untraceable_numbers") or 0
     faith_residual = (n_untraceable / n_numbers) if n_numbers else 0.0
-    conditions["faithfulness"] = {"passed": n_untraceable == 0, "residual": faith_residual}
+    conditions["traceability"] = {"passed": n_untraceable == 0, "residual": faith_residual}
 
     stale = bm.stale_state_check(trace, final_answer_text, request_text=request_text)
     if stale.get("stale_state_no_rerun"):
@@ -563,9 +564,9 @@ def _condition_plain_text(name: str, cond: Dict[str, Any], verdict: Dict[str, An
             text += f" Suggested next step: reconnect the branch between bus {a.get('from_bus')} and bus {a.get('to_bus')}, or analyse the connected part separately."
         return text
 
-    if name == "faithfulness":
+    if name == "traceability":
         r = cond.get("residual") or 0.0
-        return f"{r:.0%} of the numbers in the answer do not match any tool output or the request"
+        return f"{r:.0%} of the numbers in the answer cannot be traced to any tool output or to the request"
 
     if name == "currency":
         r = cond.get("residual") or 0

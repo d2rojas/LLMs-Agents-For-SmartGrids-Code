@@ -535,35 +535,56 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
     # ---------------- tools
     from solver.power_flow import SolverConfig
 
-    ctx = ToolContext(session=SessionState(), solver_config=SolverConfig())
-    disp = perturbing_dispatcher(ctx, seed=SEED, k=K)
-    sample: Dict[str, Dict[str, Any]] = {"load_case": {"case_name": "case14"}, "run_powerflow": {}, "get_status": {}, "get_most_loaded_branch": {}, "set_active_load": {"bus_id": 6, "p_mw": 14.7}, "set_load": {"bus_id": 9, "p_mw": 29.5, "q_mvar": 16.6}, "disconnect_line": {"from_bus": 1, "to_bus": 5}, "reconnect_line": {"from_bus": 1, "to_bus": 5}, "run_n1_contingency": {"top_k": 1, "criteria": "max_violations"}, "recommend_remedial_actions": {"max_actions": 2}, "apply_remedial_action": {"action_index": 0, "confirmed": True}, "generate_plot": {"plot_type": "voltage_heatmap"}}
-    order = list(sample)
+    from solver.power_flow import _bus_display_id
+
+    def sample_calls(c: str, net: Any) -> Dict[str, Dict[str, Any]]:
+        """One call per tool with arguments that exist on this system: the first two load buses and the first line."""
+        loads = list(net.load.sort_values("bus").itertuples())
+        b1 = int(_bus_display_id(net, int(loads[0].bus))); b2 = int(_bus_display_id(net, int(loads[1].bus))) if len(loads) > 1 else b1
+        ln = net.line.iloc[0]; f, t = int(_bus_display_id(net, int(ln.from_bus))), int(_bus_display_id(net, int(ln.to_bus)))
+        return {"load_case": {"case_name": c}, "run_powerflow": {}, "get_status": {}, "get_most_loaded_branch": {},
+                "set_active_load": {"bus_id": b1, "p_mw": round(float(loads[0].p_mw) * 1.1, 1)},
+                "set_load": {"bus_id": b2, "p_mw": round(float(loads[-1].p_mw) * 1.1, 1), "q_mvar": round(float(loads[-1].q_mvar) * 1.1, 1)},
+                "disconnect_line": {"from_bus": f, "to_bus": t}, "reconnect_line": {"from_bus": f, "to_bus": t},
+                "run_n1_contingency": {"top_k": 1, "criteria": "max_violations"}, "recommend_remedial_actions": {"max_actions": 2},
+                "apply_remedial_action": {"action_index": 0, "confirmed": True}, "generate_plot": {"plot_type": "voltage_heatmap"}}
+
+    outputs: Dict[str, Dict[str, Tuple[Dict[str, Any], str]]] = {}  # case -> tool -> (args, output)
+    for c in CASES:
+        ctx = ToolContext(session=SessionState(), solver_config=SolverConfig())
+        disp = perturbing_dispatcher(ctx, seed=SEED, k=K)
+        calls = sample_calls(c, nets_by_case[c])
+        outputs[c] = {}
+        for name, args in calls.items():
+            try:
+                result = disp.dispatch(name, args)
+            except Exception as exc:
+                result = f"(error: {exc})"
+            outputs[c][name] = (args, FIG.sub(lambda mm: f'"figure_json": "<plot, {len(mm.group(1)) // 1024} KB, omitted>"', str(result)))
+    order = list(outputs[CASES[0]])
     schema = {(t.get("function") or t)["name"]: (t.get("function") or t) for t in get_openai_tools(variant=TOOLS)}
-    H.append("<div class='tab' id='tab-tools'><div class='card'><h2>The solver interface</h2><p>These twelve tools are the only way any method touches the network. The schema is what the model sees; the handler is the Python the dispatcher runs (PandaPower underneath); the output was produced now on the same perturbed case14 the runs use, in this order, so state carries from one call to the next.</p></div>")
+    H.append("<div class='tab' id='tab-tools'><div class='card'><h2>The solver interface</h2><p>These twelve tools are the only way any method touches the network. The schema is what the model sees; the handler is the Python the dispatcher runs (PandaPower underneath); the output was produced now, on the perturbed system you pick, by running the calls in the order shown (each one on the state the previous ones left). Outputs are rounded by the dispatcher: 6 decimals in p.u., 3 in MW and degrees, 2 in loading %.</p><p><label>System <select id='tcase'>" + "".join(f"<option value='{c}'>{E(CASE_LABEL[c])}</option>" for c in CASES) + "</select></label></p></div>")
     for name in order:
         fn = schema.get(name, {}); props = (fn.get("parameters") or {}).get("properties") or {}; req = set((fn.get("parameters") or {}).get("required") or [])
         inputs = "".join(f"<tr><td><code>{E(k)}</code>{'*' if k in req else ''}</td><td>{E(str(v.get('type')))}{' in {' + ', '.join(map(str, v['enum'])) + '}' if v.get('enum') else ''}</td><td>{E(str(v.get('default'))) if 'default' in v else ''}</td><td>{E(v.get('description') or '')}</td></tr>" for k, v in props.items()) or "<tr><td colspan='4' class='muted'>no inputs</td></tr>"
         code = _src(disp.handlers.get(name)) if disp.handlers.get(name) else "(no handler)"
-        try:
-            result = disp.dispatch(name, sample[name])
-        except Exception as exc:
-            result = f"(error: {exc})"
-        result = FIG.sub(lambda mm: f'"figure_json": "<plot, {len(mm.group(1)) // 1024} KB, omitted>"', str(result))
-        H.append(f"<div class='card'><h2><code>{E(name)}</code> <span class='muted'>{E(fn.get('description') or '')}</span></h2><div class='grid g2'><div><h3>Inputs</h3><table><tr><th>input</th><th>type</th><th>default</th><th>meaning</th></tr>{inputs}</table><h3>Output for <code>{E(name)}({E(', '.join(f'{k}={v!r}' for k, v in sample[name].items()))})</code></h3><pre>{E(result if len(result) < 5000 else result[:5000] + chr(10) + '... (' + str(len(result) - 5000) + ' more chars)')}</pre></div><div><h3>Handler, Python</h3><pre>{E(code)}</pre></div></div></div>")
+        outs = "".join(f"<div class='tout' data-case='{c}'><h3>Output for <code>{E(name)}({E(', '.join(f'{k}={v!r}' for k, v in outputs[c][name][0].items()))})</code> on {E(CASE_LABEL[c])}</h3><pre>{E(outputs[c][name][1][:6000])}{'…' if len(outputs[c][name][1]) > 6000 else ''}</pre></div>" for c in CASES)
+        H.append(f"<div class='card'><h2><code>{E(name)}</code> <span class='muted'>{E(fn.get('description') or '')}</span></h2><div class='grid g2'><div><h3>Inputs</h3><table><tr><th>input</th><th>type</th><th>default</th><th>meaning</th></tr>{inputs}</table>{outs}</div><div><h3>Handler (Python, runs in the dispatcher)</h3><pre>{E(code)}</pre></div></div></div>")
     H.append("</div>")
 
     # ---------------- gate & scoring
-    GATE = [("V1", "converged", "The last power flow the agent ran converged."), ("V2", "balance", "Active-power balance of the reported state holds within tolerance."), ("V3", "no_isolated_buses", "No bus was left isolated by the network changes."), ("V4", "faithfulness", "Every unit-bearing number in the answer appears in a tool output."), ("V5", "currency", "Those numbers come from the solve made after the last network change."), ("V6", "argument_grounding", "Every argument of a mutating tool traces to the request or to a prior tool output; a positive max_candidates on the N-1 scan must also come from the request."), ("V7", "claims_from_tools", "The answer's claims match the agent's own last solved state.")]
-    SCORING = [
-        ("Where the numbers come from", "The evaluator reads the answer JSON, never the solver trace: the trace is evidence for traceability and for the gate, not the source of the scored numbers."),
-        ("Reported state", "Bus voltages, branch flows and totals from the answer JSON, compared with the reference solution: voltage MAE, flow MAE, coverage (every bus reported), and the bus power-balance residual."),
-        ("Answer", "The specific quantity the request asked for (worst outage, lowest-voltage bus, overloaded lines, totals), read from the answer and compared with the reference answer."),
-        ("Formulation", "The `formulation` field of the answer, the ordered solver operations the method used (with tools) or that the request needs (without tools), must match the reference operations in tool, identifiers, values and order; read-only repeats are ignored; an unrequested argument that changes the result (an invented q_mvar, an N-1 max_candidates below the branch count) is an error. With tools, the declared operations must also match the ones the trace shows the method actually ran."),
-        ("Escalated", "The answer declares it cannot complete the request: cannot_answer filled, the abstention shape (converged false, empty arrays), an explicit statement of inability, the round limit, or the gate rejecting every candidate. Takes precedence over the other two outcomes."),
-        ("Solved", "Not escalated, formulation exact, a reported state that converges like the reference, covers every bus, and is within tolerance (1e-3 p.u. on voltages, 1% on flows), and an answer that matches the reference where the request asks a checkable question."),
-        ("Wrong, unflagged", "Everything else: numbers or an answer that do not match the reference, reported as if they did. Solved + Escalated + Wrong = 100%."),
-        ("Traceable", "Every number in the answer JSON appears in a solver output of the trace, from the solve after the last network change. Zero by construction without tools."),
+    GATE = [("V1", "converged", "The last power flow the agent ran converged."), ("V2", "balance", "Active-power balance of the reported state holds within tolerance."), ("V3", "no_isolated_buses", "No bus was left isolated by the network changes."), ("V4", "traceability", "Every unit-bearing number in the answer appears in a tool output or in the request."), ("V5", "currency", "Those numbers come from the solve made after the last network change."), ("V6", "argument_grounding", "Every argument of a mutating tool traces to the request or to a prior tool output; a positive max_candidates on the N-1 scan must also come from the request."), ("V7", "claims_from_tools", "The answer's claims match the agent's own last solved state.")]
+    SCORING_INTRO = "The evaluator reads the answer JSON, never the solver trace: the trace is evidence for traceability and for the gate, not the source of the scored numbers. The three groups and their order are those of the results table."
+    SCORING = [  # (group, metric, definition), in the order of the results table
+        ("Task utility", "Formulation", "The `formulation` field of the answer, the ordered solver operations the method used (with tools) or that the request needs (without tools), must match the reference operations in tool, identifiers, values and order; read-only repeats are ignored; an unrequested argument that changes the result (an invented q_mvar, an N-1 max_candidates below the branch count) is an error. With tools, the declared operations must also match the ones the trace shows the method actually ran. Reported as the share of requests with an exact formulation."),
+        ("Task utility", "V_MAE, solved and all", "Mean absolute error of the reported bus voltages against the reference solution, in p.u.: over the solved requests, and over every request that reported a state."),
+        ("Task utility", "B_mean, solved and all", "Mean bus power-balance residual of the reported state, in MW: how far the reported voltages and flows are from satisfying the network equations, over the solved requests and over all."),
+        ("Solver-grounded correctness", "Solved", "Not escalated, formulation exact, a reported state that converges like the reference, covers every bus, and is within tolerance (1e-3 p.u. on voltages, 1% on flows), and an answer that matches the reference where the request asks a checkable question."),
+        ("Solver-grounded correctness", "Escalated", "The answer declares it cannot complete the request: cannot_answer filled, the abstention shape (converged false, empty arrays), an explicit statement of inability, the round limit, or the gate rejecting every candidate. Takes precedence over the other two outcomes."),
+        ("Solver-grounded correctness", "Wrong, unflagged", "Everything else: numbers or an answer that do not match the reference, reported as if they did. Solved + Escalated + Wrong = 100%."),
+        ("Solver-grounded correctness", "Traceable", "Every number in the answer JSON appears in a solver output of the trace, from the solve after the last network change. Zero by construction without tools."),
+        ("Cost and time", "Tokens", "Prompt plus completion tokens per request, summed over every model call of the request (mean over requests)."),
+        ("Cost and time", "Time", "Wall-clock seconds per request, from the request to the final answer, model calls and solver calls included (mean over requests)."),
     ]
     contract = methods.read_text("_shared/output_contract.txt")
     rules = methods.read_text("_shared/common_rules.txt")
@@ -578,7 +599,7 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
         ("cannot_answer", "why the request could not be completed, or null", "the model", "a filled string → Escalated"),
     ]
     field_rows = "".join(f"<tr><td><code>{E(a)}</code></td><td>{E(b)}</td><td>{E(c)}</td><td>{E(d)}</td></tr>" for a, b, c, d in FIELDS)
-    H.append("<div class='tab' id='tab-gate'><div class='card'><h2>The answer every method must return</h2><h3>What we expect back, field by field</h3><table><tr><th>field</th><th>what it holds</th><th>who fills it</th><th>what the evaluator does with it</th></tr>" + field_rows + "</table><h3>The exact text the model reads</h3><p class='muted'>This block is part of every prompt: the last section of the user message in the prompting methods, and the final-answer instruction of the agents. The parser fills the same object from the solver outputs without reading it.</p>" + blocks_html([("u_out", contract)], collapsed=()) + "<h3>The rules block, in both system prompts</h3>" + blocks_html([("sys_base", rules)], collapsed=()) + "</div><div class='grid g2'><div class='card'><h2>Verification gate, PFAgent only</h2><p class='muted'>Runs once on the final answer. A failure is sent back to the model with the failed conditions spelled out; a second failure escalates the request.</p><table><tr><th></th><th>condition</th></tr>" + "".join(f"<tr><td><b>{a}</b><br><span class='muted'>{b}</span></td><td>{E(c)}</td></tr>" for a, b, c in GATE) + "</table></div><div class='card'><h2>Scoring</h2><table><tr><th>metric</th><th>definition</th></tr>" + "".join(f"<tr><td><b>{E(a)}</b></td><td>{E(b)}</td></tr>" for a, b in SCORING) + "</table></div></div>")
+    H.append("<div class='tab' id='tab-gate'><div class='card'><h2>The answer every method must return</h2><h3>What we expect back, field by field</h3><table><tr><th>field</th><th>what it holds</th><th>who fills it</th><th>what the evaluator does with it</th></tr>" + field_rows + "</table><h3>The exact text the model reads</h3><p class='muted'>This block is part of every prompt: the last section of the user message in the prompting methods, and the final-answer instruction of the agents. The parser fills the same object from the solver outputs without reading it.</p>" + blocks_html([("u_out", contract)], collapsed=()) + "<h3>The rules block, in both system prompts</h3>" + blocks_html([("sys_base", rules)], collapsed=()) + "</div><div class='grid g2'><div class='card'><h2>Verification gate, PFAgent only</h2><p class='muted'>Runs once on the final answer. A failure is sent back to the model with the failed conditions spelled out; a second failure escalates the request.</p><table><tr><th></th><th>condition</th></tr>" + "".join(f"<tr><td><b>{a}</b><br><span class='muted'>{b}</span></td><td>{E(c)}</td></tr>" for a, b, c in GATE) + "</table></div><div class='card'><h2>Scoring</h2><p class='muted'>" + E(SCORING_INTRO) + "</p><table><tr><th>group</th><th>metric</th><th>definition</th></tr>" + "".join(f"<tr><td>{'<b>' + E(g) + '</b>' if (k == 0 or SCORING[k - 1][0] != g) else ''}</td><td><b>{E(a)}</b></td><td>{E(b)}</td></tr>" for k, (g, a, b) in enumerate(SCORING)) + "</table></div></div>")
     parts = [("Engine: one request, any architecture", LLMEngine.run_with_trace), ("ReAct loop", LLMEngine._run_react), ("Plan-and-Act", LLMEngine._run_plan_act), ("How a run ends", LLMEngine._finish), ("Verification gate V1–V7", verify_final_answer), ("V6 argument grounding", bm.argument_grounding_check), ("Deterministic parser: request → calls", rule_based._parse_clause), ("Deterministic parser: run", rule_based.run), ("Formulation comparator, rules R0–R10", bm.formulation_check), ("The evaluator: score_common", __import__("evaluation.common_eval", fromlist=["score_common"]).score_common), ("Traceable numbers", bm.faithful_numbers), ("Answer matches the reference", bs.answer_matches_truth)]
     H.append("<div class='card'><h2>The code behind each step, verbatim</h2><p class='muted'>From methods/agent/engine.py, methods/deterministic/rule_based.py, evaluation/metrics.py and evaluation/scoring.py in this worktree.</p>" + "".join(f"<details><summary><b>{E(t)}</b> · {E(o.__module__)}.{E(getattr(o, '__qualname__', o.__name__))} · {len(_src(o).splitlines())} lines</summary><pre>{E(_src(o))}</pre></details>" for t, o in parts) + "</div></div>")
 
@@ -628,6 +649,7 @@ function fillScn(keep){const c=pcase.value;scn.innerHTML=(SCN[c]||[]).map(([id,l
 function ap(){document.querySelectorAll('.um').forEach(p=>p.classList.toggle('hid',!(p.dataset.scn===scn.value&&p.dataset.case===pcase.value)));document.querySelectorAll('.pm').forEach(p=>p.classList.toggle('hid',p.dataset.mth!==mth.value));}
 pcase.onchange=()=>{fillScn();ap();};scn.onchange=ap;mth.onchange=ap;fillScn();ap();
 document.addEventListener('toggle',e=>{const d=e.target;if(d.classList&&d.classList.contains('udata')&&d.open){const pre=d.querySelector('pre');if(!pre.textContent){const t=document.getElementById('udata-'+d.dataset.ref);pre.textContent=t?t.innerHTML.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&'):'';}}},true);
+const tcase=document.getElementById('tcase');function tAp(){document.querySelectorAll('.tout').forEach(x=>x.style.display=x.dataset.case===tcase.value?'':'none');}if(tcase){tcase.onchange=tAp;tAp();}
 const exc=document.getElementById('exc'),exs=document.getElementById('exs');
 function fillExs(){exs.innerHTML=(EXS[exc.value]||[]).map(([id,l])=>`<option value="${id}">${l.replace(/</g,'&lt;')}</option>`).join('');}
 function exAp(){document.querySelectorAll('.ex').forEach(x=>x.classList.toggle('on',x.dataset.case===exc.value&&x.dataset.scn===exs.value));}

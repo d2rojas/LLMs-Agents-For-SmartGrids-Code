@@ -28,5 +28,5 @@ SYSTEM_PROMPT = _read_method_text("_shared/agent_system_prompt_zh_ui.txt")
 
 # English system prompt used by the benchmark harness (revision R1). Same rules as SYSTEM_PROMPT,
 # without the UI-only visualization instructions, and with the reply language fixed to English so
-# that faithfulness metrics and trace analysis are language-independent.
+# that traceability metrics and trace analysis are language-independent.
 SYSTEM_PROMPT_EN = _read_method_text("_shared/agent_system_prompt.txt")

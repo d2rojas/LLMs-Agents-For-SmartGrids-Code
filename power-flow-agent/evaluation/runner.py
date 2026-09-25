@@ -2,7 +2,7 @@
 
 This runner evaluates multiple models, methods, cases and seeds against the
 PandaPower ground truth and records scientific metrics, formulation /
-faithfulness metrics and API usage.
+traceability metrics and API usage.
 
 Revision R1
 -----------
@@ -145,7 +145,7 @@ EXTENDED_SCOREBOARD_FIELDS = [
     # setpoint the model can copy from the gen/ext_grid table, so this is the number
     # that actually reflects whether an LLM-only method solved anything.
     "voltage_mae_pq_mean",
-    # per-answer faithfulness+currency (V4 and V5 together), next to the pre-existing
+    # per-answer traceability+currency (V4 and V5 together), next to the pre-existing
     # per-number faithful_numbers_mean above.
     "faithful_answers_rate",
     "faithful_answers_count",
@@ -1170,7 +1170,7 @@ def evaluate_item(
         declared_failure=failure.get("safe_failure"),
     )
     stale = bm.stale_state_check(trace, raw_text, request_text=item.text)
-    # Per-answer, over both faithfulness (V4) and currency (V5): every number in this
+    # Per-answer, over both traceability (V4) and currency (V5): every number in this
     # answer traces to a tool output AND comes from the solve that follows the last
     # network change. A binary per item, not the mean of each answer's own traceable-
     # number share -- see "faithful_answer" below for why those diverge. An answer with
@@ -1439,7 +1439,7 @@ def _aggregate_group_legacy(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "formulation_exact_total": form["total"],
         "formulation_error_counts": bm.error_type_counts([r.get("formulation_error_type") for r in rows]),
         "faithful_numbers_mean": _safe_mean([r.get("faithful_numbers") for r in rows]),
-        # Per-answer, over both faithfulness (V4) and currency (V5): share of answers
+        # Per-answer, over both traceability (V4) and currency (V5): share of answers
         # where every number traces to a tool output and comes from the solve after the
         # last network change. Not the mean of each answer's own traceable-number share
         # (faithful_numbers_mean above) -- see evaluate_item's "faithful_answers" field.

@@ -492,7 +492,7 @@ def test_wrong_bus_id_is_a_formulation_error_not_a_solve_error():
     assert good["formulation_exact"] is True and good["metrics"]["voltage_mae"] == pytest.approx(0.0, abs=1e-6)
 
 
-def test_hallucinated_numbers_lower_faithfulness():
+def test_hallucinated_numbers_lower_traceability():
     report = _run(["react"], FakeAgentClient(hallucinate=True), k=0, seeds=[0])
     row = report["runs"][0]
     assert row["formulation_exact"] is True
@@ -563,7 +563,7 @@ def test_fresh_run_matches_its_own_rescore(tmp_path):
     Traces are NOT disabled: rescore.py prefers the full untruncated trace file over a
     row's own truncated embedded trace when one exists, so a --no-traces run compares
     the live path against a rescore working from strictly less information than a real
-    run would have and reports spurious faithfulness/traceability diffs that a real
+    run would have and reports spurious traceability diffs that a real
     (traced) run does not have -- this test exercises the harness the way every actual
     committed run is produced, not the fast-test shortcut.
     """

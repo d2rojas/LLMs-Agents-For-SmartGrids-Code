@@ -88,22 +88,22 @@ def test_isolated_bus_fails():
     assert iso["passed"] is False and iso["residual"] == 1
 
 
-def test_faithfulness_fails_on_invented_number():
+def test_traceability_fails_on_invented_number():
     pf = _pf_json()
     trace = _trace(_round(_tool("run_powerflow", pf)))
     # 0.873 pu appears nowhere in the tool output or the request.
     verdict = verify_final_answer(trace, "The lowest voltage is 0.873 pu.", request_text="Report the lowest voltage.")
     assert verdict["passed"] is False
-    faith = verdict["conditions"]["faithfulness"]
+    faith = verdict["conditions"]["traceability"]
     assert faith["passed"] is False and faith["residual"] == 1.0
 
 
-def test_faithfulness_treats_request_echo_as_traceable():
+def test_traceability_treats_request_echo_as_traceable():
     pf = _pf_json()
     trace = _trace(_round(_tool("run_powerflow", pf)))
     text = "Set the load at bus 9 to 40 MW as requested; bus 1 is at 1.06 pu."
     verdict = verify_final_answer(trace, text, request_text="Set the active load at bus 9 to 40 MW.")
-    assert verdict["conditions"]["faithfulness"]["passed"] is True
+    assert verdict["conditions"]["traceability"]["passed"] is True
 
 
 def test_currency_fails_when_mutation_never_resolved():

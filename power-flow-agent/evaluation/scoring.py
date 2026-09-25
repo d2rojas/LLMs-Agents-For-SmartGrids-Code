@@ -1,6 +1,6 @@
 """End-to-end item scoring: ``solved`` and JSON-aware failure reporting.
 
-``evaluation/metrics.py`` scores *parts* of an item (formulation, faithfulness,
+``evaluation/metrics.py`` scores *parts* of an item (formulation, traceability,
 stale state, text-based failure reporting). This module combines the stored
 per-item fields into the headline verdicts that the paper table reports, and
 fixes two measurement problems observed on real output:
