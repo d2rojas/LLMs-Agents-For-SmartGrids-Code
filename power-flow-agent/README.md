@@ -13,12 +13,14 @@ so that only numbers traceable to a solver output are reported.
 
 ```
 run.py            the front door: run a method on a case, then render the results
-methods/          one folder per method: method.json + the prompt .txt files it uses   (methods/README.md)
-agent/            the agents: engine.py (ReAct loop, Plan-and-Act, verification gate), tools.py (the 12 solver
-                  tools and the dispatcher), prompts.py
-prompting/        the no-tools methods: llm_only.py (case tables in the prompt, the LLM-only runner),
-                  prompt_variants.py (prompt assembly for every method), prompts_baseline.py
-deterministic/    rule_based.py, the parser: request text to solver calls by regex, no LLM
+methods/          everything that answers a request. One folder per method with its method.json and prompt
+                  .txt files (rule_based, llm_only_structured, llm_only_cot, plan_act_nogate, react_nogate, pfagent;
+                  _shared/ texts, _archive/ variants), plus the code that runs them:
+                    methods/agent/          engine.py (ReAct loop, Plan-and-Act, verification gate), tools.py (the 12
+                                            solver tools and the dispatcher), prompts.py
+                    methods/prompting/      llm_only.py (case tables in the prompt, the LLM-only runner),
+                                            prompt_variants.py (prompt assembly), prompts_baseline.py
+                    methods/deterministic/  rule_based.py, the parser: request text to solver calls, no LLM
 solver/           PandaPower: case_loader, power_flow, contingency (N-1), remedial, validators, schemas
 evaluation/       requests.py (the 40 scenarios per system), runner.py (runs one method), scoring.py,
                   metrics.py, common_eval.py (one evaluator for every method), rescore.py, postprocess.py,
@@ -87,7 +89,7 @@ Three groups, as in the paper. Definitions and code: `evaluation/scoring.py`, `e
 
 ## Verification gate (PFAgent)
 
-Conditions V1 to V7 in `agent/engine.py:verify_final_answer`: converged, power balance, no isolated
+Conditions V1 to V7 in `methods/agent/engine.py:verify_final_answer`: converged, power balance, no isolated
 buses, faithfulness of reported numbers, currency (numbers come from the solve after the last
 mutation), argument grounding (every mutating-tool argument traces to the request or a prior tool
 output), and claims consistent with the agent's own last solved state. A rejected answer is

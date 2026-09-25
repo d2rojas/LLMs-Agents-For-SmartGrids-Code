@@ -2,7 +2,7 @@
 
 Each `Request` pairs a natural-language instruction with the exact ordered tool
 calls it is meant to trigger (`intended_calls`, using the tool names and argument
-names of `agent/tools.py`) and with the result of executing those calls through the
+names of `methods/agent/tools.py`) and with the result of executing those calls through the
 real `ToolDispatcher` on a seed-perturbed case (`ground_truth`). This separates
 *formulation correctness* (did the agent call the right tools with the right
 arguments) from *numerical correctness* (does the reported number match the solver).
@@ -43,7 +43,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from agent.tools import TOOLS, ToolContext, build_default_dispatcher
+from methods.agent.tools import TOOLS, ToolContext, build_default_dispatcher
 from solver.schemas import SessionState
 from solver import case_loader
 from solver.power_flow import _bus_display_id, run_power_flow

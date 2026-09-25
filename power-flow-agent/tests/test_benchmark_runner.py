@@ -21,7 +21,7 @@ from evaluation.runner import (
     perturbed_case,
     run_benchmark,
 )
-from agent.engine import LLMClient
+from methods.agent.engine import LLMClient
 from solver import case_loader
 from solver.power_flow import SolverConfig, run_power_flow
 

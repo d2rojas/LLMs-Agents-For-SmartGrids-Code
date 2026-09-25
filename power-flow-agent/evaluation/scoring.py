@@ -364,7 +364,7 @@ def answer_matches_truth(answer_text: Optional[str], truth_answer: Any) -> Optio
 
 def _last_pf_and_n1(trace: Optional[Dict[str, Any]]) -> tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
     """(pf, n1_report): the agent's own last solved power-flow payload (after the
-    last network mutation, same search agent.engine.verify_final_answer uses for its
+    last network mutation, same search methods.agent.engine.verify_final_answer uses for its
     own conditions) and the last run_n1_contingency output, if any."""
     records = bm._tool_records_from_trace(trace)
     last_mut: Optional[int] = None
@@ -489,7 +489,7 @@ def claims_from_tools_check(
     itself is not recoverable, there is no solved state in the trace to re-derive
     a claim from, or the final answer is itself a declared failure (round-limit
     exhaustion or a verification abstention -- both share the fixed
-    ``agent.engine`` phrase "No numerical result is reported.") rather than a
+    ``methods.agent.engine`` phrase "No numerical result is reported.") rather than a
     claim -- the same "nothing to check" convention ``answer_matches_truth``
     itself uses (``None`` there, not a failure). Checked before re-deriving a
     claim to compare against: a declared failure is not wrong about what it
@@ -661,9 +661,9 @@ def escalation_check(
 
     Four ways a row escalates, applied identically to every method: the task-level
     verification gate's abstention (``final_gate=True``, see
-    ``agent.engine.verify_final_answer`` / its ``verification_outcome``); the
+    ``methods.agent.engine.verify_final_answer`` / its ``verification_outcome``); the
     tool-round budget running out before a final answer was ever produced
-    (``round_limit_exceeded``, ``agent.engine``'s ``MAX_ROUNDS_EXCEEDED_TEXT`` --
+    (``round_limit_exceeded``, ``methods.agent.engine``'s ``MAX_ROUNDS_EXCEEDED_TEXT`` --
     ``trace["status"] == "max_rounds"``: the run says in words that no result is
     reported, the same declared-failure shape as a verification abstention, just
     from a different exhaustion point); the deterministic parser's refusal when it

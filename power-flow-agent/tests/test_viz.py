@@ -17,7 +17,7 @@ from viz import (
     make_violation_overview,
 )
 
-from agent.tools import ToolContext, build_default_dispatcher
+from methods.agent.tools import ToolContext, build_default_dispatcher
 
 
 @pytest.mark.parametrize("case_name", ["case14", "case30", "case57"])

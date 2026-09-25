@@ -1,4 +1,4 @@
-"""prompting/llm_only.py
+"""methods/prompting/llm_only.py
 
 LLM-Only 基线（不调用工具/求解器）。
 
@@ -27,13 +27,13 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 
-from agent.engine import GATE_BALANCE_REL_TOL, GATE_BALANCE_TOL_MW, LLMClient, OpenAIChatClient
+from methods.agent.engine import GATE_BALANCE_REL_TOL, GATE_BALANCE_TOL_MW, LLMClient, OpenAIChatClient
 from solver.power_flow import _bus_display_id
 from solver import case_loader
 from solver.power_flow import SolverConfig, run_power_flow
 from solver.schemas import PowerFlowResult
 
-from prompting.prompts_baseline import (
+from methods.prompting.prompts_baseline import (
     BASELINE_PROMPT_TEMPLATE,
     BASELINE_SYSTEM_PROMPT,
 )
@@ -883,7 +883,7 @@ def evaluate_against_truth_extended(
         kcl_mean_mismatch_mw = kcl_metrics.get("kcl_mean_mismatch_mw")
         # "Feasible": kcl_mean_mismatch_mw (B_mean's own per-item residual) against the
         # same tolerance the V2 verification gate uses for system-wide active-power
-        # balance (agent.engine.GATE_BALANCE_TOL_MW / _REL_TOL), so no new threshold to
+        # balance (methods.agent.engine.GATE_BALANCE_TOL_MW / _REL_TOL), so no new threshold to
         # justify and no rerun -- computed from data evaluate_against_truth_extended
         # already produces (2026-09-21, replaces an earlier "B_mean, all requests"
         # composite column: kcl_mean_mismatch_mw is a self-consistency check on whatever

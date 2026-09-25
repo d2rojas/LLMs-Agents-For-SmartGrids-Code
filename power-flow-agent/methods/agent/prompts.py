@@ -1,4 +1,4 @@
-"""agent/prompts.py
+"""methods/agent/prompts.py
 
 System prompt & prompt templates.
 

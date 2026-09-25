@@ -293,7 +293,7 @@ def rebuild_user_message(row: Dict[str, Any], header: Dict[str, Any]) -> Optiona
         return None
     try:
         from evaluation.runner import perturbed_case
-        from prompting.prompt_variants import build_messages
+        from methods.prompting.prompt_variants import build_messages
 
         key = (str(row.get("case_name")), int(row.get("seed") or 0), int(row.get("k") or 0))
         if key not in _NET_CACHE:
@@ -333,7 +333,7 @@ def render_transcript(row: Dict[str, Any], payload: Dict[str, Any], header: Dict
         else:
             out += [f"[system]   stamped hash {stamped} differs from the current methods/ text ({cur}); prompt text not reproduced", ""]
     elif method_name == "rule_based":
-        out += ["[system]   no LLM; deterministic parser (deterministic/rule_based.py)", ""]
+        out += ["[system]   no LLM; deterministic parser (methods/deterministic/rule_based.py)", ""]
 
     stored = [m for m in (tr.get("messages") or []) if isinstance(m, dict)]
     stored_user = next((m.get("content") for m in stored if m.get("role") == "user"), None)
@@ -356,7 +356,7 @@ def render_transcript(row: Dict[str, Any], payload: Dict[str, Any], header: Dict
     try:
         _m = methods.get_method(method_name)
         if _m.uses_tools and _m.uses_llm:
-            from agent.tools import get_openai_tools
+            from methods.agent.tools import get_openai_tools
 
             variant = str(header.get("tool_variant") or "v1")
             out.append(f"[tools available to the model]   (function-calling schema, --tool-variant {variant}; enum values and defaults as sent)")

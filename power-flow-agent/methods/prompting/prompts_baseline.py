@@ -1,4 +1,4 @@
-"""prompting/prompts_baseline.py
+"""methods/prompting/prompts_baseline.py
 
 LLM-Only 基线 Prompt 模板。
 

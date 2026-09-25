@@ -79,7 +79,7 @@ def test_assembled_system_prompt_matches_paper_runs(name: str, expected: str) ->
 
 @pytest.mark.parametrize("variant,expected", sorted(PINNED_PLANNER_PROMPTS.items()))
 def test_planner_prompt_matches_engine(variant: str, expected: str) -> None:
-    from agent import engine
+    from methods.agent import engine
 
     text = planner_prompt_for("plan_act", tool_variant=variant)
     assert text == engine._plan_system_prompt(variant)
@@ -88,9 +88,9 @@ def test_planner_prompt_matches_engine(variant: str, expected: str) -> None:
 
 def test_modules_import_from_methods() -> None:
     """The modules must read the same bytes as methods/ (no second copy of a prompt)."""
-    from prompting import prompts_baseline as pb
-    from agent import engine, prompts
-    from prompting import prompt_variants as pv
+    from methods.prompting import prompts_baseline as pb
+    from methods.agent import engine, prompts
+    from methods.prompting import prompt_variants as pv
 
     assert prompts.SYSTEM_PROMPT_EN == read_text("_shared/agent_system_prompt.txt")
     assert pb.BASELINE_SYSTEM_PROMPT == read_text("_shared/llm_only_system_prompt.txt")
@@ -103,7 +103,9 @@ def test_modules_import_from_methods() -> None:
 def test_every_method_folder_is_registered_and_runnable() -> None:
     from evaluation.runner import parse_method
 
-    folders = {p.name for p in methods.METHODS_DIR.iterdir() if p.is_dir() and not p.name.startswith("_")}
+    # method folders carry a method.json; methods/agent, methods/prompting and methods/deterministic are code
+    folders = {p.name for p in methods.METHODS_DIR.iterdir() if p.is_dir() and not p.name.startswith("_") and (p / "method.json").is_file()}
+    assert {"agent", "prompting", "deterministic"} <= {p.name for p in methods.METHODS_DIR.iterdir() if p.is_dir()}
     registered = {m.folder for m in methods.list_methods(include_archived=False)}
     assert folders == registered
     archived = {p.name for p in (methods.METHODS_DIR / "_archive").iterdir() if p.is_dir()}
@@ -119,7 +121,7 @@ def test_every_method_folder_is_registered_and_runnable() -> None:
 
 def test_answer_prompts_unchanged_and_probe_asks_only_for_formulation() -> None:
     from evaluation.runner import perturbed_case
-    from prompting.prompt_variants import build_messages
+    from methods.prompting.prompt_variants import build_messages
 
     net = perturbed_case("case14", seed=0, k=1)
     req = "Load case14 and disconnect the line between bus 10 and bus 11."

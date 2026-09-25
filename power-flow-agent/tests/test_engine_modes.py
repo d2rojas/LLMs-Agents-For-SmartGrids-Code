@@ -14,7 +14,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from agent.engine import (
+from methods.agent.engine import (
     MAX_ROUNDS_EXCEEDED_TEXT,
     PLAN_UNPARSEABLE_TEXT,
     EngineConfig,
@@ -23,7 +23,7 @@ from agent.engine import (
     gate_verdict,
     parse_plan,
 )
-from agent.tools import ToolContext, ToolDispatcher, build_default_dispatcher
+from methods.agent.tools import ToolContext, ToolDispatcher, build_default_dispatcher
 from solver.schemas import SessionState
 
 
@@ -387,7 +387,7 @@ def test_gate_on_is_a_no_op_for_converged_or_already_blank_payloads():
 def test_gate_fails_on_isolated_bus_nan_voltage():
     """A converged solve with a NaN bus voltage (islanded bus) must not pass the gate."""
     import json as _json
-    from agent.engine import gate_verdict, _withhold_numbers
+    from methods.agent.engine import gate_verdict, _withhold_numbers
     payload = {
         "case_name": "case30", "converged": True,
         "bus_voltages": [{"bus_id": 1, "vm_pu": 1.0, "va_deg": 0.0}, {"bus_id": 11, "vm_pu": float("nan"), "va_deg": float("nan")}],
@@ -406,7 +406,7 @@ def test_gate_fails_on_isolated_bus_nan_voltage():
 
 def test_gate_passes_when_all_voltages_finite():
     import json as _json
-    from agent.engine import gate_verdict
+    from methods.agent.engine import gate_verdict
     payload = {"converged": True, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.0, "va_deg": 0.0}], "line_flows": [],
                "total_generation_mw": 10.0, "total_load_mw": 9.5, "total_loss_mw": 0.5}
     v = gate_verdict(_json.dumps(payload))
@@ -416,7 +416,7 @@ def test_gate_passes_when_all_voltages_finite():
 def test_gate_enforces_on_islanded_payload_not_only_nonconverged():
     """An islanded (converged but NaN-bus) payload must be withheld when gate=True and forwarded when gate=False."""
     import json as _json
-    from agent.engine import _withhold_numbers, gate_verdict
+    from methods.agent.engine import _withhold_numbers, gate_verdict
     payload = {"converged": True,
                "bus_voltages": [{"bus_id": 1, "vm_pu": 1.0, "va_deg": 0.0}, {"bus_id": 8, "vm_pu": float("nan"), "va_deg": float("nan")}],
                "line_flows": [{"line_id": 0, "p_from_mw": 5.0, "loading_percent": 10.0}],
@@ -432,7 +432,7 @@ def test_gate_enforces_on_islanded_payload_not_only_nonconverged():
 def test_gate_balance_tolerance_is_relative_for_large_systems():
     """case118-sized totals with a 0.18 MW mismatch (0.004 percent) must pass; 1 percent must fail."""
     import json as _json
-    from agent.engine import gate_verdict
+    from methods.agent.engine import gate_verdict
     base = {"converged": True, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.0, "va_deg": 0.0}], "line_flows": [],
             "total_load_mw": 4242.0, "total_loss_mw": 132.684}
     ok = dict(base, total_generation_mw=4242.0 + 132.684 + 0.179)

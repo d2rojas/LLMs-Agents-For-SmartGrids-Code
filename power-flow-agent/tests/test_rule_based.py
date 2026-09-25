@@ -8,8 +8,8 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from deterministic.rule_based import MVA_WARNING, CannotParse, parse, parse_detailed, run, words_to_int
-from agent.tools import TOOLS, ToolContext
+from methods.deterministic.rule_based import MVA_WARNING, CannotParse, parse, parse_detailed, run, words_to_int
+from methods.agent.tools import TOOLS, ToolContext
 from solver.schemas import SessionState
 
 TOOL_PARAMS = {t["name"]: set(t["parameters"].get("properties", {})) for t in TOOLS}

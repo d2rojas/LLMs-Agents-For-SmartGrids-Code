@@ -212,7 +212,7 @@ def reconstruct_final_state(
     them -- see BaselineParsed.from_json. Without it, _compute_kcl_self_consistency's
     B_mean never runs for any llm_only(_forced) row during rescoring.
     """
-    from prompting.llm_only import baseline_parsed_from_result
+    from methods.prompting.llm_only import baseline_parsed_from_result
     from solver.schemas import PowerFlowResult
 
     if spec.kind in ("task", "llm_only"):
@@ -263,7 +263,7 @@ def rescore_row(
     truth_cache: Optional[TruthCache],
     solver_config: Any,
 ) -> dict[str, Any]:
-    from prompting.llm_only import evaluate_against_truth_extended
+    from methods.prompting.llm_only import evaluate_against_truth_extended
 
     new = copy.deepcopy(row)
     method_name = str(row.get("method") or row.get("task") or "")
@@ -308,7 +308,7 @@ def rescore_row(
             }
         )
 
-    from agent.engine import _is_finite_number
+    from methods.agent.engine import _is_finite_number
 
     # ground truth
     truth_converged = row.get("truth_converged")
@@ -431,7 +431,7 @@ def rescore_row(
     except Exception as exc:  # never let the evaluator break a rescore
         new.update({"common_outcome": None, "common_reason": f"evaluator error: {type(exc).__name__}: {exc}"})
 
-    from agent.engine import verify_final_answer
+    from methods.agent.engine import verify_final_answer
 
     new["v_pass"] = bool(verify_final_answer(trace or {}, raw or "", request_text=request_text)["passed"])
     new.update(bs.score_row(new, truth_answer=truth_answer, round_limit_exceeded=bool(trace and trace.get("status") == "max_rounds")))

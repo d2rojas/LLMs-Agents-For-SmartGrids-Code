@@ -1,4 +1,4 @@
-"""agent/engine.py
+"""methods/agent/engine.py
 
 LLM 调用核心引擎（意图解析 + Function Calling）。
 
@@ -58,9 +58,9 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from solver.schemas import SessionState
-from agent.prompts import SYSTEM_PROMPT
+from methods.agent.prompts import SYSTEM_PROMPT
 from methods import read_text as _read_method_text
-from agent.tools import TOOLS, TOOLS_LOAD_SPLIT, ToolDispatcher, get_openai_tools
+from methods.agent.tools import TOOLS, TOOLS_LOAD_SPLIT, ToolDispatcher, get_openai_tools
 
 ARCHITECTURES = ("react", "single_call", "plan_act")
 
@@ -95,7 +95,7 @@ PLAN_UNPARSEABLE_TEXT = (
 # verification retry is in effect: the model may inspect the current state (run_powerflow,
 # get_status, ...) but must not undo or replace the network change the request asked for just
 # to reach a state that happens to pass verification (see _run_react's retry_active).
-# set_active_load / set_load: the split tool set's load-mutation pair (agent/tools.py's
+# set_active_load / set_load: the split tool set's load-mutation pair (methods/agent/tools.py's
 # TOOLS_LOAD_SPLIT), in place of modify_load under --tool-variant load_split. Added
 # 2026-09-21 after an audit found this list was still v1-only (predates load_split):
 # every PFAgent trace in the four-row split-tool launch was checked directly and none
@@ -145,7 +145,7 @@ class EngineConfig:
     trace_output_chars: int = 400
     final_gate: bool = False
     # "v1" (default) is the original modify_load tool, byte-identical to every existing
-    # run. "load_split" swaps it for set_active_load/set_load (agent.tools.TOOLS_LOAD_SPLIT),
+    # run. "load_split" swaps it for set_active_load/set_load (methods.agent.tools.TOOLS_LOAD_SPLIT),
     # which drops modify_load's optional q_mvar argument -- validated offline against
     # committed traces (2026-09-17) to eliminate GPT-5.4's invented-q_mvar formulation
     # failures by construction; this field is what actually lets a live run pick it.
@@ -405,7 +405,7 @@ def verify_final_answer(
     the offline ``v_pass`` measurement for every method, not just PFAgent, and V6/V7
     must not silently start gating that measurement for architectures with no
     escalation path of their own (see evaluation.runner._aggregate_group's
-    same concern for escalated_rate_v6v7). Only ``agent.engine._run_react`` — PFAgent's
+    same concern for escalated_rate_v6v7). Only ``methods.agent.engine._run_react`` — PFAgent's
     own loop — passes ``enforce_v6v7=True``.
     """
     from evaluation import metrics as bm
@@ -643,7 +643,7 @@ def _withhold_numbers(tool_output: str, verdict: Dict[str, Any]) -> str:
 
 
 def _tools_catalog_text(variant: str = "v1") -> str:
-    from agent.tools import tools_catalog_text
+    from methods.agent.tools import tools_catalog_text
 
     return tools_catalog_text(variant)
 
@@ -660,7 +660,7 @@ def _plan_system_prompt(variant: str = "v1") -> str:
     # values of each argument (the schema gives them to ReAct) and the indexing rule of the
     # agent system prompt. Before this, every Plan-and-Act formulation miss was an invalid
     # free-text criterion or an unconverted 0-based index, neither of which ReAct can make.
-    from agent.tools import tools_catalog_text
+    from methods.agent.tools import tools_catalog_text
 
     return _read_method_text("plan_act_nogate/plan_system_prompt_prefix.txt") + tools_catalog_text(variant, with_enums=True)
 

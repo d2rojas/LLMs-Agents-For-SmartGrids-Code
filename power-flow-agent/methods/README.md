@@ -4,8 +4,8 @@ One folder per evaluated method. Each folder has a `method.json` (what the metho
 runner names it, which prompt texts it uses) and the `.txt` prompt texts specific to it.
 Texts several methods share live in `_shared/`.
 
-These files are the **only** copy of every prompt. `agent/prompts.py`, `prompting/prompt_variants.py`,
-`agent/engine.py` and `prompting/prompts_baseline.py` read them at import time, so editing a
+These files are the **only** copy of every prompt. `methods/agent/prompts.py`, `methods/prompting/prompt_variants.py`,
+`methods/agent/engine.py` and `methods/prompting/prompts_baseline.py` read them at import time, so editing a
 `.txt` changes the prompt for the benchmark and the Streamlit app alike.
 `tests/test_methods_prompts.py` pins the hash of every text to the value stamped on the runs
 behind the paper tables. Changing a prompt therefore fails a test until the pin is updated on
@@ -22,7 +22,7 @@ committed ones. Do not strip or reflow whitespace in these files.
 | `pfagent` | `pfagent` | ReAct loop plus the task-level verification gate V1 to V7 on the final answer. The solver-grounded row. | yes | final gate |
 
 These six are the current design (`run.py list-methods` shows them first, with the file and function that run each one; the map is also in `docs/ARCHITECTURE.md`). Every method receives
-the same rules block (`_shared/common_rules.txt`), the same operations catalogue (`agent/tools.py`,
+the same rules block (`_shared/common_rules.txt`), the same operations catalogue (`methods/agent/tools.py`,
 rendered with the argument enums for the no-tools methods) and the same answer contract
 (`_shared/output_contract.txt`), and every method's answer is scored by the same evaluator
 (`evaluation/common_eval.py`). Formulation is the ordered list of solver operations the method
@@ -50,18 +50,18 @@ because they depend on the request or on the network, and `method.json` names th
 `dynamic_parts`:
 
 - the system-data block (case tables rendered from the seed-perturbed network, or the rows
-  RAG retrieved for the request), built in `prompting/prompt_variants.py`;
-- the operations catalogue (`agent/tools.py`, `--tool-variant v1|load_split`): the tool schemas
+  RAG retrieved for the request), built in `methods/prompting/prompt_variants.py`;
+- the operations catalogue (`methods/agent/tools.py`, `--tool-variant v1|load_split`): the tool schemas
   passed to the API for the tool methods, the same catalogue rendered as text under `## Operations`
   for the no-tools methods, and the catalogue appended to
   `plan_act_nogate/plan_system_prompt_prefix.txt` for the planner;
-- the two worked examples of the archived few-shot variants (`prompting/prompt_variants.py`).
+- the two worked examples of the archived few-shot variants (`methods/prompting/prompt_variants.py`).
 
 ## Adding a method
 
 1. Create `methods/<name>/method.json` (copy a neighbour; `runner_name` must be a name
    `evaluation/runner.py --method` accepts, so a genuinely new architecture also needs
-   an entry in `ARCH_METHODS` there or a new strategy in `prompting/prompt_variants.py`).
+   an entry in `ARCH_METHODS` there or a new strategy in `methods/prompting/prompt_variants.py`).
 2. Put its fixed texts in `methods/<name>/*.txt` and list them in `prompt_files`.
 3. Add the new texts to `PINNED_TEXTS` in `tests/test_methods_prompts.py` once the wording is
    final.

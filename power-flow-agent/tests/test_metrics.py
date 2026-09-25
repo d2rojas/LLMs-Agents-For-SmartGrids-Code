@@ -100,7 +100,7 @@ def test_formulation_exact_with_normalization_and_benign_run_powerflow():
 
 
 def test_set_active_load_and_set_load_are_formulation_equivalent_to_modify_load():
-    """tool_variant="load_split" (agent.tools.TOOLS_LOAD_SPLIT) replaces modify_load with
+    """tool_variant="load_split" (methods.agent.tools.TOOLS_LOAD_SPLIT) replaces modify_load with
     set_active_load/set_load, but intended_calls always says "modify_load" -- the
     ground-truth generator predates the split and never emits the new names. Without this
     alias, a load-split run whose arguments are otherwise identical to the reference would
@@ -249,7 +249,7 @@ N1_PINNED = [LOAD30, _c("run_n1_contingency", top_k=3, criteria="min_voltage")] 
 
 
 def test_tool_schema_mirrors_llm_tools():
-    from agent.tools import TOOLS
+    from methods.agent.tools import TOOLS
 
     assert {t["name"] for t in TOOLS} == set(TOOL_SCHEMA)
     for t in TOOLS:

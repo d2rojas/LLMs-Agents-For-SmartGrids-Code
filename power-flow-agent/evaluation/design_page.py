@@ -21,13 +21,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import methods  # noqa: E402
-from deterministic import rule_based  # noqa: E402
+from methods.deterministic import rule_based  # noqa: E402
 from evaluation import metrics as bm, scoring as bs  # noqa: E402
 from evaluation.runner import perturbed_case, perturbing_dispatcher  # noqa: E402
 from evaluation.requests import generate_requests  # noqa: E402
-from agent.engine import LLMEngine, SessionState, verify_final_answer  # noqa: E402
-from prompting.prompt_variants import build_messages  # noqa: E402
-from agent.tools import ToolContext, get_openai_tools  # noqa: E402
+from methods.agent.engine import LLMEngine, SessionState, verify_final_answer  # noqa: E402
+from methods.prompting.prompt_variants import build_messages  # noqa: E402
+from methods.agent.tools import ToolContext, get_openai_tools  # noqa: E402
 
 E = html.escape
 CASE, N, SEED, K, ROUNDS, TOOLS = "case14", 40, 0, 1, 8, "load_split"
@@ -57,7 +57,7 @@ AGENT_FIXED_SHARE = 0.6  # share of an agent's prompt tokens that does not grow 
 def case_sizes() -> Dict[str, Dict[str, int]]:
     """Measured per case: buses, branches, tokens of the prompting user message (case tables), tokens of one
     run_powerflow output (what an agent reads per solve and what the answer object carries)."""
-    from agent.tools import SessionState as _SS, build_default_dispatcher
+    from methods.agent.tools import SessionState as _SS, build_default_dispatcher
     from solver.power_flow import SolverConfig
     out: Dict[str, Dict[str, int]] = {}
     for c in SIZE_CASES:
@@ -126,16 +126,16 @@ BLOCKS = {
     "sys_cot": ("#6d4fc4", "system · reasoning-mode suffix", "methods/_shared/cot_system_suffix.txt"),
     "sys_probe": ("#0f8f84", "system · probe role (declare, do not compute)", "methods/_shared/formulation_probe_system_prompt.txt"),
     "u_role": ("#64748b", "user · role line", "methods/_shared/llm_only_user_template.txt"),
-    "u_data": ("#e0891a", "user · system data: the case tables", "rendered from the perturbed case (prompting/llm_only.py)"),
+    "u_data": ("#e0891a", "user · system data: the case tables", "rendered from the perturbed case (methods/prompting/llm_only.py)"),
     "u_task": ("#1f9d55", "user · task: the request", "evaluation/requests.py"),
     "u_reason": ("#6d4fc4", "user · reasoning instructions", "methods/llm_only_cot/reasoning_section.txt"),
-    "u_form": ("#0f8f84", "user · formulation: operations catalogue", "methods/_shared/formulation_probe_section.txt + agent/tools.py"),
-    "u_ops": ("#0f8f84", "user · operations catalogue (for the formulation field)", "methods/_shared/operations_section.txt + agent/tools.py"),
+    "u_form": ("#0f8f84", "user · formulation: operations catalogue", "methods/_shared/formulation_probe_section.txt + methods/agent/tools.py"),
+    "u_ops": ("#0f8f84", "user · operations catalogue (for the formulation field)", "methods/_shared/operations_section.txt + methods/agent/tools.py"),
     "u_out": ("#c99a06", "user · output requirements (JSON schema)", "methods/_shared/llm_only_user_template.txt"),
     "u_out_probe": ("#c99a06", "user · output requirements (formulation only)", "methods/_shared/formulation_probe_output_section.txt"),
     "u_request": ("#1f9d55", "user · the request, verbatim", "evaluation/requests.py"),
-    "planner": ("#6d4fc4", "planner system prompt (plan step only)", "methods/plan_act_nogate/plan_system_prompt_prefix.txt + agent/tools.py"),
-    "tools": ("#0f8f84", "tool schema (function calling)", "agent/tools.py"),
+    "planner": ("#6d4fc4", "planner system prompt (plan step only)", "methods/plan_act_nogate/plan_system_prompt_prefix.txt + methods/agent/tools.py"),
+    "tools": ("#0f8f84", "tool schema (function calling)", "methods/agent/tools.py"),
 }
 FIG = re.compile(r'"figure_json":\s*"((?:[^"\\]|\\.)*)"')
 
@@ -295,7 +295,7 @@ def split_system(text: str, m: methods.Method) -> List[Tuple[str, str]]:
     elif m.kind == "llm_only":
         base = methods.read_text("_shared/llm_only_system_prompt.txt").strip()
         if m.forced:
-            from prompting.prompt_variants import forced_system_prompt
+            from methods.prompting.prompt_variants import forced_system_prompt
 
             fb = forced_system_prompt(base)
             clause = methods.read_text("llm_only_forced_structured/forced_replacement.txt")
@@ -527,7 +527,7 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
     field_rows = "".join(f"<tr><td><code>{E(a)}</code></td><td>{E(b)}</td><td>{E(c)}</td><td>{E(d)}</td></tr>" for a, b, c, d in FIELDS)
     H.append("<div class='tab' id='tab-gate'><div class='card'><h2>The answer every method must return</h2><h3>What we expect back, field by field</h3><table><tr><th>field</th><th>what it holds</th><th>who fills it</th><th>what the evaluator does with it</th></tr>" + field_rows + "</table><h3>The exact text the model reads</h3><p class='muted'>This block is part of every prompt: the last section of the user message in the prompting methods, and the final-answer instruction of the agents. The parser fills the same object from the solver outputs without reading it.</p>" + blocks_html([("u_out", contract)], collapsed=()) + "<h3>The rules block, in both system prompts</h3>" + blocks_html([("sys_base", rules)], collapsed=()) + "</div><div class='grid g2'><div class='card'><h2>Verification gate, PFAgent only</h2><p class='muted'>Runs once on the final answer. A failure is sent back to the model with the failed conditions spelled out; a second failure escalates the request.</p><table><tr><th></th><th>condition</th></tr>" + "".join(f"<tr><td><b>{a}</b><br><span class='muted'>{b}</span></td><td>{E(c)}</td></tr>" for a, b, c in GATE) + "</table></div><div class='card'><h2>Scoring</h2><table><tr><th>metric</th><th>definition</th></tr>" + "".join(f"<tr><td><b>{E(a)}</b></td><td>{E(b)}</td></tr>" for a, b in SCORING) + "</table></div></div>")
     parts = [("Engine: one request, any architecture", LLMEngine.run_with_trace), ("ReAct loop", LLMEngine._run_react), ("Plan-and-Act", LLMEngine._run_plan_act), ("How a run ends", LLMEngine._finish), ("Verification gate V1–V7", verify_final_answer), ("V6 argument grounding", bm.argument_grounding_check), ("Deterministic parser: request → calls", rule_based._parse_clause), ("Deterministic parser: run", rule_based.run), ("Formulation comparator, rules R0–R10", bm.formulation_check), ("The evaluator: score_common", __import__("evaluation.common_eval", fromlist=["score_common"]).score_common), ("Traceable numbers", bm.faithful_numbers), ("Answer matches the reference", bs.answer_matches_truth)]
-    H.append("<div class='card'><h2>The code behind each step, verbatim</h2><p class='muted'>From agent/engine.py, deterministic/rule_based.py, evaluation/metrics.py and evaluation/scoring.py in this worktree.</p>" + "".join(f"<details><summary><b>{E(t)}</b> · {E(o.__module__)}.{E(getattr(o, '__qualname__', o.__name__))} · {len(_src(o).splitlines())} lines</summary><pre>{E(_src(o))}</pre></details>" for t, o in parts) + "</div></div>")
+    H.append("<div class='card'><h2>The code behind each step, verbatim</h2><p class='muted'>From methods/agent/engine.py, methods/deterministic/rule_based.py, evaluation/metrics.py and evaluation/scoring.py in this worktree.</p>" + "".join(f"<details><summary><b>{E(t)}</b> · {E(o.__module__)}.{E(getattr(o, '__qualname__', o.__name__))} · {len(_src(o).splitlines())} lines</summary><pre>{E(_src(o))}</pre></details>" for t, o in parts) + "</div></div>")
 
     # ---------------- run plan
     H.append("<div class='tab' id='tab-plan'><div class='card'><h2>What runs and what it costs</h2><p>Six methods, five systems, two models, 40 requests per system, one run each at temperature 0. Three phases, in this order; each phase is checked in the trace viewer before the next one is paid for.</p></div>")

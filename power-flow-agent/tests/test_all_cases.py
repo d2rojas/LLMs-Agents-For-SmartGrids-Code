@@ -8,10 +8,10 @@ import re
 
 import pytest
 
-from deterministic import rule_based
+from methods.deterministic import rule_based
 from evaluation.requests import generate_requests
-from prompting.prompt_variants import build_messages
-from agent.tools import SessionState, ToolContext, build_default_dispatcher
+from methods.prompting.prompt_variants import build_messages
+from methods.agent.tools import SessionState, ToolContext, build_default_dispatcher
 from solver.case_loader import load
 from solver.power_flow import SolverConfig
 

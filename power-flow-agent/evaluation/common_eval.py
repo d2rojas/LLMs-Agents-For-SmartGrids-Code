@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional
 
-from prompting.llm_only import BaselineParsed, evaluate_against_truth_extended
+from methods.prompting.llm_only import BaselineParsed, evaluate_against_truth_extended
 from evaluation import metrics as bm
 from evaluation import scoring as bs
 

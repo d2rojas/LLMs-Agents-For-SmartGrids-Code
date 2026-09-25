@@ -1,4 +1,4 @@
-"""prompting/prompt_variants.py
+"""methods/prompting/prompt_variants.py
 
 Single-call prompting strategies for the paper's Section 3 ablation.
 
@@ -6,11 +6,11 @@ Four strategies (structured / few-shot / chain-of-thought / RAG) are built on
 identical power-flow requests in two modes:
 
 - ``llm_only``: the LLM must answer from the case data in the prompt (no tools).
-  The structured variant reuses ``prompting.llm_only.build_baseline_prompt`` so
+  The structured variant reuses ``methods.prompting.llm_only.build_baseline_prompt`` so
   results remain comparable with the published LLM-only baseline, and every
   strategy keeps the *same* output-format section so
-  ``prompting.llm_only.parse_llm_baseline_json`` keeps working.
-- ``single_call``: the LLM receives the tool definitions (``agent.tools.TOOLS``,
+  ``methods.prompting.llm_only.parse_llm_baseline_json`` keeps working.
+- ``single_call``: the LLM receives the tool definitions (``methods.agent.tools.TOOLS``,
   passed to the API by the caller via ``get_openai_tools()``) and must emit the
   tool calls in one round: no memory, no planning loop.
 
@@ -24,10 +24,10 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
-from prompting.llm_only import build_baseline_prompt
-from prompting.prompts_baseline import BASELINE_PROMPT_TEMPLATE, BASELINE_SYSTEM_PROMPT
-from agent.prompts import SYSTEM_PROMPT_EN as SYSTEM_PROMPT
-from agent.tools import TOOLS, tools_catalog_text
+from methods.prompting.llm_only import build_baseline_prompt
+from methods.prompting.prompts_baseline import BASELINE_PROMPT_TEMPLATE, BASELINE_SYSTEM_PROMPT
+from methods.agent.prompts import SYSTEM_PROMPT_EN as SYSTEM_PROMPT
+from methods.agent.tools import TOOLS, tools_catalog_text
 from methods import read_text as _read_method_text
 
 STRATEGIES: Tuple[str, ...] = ("structured", "few_shot", "cot", "rag", "nr")
@@ -664,7 +664,7 @@ def build_messages(
     """Build OpenAI-style chat messages for one (strategy, mode) on ``request_text``.
 
     ``k_rows`` only affects ``strategy == "rag"`` (default 8). For ``single_call`` the
-    caller passes ``agent.tools.get_openai_tools()`` as the API ``tools`` argument.
+    caller passes ``methods.agent.tools.get_openai_tools()`` as the API ``tools`` argument.
     """
     _validate(strategy, mode)
     if not request_text or not request_text.strip():

@@ -3,7 +3,7 @@
 These metrics separate *formulation* correctness (did the method call the right
 tools with the right arguments, in the right order) from *solve* correctness
 (Tier I-III numbers vs the PandaPower ground truth, computed elsewhere with
-``prompting.llm_only.evaluate_against_truth_extended``) and from *reporting*
+``methods.prompting.llm_only.evaluate_against_truth_extended``) and from *reporting*
 faithfulness (are the numbers in the final answer traceable to tool outputs).
 
 Every function is pure and JSON-friendly; nothing here calls an LLM or a solver.
@@ -114,7 +114,7 @@ MUTATING_TOOLS: frozenset[str] = frozenset({"modify_load", "disconnect_line", "r
 RESOLVING_TOOLS: frozenset[str] = MUTATING_TOOLS | {"run_powerflow"}
 ID_ARGS: frozenset[str] = frozenset({"bus_id", "from_bus", "to_bus", "case_name"})
 
-# Mirror of ``agent.tools.TOOLS`` (kept here so this module stays import-light; a
+# Mirror of ``methods.agent.tools.TOOLS`` (kept here so this module stays import-light; a
 # test asserts the two agree). ``minimum`` encodes what the dispatcher does with
 # the value: ``int(top_k or 5)`` makes 0 fall back to the default, so a positive
 # integer is the only value that means what the caller wrote.
@@ -293,7 +293,7 @@ def normalize_call(call: Dict[str, Any]) -> Dict[str, Any]:
     return {"tool": tool, "args": _canonical_args(tool, _raw_args(call), drop_defaults=True, lower_enums=True)}
 
 
-# set_active_load/set_load (agent.tools.TOOLS_LOAD_SPLIT, tool_variant="load_split") are the
+# set_active_load/set_load (methods.agent.tools.TOOLS_LOAD_SPLIT, tool_variant="load_split") are the
 # same underlying action as modify_load with a narrower schema (no invented q_mvar) --
 # intended_calls always says "modify_load" since the ground-truth generator predates the
 # split and never emits the new names, so without this alias every load-split run's
@@ -1190,10 +1190,10 @@ def _strip_thousands(text: str) -> str:
 
 def _word_numbers_from_text(text: str) -> set[float]:
     """Spelled-out bus numbers ("bus ten and bus eleven") the digit regex alone
-    misses -- reuses deterministic.rule_based's own word list (its bus-number parser
+    misses -- reuses methods.deterministic.rule_based's own word list (its bus-number parser
     covers the same generated-request phrasings) rather than a second one to keep
     in sync."""
-    from deterministic.rule_based import _NUMBER_WORDS
+    from methods.deterministic.rule_based import _NUMBER_WORDS
 
     found: set[float] = set()
     for word in re.findall(r"[a-zA-Z]+", text):
@@ -1299,7 +1299,7 @@ def argument_grounding_check(trace: Optional[Dict[str, Any]], request_text: Opti
     A bus-like argument (``bus_id``/``from_bus``/``to_bus``) also grounds against its
     zero-based-to-one-based neighbor (n-1 or n+1), so a request that states its bus
     reference in the 0-based convention (``"bus 10 (0-based)"``, converted to the
-    MATPOWER 1-based id before the tool call -- see agent/prompts.py) is not flagged for
+    MATPOWER 1-based id before the tool call -- see methods/agent/prompts.py) is not flagged for
     a conversion the request itself asked for. Conversely, a bus-like argument that
     reuses the *unconverted* 0-based number verbatim (a real conversion bug, not a
     conversion) is flagged even though that literal number appears in the request

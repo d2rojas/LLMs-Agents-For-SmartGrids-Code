@@ -8,14 +8,14 @@ piece lives. The evaluation design itself (methods, prompts, answer object, scor
 
 | method | `methods/` folder (prompts) | code that runs it |
 |---|---|---|
-| Deterministic parser | `rule_based` | `deterministic/rule_based.py` (`_parse_clause`, `run`, `contract_answer`) |
-| Structured prompting | `llm_only_structured` | `prompting/prompt_variants.py` (`build_messages`), `prompting/llm_only.py` (case tables), `evaluation/runner.py` (`evaluate_item`, kind `llm_only`) |
+| Deterministic parser | `rule_based` | `methods/deterministic/rule_based.py` (`_parse_clause`, `run`, `contract_answer`) |
+| Structured prompting | `llm_only_structured` | `methods/prompting/prompt_variants.py` (`build_messages`), `methods/prompting/llm_only.py` (case tables), `evaluation/runner.py` (`evaluate_item`, kind `llm_only`) |
 | Chain-of-thought prompting | `llm_only_cot` | same as structured, with the reasoning section from `methods/_shared/` |
-| Plan-and-Act | `plan_act_nogate` | `agent/engine.py` (`LLMEngine._run_plan_act`, planner prompt from `methods/plan_act_nogate/`) |
-| ReAct | `react_nogate` | `agent/engine.py` (`LLMEngine._run_react`) |
-| PFAgent | `pfagent` | `agent/engine.py` (`LLMEngine._run_react` + `verify_final_answer`, the gate V1 to V7) |
+| Plan-and-Act | `plan_act_nogate` | `methods/agent/engine.py` (`LLMEngine._run_plan_act`, planner prompt from `methods/plan_act_nogate/`) |
+| ReAct | `react_nogate` | `methods/agent/engine.py` (`LLMEngine._run_react`) |
+| PFAgent | `pfagent` | `methods/agent/engine.py` (`LLMEngine._run_react` + `verify_final_answer`, the gate V1 to V7) |
 
-Every method with tools calls the same twelve tools through `agent/tools.py` (`ToolDispatcher`,
+Every method with tools calls the same twelve tools through `methods/agent/tools.py` (`ToolDispatcher`,
 `build_default_dispatcher`); the tool schemas and the text catalogue the no-tools methods read come
 from the same table there (`TOOLS_LOAD_SPLIT`, `tools_catalog_text`). Every method returns the same
 answer object (`methods/_shared/output_contract.txt`) and is scored by `evaluation/common_eval.py`
@@ -23,12 +23,12 @@ answer object (`methods/_shared/output_contract.txt`) and is scored by `evaluati
 
 ## Packages
 
-- `agent/`: `engine.py` (the loop, the gate, the plan parser), `tools.py` (tools, dispatcher, rounding of
+- `methods/agent/`: `engine.py` (the loop, the gate, the plan parser), `tools.py` (tools, dispatcher, rounding of
   outputs), `prompts.py` (agent system prompt loader).
-- `prompting/`: `llm_only.py` (case tables, `BaselineParsed`, `evaluate_against_truth_extended`),
+- `methods/prompting/`: `llm_only.py` (case tables, `BaselineParsed`, `evaluate_against_truth_extended`),
   `prompt_variants.py` (assembles system and user messages for every prompting strategy),
   `prompts_baseline.py` (loads the prompting texts).
-- `deterministic/`: the regex parser.
+- `methods/deterministic/`: the regex parser.
 - `solver/`: `case_loader.py`, `power_flow.py`, `contingency.py`, `remedial.py`, `net_ops.py`, `validators.py`,
   `schemas.py` (Pydantic: `PowerFlowResult`, `N1Report`, `SessionState`), `llm_only_schema.py` and `llm_pf.py`
   (the archived hand-Newton-Raphson method).

@@ -7,7 +7,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from prompting.llm_only import (
+from methods.prompting.llm_only import (
     BaselineParsed,
     baseline_parsed_from_result,
     build_baseline_prompt,

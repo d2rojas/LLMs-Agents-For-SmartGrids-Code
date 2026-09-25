@@ -38,7 +38,7 @@ from typing import Any, Dict, List, Optional
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from agent.engine import LLMClient  # noqa: E402
+from methods.agent.engine import LLMClient  # noqa: E402
 
 RESULTS = PROJECT_ROOT / "results"
 ESCALATION_TEXT = "I cannot complete this request with the available tools. No numerical result is reported. This request needs review by an operator: {reason}"

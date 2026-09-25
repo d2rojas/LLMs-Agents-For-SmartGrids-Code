@@ -17,7 +17,7 @@ from evaluation.requests import (
     generate_requests,
     to_jsonl,
 )
-from agent.tools import TOOLS
+from methods.agent.tools import TOOLS
 
 N = 16  # 4 per difficulty
 
@@ -102,18 +102,18 @@ def test_zero_based_ambiguous_requests_carry_the_tag_in_visible_text():
 
 
 def test_system_prompt_does_not_unconditionally_override_stated_indexing():
-    """agent/prompts.py:SYSTEM_PROMPT_EN used to say identifiers are always MATPOWER 1-based and
+    """methods/agent/prompts.py:SYSTEM_PROMPT_EN used to say identifiers are always MATPOWER 1-based and
     should be "passed as given", which flatly contradicted the "(0-based)" tag above and made
     every method (LLM and rule_based alike) get those items wrong the same way -- see
     notes/failure_examples_verbatim.md, case14-ambiguous-039-s0/-027-s0 (fixed 2026-09-17)."""
-    from agent.prompts import SYSTEM_PROMPT_EN
+    from methods.agent.prompts import SYSTEM_PROMPT_EN
 
     assert "0-based" in SYSTEM_PROMPT_EN
     assert "convert" in SYSTEM_PROMPT_EN.lower()
 
 
 def test_prompt_hash_is_stable_and_sensitive_to_wording():
-    from agent.prompts import SYSTEM_PROMPT_EN, prompt_hash
+    from methods.agent.prompts import SYSTEM_PROMPT_EN, prompt_hash
 
     assert prompt_hash(SYSTEM_PROMPT_EN) == prompt_hash(SYSTEM_PROMPT_EN)
     assert prompt_hash(SYSTEM_PROMPT_EN) != prompt_hash(SYSTEM_PROMPT_EN + " ")

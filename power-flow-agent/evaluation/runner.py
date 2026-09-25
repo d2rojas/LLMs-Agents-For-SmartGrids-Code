@@ -132,11 +132,11 @@ EXTENDED_SCOREBOARD_FIELDS = [
     "verification_pass_retry_rate",
     "verification_abstained_rate",
     # the model attempted a mutating tool call during a retry (blocked, not executed --
-    # see agent.engine._RETRY_BLOCKED_TOOLS); a subset of "abstained" worth tracking on its own
+    # see methods.agent.engine._RETRY_BLOCKED_TOOLS); a subset of "abstained" worth tracking on its own
     # since it is verification gaming, not an honest failure to converge/balance/etc.
     "verification_abstained_retry_mutation_rate",
     "verification_total",
-    # offline V(x,c,z,y) check computed for every method (agent.engine.verify_final_answer),
+    # offline V(x,c,z,y) check computed for every method (methods.agent.engine.verify_final_answer),
     # not only the ones with final_gate on; see evaluate_item.
     "v_pass_rate",
     "v_pass_count",
@@ -235,7 +235,7 @@ class TaskSpec:
 
 # ---------------------------------------------------------------------------- methods
 
-STRATEGIES = ("structured", "few_shot", "cot", "rag", "nr")  # keep in sync with prompting/prompt_variants.py
+STRATEGIES = ("structured", "few_shot", "cot", "rag", "nr")  # keep in sync with methods/prompting/prompt_variants.py
 ARCH_METHODS: dict[str, dict[str, Any]] = {
     # name: (architecture, gate, memory, final_gate)
     "react": {"architecture": "react", "gate": True, "memory": False},
@@ -243,7 +243,7 @@ ARCH_METHODS: dict[str, dict[str, Any]] = {
     "plan_act": {"architecture": "plan_act", "gate": True, "memory": False},
     "plan_act_nogate": {"architecture": "plan_act", "gate": False, "memory": False},
     # PFAgent = ReAct with no in-loop observation gate, plus the task-level final-answer
-    # verification V(x,c,z,y) (agent.engine.verify_final_answer). "pfagent_obsgate" keeps
+    # verification V(x,c,z,y) (methods.agent.engine.verify_final_answer). "pfagent_obsgate" keeps
     # the old (pre-V) behaviour reachable under its own name, for the already-reported
     # stress-set numbers (results_stress_gpt-4o-mini_gate3) that used it.
     # memory=False: PFAgent's premise is "ReAct minus the in-loop observation gate,
@@ -500,7 +500,7 @@ def declared_formulation_check(raw_text: str, intended_calls: list[Any], case_na
 
 
 def _baseline_parser(raw_text: str, _ctx: dict[str, Any]) -> BaselineParsed:
-    from prompting.llm_only import BaselineParsed, parse_llm_baseline_json
+    from methods.prompting.llm_only import BaselineParsed, parse_llm_baseline_json
 
     obj, err = parse_llm_baseline_json(raw_text)
     if err:
@@ -512,7 +512,7 @@ def _baseline_parser(raw_text: str, _ctx: dict[str, Any]) -> BaselineParsed:
 
 
 def _blueprint_parser(raw_text: str, ctx: dict[str, Any]) -> BaselineParsed:
-    from prompting.llm_only import BaselineParsed
+    from methods.prompting.llm_only import BaselineParsed
     from solver.llm_pf import validate_llm_output
 
     parsed = validate_llm_output(
@@ -537,8 +537,8 @@ def _blueprint_parser(raw_text: str, ctx: dict[str, Any]) -> BaselineParsed:
 
 
 def _build_baseline_messages(case_name: str, net: Any = None) -> tuple[str, str]:
-    from prompting.llm_only import build_baseline_prompt
-    from prompting.prompts_baseline import BASELINE_SYSTEM_PROMPT
+    from methods.prompting.llm_only import build_baseline_prompt
+    from methods.prompting.prompts_baseline import BASELINE_SYSTEM_PROMPT
     from solver import case_loader
 
     if net is None:
@@ -611,7 +611,7 @@ def _resolve_base_url(provider: str) -> Optional[str]:
 
 
 def _default_client_factory(spec: ModelSpec) -> Any:
-    from agent.engine import OpenAIChatClient
+    from methods.agent.engine import OpenAIChatClient
 
     return OpenAIChatClient(api_key=_resolve_api_key(spec.provider), base_url=_resolve_base_url(spec.provider))
 
@@ -683,7 +683,7 @@ def perturbing_dispatcher(ctx: Any, *, seed: int, k: int) -> Any:
     under test and the ground truth always see the same network.
     """
     from evaluation.requests import perturb_network
-    from agent.tools import build_default_dispatcher
+    from methods.agent.tools import build_default_dispatcher
     from solver import case_loader
 
     dispatcher = build_default_dispatcher(ctx)
@@ -746,7 +746,7 @@ def execute_intended(
     solver_config: Any,
 ) -> tuple[Any, Any, list[dict[str, Any]]]:
     """Run ``intended_calls`` on a fresh perturbed case; return (final PowerFlowResult, net, tool_errors)."""
-    from agent.tools import ToolContext
+    from methods.agent.tools import ToolContext
     from solver.schemas import SessionState
     from solver.power_flow import run_power_flow
 
@@ -861,7 +861,7 @@ def _truncate_trace(trace: Optional[dict[str, Any]], limit: int) -> Optional[dic
 
 
 def _numeric_metrics(parsed: Any, item: Item, net: Any, solver_config: Any) -> Optional[dict[str, Any]]:
-    from prompting.llm_only import evaluate_against_truth_extended
+    from methods.prompting.llm_only import evaluate_against_truth_extended
 
     if parsed is None or item.truth is None:
         return None
@@ -882,7 +882,7 @@ def _prompt_hash_of(system_prompt: Optional[str]) -> Optional[str]:
     silently make two runs of the "same" method incomparable."""
     if not isinstance(system_prompt, str):
         return None
-    from agent.prompts import prompt_hash
+    from methods.agent.prompts import prompt_hash
 
     return prompt_hash(system_prompt)
 
@@ -907,19 +907,19 @@ def evaluate_item(
 
     ``tool_variant``: "v1" (default) is the original tool set, byte-identical to every
     existing run. "load_split" swaps modify_load for set_active_load/set_load (see
-    agent.tools.TOOLS_LOAD_SPLIT and agent.engine.EngineConfig.tool_variant). Only affects
+    methods.agent.tools.TOOLS_LOAD_SPLIT and methods.agent.engine.EngineConfig.tool_variant). Only affects
     "engine"-kind methods (react/plan_act/single_call/pfagent); ignored otherwise.
 
     ``plan_variant``: "text" (default) is plan_act's original free-text JSON plan,
     byte-identical to every existing run. "structured" routes the planning step through
-    real function-calling instead (see agent.engine.EngineConfig.plan_variant), so its
+    real function-calling instead (see methods.agent.engine.EngineConfig.plan_variant), so its
     arguments are schema-valid by construction. Only affects plan_act; ignored otherwise.
 
     When ``full_trace_dir`` is given, the untruncated trace, the final answer and the request are
     also written to ``<full_trace_dir>/<method>/<case>/<request_id>_run<k>.json`` for qualitative analysis.
     """
-    from prompting.llm_only import baseline_parsed_from_result
-    from agent.tools import ToolContext
+    from methods.prompting.llm_only import baseline_parsed_from_result
+    from methods.agent.tools import ToolContext
     from solver.schemas import SessionState
     from solver.power_flow import run_power_flow
 
@@ -956,7 +956,7 @@ def evaluate_item(
                 parser_ctx = task.context_builder(item.case_name) if task.context_builder else {}
                 parser = task.response_parser
             else:
-                from prompting.prompt_variants import build_messages
+                from methods.prompting.prompt_variants import build_messages
 
                 msgs = build_messages(method.strategy, "llm_only", item.text, net, item.case_name, forced=bool(getattr(method, "forced", False)), tool_variant=tool_variant, probe=bool(getattr(method, "probe", False)))
                 system_prompt, user_prompt = msgs[0]["content"], msgs[1]["content"]
@@ -1010,18 +1010,18 @@ def evaluate_item(
                     metrics = _numeric_metrics(parsed, item, net, solver_config)
 
         elif method.kind == "engine":
-            from agent.engine import EngineConfig, LLMEngine
+            from methods.agent.engine import EngineConfig, LLMEngine
 
             if method.preload_case:
                 dispatcher.dispatch("load_case", {"case_name": item.case_name})
                 preloaded_case = item.case_name
             if method.architecture == "single_call":
-                from prompting.prompt_variants import build_messages
+                from methods.prompting.prompt_variants import build_messages
 
                 msgs = build_messages(method.strategy, "single_call", item.text, ctx.net, item.case_name)
                 system_prompt, user_message = msgs[0]["content"], msgs[1]["content"]
             else:
-                from agent.prompts import SYSTEM_PROMPT_EN
+                from methods.agent.prompts import SYSTEM_PROMPT_EN
 
                 system_prompt, user_message = SYSTEM_PROMPT_EN, item.text
             cfg = EngineConfig(
@@ -1051,8 +1051,8 @@ def evaluate_item(
                 raise RuntimeError(raw_text)
 
         elif method.kind == "rule_based":
-            from deterministic import rule_based
-            from agent.engine import gate_verdict
+            from methods.deterministic import rule_based
+            from methods.agent.engine import gate_verdict
 
             t0 = time.perf_counter()
             out = rule_based.run(item.text, ctx, dispatcher)
@@ -1111,9 +1111,9 @@ def evaluate_item(
                 # every wrong-formulation item live, disagreeing with its own rescore.
                 net_for_metrics = ctx.net if formulation.get("formulation_exact") is True else None
                 # Score the state as the method saw and reported it (tool outputs are rounded by the
-                # dispatcher, agent/tools.py round_floats), not the solver's full-precision object:
+                # dispatcher, methods/agent/tools.py round_floats), not the solver's full-precision object:
                 # the same source rescore.py reads back from the trace, so live and rescored agree.
-                from agent.tools import round_floats as _round_floats
+                from methods.agent.tools import round_floats as _round_floats
                 as_seen = type(final_result).model_validate(_round_floats(final_result.model_dump()))
                 metrics = _numeric_metrics(baseline_parsed_from_result(as_seen), item, net_for_metrics, solver_config)
             if metrics is None:
@@ -1134,9 +1134,9 @@ def evaluate_item(
     # bus (e.g. a stress-condition line disconnection), no final answer -- however correct --
     # can ever satisfy verify_final_answer's converged/no_isolated_buses conditions, so
     # counting those items as v_pass failures would penalize the check's own premise rather
-    # than the method. Same NaN-vm_pu convention `agent.engine.verify_final_answer` uses for
+    # than the method. Same NaN-vm_pu convention `methods.agent.engine.verify_final_answer` uses for
     # the agent's own trace, applied here to the independently-solved reference instead.
-    from agent.engine import _is_finite_number
+    from methods.agent.engine import _is_finite_number
 
     reference_solvable = (
         item.truth is not None
@@ -1178,11 +1178,11 @@ def evaluate_item(
     # checks are None/inapplicable), so the denominator is every item, not just the ones
     # with a mutation or a number.
     faithful_answers = (faith["n_untraceable_numbers"] == 0) and not bool(stale.get("stale_state"))
-    # Evaluator-side V(x,c,z,y) check (agent.engine.verify_final_answer), computed for every
+    # Evaluator-side V(x,c,z,y) check (methods.agent.engine.verify_final_answer), computed for every
     # method/row regardless of whether the method's own final_gate is on: for methods that
     # already enforce it live (final_gate=True) this is 1.0 by construction and serves as a
     # cross-check; for the rest it answers "would this answer have passed V" offline.
-    from agent.engine import verify_final_answer
+    from methods.agent.engine import verify_final_answer
 
     v_verdict = verify_final_answer(trace or {}, raw_text or "", request_text=item.text)
     v_pass = bool(v_verdict["passed"])
@@ -1395,7 +1395,7 @@ def _aggregate_group_legacy(rows: list[dict[str, Any]]) -> dict[str, Any]:
         # PQ-bus-only voltage error: at a PV/slack bus vm is a control setpoint the
         # model can read straight off the gen/ext_grid table, so the all-buses MAE
         # above is diluted by buses that don't require solving anything. See
-        # prompting/llm_only.py::_pq_bus_ids.
+        # methods/prompting/llm_only.py::_pq_bus_ids.
         "voltage_mae_pq_mean": _safe_mean([(r.get("metrics") or {}).get("voltage_mae_pq") for r in ok_rows]),
         "flow_mae_mean": _safe_mean([(r.get("metrics") or {}).get("flow_mae") for r in ok_rows]),
         # flow_mae's formulation-exact-conditioned twin -- see EXTENDED_SCOREBOARD_FIELDS'
@@ -1413,7 +1413,7 @@ def _aggregate_group_legacy(rows: list[dict[str, Any]]) -> dict[str, Any]:
             [(r.get("metrics") or {}).get("kcl_mean_mismatch_mw") for r in form_exact_ok_rows]
         ),
         # Share of answers whose reported flows satisfy bus balance within the V2
-        # verification-gate tolerance (prompting/llm_only.py's evaluate_against_truth_
+        # verification-gate tolerance (methods/prompting/llm_only.py's evaluate_against_truth_
         # extended computes the per-item boolean; None for no-tools methods, excluded
         # here the same way voltage_mae_mean excludes rows with no metrics, not counted
         # as failing). See that field's own comment for why this replaced a "B_mean,
@@ -1833,7 +1833,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument(
         "--tool-variant", dest="tool_variant", default="v1", choices=["v1", "load_split"],
         help="v1 (default): original modify_load, byte-identical to every existing run. "
-        "load_split: set_active_load/set_load instead (agent.tools.TOOLS_LOAD_SPLIT), validated offline "
+        "load_split: set_active_load/set_load instead (methods.agent.tools.TOOLS_LOAD_SPLIT), validated offline "
         "to eliminate the invented-q_mvar formulation failures by construction.",
     )
     parser.add_argument(

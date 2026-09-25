@@ -34,8 +34,8 @@ from config import (
     OPENAI_TEMPERATURE,
     OPENAI_TIMEOUT_S,
 )
-from agent.engine import EngineConfig, LLMEngine, OpenAIChatClient
-from agent.tools import ToolContext, build_default_dispatcher
+from methods.agent.engine import EngineConfig, LLMEngine, OpenAIChatClient
+from methods.agent.tools import ToolContext, build_default_dispatcher
 from solver.schemas import Modification, PowerFlowResult, RemedialAction, SessionState
 from solver.contingency import run_n1_contingency
 from solver.power_flow import SolverConfig
@@ -46,7 +46,7 @@ from viz import make_flow_diagram, make_voltage_heatmap, make_violation_overview
 from viz import make_comparison, make_n1_ranking, make_remedial_ranking
 from viz.comparison import compute_comparison_summary, make_quantitative_comparison
 from viz.benchmark import make_benchmark_figure, compute_benchmark_cards
-from prompting.llm_only import baseline_parsed_from_result, evaluate_against_truth_extended
+from methods.prompting.llm_only import baseline_parsed_from_result, evaluate_against_truth_extended
 from viz.flow_diagram import resolve_flow_positions
 from viz.flow_particles import build_particle_segments, make_flow_particles_html
 from viz.network_plot import build_graph, compute_layout

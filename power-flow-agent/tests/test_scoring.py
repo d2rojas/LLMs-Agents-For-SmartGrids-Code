@@ -340,7 +340,7 @@ def test_claims_from_tools_check_unwraps_a_plotted_n1_contingency_call():
 def test_claims_from_tools_check_treats_a_declared_failure_as_not_applicable_not_a_mismatch():
     """2026-09-21 (found rescoring the split-tool launch, escalation_check fix): a
     round-limit exhaustion or a verification abstention both say, in words, that no
-    result is reported (agent.engine's MAX_ROUNDS_EXCEEDED_TEXT and
+    result is reported (methods.agent.engine's MAX_ROUNDS_EXCEEDED_TEXT and
     _verification_abstention_text share the fixed phrase "No numerical result is
     reported."). Neither is wrong about what it computed -- it computed nothing to
     report -- so V7 must read it as nothing to check, not as a claim mismatch;
@@ -500,7 +500,7 @@ def test_escalation_check_recognizes_the_round_limit_as_a_declared_failure():
         method_name="pfagent", verification_outcome=None, formulation_error_type=None, round_limit_exceeded=False
     ) is False
     # Not gated by method_name, unlike the rule_based/final_gate paths: the round-limit
-    # message is inserted by _run_react itself (agent/engine.py) regardless of whether
+    # message is inserted by _run_react itself (methods/agent/engine.py) regardless of whether
     # final_gate is on, so react_nogate (no verification gate at all) can hit the same
     # "max_rounds" status and deserves the same declared-failure reading -- a real fix,
     # not a PFAgent-only one.
@@ -663,7 +663,7 @@ def test_solved_and_escalated_can_overlap_solved_autonomously_resolves_it():
 def _pf_trace(case_name: str) -> tuple[dict, list]:
     """A real load_case + run_powerflow trace on the unperturbed case (offline PandaPower)."""
     from evaluation.runner import perturbing_dispatcher
-    from agent.tools import ToolContext
+    from methods.agent.tools import ToolContext
     from solver.schemas import SessionState
 
     ctx = ToolContext(session=SessionState())

@@ -1,4 +1,4 @@
-"""Unit tests for agent/engine.py::verify_final_answer (V(x,c,z,y)) with synthetic traces.
+"""Unit tests for methods/agent/engine.py::verify_final_answer (V(x,c,z,y)) with synthetic traces.
 
 No LLM, no solver: every trace is a hand-built dict shaped like ``LLMEngine.run_with_trace``'s
 output. One test per failing condition, plus the all-pass case and the abstention/retry
@@ -12,7 +12,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from agent.engine import (  # noqa: E402
+from methods.agent.engine import (  # noqa: E402
     EngineConfig,
     LLMEngine,
     verify_final_answer,

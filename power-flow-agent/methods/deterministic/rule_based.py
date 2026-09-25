@@ -1,4 +1,4 @@
-"""deterministic/rule_based.py
+"""methods/deterministic/rule_based.py
 
 Deterministic, LLM-free rule-based baseline for PFAgent.
 
@@ -33,7 +33,7 @@ import json
 import re
 from typing import Any, Dict, List, Optional
 
-from agent.tools import TOOLS, ToolContext, ToolDispatcher, build_default_dispatcher
+from methods.agent.tools import TOOLS, ToolContext, ToolDispatcher, build_default_dispatcher
 
 TOOL_NAMES = {t["name"] for t in TOOLS}
 
