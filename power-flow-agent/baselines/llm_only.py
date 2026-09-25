@@ -28,6 +28,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 import numpy as np
 
 from llm.engine import GATE_BALANCE_REL_TOL, GATE_BALANCE_TOL_MW, LLMClient, OpenAIChatClient
+from solver.power_flow import _bus_display_id
 from solver import case_loader
 from solver.power_flow import SolverConfig, run_power_flow
 from models.schemas import PowerFlowResult
@@ -94,17 +95,19 @@ def _per_unit_branch_table(net: Any) -> Dict[Tuple[int, int], Dict[str, float]]:
     net2 = copy.deepcopy(net)
     pp.runpp(net2)
     ppc_to_bus = {ppc_idx: orig_idx for orig_idx, ppc_idx in enumerate(net2._pd2ppc_lookups["bus"])}
-    names = net2.bus["name"]
     out: Dict[Tuple[int, int], Dict[str, float]] = {}
     for row in net2._ppc["branch"]:
-        fb = names.loc[ppc_to_bus[int(row[F_BUS].real)]]
-        tb = names.loc[ppc_to_bus[int(row[T_BUS].real)]]
+        fb = _bus_display_id(net2, int(ppc_to_bus[int(row[F_BUS].real)]))
+        tb = _bus_display_id(net2, int(ppc_to_bus[int(row[T_BUS].real)]))
         out[(int(fb), int(tb))] = {"r_pu": float(row[BR_R].real), "x_pu": float(row[BR_X].real), "b_pu": float(row[BR_B].real)}
     return out
 
 
 def _bus_name(net: Any, bus_idx: int) -> int:
-    return int(net.bus["name"].loc[bus_idx])
+    """Display id of a bus: the MATPOWER 1..N number. Same rule as the tools and the reference
+    (``solver.power_flow._bus_display_id``): the ``name`` column when it is numeric (case14,
+    case57), else row index + 1 (case30 has empty names, case118 has station names)."""
+    return int(_bus_display_id(net, int(bus_idx)))
 
 
 def export_case_tables(net: Any) -> Dict[str, str]:
@@ -149,6 +152,8 @@ def export_case_tables(net: Any) -> Dict[str, str]:
             df[col] = df[col].map(lambda i: _bus_name(net, i))
         return df
 
+    bus_df = net.bus.copy()
+    bus_df["name"] = [_bus_name(net, int(i)) for i in bus_df.index]  # the display id, never a station name
     load_df = _translated(net.load, "bus") if getattr(net, "load", None) is not None else None
     gen_df = _translated(net.gen, "bus") if getattr(net, "gen", None) is not None else None
     ext_df = _translated(net.ext_grid, "bus") if getattr(net, "ext_grid", None) is not None else None
@@ -173,7 +178,7 @@ def export_case_tables(net: Any) -> Dict[str, str]:
         trafo_df["x_pu"] = [round(pu[k]["x_pu"], 5) for k in keys]
 
     return {
-        "bus": _df_to_text(net.bus, columns=bus_cols),
+        "bus": _df_to_text(bus_df, columns=bus_cols),
         "load": _df_to_text(load_df, columns=load_cols),
         "gen": _df_to_text(gen_df, columns=gen_cols),
         "ext_grid": _df_to_text(ext_df, columns=ext_cols),

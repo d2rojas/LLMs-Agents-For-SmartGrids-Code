@@ -31,6 +31,60 @@ from llm.tools import ToolContext, get_openai_tools  # noqa: E402
 
 E = html.escape
 CASE, N, SEED, K, ROUNDS, TOOLS = "case14", 40, 0, 1, 8, "load_split"
+CASES = ["case14", "case30", "case57", "case118"]
+CASE_LABEL = {"case14": "IEEE 14-bus", "case30": "IEEE 30-bus", "case57": "IEEE 57-bus", "case118": "IEEE 118-bus"}
+CASE_FOLDER = {"case14": "ieee14", "case30": "ieee30", "case57": "ieee57", "case118": "ieee118"}
+# (id, title, cases, models, what it answers)
+PHASES = [
+    ("1", "Main table", ["case14"], ["gpt-4o-mini", "gpt-5.6-sol"], "The six methods on the 14-bus system, both models. The table the paper reports."),
+    ("2", "Scale, small model", ["case30", "case57", "case118"], ["gpt-4o-mini"], "The same six methods and the same 40-request shape on 30, 57 and 118 buses with gpt-4o-mini: where prompting breaks as the tables grow, and what long solver outputs cost the agents."),
+    ("3", "Scale, frontier model", ["case30", "case57", "case118"], ["gpt-5.6-sol"], "The same on gpt-5.6-sol. Needs a recharge first; run only what phase 2 shows is worth it."),
+]
+# per-request token means recorded on the 14-bus runs (summary.json, 2026-09-21/23): (prompt, completion) per model.
+BASE14 = {
+    "llm_only:structured": {"gpt-4o-mini": (2574, 144), "gpt-5.6-sol": (2020, 8345)},
+    "llm_only:cot": {"gpt-4o-mini": (2750, 662), "gpt-5.6-sol": (2196, 7856)},
+    "plan_act_nogate": {"gpt-4o-mini": (5802, 198), "gpt-5.6-sol": (6052, 401)},
+    "react_nogate": {"gpt-4o-mini": (7213, 210), "gpt-5.6-sol": (12995, 389)},
+    "pfagent": {"gpt-4o-mini": (11452, 261), "gpt-5.6-sol": (17738, 473)},
+}
+AGENT_FIXED_SHARE = 0.6  # share of an agent's prompt tokens that does not grow with the network (system prompt, tool schema, request)
+
+
+def case_sizes() -> Dict[str, Dict[str, int]]:
+    """Measured per case: buses, branches, tokens of the prompting user message (case tables), tokens of one
+    run_powerflow output (what an agent reads per solve and what the answer object carries)."""
+    from llm.tools import SessionState as _SS, build_default_dispatcher
+    from solver.power_flow import SolverConfig
+    out: Dict[str, Dict[str, int]] = {}
+    for c in CASES:
+        net = perturbed_case(c, seed=SEED, k=K)
+        u = build_messages("structured", "llm_only", "Run the power flow and report the lowest voltage bus.", net, c, tool_variant=TOOLS)
+        d = build_default_dispatcher(ToolContext(session=_SS(), solver_config=SolverConfig()))
+        d.dispatch("load_case", {"case_name": c})
+        r = d.dispatch("run_powerflow", {})
+        r = json.loads(r) if isinstance(r, str) else r
+        out[c] = {"buses": len(net.bus), "branches": len(net.line) + len(getattr(net, "trafo", [])), "prompt_tokens": sum(len(x["content"]) for x in u) // 4, "solve_tokens": len(json.dumps(r, default=str)) // 4}
+    return out
+
+
+def est_tokens(runner: str, model: str, case: str, sizes: Dict[str, Dict[str, int]]) -> Tuple[int, int]:
+    """(prompt, completion) tokens per request. 14-bus values are the recorded means; larger systems scale them:
+    prompting grows with the case tables, agents with the solver outputs they read (the fixed share stays), and
+    every answer grows with the state it must carry."""
+    p14, o14 = BASE14[runner][model]
+    s14, sc = sizes["case14"], sizes[case]
+    d_answer = max(0, sc["solve_tokens"] - s14["solve_tokens"])
+    if runner.startswith("llm_only"):
+        return p14 + (sc["prompt_tokens"] - s14["prompt_tokens"]), o14 + d_answer
+    ratio = sc["solve_tokens"] / s14["solve_tokens"]
+    return int(p14 * (AGENT_FIXED_SHARE + (1 - AGENT_FIXED_SHARE) * ratio)), o14 + d_answer
+
+
+def est_cost(runner: str, model: str, case: str, sizes: Dict[str, Dict[str, int]]) -> float:
+    price = json.loads((PROJECT_ROOT / "pricing.json").read_text(encoding="utf-8"))[MODEL_IDS[model]]
+    p, o = est_tokens(runner, model, case, sizes)
+    return N * (p * price["input"] + o * price["output"]) / 1e6
 MODELS = ["gpt-4o-mini", "gpt-5.6-sol"]
 MODEL_IDS = {"gpt-4o-mini": "openrouter:openai/gpt-4o-mini", "gpt-5.6-sol": "openrouter:openai/gpt-5.6-sol"}
 
@@ -49,10 +103,6 @@ ROWS: List[Dict[str, Any]] = [
     {"key": "pfagent", "label": "PFAgent", "sub": "ReAct + verification gate", "runner": "pfagent", "formulates": "the LLM, one call at a time", "computes": "PandaPower", "sees": "yes, up to 8 rounds", "gate": "final answer, V1–V7",
      "story": "ReAct, plus a gate on the final answer: numbers must come from the last solve of a converged, connected network and every argument must trace to the request. A rejected answer is retried once, then escalated."},
 ]
-# estimated cost per method and model for 40 requests, USD (gpt-4o-mini, gpt-5.6-sol): the cost_usd_total
-# recorded in summary.json of the 2026-09-21/23 runs, rounded up. On sol the prompting rows are the expensive
-# ones (about 8,000 reasoning tokens per answer); the agents mostly pay for prompt tokens.
-COST = {"rule_based": (0, 0), "llm_only:structured": (0.03, 3.6), "llm_only:cot": (0.05, 3.5), "plan_act_nogate": (0.05, 0.7), "react_nogate": (0.1, 1.3), "pfagent": (0.1, 1.7)}
 BALANCE_USD = 16.64  # OpenRouter credit on 2026-09-25
 RUN_PLAN = [  # (runner, models, why it has to run again)
     ("rule_based", [], "free, no LLM; fills the shared answer object from the solver outputs"),
@@ -308,6 +358,8 @@ def blocks_html(parts: List[Tuple[str, str]], collapsed: Tuple[str, ...] = ("u_d
 def build() -> Path:
     reqs = generate_requests(CASE, N, SEED)
     net = perturbed_case(CASE, seed=SEED, k=K)
+    sizes = case_sizes()
+    reqs_by_case = {c: (reqs if c == CASE else generate_requests(c, N, SEED)) for c in CASES}
     css = """
 :root{--bg:#f3f5f8;--panel:#fff;--line:#e3e7ee;--text:#0f172a;--muted:#64748b;--acc:#2f5fd0;--ok:#1f9d55;--esc:#e0891a;--bad:#d53f3f;--shadow:0 1px 2px rgba(15,23,42,.06),0 4px 14px rgba(15,23,42,.05)}
 *{box-sizing:border-box}body{margin:0;font:14px/1.5 Inter,-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:var(--text);background:var(--bg)}
@@ -338,13 +390,13 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
 
     # ---------------- overview
     H.append("<div class='tab on' id='tab-overview'>")
-    H.append("<div class='card'><h2>One question, six ways to answer it</h2><p>Every method receives the same 40 natural-language power-flow requests on the same perturbed IEEE 14-bus network, answers with the same JSON object, and is scored by the same evaluator. What changes between methods is only <b>who formulates</b> the solver operations, <b>who computes</b> the numbers, whether the method <b>sees the solver's outputs</b> before answering, and whether a <b>gate</b> checks the answer before it is reported.</p>")
+    H.append("<div class='card'><h2>One question, six ways to answer it</h2><p>Every method receives the same 40 natural-language power-flow requests per system, on the same perturbed IEEE test systems (14, 30, 57 and 118 buses), answers with the same JSON object, and is scored by the same evaluator. What changes between methods is only <b>who formulates</b> the solver operations, <b>who computes</b> the numbers, whether the method <b>sees the solver's outputs</b> before answering, and whether a <b>gate</b> checks the answer before it is reported.</p>")
     H.append("<div class='flow'><div class='box'><b>Request</b><span>one of 40 scenarios</span></div><span class='arr'>→</span><div class='box'><b>Formulate</b><span>which solver operations, with which arguments</span></div><span class='arr'>→</span><div class='box'><b>Compute</b><span>PandaPower, or the LLM by hand</span></div><span class='arr'>→</span><div class='box'><b>Report</b><span>the answer for the operator</span></div><span class='arr'>→</span><div class='box'><b>Verdict</b><span>solved · escalated · wrong</span></div></div></div>")
     H.append("<div class='grid g3'>")
     for r in ROWS:
         H.append(f"<div class='card'><h2>{E(r['label'])} <span class='chip'>{E(r['sub'])}</span></h2><div class='kv'><b>formulates</b><span>{E(r['formulates'])}</span><b>computes</b><span>{E(r['computes'])}</span><b>sees outputs</b><span>{E(r['sees'])}</span><b>gate</b><span>{E(r['gate'])}</span></div><p class='muted'>{E(r['story'])}</p></div>")
     H.append("</div>")
-    H.append(f"<div class='card'><h2>Common to every method</h2><span class='chip'>IEEE 14-bus</span><span class='chip'>N = {N} requests</span><span class='chip'>perturbation seed {SEED}, k = {K}</span><span class='chip'>≤ {ROUNDS} tool rounds</span><span class='chip'>temperature 0</span><span class='chip'>tool set {TOOLS}</span><span class='chip'>models: gpt-4o-mini · gpt-5.6-sol</span><span class='chip'>same output JSON for every method</span><span class='chip'>one evaluator for every method</span><span class='chip'>every message sent is stored in the trace</span></div>")
+    H.append(f"<div class='card'><h2>Common to every method</h2><span class='chip'>IEEE 14 · 30 · 57 · 118-bus</span><span class='chip'>N = {N} requests per system</span><span class='chip'>perturbation seed {SEED}, k = {K}</span><span class='chip'>≤ {ROUNDS} tool rounds</span><span class='chip'>temperature 0</span><span class='chip'>tool set {TOOLS}</span><span class='chip'>models: gpt-4o-mini · gpt-5.6-sol</span><span class='chip'>same output JSON for every method</span><span class='chip'>one evaluator for every method</span><span class='chip'>every message sent is stored in the trace</span></div>")
     H.append("</div>")
 
     # ---------------- methods
@@ -376,17 +428,22 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
 
     # ---------------- scenarios
     H.append("<div class='tab' id='tab-scenarios'>")
-    H.append(f"<div class='card'><h2>The {N} scenarios</h2><p>The same requests every method and every model see, generated by <code>benchmarks/requests.py</code> from (case14, N = 40, seed 0): ten <b>plain</b>, ten <b>parameterized</b> (a value or a criterion is stated), ten <b>multistep</b> (several operations), ten <b>ambiguous</b> (numbers spelled out, units in kW, 0-based indices). They are the same 40 used by every run since 2026-09-14.</p><p><b>Why every expected outcome is “converged”.</b> This is the normal request set: the reference solution of each request converges on a connected network, so the reference calls and the reference numbers are deterministic and every method can be judged on the same ground truth. Requests whose reference fails (islanding, non-convergence) form a separate <b>stress</b> set used to measure safe failure; it is not part of this evaluation.</p><p class='muted'>Reference calls are what a correct formulation must match: same tools, same identifiers and values, same order; read-only repeats are ignored. Click “prompts” to see how every method receives that scenario.</p><div class='legend'><span><span class='sw' style='background:#1f9d55'></span>plain</span><span><span class='sw' style='background:#2f5fd0'></span>parameterized</span><span><span class='sw' style='background:#6d4fc4'></span>multistep</span><span><span class='sw' style='background:#e0891a'></span>ambiguous</span></div></div>")
+    H.append(f"<div class='card'><h2>{N} scenarios per system</h2><p>The same requests every method and every model see, generated by <code>benchmarks/requests.py</code> from (case, N = 40, seed 0): ten <b>plain</b>, ten <b>parameterized</b> (a value or a criterion is stated), ten <b>multistep</b> (several operations), ten <b>ambiguous</b> (numbers spelled out, units in kW, 0-based indices). The 14-bus set is the one every run has used since 2026-09-14; the other systems get the same generator, seed and mix, with bus and line ids drawn from that system.</p><p><b>Why every expected outcome is “converged”.</b> This is the normal request set: the reference solution of each request converges on a connected network, so the reference calls and the reference numbers are deterministic and every method can be judged on the same ground truth. Requests whose reference fails (islanding, non-convergence) form a separate <b>stress</b> set used to measure safe failure; it is not part of this evaluation.</p><p class='muted'>Reference calls are what a correct formulation must match: same tools, same identifiers and values, same order; read-only repeats are ignored. Click “prompts” to see how every method receives a 14-bus scenario.</p><div class='legend'><span><span class='sw' style='background:#1f9d55'></span>plain</span><span><span class='sw' style='background:#2f5fd0'></span>parameterized</span><span><span class='sw' style='background:#6d4fc4'></span>multistep</span><span><span class='sw' style='background:#e0891a'></span>ambiguous</span></div></div>")
+    H.append("<div class='card'><h2>What grows with the system</h2><table><tr><th>system</th><th>buses</th><th>branches</th><th>case tables in the prompting prompt</th><th>one solver output an agent reads, and the state the answer must carry</th></tr>" + "".join(f"<tr><td><b>{E(CASE_LABEL[c])}</b></td><td>{sizes[c]['buses']}</td><td>{sizes[c]['branches']}</td><td>~{sizes[c]['prompt_tokens']:,} tokens</td><td>~{sizes[c]['solve_tokens']:,} tokens</td></tr>" for c in CASES) + "</table><p class='muted'>Measured on the perturbed networks with the prompts and tools of this design. Nothing is truncated or summarized on purpose: the growth of the context is one of the things phase 2 measures. The 8-round limit and the answer object are the same on every system.</p></div>")
     dcol = {"plain": "#1f9d55", "parameterized": "#2f5fd0", "multistep": "#6d4fc4", "ambiguous": "#e0891a"}
-    H.append("<div class='card'><table><tr><th>#</th><th>scenario</th><th>request</th><th>reference calls, in order</th><th></th></tr>")
-    for i, r in enumerate(reqs, start=1):
-        steps = "".join(f"<li>{E(c['tool'])}(" + E(", ".join(f"{k}={v}" for k, v in (c.get('args') or {}).items())) + ")</li>" for c in r.intended_calls)
-        H.append(f"<tr><td>{i}</td><td><span class='sw' style='background:{dcol[r.difficulty]}'></span> {E(r.difficulty)}<br><span class='muted'>{E(r.id)}</span></td><td>{E(r.text)}</td><td><ol class='steps'>{steps}</ol></td><td><a class='lnk' href='#' data-scn='{E(r.id)}'>prompts →</a></td></tr>")
-    H.append("</table></div></div>")
+    H.append("<div class='card'><p><label>System <select id='scase'>" + "".join(f"<option value='{c}'>{E(CASE_LABEL[c])}</option>" for c in CASES) + "</select></label></p>")
+    for c in CASES:
+        H.append(f"<div class='sct' data-case='{c}'><table><tr><th>#</th><th>scenario</th><th>request</th><th>reference calls, in order</th><th></th></tr>")
+        for i, r in enumerate(reqs_by_case[c], start=1):
+            steps = "".join(f"<li>{E(cl['tool'])}(" + E(", ".join(f"{k}={v}" for k, v in (cl.get('args') or {}).items())) + ")</li>" for cl in r.intended_calls)
+            link = f"<a class='lnk' href='#' data-scn='{E(r.id)}'>prompts →</a>" if c == CASE else ""
+            H.append(f"<tr><td>{i}</td><td><span class='sw' style='background:{dcol[r.difficulty]}'></span> {E(r.difficulty)}<br><span class='muted'>{E(r.id)}</span></td><td>{E(r.text)}</td><td><ol class='steps'>{steps}</ol></td><td>{link}</td></tr>")
+        H.append("</table></div>")
+    H.append("</div></div>")
 
     # ---------------- prompts
     H.append("<div class='tab' id='tab-prompts'>")
-    H.append("<div class='card'><h2>What the model receives, block by block</h2><p>Pick a scenario and a method. Each prompt is shown as the blocks it is assembled from; the colour tells the kind of block and the grey label says which file or code produces it. The case-tables block is long and collapsed; it is identical for every scenario (same perturbed network).</p><div class='legend'>" + "".join(f"<span><span class='sw' style='background:{c}'></span>{E(l)}</span>" for k, (c, l, s) in BLOCKS.items() if k in ('sys_base', 'sys_agent', 'sys_cot', 'u_data', 'u_task', 'u_reason', 'u_ops', 'u_out', 'planner', 'tools')) + "</div>")
+    H.append("<div class='card'><h2>What the model receives, block by block</h2><p>Pick a scenario and a method. Each prompt is shown as the blocks it is assembled from; the colour tells the kind of block and the grey label says which file or code produces it. The case-tables block is long and collapsed; it is identical for every scenario (same perturbed network). Shown for the 14-bus system; on the other systems only the case tables and the request text change.</p><div class='legend'>" + "".join(f"<span><span class='sw' style='background:{c}'></span>{E(l)}</span>" for k, (c, l, s) in BLOCKS.items() if k in ('sys_base', 'sys_agent', 'sys_cot', 'u_data', 'u_task', 'u_reason', 'u_ops', 'u_out', 'planner', 'tools')) + "</div>")
     all_methods = [r["runner"] for r in ROWS] + [c for r in ROWS for c, _ in r.get("companions", [])]
     labels = {r["runner"]: r["label"] for r in ROWS}
     for r in ROWS:
@@ -468,25 +525,37 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
     H.append("<div class='card'><h2>The code behind each step, verbatim</h2><p class='muted'>From llm/engine.py, baselines/rule_based.py, benchmarks/metrics.py and benchmarks/scoring.py in this worktree.</p>" + "".join(f"<details><summary><b>{E(t)}</b> · {E(o.__module__)}.{E(getattr(o, '__qualname__', o.__name__))} · {len(_src(o).splitlines())} lines</summary><pre>{E(_src(o))}</pre></details>" for t, o in parts) + "</div></div>")
 
     # ---------------- run plan
-    H.append("<div class='tab' id='tab-plan'><div class='card'><h2>What runs and what it costs</h2><p class='muted'>Every prompt changed with the shared rules and the shared answer object, so no earlier run is comparable: all six methods run again on both models, 40 requests each, gpt-4o-mini first. Earlier runs stay under their own dates for reference only.</p><table><tr><th>method</th><th>gpt-4o-mini</th><th>gpt-5.6-sol</th><th>why</th></tr>")
-    tm = ts = 0.0
-    for runner, models_, note in RUN_PLAN:
-        m = methods.get_method(runner)
-        cm, cs = COST[runner]
-        a = "run" if (not m.uses_llm or "gpt-4o-mini" in models_) else "skip"
-        b = "run" if (not m.uses_llm or "gpt-5.6-sol" in models_) else "skip"
-        if a == "run": tm += cm
-        if b == "run": ts += cs
-        H.append(f"<tr><td><b>{E(m.folder)}</b></td><td><span class='chip {'acc' if a == 'run' else ''}'>{a}</span> {'$%.2f' % cm if a == 'run' else ''}</td><td><span class='chip {'acc' if b == 'run' else ''}'>{b}</span> {'$%.2f' % cs if b == 'run' else ''}</td><td class='muted'>{E(note)}</td></tr>")
-    H.append(f"</table><p>Estimated cost: gpt-4o-mini about ${tm:.2f}, gpt-5.6-sol about ${ts:.2f}, total about ${tm + ts:.2f}; the recorded costs are from 40-request runs with the earlier prompts, and the shared answer object asks for a few more output tokens, so allow about 20% more. The OpenRouter balance is ${BALANCE_USD:.2f}. The EV case study still needs about $10, so after the sol runs it waits for a recharge. Output goes to <code>results/ieee14/&lt;date&gt;/&lt;model&gt;/&lt;method&gt;/</code>; afterwards the results page and the table builder read only from there.</p><h3>Order</h3><ol><li>Parser (free) and the five LLM methods on gpt-4o-mini: about ${tm:.2f}.</li><li>Check the gpt-4o-mini reports and traces in the viewer. Fix anything wrong before spending on sol.</li><li>The five LLM methods on gpt-5.6-sol: about ${ts:.2f}.</li><li>Regenerate the results page and the paper table from the new folders.</li></ol><h3>Commands</h3><pre>")
-    cmds = []
-    for runner, models_, _ in RUN_PLAN:
-        m = methods.get_method(runner)
-        if not m.uses_llm:
-            cmds.append(f".venv/bin/python run.py run --method {m.folder} --case ieee14 --n 40")
-        elif models_:
-            cmds.append(f".venv/bin/python run.py run --method {m.folder} " + " ".join(f"--model {MODEL_IDS[x]}" for x in models_) + " --case ieee14 --n 40")
-    H.append(E("\n".join(cmds)) + "</pre></div></div>")
+    H.append("<div class='tab' id='tab-plan'><div class='card'><h2>What runs and what it costs</h2><p class='muted'>Every prompt changed with the shared rules and the shared answer object, so no earlier run is comparable: every method runs again. Three phases, in this order; each phase is checked in the viewer before the next one is paid for. Earlier runs stay under their own dates for reference only.</p><table><tr><th>method</th><th>why it has to run</th></tr>" + "".join(f"<tr><td><b>{E(methods.get_method(r).folder)}</b></td><td class='muted'>{E(note)}</td></tr>" for r, _, note in RUN_PLAN) + "</table></div>")
+    notes = {"gpt-4o-mini": [], "gpt-5.6-sol": []}
+    grand = 0.0
+    for pid, title, cases_, models_, why in PHASES:
+        H.append(f"<div class='card'><h2>Phase {pid} · {E(title)}</h2><p>{E(why)}</p><table><tr><th>method</th>" + "".join(f"<th>{E(CASE_LABEL[c])}<br><span class='muted'>{E(m)}</span></th>" for c in cases_ for m in models_) + "<th>subtotal</th></tr>")
+        ptotal = 0.0
+        for runner, _, _ in RUN_PLAN:
+            m = methods.get_method(runner)
+            cells, rt = [], 0.0
+            for c in cases_:
+                for mo in models_:
+                    if not m.uses_llm:
+                        cells.append("<td><span class='chip acc'>run</span> free</td>")
+                    else:
+                        v = est_cost(runner, mo, c, sizes); rt += v
+                        pt, ot = est_tokens(runner, mo, c, sizes)
+                        cells.append(f"<td><span class='chip acc'>run</span> ${v:.2f}<br><span class='muted'>~{pt:,} in / {ot:,} out per request</span></td>")
+            ptotal += rt
+            H.append(f"<tr><td><b>{E(m.folder)}</b></td>" + "".join(cells) + f"<td><b>${rt:.2f}</b></td></tr>")
+        grand += ptotal
+        H.append(f"<tr><td colspan='{1 + len(cases_) * len(models_)}' style='text-align:right'><b>phase {pid}</b></td><td><b>${ptotal:.2f}</b></td></tr></table>")
+        cmds = []
+        for runner, _, _ in RUN_PLAN:
+            m = methods.get_method(runner)
+            for c in cases_:
+                if not m.uses_llm:
+                    cmds.append(f".venv/bin/python run.py run --method {m.folder} --case {CASE_FOLDER[c]} --n {N}")
+                else:
+                    cmds.append(f".venv/bin/python run.py run --method {m.folder} " + " ".join(f"--model {MODEL_IDS[x]}" for x in models_) + f" --case {CASE_FOLDER[c]} --n {N}")
+        H.append("<details><summary>commands</summary><pre>" + E("\n".join(cmds)) + "</pre></details></div>")
+    H.append(f"<div class='card'><h2>Budget</h2><p>All three phases: about ${grand:.2f}. The OpenRouter balance is ${BALANCE_USD:.2f}; the EV case study still needs about $10. Phase 1 fits now; phase 2 is small; phase 3 waits for a recharge.</p><h3>How the estimate is made</h3><p class='muted'>14-bus cells use the token means recorded on the 2026-09-21/23 runs and the prices in <code>pricing.json</code>; the recorded totals on sol were $3.32 to $3.50 for the prompting rows and $1.25 to $1.58 for the agents, which this reproduces. Larger systems scale those means: the prompting prompt grows by the extra case-table tokens, an agent's prompt grows with the solver outputs it reads (a fixed {int(AGENT_FIXED_SHARE * 100)}% for the system prompt, tool schema and request does not), and every answer grows by the extra state it must carry. Real cost on sol has run up to twice the estimate; the shared answer object adds output tokens. Treat every number as a lower bound and check the recorded <code>cost_usd_total</code> after each phase.</p><p class='muted'>Output goes to <code>results/&lt;system&gt;/&lt;date&gt;/&lt;model&gt;/&lt;method&gt;/</code>; the results page and the table builder read only from there.</p></div></div>")
 
     H.append("""</main><script>
 const tabs=document.querySelectorAll('.tabs button');function show(k){tabs.forEach(b=>b.classList.toggle('on',b.dataset.tab===k));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.id==='tab-'+k));window.scrollTo(0,0);}
@@ -499,6 +568,7 @@ fromHash();
 const scn=document.getElementById('scn'),mth=document.getElementById('mth');
 function ap(){document.querySelectorAll('.um').forEach(p=>p.classList.toggle('hid',p.dataset.scn!==scn.value));document.querySelectorAll('.pm').forEach(p=>p.classList.toggle('hid',p.dataset.mth!==mth.value));}
 scn.onchange=ap;mth.onchange=ap;ap();
+const scase=document.getElementById('scase');function sc(){document.querySelectorAll('.sct').forEach(t=>t.style.display=t.dataset.case===scase.value?'':'none');}scase.onchange=sc;sc();
 const exm=document.getElementById('exm'),exs=document.getElementById('exs');let exModel='gpt-5.6-sol';function exAp(){document.querySelectorAll('.ex').forEach(x=>x.classList.toggle('on',x.dataset.model===exModel&&x.dataset.scn===exs.value));}
 exm.querySelectorAll('button').forEach(b=>b.onclick=()=>{exModel=b.dataset.v;exm.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));exAp();});exs.onchange=exAp;exAp();
 document.querySelectorAll('.ln').forEach(l=>l.onclick=()=>{const o=l.classList.toggle('open');l.querySelector('.s').textContent=o?l.dataset.full:l.dataset.short||l.querySelector('.s').textContent;if(o&&!l.dataset.short){l.dataset.short=l.querySelector('.s').textContent;}});
