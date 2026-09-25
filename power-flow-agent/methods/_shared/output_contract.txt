@@ -2,6 +2,7 @@
 Reply with exactly one JSON object and nothing else (no prose before or after, no Markdown fences), with these fields, all present:
 
 {
+  "formulation": [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_powerflow", "args": {}}],
   "converged": true,
   "summary": "one sentence on what was done and the state of the network",
   "answer": "the specific thing the request asked for, with its numbers (e.g. 'Worst outage: line 1-5, 9 voltage violations' or 'Lowest voltage: bus 14 at 1.0357 p.u.')",
@@ -15,6 +16,7 @@ Reply with exactly one JSON object and nothing else (no prose before or after, n
   "cannot_answer": null
 }
 
+- `formulation` is the ordered list of solver operations the request needs, using only the operation names and argument names of the operations catalogue: with tools, the operations you actually ran; without tools, the operations a solver-based assistant would run. Copy identifiers and values from the request; do not add arguments the request does not give.
 - `bus_voltages` covers every bus of the network state you are reporting, one entry per bus, `bus_id` in MATPOWER 1-based numbering; `line_flows` covers every branch, `line_id` as the branch index (transformers: 100000 + transformer index), with `from_bus` and `to_bus`.
 - Voltage limits are 0.95 to 1.05 p.u.; a line is overloaded above 100 % loading. List the violations of the reported state.
 - All numbers are finite (no NaN or Infinity). Copy them from the solver outputs when you have tools; otherwise they are your own computation on the data above.

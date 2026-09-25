@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build results/v2_plan.html: the evaluation design as an app-like page, for approval before spending.
+"""Build results/v2_plan.html: the evaluation design as an app-like page.
 
 Tabs: Overview, Methods, Scenarios, Prompts, Tools, Gate & scoring, Run plan. Everything is
 generated from the code that will run (methods/, llm/, benchmarks/requests.py, the dispatcher).
@@ -39,7 +39,7 @@ ROWS: List[Dict[str, Any]] = [
     {"key": "rule_based", "label": "Deterministic parser", "sub": "no LLM", "runner": "rule_based", "formulates": "fixed regex rules", "computes": "PandaPower", "sees": "—", "gate": "none",
      "story": "The conventional automation baseline: a hand-written parser maps the request to solver calls. Everything it cannot parse, it cannot do."},
     {"key": "llm_only_structured", "label": "Structured prompting", "sub": "LLM only, no tools", "runner": "llm_only:structured", "formulates": "the LLM, implicitly", "computes": "the LLM, by hand", "sees": "—", "gate": "none",
-     "story": "The model gets the full case tables in the prompt and must return the power-flow numbers itself, or set converged to false if it cannot. It makes no tool calls, so Formulation does not apply; its error is measured on the answers that report numbers."},
+     "story": "The model gets the full case tables in the prompt and must return the power-flow numbers itself, or set converged to false if it cannot. It makes no tool calls; it declares the operations the request needs and computes the numbers itself."},
     {"key": "llm_only_cot", "label": "Chain-of-thought prompting", "sub": "LLM only, no tools", "runner": "llm_only:cot", "formulates": "the LLM, implicitly", "computes": "the LLM, by hand", "sees": "—", "gate": "none",
      "story": "Same as structured, plus a reasoning section that asks the model to think step by step before the final JSON."},
     {"key": "plan_act_nogate", "label": "Plan-and-Act", "sub": "LLM + solver", "runner": "plan_act_nogate", "formulates": "the LLM, whole plan at once", "computes": "PandaPower", "sees": "no: commits before seeing any result", "gate": "none",
@@ -71,6 +71,7 @@ BLOCKS = {
     "u_task": ("#1f9d55", "user · task: the request", "benchmarks/requests.py"),
     "u_reason": ("#6d4fc4", "user · reasoning instructions", "methods/llm_only_cot/reasoning_section.txt"),
     "u_form": ("#0f8f84", "user · formulation: operations catalogue", "methods/_shared/formulation_probe_section.txt + llm/tools.py"),
+    "u_ops": ("#0f8f84", "user · operations catalogue (for the formulation field)", "methods/_shared/operations_section.txt + llm/tools.py"),
     "u_out": ("#c99a06", "user · output requirements (JSON schema)", "methods/_shared/llm_only_user_template.txt"),
     "u_out_probe": ("#c99a06", "user · output requirements (formulation only)", "methods/_shared/formulation_probe_output_section.txt"),
     "u_request": ("#1f9d55", "user · the request, verbatim", "benchmarks/requests.py"),
@@ -79,7 +80,7 @@ BLOCKS = {
 }
 FIG = re.compile(r'"figure_json":\s*"((?:[^"\\]|\\.)*)"')
 
-# existing runs used only for the examples on the Methods tab (v2 re-runs them)
+# existing runs used only for the examples on the Methods tab (they will be re-run under this design)
 EXAMPLE_RUNS = {
     "gpt-5.6-sol": {"rule_based": "ieee14/2026-09-21/no-llm/rule_based", "llm_only:structured": "ieee14/2026-09-21/gpt-5.6-sol/llm_only_structured", "llm_only:cot": "ieee14/2026-09-21/gpt-5.6-sol/llm_only_cot", "plan_act_nogate": "ieee14/2026-09-23/gpt-5.6-sol/plan_act_nogate__matched", "react_nogate": "ieee14/2026-09-21/gpt-5.6-sol/react_nogate", "pfagent": "ieee14/2026-09-21/gpt-5.6-sol/pfagent"},
     "gpt-4o-mini": {"rule_based": "ieee14/2026-09-21/no-llm/rule_based", "llm_only:structured": "ieee14/2026-09-16/gpt-4o-mini/llm_only_structured", "llm_only:cot": "ieee14/2026-09-18/gpt-4o-mini/llm_only_cot", "plan_act_nogate": "ieee14/2026-09-23/gpt-4o-mini/plan_act_nogate__matched", "react_nogate": "ieee14/2026-09-21/gpt-4o-mini/react_nogate", "pfagent": "ieee14/2026-09-21/gpt-4o-mini/pfagent"},
@@ -172,7 +173,7 @@ def load_example(rel: str, rid: str) -> Tuple[Optional[Dict[str, Any]], Optional
 
 
 def prompt_for(runner: str, rid: str, reqs: Any, net: Any) -> str:
-    """The prompt v2 sends to ``runner`` for scenario ``rid``, rendered as labeled blocks."""
+    """The prompt this design sends to ``runner`` for scenario ``rid``, rendered as labeled blocks."""
     m = methods.get_method(runner)
     r = next((x for x in reqs if x.id == rid), None)
     if r is None or m.kind == "rule_based":
@@ -193,7 +194,7 @@ def prompt_for(runner: str, rid: str, reqs: Any, net: Any) -> str:
 
 def examples_section(reqs: Any, net: Any = None) -> str:
     verdict = lambda r: ("solved", "solved on its own") if (r.get("solved_autonomously") or (r.get("solved") and not r.get("escalated"))) else (("escalated", "escalated to a person") if r.get("escalated") else ("wrong", "wrong, unflagged"))
-    out = ["<div class='card'><h2>The same request under each method, from real runs</h2><p class='muted'>Examples taken from existing runs (the ones v2 re-runs), so you can see the shape of each method before spending. Each column is a log of real steps; click a line to expand it. The verdict at the bottom is how that run was scored.</p>"
+    out = ["<div class='card'><h2>The same request under each method, from real runs</h2><p class='muted'>Examples taken from existing runs, made under the previous prompts, so you can see the shape of each method before the new runs. Each column is a log of real steps; click a line to expand it. The verdict at the bottom is how that run was scored.</p>"
            "<p><label>Model <span class='seg' id='exm'><button data-v='gpt-5.6-sol' class='on'>gpt-5.6-sol</button><button data-v='gpt-4o-mini'>gpt-4o-mini</button></span></label> <label>Scenario <select id='exs'>" + "".join(f"<option value='{rid}'>{E(next((f'{i+1:02d} · {r.difficulty} · {r.text}' for i, r in enumerate(reqs) if r.id == rid), rid))}</option>" for rid in EXAMPLE_SCENARIOS) + "</select></label></p></div>"]
     for model, runs in EXAMPLE_RUNS.items():
         for rid in EXAMPLE_SCENARIOS:
@@ -208,7 +209,7 @@ def examples_section(reqs: Any, net: Any = None) -> str:
                 fe = row.get("formulation_exact")
                 form = "n/a" if fe is None else ("exact" if fe else f"NOT exact ({row.get('formulation_error_type')})")
                 stored = bool(((payload or {}).get("trace") or {}).get("messages"))
-                out.append(f"<div class='col'><h4>{E(r['label'])} <span class='vd {cls}'>{lab}</span></h4><details class='pr'><summary>prompt sent to this method for this scenario</summary><div class='prb'>{prompt_for(r['runner'], rid, reqs, net)}</div><div class='muted' style='padding:4px 10px'>{'This example run stored exactly these messages.' if stored else 'Shown as v2 will send it; this example run stored only the request and the prompt hash (' + E(str(row.get('system_prompt_hash'))) + ').'}</div></details><div class='log'>" + "".join(f"<div class='ln' data-full='{E(full)}'><span class='k {k}'>{k}</span><span class='s'>{E(short)}</span></div>" for k, short, full in lines) + f"</div><div class='vt'><b>formulation</b> {E(form)} · <b>numbers</b> {row.get('n_numbers')} ({row.get('n_untraceable_numbers')} untraceable) · <b>V_MAE</b> {E(str((row.get('metrics') or {}).get('voltage_mae', 'n/a')))} · {row.get('n_llm_calls')} model calls, {row.get('n_tool_calls')} solver calls<br><span class='muted'>from {E(rel)}</span></div></div>")
+                out.append(f"<div class='col'><h4>{E(r['label'])} <span class='vd {cls}'>{lab}</span></h4><details class='pr'><summary>prompt sent to this method for this scenario</summary><div class='prb'>{prompt_for(r['runner'], rid, reqs, net)}</div><div class='muted' style='padding:4px 10px'>{'This example run stored exactly these messages.' if stored else 'Shown as this design will send it; this example run stored only the request and the prompt hash (' + E(str(row.get('system_prompt_hash'))) + ').'}</div></details><div class='log'>" + "".join(f"<div class='ln' data-full='{E(full)}'><span class='k {k}'>{k}</span><span class='s'>{E(short)}</span></div>" for k, short, full in lines) + f"</div><div class='vt'><b>formulation</b> {E(form)} · <b>numbers</b> {row.get('n_numbers')} ({row.get('n_untraceable_numbers')} untraceable) · <b>V_MAE</b> {E(str((row.get('metrics') or {}).get('voltage_mae', 'n/a')))} · {row.get('n_llm_calls')} model calls, {row.get('n_tool_calls')} solver calls<br><span class='muted'>from {E(rel)}</span></div></div>")
             out.append("</div></div>")
     return "".join(out)
 
@@ -216,7 +217,7 @@ def examples_section(reqs: Any, net: Any = None) -> str:
 
 def split_user(text: str, probe: bool) -> List[Tuple[str, str]]:
     """Split an assembled user message into labeled blocks at its '## ' headings."""
-    heads = {"## System Data": "u_data", "## Worked Examples": "u_examples", "## Task": "u_task", "## Reasoning Instructions": "u_reason", "## Formulation": "u_form", "## Output Requirements": "u_out_probe" if probe else "u_out"}
+    heads = {"## System Data": "u_data", "## Worked Examples": "u_examples", "## Task": "u_task", "## Reasoning Instructions": "u_reason", "## Formulation": "u_form", "## Operations": "u_ops", "## Output Requirements": "u_out_probe" if probe else "u_out"}
     parts: List[Tuple[str, str]] = []
     idx = [(m.start(), m.group(0)) for m in re.finditer(r"^## [A-Za-z ]+", text, flags=re.M)]
     if not idx:
@@ -368,7 +369,7 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
     H.append("<details><summary>Details: what information each method receives, and the prompt blocks it is built from</summary><table class='cmp' style='margin-top:8px'><tr><th></th>" + "".join(f"<th>{E(r['label'])}</th>" for r in ROWS) + "</tr>")
     for c in cols:
         H.append(f"<tr><td><b>{E(c)}</b></td>" + "".join(f"<td style='background:{'#e6f4ea' if v.startswith('yes') or v.startswith('final') else ('#f3f4f6' if v in ('n/a', 'fixed rules') else '#fdecec')}'>{E(v)}</td>" for _, row in matrix for v in [row[c]]) + "</tr>")
-    H.append("<tr><td><b>prompt blocks</b></td>" + "".join("<td>" + (" ".join(f"<span class='chip'>{E(Path(f).name)}</span>" for f in methods.get_method(r['runner']).prompt_files) or "<span class='muted'>none, no LLM</span>") + "</td>" for r in ROWS) + "</tr></table><p class='muted'>Derived from the assembled prompts. Green: the method receives it. Red: it does not. Grey: not applicable. The prompting methods get no tools by design: Formulation does not apply to them, and their numbers are the model's own arithmetic.</p></details></div>")
+    H.append("<tr><td><b>prompt blocks</b></td>" + "".join("<td>" + (" ".join(f"<span class='chip'>{E(Path(f).name)}</span>" for f in methods.get_method(r['runner']).prompt_files) or "<span class='muted'>none, no LLM</span>") + "</td>" for r in ROWS) + "</tr></table><p class='muted'>Derived from the assembled prompts. Green: the method receives it. Red: it does not. Grey: not applicable. The prompting methods get no tools by design: they declare the operations the request needs and their numbers are their own arithmetic.</p></details></div>")
     H.append(examples_section(reqs, net))
     H.append("</div>")
 
@@ -384,7 +385,7 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
 
     # ---------------- prompts
     H.append("<div class='tab' id='tab-prompts'>")
-    H.append("<div class='card'><h2>What the model receives, block by block</h2><p>Pick a scenario and a method. Each prompt is shown as the blocks it is assembled from; the colour tells the kind of block and the grey label says which file or code produces it. The case-tables block is long and collapsed; it is identical for every scenario (same perturbed network).</p><div class='legend'>" + "".join(f"<span><span class='sw' style='background:{c}'></span>{E(l)}</span>" for k, (c, l, s) in BLOCKS.items() if k in ('sys_base', 'sys_agent', 'sys_cot', 'u_data', 'u_task', 'u_reason', 'u_out', 'planner', 'tools')) + "</div>")
+    H.append("<div class='card'><h2>What the model receives, block by block</h2><p>Pick a scenario and a method. Each prompt is shown as the blocks it is assembled from; the colour tells the kind of block and the grey label says which file or code produces it. The case-tables block is long and collapsed; it is identical for every scenario (same perturbed network).</p><div class='legend'>" + "".join(f"<span><span class='sw' style='background:{c}'></span>{E(l)}</span>" for k, (c, l, s) in BLOCKS.items() if k in ('sys_base', 'sys_agent', 'sys_cot', 'u_data', 'u_task', 'u_reason', 'u_ops', 'u_out', 'planner', 'tools')) + "</div>")
     all_methods = [r["runner"] for r in ROWS] + [c for r in ROWS for c, _ in r.get("companions", [])]
     labels = {r["runner"]: r["label"] for r in ROWS}
     for r in ROWS:
@@ -439,19 +440,19 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
     # ---------------- gate & scoring
     GATE = [("V1", "converged", "The last power flow the agent ran converged."), ("V2", "balance", "Active-power balance of the reported state holds within tolerance."), ("V3", "no_isolated_buses", "No bus was left isolated by the network changes."), ("V4", "faithfulness", "Every unit-bearing number in the answer appears in a tool output."), ("V5", "currency", "Those numbers come from the solve made after the last network change."), ("V6", "argument_grounding", "Every argument of a mutating tool traces to the request or to a prior tool output; a positive max_candidates on the N-1 scan must also come from the request."), ("V7", "claims_from_tools", "The answer's claims match the agent's own last solved state.")]
     SCORING = [
-        ("Same answer, same evaluator", "Every method replies with the same JSON object (the Output contract). The evaluator reads that JSON, never the solver trace, so all six methods are scored by the same code path: the trace is evidence for traceability and for the gate, not the source of the numbers."),
+        ("Same answer, same evaluator", "Every method replies with the same JSON object (the output contract). The evaluator reads that JSON, never the solver trace, so all six methods are scored by the same code path: the trace is evidence for traceability and for the gate, not the source of the numbers."),
         ("Reported state", "Bus voltages, branch flows and totals from the answer JSON, compared with the reference solution: voltage MAE, flow MAE, coverage (every bus reported), and the bus power-balance residual."),
         ("Answer", "The specific quantity the request asked for (worst outage, lowest-voltage bus, overloaded lines, totals), read from the answer and compared with the reference answer."),
-        ("Formulation", "Methods with tools: the executed calls match the reference calls in tool, identifiers, values and order; read-only repeats ignored; an unrequested argument that changes the result (an invented q_mvar, an N-1 max_candidates below the branch count) is an error. Methods without tools: not applicable."),
+        ("Formulation", "One rule for every method. The `formulation` field of the answer, the ordered solver operations the method used (with tools) or that the request needs (without tools), must match the reference operations in tool, identifiers, values and order; read-only repeats are ignored; an unrequested argument that changes the result (an invented q_mvar, an N-1 max_candidates below the branch count) is an error. With tools, the declared operations must also match the ones the trace shows the method actually ran."),
         ("Escalated", "The answer declares it cannot complete the request: cannot_answer filled, the abstention shape (converged false, empty arrays), an explicit statement of inability, the round limit, or the gate rejecting every candidate. Same rule for every method; takes precedence."),
-        ("Solved", "Not escalated, formulation exact where it applies, a reported state that converges like the reference, covers every bus, and is within tolerance (1e-3 p.u. on voltages, 1% on flows), and an answer that matches the reference where the request asks a checkable question."),
+        ("Solved", "Not escalated, formulation exact, a reported state that converges like the reference, covers every bus, and is within tolerance (1e-3 p.u. on voltages, 1% on flows), and an answer that matches the reference where the request asks a checkable question."),
         ("Wrong, unflagged", "Everything else: numbers or an answer that do not match the reference, reported as if they did. Solved + Escalated + Wrong = 100%."),
         ("Traceable", "Every number in the answer JSON appears in a solver output of the trace, from the solve after the last network change. Zero by construction without tools."),
     ]
     contract = methods.read_text("_shared/output_contract.txt")
     rules = methods.read_text("_shared/common_rules.txt")
     H.append("<div class='tab' id='tab-gate'><div class='card'><h2>The output contract, shared by every method</h2><p class='muted'>Appended to every prompt (methods/_shared/output_contract.txt). The parser fills it from the solver outputs; the LLM methods must return exactly this object.</p><pre>" + E(contract) + "</pre><h3>The shared rules, in both system prompts</h3><pre>" + E(rules) + "</pre></div><div class='grid g2'><div class='card'><h2>Verification gate, PFAgent only</h2><p class='muted'>Runs once on the final answer. A failure is sent back to the model with the failed conditions spelled out; a second failure escalates the request.</p><table><tr><th></th><th>condition</th></tr>" + "".join(f"<tr><td><b>{a}</b><br><span class='muted'>{b}</span></td><td>{E(c)}</td></tr>" for a, b, c in GATE) + "</table></div><div class='card'><h2>Scoring, every method</h2><table><tr><th>metric</th><th>definition</th></tr>" + "".join(f"<tr><td><b>{E(a)}</b></td><td>{E(b)}</td></tr>" for a, b in SCORING) + "</table></div></div>")
-    parts = [("Engine: one request, any architecture", LLMEngine.run_with_trace), ("ReAct loop", LLMEngine._run_react), ("Plan-and-Act", LLMEngine._run_plan_act), ("How a run ends", LLMEngine._finish), ("Verification gate V1–V7", verify_final_answer), ("V6 argument grounding", bm.argument_grounding_check), ("Deterministic parser: request → calls", rule_based._parse_clause), ("Deterministic parser: run", rule_based.run), ("Formulation comparator, rules R0–R10", bm.formulation_check), ("Unified evaluator (v2): score_common", __import__("benchmarks.common_eval", fromlist=["score_common"]).score_common), ("Traceable numbers", bm.faithful_numbers), ("Answer matches the reference", bs.answer_matches_truth)]
+    parts = [("Engine: one request, any architecture", LLMEngine.run_with_trace), ("ReAct loop", LLMEngine._run_react), ("Plan-and-Act", LLMEngine._run_plan_act), ("How a run ends", LLMEngine._finish), ("Verification gate V1–V7", verify_final_answer), ("V6 argument grounding", bm.argument_grounding_check), ("Deterministic parser: request → calls", rule_based._parse_clause), ("Deterministic parser: run", rule_based.run), ("Formulation comparator, rules R0–R10", bm.formulation_check), ("The evaluator: score_common", __import__("benchmarks.common_eval", fromlist=["score_common"]).score_common), ("Traceable numbers", bm.faithful_numbers), ("Answer matches the reference", bs.answer_matches_truth)]
     H.append("<div class='card'><h2>The code behind each step, verbatim</h2><p class='muted'>From llm/engine.py, baselines/rule_based.py, benchmarks/metrics.py and benchmarks/scoring.py in this worktree.</p>" + "".join(f"<details><summary><b>{E(t)}</b> · {E(o.__module__)}.{E(getattr(o, '__qualname__', o.__name__))} · {len(_src(o).splitlines())} lines</summary><pre>{E(_src(o))}</pre></details>" for t, o in parts) + "</div></div>")
 
     # ---------------- run plan
@@ -465,14 +466,14 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
         if a == "run": tm += cm
         if b == "run": ts += cs
         H.append(f"<tr><td><b>{E(m.folder)}</b></td><td><span class='chip {'acc' if a == 'run' else ''}'>{a}</span> {'$%.2f' % cm if a == 'run' else ''}</td><td><span class='chip {'acc' if b == 'run' else ''}'>{b}</span> {'$%.2f' % cs if b == 'run' else ''}</td><td class='muted'>{E(note)}</td></tr>")
-    H.append(f"</table><p>Estimated: gpt-4o-mini about ${tm:.2f}, gpt-5.6-sol about ${ts:.2f}, total about ${tm + ts:.2f}. Real cost on sol has run up to twice the estimate. Output goes to <code>results/ieee14/2026-09-24/&lt;model&gt;/&lt;method&gt;__v2/</code>; afterwards the results page and the table builder read only from there.</p><h3>Commands, in order (gpt-4o-mini first within each)</h3><pre>")
+    H.append(f"</table><p>Estimated cost: gpt-4o-mini about ${tm:.2f}, gpt-5.6-sol about ${ts:.2f}, total about ${tm + ts:.2f}. Real cost on sol has run up to twice the estimate. Output goes to <code>results/ieee14/&lt;date&gt;/&lt;model&gt;/&lt;method&gt;/</code>; afterwards the results page and the table builder read only from there.</p><h3>Commands, in order (gpt-4o-mini first within each)</h3><pre>")
     cmds = []
     for runner, models_, _ in RUN_PLAN:
         m = methods.get_method(runner)
         if not m.uses_llm:
-            cmds.append(f".venv/bin/python run.py run --method {m.folder} --case ieee14 --n 40 --tag v2")
+            cmds.append(f".venv/bin/python run.py run --method {m.folder} --case ieee14 --n 40")
         elif models_:
-            cmds.append(f".venv/bin/python run.py run --method {m.folder} " + " ".join(f"--model {MODEL_IDS[x]}" for x in models_) + " --case ieee14 --n 40 --tag v2")
+            cmds.append(f".venv/bin/python run.py run --method {m.folder} " + " ".join(f"--model {MODEL_IDS[x]}" for x in models_) + " --case ieee14 --n 40")
     H.append(E("\n".join(cmds)) + "</pre></div></div>")
 
     H.append("""</main><script>

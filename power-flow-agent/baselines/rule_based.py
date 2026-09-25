@@ -308,7 +308,7 @@ def _summarize(tool: str, out: Dict[str, Any]) -> str:
     return f"{tool}: done."
 
 
-def contract_answer(outputs: List[Dict[str, Any]], derived: List[Dict[str, Any]], lines: List[str], *, ok: bool, cannot: Optional[str] = None) -> str:
+def contract_answer(outputs: List[Dict[str, Any]], derived: List[Dict[str, Any]], lines: List[str], *, ok: bool, cannot: Optional[str] = None, plan: Optional[List[Dict[str, Any]]] = None) -> str:
     """The parser's answer in the common output contract (methods/_shared/output_contract.txt),
     built from the last power-flow state the solver returned (2026-09-25, v2). The same JSON
     every LLM method must return, so every method is scored by the same evaluator."""
@@ -322,6 +322,7 @@ def contract_answer(outputs: List[Dict[str, Any]], derived: List[Dict[str, Any]]
         cannot = "; ".join(errs) or "a tool call failed"
     converged = bool(pf.get("converged")) if pf else False
     body: Dict[str, Any] = {
+        "formulation": [{"tool": s.get("tool"), "args": dict(s.get("args") or {})} for s in (plan or [])],
         "converged": converged if cannot is None else False,
         "summary": " ".join(lines)[:600] if lines else (cannot or ""),
         "answer": " ".join(d.get("text") for d in derived if d.get("text")) or (lines[-1] if lines else (cannot or "")),
@@ -396,5 +397,5 @@ def run(request_text: str, ctx: ToolContext, dispatcher: Optional[ToolDispatcher
         "warnings": parsed["warnings"],
         "outputs": outputs,
         "derived": derived,
-        "answer": contract_answer(outputs, derived, lines, ok=ok),
+        "answer": contract_answer(outputs, derived, lines, ok=ok, plan=parsed["plan"]),
     }

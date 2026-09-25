@@ -31,7 +31,7 @@ from benchmarks import scoring as bs
 FIELDS = [
     "common_json_ok", "common_reported_state", "common_cannot_answer", "common_converged",
     "common_voltage_mae", "common_flow_mae", "common_kcl_mismatch_mw", "common_bus_coverage", "common_numeric_ok",
-    "common_answer_ok", "common_formulation_exact", "common_formulation_error_type", "common_formulation_detail",
+    "common_answer_ok", "common_formulation_exact", "common_formulation_error_type", "common_formulation_detail", "common_declared_formulation",
     "common_escalated", "common_escalation_reason", "common_solved", "common_reason", "common_outcome",
     "common_n_numbers", "common_n_untraceable", "common_traceable",
 ]
@@ -97,12 +97,22 @@ def score_common(
     ans = bs.answer_matches_truth(text, truth_answer)
     out["common_answer_ok"] = ans
 
-    # 3. formulation (tools only)
-    if has_tools:
-        fm = bm.formulation_check(list(intended_calls or []), executed_calls, preloaded_case=preloaded_case)
-        out["common_formulation_exact"] = fm.get("formulation_exact")
-        out["common_formulation_error_type"] = fm.get("formulation_error_type")
-        out["common_formulation_detail"] = fm.get("detail")
+    # 3. formulation, one definition for every method: the operations declared in the answer
+    #    against the reference operations; with tools, the declaration must also match what ran
+    from benchmarks.evaluate_llms import declared_formulation
+
+    declared = declared_formulation(text)
+    fm = bm.formulation_check(list(intended_calls or []), declared, preloaded_case=preloaded_case)
+    exact = bool(fm.get("formulation_exact"))
+    etype, detail = fm.get("formulation_error_type"), ("declared: " + str(fm.get("detail") or "")) if declared is not None else "no formulation field in the answer"
+    if exact and has_tools:
+        ran = bm.formulation_check(list(executed_calls or []), declared, preloaded_case=preloaded_case)
+        if not ran.get("formulation_exact"):
+            exact, etype, detail = False, "declared_differs_from_executed", "the answer declares operations that differ from the ones the trace shows: " + str(ran.get("detail") or "")
+    out["common_formulation_exact"] = exact
+    out["common_formulation_error_type"] = "ok" if exact else etype
+    out["common_formulation_detail"] = detail
+    out["common_declared_formulation"] = declared
 
     # 4. escalation, same rule for everyone
     reasons: List[str] = []
@@ -137,7 +147,7 @@ def score_common(
     truth_converged = bool(getattr(truth, "converged", False)) if truth is not None else None
     reason = None
     solved = False
-    if has_tools and out["common_formulation_exact"] is not True:
+    if out["common_formulation_exact"] is not True:
         reason = "formulation"
     elif expected_outcome in ("non_converged", "islanded"):
         solved = bool(out["common_escalated"] or out["common_converged"] is False)

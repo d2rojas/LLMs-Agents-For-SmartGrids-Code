@@ -86,6 +86,15 @@ COT_SYSTEM_SUFFIX = _read_method_text("_shared/cot_system_suffix.txt")
 # only for the formulation (which solver operations the request needs), never for numbers.
 # The answer prompts above stay byte-identical to the paper runs; asking for the formulation
 # inside the answer changed gpt-4o-mini's chain-of-thought behaviour (it stopped abstaining).
+OPERATIONS_SECTION = _read_method_text("_shared/operations_section.txt")
+
+
+def operations_section(tool_variant: str = "load_split") -> str:
+    """'## Operations': the catalogue (names, arguments, allowed values, meanings) a no-tools answer
+    uses to fill the `formulation` field of the common output contract."""
+    return OPERATIONS_SECTION + tools_catalog_text(tool_variant, with_enums=True)
+
+
 FORMULATION_PROBE_SYSTEM_PROMPT = _read_method_text("_shared/formulation_probe_system_prompt.txt")
 FORMULATION_PROBE_SECTION = _read_method_text("_shared/formulation_probe_section.txt")
 FORMULATION_PROBE_OUTPUT_SECTION = _read_method_text("_shared/formulation_probe_output_section.txt")
@@ -599,6 +608,7 @@ def _build_llm_only(strategy: str, request_text: str, net: Any, case_name: str, 
         sections.append(LLM_ONLY_COT_SECTION)
     elif strategy == "nr":
         sections.append(LLM_ONLY_NR_SECTION)
+    sections.append(operations_section(tool_variant))
     sections.append(LLM_ONLY_OUTPUT_SECTION)
 
     base = forced_system_prompt(BASELINE_SYSTEM_PROMPT.strip()) if forced else BASELINE_SYSTEM_PROMPT.strip()
