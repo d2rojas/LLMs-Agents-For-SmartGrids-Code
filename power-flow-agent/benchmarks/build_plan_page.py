@@ -79,6 +79,119 @@ BLOCKS = {
 }
 FIG = re.compile(r'"figure_json":\s*"((?:[^"\\]|\\.)*)"')
 
+# existing runs used only for the examples on the Methods tab (v2 re-runs them)
+EXAMPLE_RUNS = {
+    "gpt-5.6-sol": {"rule_based": "ieee14/2026-09-21/no-llm/rule_based", "llm_only:structured": "ieee14/2026-09-21/gpt-5.6-sol/llm_only_structured", "llm_only:cot": "ieee14/2026-09-21/gpt-5.6-sol/llm_only_cot", "plan_act_nogate": "ieee14/2026-09-23/gpt-5.6-sol/plan_act_nogate__matched", "react_nogate": "ieee14/2026-09-21/gpt-5.6-sol/react_nogate", "pfagent": "ieee14/2026-09-21/gpt-5.6-sol/pfagent"},
+    "gpt-4o-mini": {"rule_based": "ieee14/2026-09-21/no-llm/rule_based", "llm_only:structured": "ieee14/2026-09-16/gpt-4o-mini/llm_only_structured", "llm_only:cot": "ieee14/2026-09-18/gpt-4o-mini/llm_only_cot", "plan_act_nogate": "ieee14/2026-09-23/gpt-4o-mini/plan_act_nogate__matched", "react_nogate": "ieee14/2026-09-21/gpt-4o-mini/react_nogate", "pfagent": "ieee14/2026-09-21/gpt-4o-mini/pfagent"},
+}
+EXAMPLE_SCENARIOS = ["case14-plain-004-s0", "case14-ambiguous-027-s0", "case14-multistep-006-s0", "case14-parameterized-009-s0"]
+RESULTS = PROJECT_ROOT / "results"
+
+
+def _fmt_args(a: Any) -> str:
+    if isinstance(a, str):
+        try:
+            a = json.loads(a)
+        except Exception:
+            return a
+    if not a:
+        return "()"
+    return "(" + ", ".join(f"{k}={json.dumps(v)}" for k, v in a.items()) + ")"
+
+
+def _tool_short(out: str) -> str:
+    try:
+        o = json.loads(out)
+    except Exception:
+        return " ".join(out.split())[:150]
+    if not isinstance(o, dict):
+        return " ".join(out.split())[:150]
+    bits = []
+    if o.get("error"): bits.append("ERROR " + str(o["error"]))
+    if "converged" in o: bits.append(f"converged={o['converged']}")
+    for k, lab in (("total_load_mw", "load"), ("total_generation_mw", "gen"), ("total_loss_mw", "loss")):
+        if isinstance(o.get(k), (int, float)): bits.append(f"{lab} {o[k]:.1f} MW")
+    for k in ("voltage_violations", "thermal_violations"):
+        if isinstance(o.get(k), list): bits.append(f"{k.split('_')[0]} viol {len(o[k])}")
+    if isinstance(o.get("n1_report"), dict): bits.append(str(o["n1_report"].get("summary_text", "")))
+    if o.get("summary_text") and not o.get("n1_report"): bits.append(str(o["summary_text"]))
+    if o.get("message"): bits.append(str(o["message"]))
+    return " · ".join(bits)[:220] or " ".join(out.split())[:150]
+
+
+def example_rows(payload: Dict[str, Any], row: Dict[str, Any]) -> List[Tuple[str, str, str]]:
+    """(kind, short, full) log lines from a real trace."""
+    tr = payload.get("trace") or {}
+    L: List[Tuple[str, str, str]] = []
+    if tr.get("plan"):
+        L.append(("plan", "plan: " + " → ".join(c["tool"] + _fmt_args(c.get("args")) for c in tr["plan"]), json.dumps(tr["plan"], indent=1)))
+    rounds = tr.get("rounds") or []
+    for rd in rounds:
+        llm = rd.get("llm") if isinstance(rd.get("llm"), dict) else None
+        if llm is not None:
+            calls = [tc["name"] + _fmt_args(tc.get("arguments")) for tc in llm.get("tool_calls") or []]
+            u = llm.get("usage") or {}
+            if rd.get("final"):
+                L.append(("model", "final answer: " + " ".join(str(llm.get("content") or "").split())[:150], str(llm.get("content") or "")))
+            elif calls:
+                L.append(("model", "calls → " + "; ".join(calls), (llm.get("content") or "") + "\n\ntool calls:\n" + "\n".join(calls) + f"\n\n[{u.get('prompt_tokens', '?')} in / {u.get('completion_tokens', '?')} out tokens]"))
+            else:
+                L.append(("model", "text: " + " ".join(str(llm.get("content") or "").split())[:150], str(llm.get("content") or "")))
+        for tool in rd.get("tools") or []:
+            out = tool.get("output"); out = out if isinstance(out, str) else json.dumps(out)
+            out = FIG.sub(lambda m: '"figure_json": "<plot omitted>"', out)
+            g = "" if tool.get("gate") is None else (" [gate: pass]" if (tool["gate"].get("passed") if isinstance(tool["gate"], dict) else tool["gate"]) else " [gate: FAIL]")
+            L.append(("solver", tool["name"] + _fmt_args(tool.get("arguments")) + " → " + _tool_short(out) + g, tool["name"] + _fmt_args(tool.get("arguments")) + "\n\n" + out))
+    if not rounds:
+        ans = str(payload.get("answer") or row.get("raw_response") or "")
+        L.append(("model", "answer: " + " ".join(ans.split())[:150], ans))
+    elif not any(r.get("final") for r in rounds) and payload.get("answer"):
+        L.append(("final", " ".join(str(payload["answer"]).split())[:150], str(payload["answer"])))
+    for i, v in enumerate(tr.get("verification") or []):
+        cs = v.get("conditions") or {}
+        L.append(("gate", f"gate attempt {i + 1}: {'PASS' if v.get('passed') else 'FAIL'} · " + " ".join(f"{c.get('label', k)}{'✓' if c.get('passed') else ('·' if c.get('applicable') is False else '✗')}" for k, c in cs.items()), "\n".join(f"{c.get('label', k)} {k}: {'pass' if c.get('passed') else 'FAIL'}{' · ' + str(c.get('detail')) if c.get('detail') else ''}" for k, c in cs.items())))
+    for m in tr.get("verification_retry_messages") or []:
+        L.append(("gate", "retry message: " + " ".join(str(m).split())[:150], str(m)))
+    if tr.get("status") and tr.get("status") != "ok":
+        L.append(("status", "engine status: " + str(tr["status"]), str(tr["status"])))
+    return L
+
+
+def load_example(rel: str, rid: str) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    d = RESULTS / rel
+    try:
+        rows = {r["request_id"]: r for r in json.loads((d / "raw" / "report.rescored.json").read_text(encoding="utf-8"))["runs"]}
+    except Exception:
+        return None, None
+    row = rows.get(rid)
+    if not row:
+        return None, None
+    hits = list((d / "raw" / "traces").rglob(f"{rid}_run0.json")) if (d / "raw" / "traces").is_dir() else []
+    payload = json.loads(hits[0].read_text(encoding="utf-8")) if hits else {"trace": row.get("trace") or {}, "answer": row.get("raw_response")}
+    return payload, row
+
+
+def examples_section(reqs: Any) -> str:
+    verdict = lambda r: ("solved", "solved on its own") if (r.get("solved_autonomously") or (r.get("solved") and not r.get("escalated"))) else (("escalated", "escalated to a person") if r.get("escalated") else ("wrong", "wrong, unflagged"))
+    out = ["<div class='card'><h2>The same request under each method, from real runs</h2><p class='muted'>Examples taken from existing runs (the ones v2 re-runs), so you can see the shape of each method before spending. Each column is a log of real steps; click a line to expand it. The verdict at the bottom is how that run was scored.</p>"
+           "<p><label>Model <span class='seg' id='exm'><button data-v='gpt-5.6-sol' class='on'>gpt-5.6-sol</button><button data-v='gpt-4o-mini'>gpt-4o-mini</button></span></label> <label>Scenario <select id='exs'>" + "".join(f"<option value='{rid}'>{E(next((f'{i+1:02d} · {r.difficulty} · {r.text}' for i, r in enumerate(reqs) if r.id == rid), rid))}</option>" for rid in EXAMPLE_SCENARIOS) + "</select></label></p></div>"]
+    for model, runs in EXAMPLE_RUNS.items():
+        for rid in EXAMPLE_SCENARIOS:
+            out.append(f"<div class='ex' data-model='{model}' data-scn='{rid}'><div class='cols6'>")
+            for r in ROWS:
+                rel = runs.get(r["runner"])
+                payload, row = load_example(rel, rid) if rel else (None, None)
+                if not row:
+                    out.append(f"<div class='col'><h4>{E(r['label'])}</h4><p class='muted'>no run</p></div>"); continue
+                cls, lab = verdict(row)
+                lines = example_rows(payload, row)
+                fe = row.get("formulation_exact")
+                form = "n/a" if fe is None else ("exact" if fe else f"NOT exact ({row.get('formulation_error_type')})")
+                out.append(f"<div class='col'><h4>{E(r['label'])} <span class='vd {cls}'>{lab}</span></h4><div class='log'>" + "".join(f"<div class='ln' data-full='{E(full)}'><span class='k {k}'>{k}</span><span class='s'>{E(short)}</span></div>" for k, short, full in lines) + f"</div><div class='vt'><b>formulation</b> {E(form)} · <b>numbers</b> {row.get('n_numbers')} ({row.get('n_untraceable_numbers')} untraceable) · <b>V_MAE</b> {E(str((row.get('metrics') or {}).get('voltage_mae', 'n/a')))} · {row.get('n_llm_calls')} model calls, {row.get('n_tool_calls')} solver calls<br><span class='muted'>from {E(rel)}</span></div></div>")
+            out.append("</div></div>")
+    return "".join(out)
+
+
 
 def split_user(text: str, probe: bool) -> List[Tuple[str, str]]:
     """Split an assembled user message into labeled blocks at its '## ' headings."""
@@ -164,6 +277,9 @@ details summary{cursor:pointer;color:var(--acc);font-size:12.5px}.hid{display:no
 .steps{margin:0;padding-left:18px;font:12px/1.5 "JetBrains Mono",ui-monospace,Menlo,monospace}.steps li{margin:1px 0}
 select{font:inherit;padding:5px 8px;max-width:760px}a.lnk{color:var(--acc);text-decoration:none;font-weight:500}a.lnk:hover{text-decoration:underline}
 .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted)}.legend span{display:inline-flex;gap:5px;align-items:center}
+.cols6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;align-items:start}.col{background:#fff;border:1px solid var(--line);border-radius:10px;min-width:0;overflow:hidden}.col h4{margin:0;padding:8px 10px;border-bottom:1px solid var(--line);font-size:12.5px;background:#fafbfd;display:flex;justify-content:space-between;gap:6px;align-items:center}.vd{display:inline-block;padding:1px 8px;border-radius:999px;color:#fff;font-size:10.5px;font-weight:600;white-space:nowrap}.vd.solved{background:var(--ok)}.vd.escalated{background:var(--esc)}.vd.wrong{background:var(--bad)}
+.log{font:11.5px/1.4 'JetBrains Mono',ui-monospace,Menlo,monospace}.ln{display:grid;grid-template-columns:44px 1fr;gap:6px;padding:4px 8px;border-bottom:1px solid #f0f2f5;cursor:pointer}.ln:hover{background:#f7f9fc}.ln .k{font-weight:600;font-size:10.5px}.ln .k.model{color:var(--acc)}.ln .k.solver{color:#0f8f84}.ln .k.plan{color:#6d4fc4}.ln .k.gate{color:#c99a06}.ln .k.final{color:var(--acc)}.ln .k.status{color:var(--muted)}.ln .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ln.open .s{white-space:pre-wrap;overflow:visible;word-break:break-word}.vt{padding:8px 10px;border-top:1px solid var(--line);font-size:11.5px;background:#fbfcfe}
+table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block}.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;vertical-align:middle}.seg button{font:inherit;font-weight:500;padding:4px 12px;border:none;background:#fff;cursor:pointer;color:var(--muted)}.seg button.on{background:var(--acc);color:#fff}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:13px}.kv b{color:var(--muted);font-weight:500}
 """
     H: List[str] = [f"<!doctype html><html lang='en'><head><meta charset='utf-8'><title>PFAgent · Evaluation design</title><link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap' rel='stylesheet'><style>{css}</style></head><body>"]
@@ -189,27 +305,24 @@ select{font:inherit;padding:5px 8px;max-width:760px}a.lnk{color:var(--acc);text-
         m = methods.get_method(r["runner"])
         sp = methods.system_prompt_for(m, tool_variant=TOOLS) or ""
         planner = methods.planner_prompt_for(m, tool_variant=TOOLS) if m.architecture == "plan_act" else None
-        u0 = ""
-        if m.kind == "llm_only":
-            u0 = build_messages(m.strategy or "structured", "llm_only", reqs[0].text, net, CASE, forced=bool(m.forced), probe=bool(m.probe), tool_variant=TOOLS)[1]["content"]
+        u0 = build_messages(m.strategy or "structured", "llm_only", reqs[0].text, net, CASE, forced=bool(m.forced), probe=bool(m.probe), tool_variant=TOOLS)[1]["content"] if m.kind == "llm_only" else ""
         tools = get_openai_tools(variant=TOOLS) if (m.uses_tools and m.uses_llm) else []
         sysm = sp + (planner or "")
-        row = {cols[0]: "yes" if "### Node Data" in u0 else ("n/a" if m.kind == "rule_based" else "no"),
-               cols[1]: "yes" if tools else ("n/a" if m.kind == "rule_based" else "no"),
-               cols[2]: "yes" if (tools or " in {" in sysm) else ("n/a" if m.kind == "rule_based" else "no"),
-               cols[3]: "yes" if "0-based" in sysm else ("fixed rules" if m.kind == "rule_based" else "no"),
-               cols[4]: "yes" if m.architecture == "react" else ("no" if m.uses_tools else "n/a"),
-               cols[5]: "yes" if "set `converged` to false" in sp else ("n/a" if m.uses_tools or m.kind == "rule_based" else "no"),
-               cols[6]: "final V1–V7" if m.final_gate else "no"}
-        matrix.append((r["label"], row))
-        comp = ""
-        if r.get("companions"):
-            comp = "<h3>Companion measurements for this method</h3><ul>" + "".join(f"<li><b>{E(methods.get_method(c).folder)}</b> — {E(why)} <a class='lnk' href='#' data-goto='{E(c)}'>see its prompt →</a></li>" for c, why in r["companions"]) + "</ul>"
-        H.append(f"<div class='card'><h2>{E(r['label'])} <span class='chip'>{E(r['sub'])}</span> <span class='muted'>runner: {E(r['runner'])}</span></h2><p>{E(r['story'])}</p><div class='kv'><b>formulates</b><span>{E(r['formulates'])}</span><b>computes</b><span>{E(r['computes'])}</span><b>sees outputs</b><span>{E(r['sees'])}</span><b>gate</b><span>{E(r['gate'])}</span><b>prompt blocks</b><span>" + " ".join(f"<span class='chip'>{E(Path(f).name)}</span>" for f in m.prompt_files) + ("" if m.prompt_files else "<span class='muted'>none: no LLM</span>") + f"</span></div>{comp}<p><a class='lnk' href='#' data-goto='{E(r['runner'])}'>see exactly what this method receives →</a></p></div>")
-    H.append("<div class='card'><h2>Who receives what</h2><p class='muted'>Derived from the assembled prompts, not typed by hand. Green: the method receives it. Red: it does not. Grey: not applicable.</p><table><tr><th>method</th>" + "".join(f"<th>{E(c)}</th>" for c in cols) + "</tr>")
-    for label, row in matrix:
-        H.append(f"<tr><td><b>{E(label)}</b></td>" + "".join(f"<td style='background:{'#e6f4ea' if v.startswith('yes') or v.startswith('final') else ('#f3f4f6' if v in ('n/a', 'fixed rules') else '#fdecec')}'>{E(v)}</td>" for v in row.values()) + "</tr>")
-    H.append("</table><p class='muted'>The prompting methods get no tools by design: Formulation does not apply to them, and their numbers are the model's own arithmetic.</p></div></div>")
+        matrix.append((r["label"], {cols[0]: "yes" if "### Node Data" in u0 else ("n/a" if m.kind == "rule_based" else "no"), cols[1]: "yes" if tools else ("n/a" if m.kind == "rule_based" else "no"), cols[2]: "yes" if (tools or " in {" in sysm) else ("n/a" if m.kind == "rule_based" else "no"), cols[3]: "yes" if "0-based" in sysm else ("fixed rules" if m.kind == "rule_based" else "no"), cols[4]: "yes" if m.architecture == "react" else ("no" if m.uses_tools else "n/a"), cols[5]: "yes" if "set `converged` to false" in sp else ("n/a" if m.uses_tools or m.kind == "rule_based" else "no"), cols[6]: "final V1–V7" if m.final_gate else "no"}))
+    # side-by-side comparison: aspects as rows, methods as columns
+    aspects = [("formulates the solver operations", "formulates"), ("computes the numbers", "computes"), ("sees the solver outputs before answering", "sees"), ("gate on the answer", "gate")]
+    H.append("<div class='card'><h2>Side by side</h2><table class='cmp'><tr><th></th>" + "".join(f"<th>{E(r['label'])}<br><span class='muted'>{E(r['sub'])}</span></th>" for r in ROWS) + "</tr>")
+    for title, key in aspects:
+        H.append(f"<tr><td><b>{E(title)}</b></td>" + "".join(f"<td>{E(r[key])}</td>" for r in ROWS) + "</tr>")
+    for c in cols:
+        H.append(f"<tr><td><b>{E(c)}</b></td>" + "".join(f"<td style='background:{'#e6f4ea' if v.startswith('yes') or v.startswith('final') else ('#f3f4f6' if v in ('n/a', 'fixed rules') else '#fdecec')}'>{E(v)}</td>" for _, row in matrix for v in [row[c]]) + "</tr>")
+    H.append("<tr><td><b>prompt blocks</b></td>" + "".join("<td>" + (" ".join(f"<span class='chip'>{E(Path(f).name)}</span>" for f in methods.get_method(r['runner']).prompt_files) or "<span class='muted'>none, no LLM</span>") + "</td>" for r in ROWS) + "</tr>")
+    H.append("<tr><td></td>" + "".join(f"<td><a class='lnk' href='#' data-goto='{E(r['runner'])}'>see its prompts →</a></td>" for r in ROWS) + "</tr></table><p class='muted'>Derived from the assembled prompts. Green: the method receives it. Red: it does not. Grey: not applicable. The prompting methods get no tools by design: Formulation does not apply to them, and their numbers are the model's own arithmetic.</p></div>")
+    H.append(examples_section(reqs))
+    H.append("<div class='grid g3'>")
+    for r in ROWS:
+        H.append(f"<div class='card'><h2>{E(r['label'])} <span class='chip'>{E(r['sub'])}</span></h2><p>{E(r['story'])}</p><p class='muted'>runner: {E(r['runner'])}</p></div>")
+    H.append("</div></div>")
 
     # ---------------- scenarios
     H.append("<div class='tab' id='tab-scenarios'>")
@@ -309,6 +422,9 @@ tabs.forEach(b=>b.onclick=()=>show(b.dataset.tab));
 const scn=document.getElementById('scn'),mth=document.getElementById('mth');
 function ap(){document.querySelectorAll('.um').forEach(p=>p.classList.toggle('hid',p.dataset.scn!==scn.value));document.querySelectorAll('.pm').forEach(p=>p.classList.toggle('hid',p.dataset.mth!==mth.value));}
 scn.onchange=ap;mth.onchange=ap;ap();
+const exm=document.getElementById('exm'),exs=document.getElementById('exs');let exModel='gpt-5.6-sol';function exAp(){document.querySelectorAll('.ex').forEach(x=>x.classList.toggle('on',x.dataset.model===exModel&&x.dataset.scn===exs.value));}
+exm.querySelectorAll('button').forEach(b=>b.onclick=()=>{exModel=b.dataset.v;exm.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));exAp();});exs.onchange=exAp;exAp();
+document.querySelectorAll('.ln').forEach(l=>l.onclick=()=>{const o=l.classList.toggle('open');l.querySelector('.s').textContent=o?l.dataset.full:l.dataset.short||l.querySelector('.s').textContent;if(o&&!l.dataset.short){l.dataset.short=l.querySelector('.s').textContent;}});
 document.querySelectorAll('a[data-goto]').forEach(a=>a.onclick=e=>{e.preventDefault();mth.value=a.dataset.goto;ap();show('prompts');});
 document.querySelectorAll('a[data-scn]').forEach(a=>a.onclick=e=>{e.preventDefault();scn.value=a.dataset.scn;ap();show('prompts');});
 </script></body></html>""")
