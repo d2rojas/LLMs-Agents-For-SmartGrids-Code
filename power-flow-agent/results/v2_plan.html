@@ -11,7 +11,286 @@ pre{background:#fafbfd;border:1px solid var(--line);border-radius:8px;padding:10
 <li><b>One scoring version</b>: current comparator (a narrowed N-1 scan is a formulation error) and verification gate (V6 covers max_candidates).</li>
 <li><b>Every trace stores the exact messages sent</b>, so the transcript is the real exchange, never rebuilt.</li></ul>
 <p><b>Common parameters</b>: IEEE 14-bus, N = 40 generated requests, perturbation seed 0, k = 1, up to 8 tool rounds, temperature 0, models <code>openrouter:openai/gpt-4o-mini</code>, <code>openrouter:openai/gpt-5.6-sol</code>. Output: <code>results/ieee14/2026-09-24/&lt;model&gt;/&lt;method&gt;__v2/</code> with REPORT.md, summary.csv, traces (transcript, narrative, figure, JSON) and raw/.</p>
-<p><b>Estimated cost</b>: gpt-4o-mini about $0.39, gpt-5.6-sol about $4.75; total about $5.14 of the credit left (about 16 USD). Real cost on sol has run 1.5 to 2 times the estimate before.</p></section><section><h2>2. Rows to run</h2><table><tr><th>Table 6 row</th><th>runner name</th><th>what it is</th><th>run now?</th><th>why</th><th>cost mini / sol</th></tr><tr><td><b>Deterministic parser, no LLM</b></td><td><code>rule_based</code></td><td>Deterministic regex parser maps the request to tool calls, no LLM (baselines/rule_based.py). The conventional-workflow row.</td><td><span class='tag'>run</span></td><td>no LLM; rerun for free on the current tool set</td><td>$0.00 / $0.00</td></tr><tr><td><b>Structured prompting</b></td><td><code>llm_only:structured</code></td><td>LLM answers from the case tables in the prompt. No tools. Structured prompt: role, full case tables as system data, task, JSON output schema.</td><td><span class='tag'>run gpt-4o-mini</span> <span class='tag reuse'>reuse sol</span></td><td>no tools; sol reused from 2026-09-21 (prompt unchanged); gpt-4o-mini rerun (its 2026-09-16 prompt predates a fix)</td><td>$0.02 / $0.00</td></tr><tr><td><b>Chain-of-thought prompting</b></td><td><code>llm_only:cot</code></td><td>LLM answers from the case tables in the prompt. No tools. Structured prompt plus a reasoning section asking for step-by-step reasoning before the final JSON.</td><td><span class='tag reuse'>reuse</span></td><td>no tools; reused (sol 2026-09-21, gpt-4o-mini 2026-09-18), prompt unchanged</td><td>$0.00 / $0.00</td></tr><tr><td><b>Structured, forced (§ cells, gpt-4o-mini)</b></td><td><code>llm_only_forced:structured</code></td><td>Structured LLM-only without the abstention clause: the model must report best-effort numbers (&#x27;LLM only, forced&#x27; row).</td><td><span class='tag'>run</span></td><td>gpt-4o-mini only; rerun with the paper&#x27;s answer prompt</td><td>$0.05 / $0.00</td></tr><tr><td><b>Formulation probe, structured (¶ cells)</b></td><td><code>formulation_probe:structured</code></td><td>Same case tables and request as llm_only:structured, but the only output is the declared formulation (the ordered solver operations the request needs). Fills the Formulation cell of the prompting rows without changing how those rows answer.</td><td><span class='tag'>run</span></td><td>catalogue now explains the N-1 arguments</td><td>$0.02 / $0.25</td></tr><tr><td><b>Formulation probe, chain-of-thought (¶ cells)</b></td><td><code>formulation_probe:cot</code></td><td>Same case tables and request as llm_only:cot, but the only output is the declared formulation (the ordered solver operations the request needs). Fills the Formulation cell of the prompting rows without changing how those rows answer. Reasons step by step first.</td><td><span class='tag'>run</span></td><td>catalogue now explains the N-1 arguments</td><td>$0.02 / $0.30</td></tr><tr><td><b>Single-call</b></td><td><code>single_call:structured</code></td><td>One function-calling round: the model must emit every tool call at once, no memory, no second turn. Structured prompt: role, full case tables as system data, task, JSON output schema.</td><td><span class='tag'>run</span></td><td>tool schema now explains the N-1 arguments</td><td>$0.03 / $0.50</td></tr><tr><td><b>Plan-and-Act</b></td><td><code>plan_act_nogate</code></td><td>Plan-and-Act with no gate.</td><td><span class='tag'>run</span></td><td>planner catalogue and tool schema now explain the N-1 arguments</td><td>$0.05 / $0.70</td></tr><tr><td><b>ReAct</b></td><td><code>react_nogate</code></td><td>ReAct loop with no gate at all. The plain multi-step agent baseline.</td><td><span class='tag'>run</span></td><td>tool schema now explains the N-1 arguments; messages stored</td><td>$0.10 / $1.50</td></tr><tr><td><b>PFAgent (ReAct + verification gate)</b></td><td><code>pfagent</code></td><td>PFAgent: ReAct loop with no in-loop gate plus the task-level verification gate V1-V7 on the final answer (llm/engine.py verify_final_answer). The solver-grounded row.</td><td><span class='tag'>run</span></td><td>tool schema; V6 now covers max_candidates; messages stored</td><td>$0.10 / $1.50</td></tr></table><p class='muted'>Human with solver is not an LLM run (human_run.py). Few-shot and RAG variants are not in Table 6 and are not run.</p></section><section><h2>3. The 40 scenarios (same for every row and both models)</h2><p>Generated by <code>benchmarks/requests.py</code> from (case14, N=40, seed 0): four difficulties, ten each. The reference calls define Formulation; the reference solution (PandaPower on the same perturbed case) defines Solved.</p><table><tr><th>#</th><th>id</th><th>difficulty</th><th>request</th><th>reference calls</th><th>expected</th></tr><tr><td>1</td><td><code>case14-plain-000-s0</code></td><td>plain</td><td>Load case14 and run the power flow, then report the bus with the lowest voltage magnitude.</td><td><code>load_case(case_name=case14) → run_powerflow()</code></td><td>converged</td></tr><tr><td>2</td><td><code>case14-parameterized-001-s0</code></td><td>parameterized</td><td>Load the IEEE 14-bus system and run an N-1 contingency analysis ranked by min voltage and report the 3 worst outages.</td><td><code>load_case(case_name=case14) → run_n1_contingency(top_k=3, criteria=min_voltage)</code></td><td>converged</td></tr><tr><td>3</td><td><code>case14-multistep-002-s0</code></td><td>multistep</td><td>Load the 14-bus test case (case14), disconnect the line between bus 6 and bus 13, disconnect the line between bus 12 and bus 13, and finally rerun the power flow, then list every line whose loading is above 100%.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=6, to_bus=13) → disconnect_line(from_bus=12, to_bus=13) → run_powerflow()</code></td><td>converged</td></tr><tr><td>4</td><td><code>case14-ambiguous-003-s0</code></td><td>ambiguous</td><td>Load case14 and disconnect the line between bus ten and bus eleven.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=10, to_bus=11)</code></td><td>converged</td></tr><tr><td>5</td><td><code>case14-plain-004-s0</code></td><td>plain</td><td>Load case14 and run an N-1 contingency analysis and report the worst single outage.</td><td><code>load_case(case_name=case14) → run_n1_contingency()</code></td><td>converged</td></tr><tr><td>6</td><td><code>case14-parameterized-005-s0</code></td><td>parameterized</td><td>Load the IEEE 14-bus system and disconnect the line between bus 4 and bus 5.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=4, to_bus=5)</code></td><td>converged</td></tr><tr><td>7</td><td><code>case14-multistep-006-s0</code></td><td>multistep</td><td>Load the 14-bus test case (case14), set the active load at bus 4 to 42.7 MW, disconnect the line between bus 3 and bus 4, reconnect the line between bus 3 and bus 4, and finally rerun the power flow, then list every line whose loading is above 80%.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=4, p_mw=42.7) → disconnect_line(from_bus=3, to_bus=4) → reconnect_line(from_bus=3, to_bus=4) → run_powerflow()</code></td><td>converged</td></tr><tr><td>8</td><td><code>case14-ambiguous-007-s0</code></td><td>ambiguous</td><td>Load the 14-bus test case (case14) and disconnect the line between bus 6 and bus 13 (1-based).</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=6, to_bus=13)</code></td><td>converged</td></tr><tr><td>9</td><td><code>case14-plain-008-s0</code></td><td>plain</td><td>Load case14 and set the active load at bus 2 to 21.7 MW.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=2, p_mw=21.7)</code></td><td>converged</td></tr><tr><td>10</td><td><code>case14-parameterized-009-s0</code></td><td>parameterized</td><td>Load the 14-bus test case (case14) and run an N-1 contingency analysis ranked by max violations and report the 3 worst outages.</td><td><code>load_case(case_name=case14) → run_n1_contingency(top_k=3, criteria=max_violations)</code></td><td>converged</td></tr><tr><td>11</td><td><code>case14-multistep-010-s0</code></td><td>multistep</td><td>Load the 14-bus test case (case14), disconnect the line between bus 2 and bus 5, disconnect the line between bus 1 and bus 2, and finally rerun the power flow, then list every line whose loading is above 100%.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=2, to_bus=5) → disconnect_line(from_bus=1, to_bus=2) → run_powerflow()</code></td><td>converged</td></tr><tr><td>12</td><td><code>case14-ambiguous-011-s0</code></td><td>ambiguous</td><td>Load case14 and set the active load at bus 6 to 14,700 kw.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=6, p_mw=14.7)</code></td><td>converged</td></tr><tr><td>13</td><td><code>case14-plain-012-s0</code></td><td>plain</td><td>Load the 14-bus test case (case14).</td><td><code>load_case(case_name=case14)</code></td><td>converged</td></tr><tr><td>14</td><td><code>case14-parameterized-013-s0</code></td><td>parameterized</td><td>Load the 14-bus test case (case14) and disconnect the line between bus 13 and bus 14.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=13, to_bus=14)</code></td><td>converged</td></tr><tr><td>15</td><td><code>case14-multistep-014-s0</code></td><td>multistep</td><td>Load case14, set the active load at bus 13 to 18.9 MW, set the active load at bus 4 to 59.1 MW, set the active load at bus 9 to 23.2 MW, and finally rerun the power flow, then report the bus with the lowest voltage magnitude.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=13, p_mw=18.9) → modify_load(bus_id=4, p_mw=59.1) → modify_load(bus_id=9, p_mw=23.2) → run_powerflow()</code></td><td>converged</td></tr><tr><td>16</td><td><code>case14-ambiguous-015-s0</code></td><td>ambiguous</td><td>Load the 14-bus test case (case14) and set the active load at bus 5 to 4.4 MVA.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=5, p_mw=4.4)</code></td><td>converged</td></tr><tr><td>17</td><td><code>case14-plain-016-s0</code></td><td>plain</td><td>Load case14 and run an N-1 contingency analysis and report the worst single outage.</td><td><code>load_case(case_name=case14) → run_n1_contingency()</code></td><td>converged</td></tr><tr><td>18</td><td><code>case14-parameterized-017-s0</code></td><td>parameterized</td><td>Load case14 and run an N-1 contingency analysis ranked by max violations and report the 8 worst outages.</td><td><code>load_case(case_name=case14) → run_n1_contingency(top_k=8, criteria=max_violations)</code></td><td>converged</td></tr><tr><td>19</td><td><code>case14-multistep-018-s0</code></td><td>multistep</td><td>Load the IEEE 14-bus system, disconnect the line between bus 4 and bus 5, then rerun the power flow, then list every line whose loading is above 90%.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=4, to_bus=5) → run_powerflow()</code></td><td>converged</td></tr><tr><td>20</td><td><code>case14-ambiguous-019-s0</code></td><td>ambiguous</td><td>Load the 14-bus test case (case14) and disconnect the line between bus 9 and bus 14 (1-based).</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=9, to_bus=14)</code></td><td>converged</td></tr><tr><td>21</td><td><code>case14-plain-020-s0</code></td><td>plain</td><td>Load the 14-bus test case (case14) and run the power flow, then report the bus with the lowest voltage magnitude.</td><td><code>load_case(case_name=case14) → run_powerflow()</code></td><td>converged</td></tr><tr><td>22</td><td><code>case14-parameterized-021-s0</code></td><td>parameterized</td><td>Load case14 and run an N-1 contingency analysis ranked by max violations and report the 3 worst outages.</td><td><code>load_case(case_name=case14) → run_n1_contingency(top_k=3, criteria=max_violations)</code></td><td>converged</td></tr><tr><td>23</td><td><code>case14-multistep-022-s0</code></td><td>multistep</td><td>Load case14, disconnect the line between bus 9 and bus 10, set the active load at bus 3 to 118.6 MW, set the active load at bus 4 to 53.6 MW, and finally run an N-1 contingency analysis ranked by max violations and report the 8 worst outages.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=9, to_bus=10) → modify_load(bus_id=3, p_mw=118.6) → modify_load(bus_id=4, p_mw=53.6) → run_n1_contingency(top_k=8, criteria=max_violations)</code></td><td>converged</td></tr><tr><td>24</td><td><code>case14-ambiguous-023-s0</code></td><td>ambiguous</td><td>Load the IEEE 14-bus system and set the active load at bus 5 (1-based) to 5.9 MW.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=5, p_mw=5.9)</code></td><td>converged</td></tr><tr><td>25</td><td><code>case14-plain-024-s0</code></td><td>plain</td><td>Load the IEEE 14-bus system.</td><td><code>load_case(case_name=case14)</code></td><td>converged</td></tr><tr><td>26</td><td><code>case14-parameterized-025-s0</code></td><td>parameterized</td><td>Load case14 and disconnect the line between bus 9 and bus 10.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=9, to_bus=10)</code></td><td>converged</td></tr><tr><td>27</td><td><code>case14-multistep-026-s0</code></td><td>multistep</td><td>Load the 14-bus test case (case14), disconnect the line between bus 2 and bus 4, then rerun the power flow, then report the bus with the lowest voltage magnitude.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=2, to_bus=4) → run_powerflow()</code></td><td>converged</td></tr><tr><td>28</td><td><code>case14-ambiguous-027-s0</code></td><td>ambiguous</td><td>Load the IEEE 14-bus system and set the active load at bus 10 (0-based) to 4.7 MW.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=11, p_mw=4.7)</code></td><td>converged</td></tr><tr><td>29</td><td><code>case14-plain-028-s0</code></td><td>plain</td><td>Load case14 and run the AC power flow.</td><td><code>load_case(case_name=case14) → run_powerflow()</code></td><td>converged</td></tr><tr><td>30</td><td><code>case14-parameterized-029-s0</code></td><td>parameterized</td><td>Load the 14-bus test case (case14) and run the power flow, then list every line whose loading is above 80%.</td><td><code>load_case(case_name=case14) → run_powerflow()</code></td><td>converged</td></tr><tr><td>31</td><td><code>case14-multistep-030-s0</code></td><td>multistep</td><td>Load case14, set the active load at bus 14 to 17.2 MW, disconnect the line between bus 1 and bus 5, reconnect the line between bus 1 and bus 5, and finally run an N-1 contingency analysis ranked by min voltage and report the 8 worst outages.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=14, p_mw=17.2) → disconnect_line(from_bus=1, to_bus=5) → reconnect_line(from_bus=1, to_bus=5) → run_n1_contingency(top_k=8, criteria=min_voltage)</code></td><td>converged</td></tr><tr><td>32</td><td><code>case14-ambiguous-031-s0</code></td><td>ambiguous</td><td>Load case14 and disconnect the line between bus six and bus eleven.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=6, to_bus=11)</code></td><td>converged</td></tr><tr><td>33</td><td><code>case14-plain-032-s0</code></td><td>plain</td><td>Load the 14-bus test case (case14).</td><td><code>load_case(case_name=case14)</code></td><td>converged</td></tr><tr><td>34</td><td><code>case14-parameterized-033-s0</code></td><td>parameterized</td><td>Load the IEEE 14-bus system and set the active load at bus 14 to 15.2 MW.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=14, p_mw=15.2)</code></td><td>converged</td></tr><tr><td>35</td><td><code>case14-multistep-034-s0</code></td><td>multistep</td><td>Load case14, disconnect the line between bus 2 and bus 5, set the active load at bus 9 to 19.9 MW, and finally rerun the power flow, then list every line whose loading is above 100%.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=2, to_bus=5) → modify_load(bus_id=9, p_mw=19.9) → run_powerflow()</code></td><td>converged</td></tr><tr><td>36</td><td><code>case14-ambiguous-035-s0</code></td><td>ambiguous</td><td>Load the 14-bus test case (case14) and set the active load at bus 5 to 3.8 MVA.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=5, p_mw=3.8)</code></td><td>converged</td></tr><tr><td>37</td><td><code>case14-plain-036-s0</code></td><td>plain</td><td>Load case14 and set the active load at bus 2 to 21.7 MW.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=2, p_mw=21.7)</code></td><td>converged</td></tr><tr><td>38</td><td><code>case14-parameterized-037-s0</code></td><td>parameterized</td><td>Load the IEEE 14-bus system and run the power flow, then list every line whose loading is above 100%.</td><td><code>load_case(case_name=case14) → run_powerflow()</code></td><td>converged</td></tr><tr><td>39</td><td><code>case14-multistep-038-s0</code></td><td>multistep</td><td>Load the IEEE 14-bus system, set the active load at bus 6 to 7 MW, set the active load at bus 4 to 40.3 MW, and finally rerun the power flow, then report the bus with the lowest voltage magnitude.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=6, p_mw=7.0) → modify_load(bus_id=4, p_mw=40.3) → run_powerflow()</code></td><td>converged</td></tr><tr><td>40</td><td><code>case14-ambiguous-039-s0</code></td><td>ambiguous</td><td>Load the 14-bus test case (case14) and set the active load at bus 1 (0-based) to 11 MW.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=2, p_mw=11.0)</code></td><td>converged</td></tr></table></section><section><h2>4. What each method receives, exactly</h2><p>Pick a scenario in the header. For each row: the system prompt (hash as it will be stamped on the run), the full user message for that scenario, the tool schema sent through function calling, and the planner prompt where it exists. Long blocks are collapsed; expand to read them whole.</p><h3>Deterministic parser, no LLM <span class='muted'>· rule_based</span></h3><p class='muted'>No LLM: a regex parser maps the request to tool calls and the solver runs them (baselines/rule_based.py). Nothing is sent to a model.</p><h3>Structured prompting <span class='muted'>· llm_only:structured</span></h3><details><summary>system prompt · hash 1b4712c641b5 · 439 chars</summary><pre>You are a power system analysis expert. You need to calculate AC power flow results based on test system data provided by the user.
+<p><b>Estimated cost</b>: gpt-4o-mini about $0.39, gpt-5.6-sol about $4.75; total about $5.14 of the credit left (about 16 USD). Real cost on sol has run 1.5 to 2 times the estimate before.</p></section><section><h2>2. Rows to run</h2><table><tr><th>Table 6 row</th><th>runner name</th><th>what it is</th><th>run now?</th><th>why</th><th>cost mini / sol</th></tr><tr><td><b>Deterministic parser, no LLM</b></td><td><code>rule_based</code></td><td>Deterministic regex parser maps the request to tool calls, no LLM (baselines/rule_based.py). The conventional-workflow row.</td><td><span class='tag'>run</span></td><td>no LLM; rerun for free on the current tool set</td><td>$0.00 / $0.00</td></tr><tr><td><b>Structured prompting</b></td><td><code>llm_only:structured</code></td><td>LLM answers from the case tables in the prompt. No tools. Structured prompt: role, full case tables as system data, task, JSON output schema.</td><td><span class='tag'>run gpt-4o-mini</span> <span class='tag reuse'>reuse sol</span></td><td>no tools; sol reused from 2026-09-21 (prompt unchanged); gpt-4o-mini rerun (its 2026-09-16 prompt predates a fix)</td><td>$0.02 / $0.00</td></tr><tr><td><b>Chain-of-thought prompting</b></td><td><code>llm_only:cot</code></td><td>LLM answers from the case tables in the prompt. No tools. Structured prompt plus a reasoning section asking for step-by-step reasoning before the final JSON.</td><td><span class='tag reuse'>reuse</span></td><td>no tools; reused (sol 2026-09-21, gpt-4o-mini 2026-09-18), prompt unchanged</td><td>$0.00 / $0.00</td></tr><tr><td><b>Structured, forced (§ cells, gpt-4o-mini)</b></td><td><code>llm_only_forced:structured</code></td><td>Structured LLM-only without the abstention clause: the model must report best-effort numbers (&#x27;LLM only, forced&#x27; row).</td><td><span class='tag'>run</span></td><td>gpt-4o-mini only; rerun with the paper&#x27;s answer prompt</td><td>$0.05 / $0.00</td></tr><tr><td><b>Formulation probe, structured (¶ cells)</b></td><td><code>formulation_probe:structured</code></td><td>Same case tables and request as llm_only:structured, but the only output is the declared formulation (the ordered solver operations the request needs). Fills the Formulation cell of the prompting rows without changing how those rows answer.</td><td><span class='tag'>run</span></td><td>catalogue now explains the N-1 arguments</td><td>$0.02 / $0.25</td></tr><tr><td><b>Formulation probe, chain-of-thought (¶ cells)</b></td><td><code>formulation_probe:cot</code></td><td>Same case tables and request as llm_only:cot, but the only output is the declared formulation (the ordered solver operations the request needs). Fills the Formulation cell of the prompting rows without changing how those rows answer. Reasons step by step first.</td><td><span class='tag'>run</span></td><td>catalogue now explains the N-1 arguments</td><td>$0.02 / $0.30</td></tr><tr><td><b>Single-call</b></td><td><code>single_call:structured</code></td><td>One function-calling round: the model must emit every tool call at once, no memory, no second turn. Structured prompt: role, full case tables as system data, task, JSON output schema.</td><td><span class='tag'>run</span></td><td>tool schema now explains the N-1 arguments</td><td>$0.03 / $0.50</td></tr><tr><td><b>Plan-and-Act</b></td><td><code>plan_act_nogate</code></td><td>Plan-and-Act with no gate.</td><td><span class='tag'>run</span></td><td>planner catalogue and tool schema now explain the N-1 arguments</td><td>$0.05 / $0.70</td></tr><tr><td><b>ReAct</b></td><td><code>react_nogate</code></td><td>ReAct loop with no gate at all. The plain multi-step agent baseline.</td><td><span class='tag'>run</span></td><td>tool schema now explains the N-1 arguments; messages stored</td><td>$0.10 / $1.50</td></tr><tr><td><b>PFAgent (ReAct + verification gate)</b></td><td><code>pfagent</code></td><td>PFAgent: ReAct loop with no in-loop gate plus the task-level verification gate V1-V7 on the final answer (llm/engine.py verify_final_answer). The solver-grounded row.</td><td><span class='tag'>run</span></td><td>tool schema; V6 now covers max_candidates; messages stored</td><td>$0.10 / $1.50</td></tr></table><p class='muted'>Human with solver is not an LLM run (human_run.py). Few-shot and RAG variants are not in Table 6 and are not run.</p></section><section><h2>3. The 40 scenarios (same for every row and both models)</h2><p>Generated by <code>benchmarks/requests.py</code> from (case14, N=40, seed 0): four difficulties, ten each. The reference calls define Formulation; the reference solution (PandaPower on the same perturbed case) defines Solved.</p><table><tr><th>#</th><th>id</th><th>difficulty</th><th>request</th><th>reference calls</th><th>expected</th></tr><tr><td>1</td><td><code>case14-plain-000-s0</code></td><td>plain</td><td>Load case14 and run the power flow, then report the bus with the lowest voltage magnitude.</td><td><code>load_case(case_name=case14) → run_powerflow()</code></td><td>converged</td></tr><tr><td>2</td><td><code>case14-parameterized-001-s0</code></td><td>parameterized</td><td>Load the IEEE 14-bus system and run an N-1 contingency analysis ranked by min voltage and report the 3 worst outages.</td><td><code>load_case(case_name=case14) → run_n1_contingency(top_k=3, criteria=min_voltage)</code></td><td>converged</td></tr><tr><td>3</td><td><code>case14-multistep-002-s0</code></td><td>multistep</td><td>Load the 14-bus test case (case14), disconnect the line between bus 6 and bus 13, disconnect the line between bus 12 and bus 13, and finally rerun the power flow, then list every line whose loading is above 100%.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=6, to_bus=13) → disconnect_line(from_bus=12, to_bus=13) → run_powerflow()</code></td><td>converged</td></tr><tr><td>4</td><td><code>case14-ambiguous-003-s0</code></td><td>ambiguous</td><td>Load case14 and disconnect the line between bus ten and bus eleven.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=10, to_bus=11)</code></td><td>converged</td></tr><tr><td>5</td><td><code>case14-plain-004-s0</code></td><td>plain</td><td>Load case14 and run an N-1 contingency analysis and report the worst single outage.</td><td><code>load_case(case_name=case14) → run_n1_contingency()</code></td><td>converged</td></tr><tr><td>6</td><td><code>case14-parameterized-005-s0</code></td><td>parameterized</td><td>Load the IEEE 14-bus system and disconnect the line between bus 4 and bus 5.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=4, to_bus=5)</code></td><td>converged</td></tr><tr><td>7</td><td><code>case14-multistep-006-s0</code></td><td>multistep</td><td>Load the 14-bus test case (case14), set the active load at bus 4 to 42.7 MW, disconnect the line between bus 3 and bus 4, reconnect the line between bus 3 and bus 4, and finally rerun the power flow, then list every line whose loading is above 80%.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=4, p_mw=42.7) → disconnect_line(from_bus=3, to_bus=4) → reconnect_line(from_bus=3, to_bus=4) → run_powerflow()</code></td><td>converged</td></tr><tr><td>8</td><td><code>case14-ambiguous-007-s0</code></td><td>ambiguous</td><td>Load the 14-bus test case (case14) and disconnect the line between bus 6 and bus 13 (1-based).</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=6, to_bus=13)</code></td><td>converged</td></tr><tr><td>9</td><td><code>case14-plain-008-s0</code></td><td>plain</td><td>Load case14 and set the active load at bus 2 to 21.7 MW.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=2, p_mw=21.7)</code></td><td>converged</td></tr><tr><td>10</td><td><code>case14-parameterized-009-s0</code></td><td>parameterized</td><td>Load the 14-bus test case (case14) and run an N-1 contingency analysis ranked by max violations and report the 3 worst outages.</td><td><code>load_case(case_name=case14) → run_n1_contingency(top_k=3, criteria=max_violations)</code></td><td>converged</td></tr><tr><td>11</td><td><code>case14-multistep-010-s0</code></td><td>multistep</td><td>Load the 14-bus test case (case14), disconnect the line between bus 2 and bus 5, disconnect the line between bus 1 and bus 2, and finally rerun the power flow, then list every line whose loading is above 100%.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=2, to_bus=5) → disconnect_line(from_bus=1, to_bus=2) → run_powerflow()</code></td><td>converged</td></tr><tr><td>12</td><td><code>case14-ambiguous-011-s0</code></td><td>ambiguous</td><td>Load case14 and set the active load at bus 6 to 14,700 kw.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=6, p_mw=14.7)</code></td><td>converged</td></tr><tr><td>13</td><td><code>case14-plain-012-s0</code></td><td>plain</td><td>Load the 14-bus test case (case14).</td><td><code>load_case(case_name=case14)</code></td><td>converged</td></tr><tr><td>14</td><td><code>case14-parameterized-013-s0</code></td><td>parameterized</td><td>Load the 14-bus test case (case14) and disconnect the line between bus 13 and bus 14.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=13, to_bus=14)</code></td><td>converged</td></tr><tr><td>15</td><td><code>case14-multistep-014-s0</code></td><td>multistep</td><td>Load case14, set the active load at bus 13 to 18.9 MW, set the active load at bus 4 to 59.1 MW, set the active load at bus 9 to 23.2 MW, and finally rerun the power flow, then report the bus with the lowest voltage magnitude.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=13, p_mw=18.9) → modify_load(bus_id=4, p_mw=59.1) → modify_load(bus_id=9, p_mw=23.2) → run_powerflow()</code></td><td>converged</td></tr><tr><td>16</td><td><code>case14-ambiguous-015-s0</code></td><td>ambiguous</td><td>Load the 14-bus test case (case14) and set the active load at bus 5 to 4.4 MVA.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=5, p_mw=4.4)</code></td><td>converged</td></tr><tr><td>17</td><td><code>case14-plain-016-s0</code></td><td>plain</td><td>Load case14 and run an N-1 contingency analysis and report the worst single outage.</td><td><code>load_case(case_name=case14) → run_n1_contingency()</code></td><td>converged</td></tr><tr><td>18</td><td><code>case14-parameterized-017-s0</code></td><td>parameterized</td><td>Load case14 and run an N-1 contingency analysis ranked by max violations and report the 8 worst outages.</td><td><code>load_case(case_name=case14) → run_n1_contingency(top_k=8, criteria=max_violations)</code></td><td>converged</td></tr><tr><td>19</td><td><code>case14-multistep-018-s0</code></td><td>multistep</td><td>Load the IEEE 14-bus system, disconnect the line between bus 4 and bus 5, then rerun the power flow, then list every line whose loading is above 90%.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=4, to_bus=5) → run_powerflow()</code></td><td>converged</td></tr><tr><td>20</td><td><code>case14-ambiguous-019-s0</code></td><td>ambiguous</td><td>Load the 14-bus test case (case14) and disconnect the line between bus 9 and bus 14 (1-based).</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=9, to_bus=14)</code></td><td>converged</td></tr><tr><td>21</td><td><code>case14-plain-020-s0</code></td><td>plain</td><td>Load the 14-bus test case (case14) and run the power flow, then report the bus with the lowest voltage magnitude.</td><td><code>load_case(case_name=case14) → run_powerflow()</code></td><td>converged</td></tr><tr><td>22</td><td><code>case14-parameterized-021-s0</code></td><td>parameterized</td><td>Load case14 and run an N-1 contingency analysis ranked by max violations and report the 3 worst outages.</td><td><code>load_case(case_name=case14) → run_n1_contingency(top_k=3, criteria=max_violations)</code></td><td>converged</td></tr><tr><td>23</td><td><code>case14-multistep-022-s0</code></td><td>multistep</td><td>Load case14, disconnect the line between bus 9 and bus 10, set the active load at bus 3 to 118.6 MW, set the active load at bus 4 to 53.6 MW, and finally run an N-1 contingency analysis ranked by max violations and report the 8 worst outages.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=9, to_bus=10) → modify_load(bus_id=3, p_mw=118.6) → modify_load(bus_id=4, p_mw=53.6) → run_n1_contingency(top_k=8, criteria=max_violations)</code></td><td>converged</td></tr><tr><td>24</td><td><code>case14-ambiguous-023-s0</code></td><td>ambiguous</td><td>Load the IEEE 14-bus system and set the active load at bus 5 (1-based) to 5.9 MW.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=5, p_mw=5.9)</code></td><td>converged</td></tr><tr><td>25</td><td><code>case14-plain-024-s0</code></td><td>plain</td><td>Load the IEEE 14-bus system.</td><td><code>load_case(case_name=case14)</code></td><td>converged</td></tr><tr><td>26</td><td><code>case14-parameterized-025-s0</code></td><td>parameterized</td><td>Load case14 and disconnect the line between bus 9 and bus 10.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=9, to_bus=10)</code></td><td>converged</td></tr><tr><td>27</td><td><code>case14-multistep-026-s0</code></td><td>multistep</td><td>Load the 14-bus test case (case14), disconnect the line between bus 2 and bus 4, then rerun the power flow, then report the bus with the lowest voltage magnitude.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=2, to_bus=4) → run_powerflow()</code></td><td>converged</td></tr><tr><td>28</td><td><code>case14-ambiguous-027-s0</code></td><td>ambiguous</td><td>Load the IEEE 14-bus system and set the active load at bus 10 (0-based) to 4.7 MW.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=11, p_mw=4.7)</code></td><td>converged</td></tr><tr><td>29</td><td><code>case14-plain-028-s0</code></td><td>plain</td><td>Load case14 and run the AC power flow.</td><td><code>load_case(case_name=case14) → run_powerflow()</code></td><td>converged</td></tr><tr><td>30</td><td><code>case14-parameterized-029-s0</code></td><td>parameterized</td><td>Load the 14-bus test case (case14) and run the power flow, then list every line whose loading is above 80%.</td><td><code>load_case(case_name=case14) → run_powerflow()</code></td><td>converged</td></tr><tr><td>31</td><td><code>case14-multistep-030-s0</code></td><td>multistep</td><td>Load case14, set the active load at bus 14 to 17.2 MW, disconnect the line between bus 1 and bus 5, reconnect the line between bus 1 and bus 5, and finally run an N-1 contingency analysis ranked by min voltage and report the 8 worst outages.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=14, p_mw=17.2) → disconnect_line(from_bus=1, to_bus=5) → reconnect_line(from_bus=1, to_bus=5) → run_n1_contingency(top_k=8, criteria=min_voltage)</code></td><td>converged</td></tr><tr><td>32</td><td><code>case14-ambiguous-031-s0</code></td><td>ambiguous</td><td>Load case14 and disconnect the line between bus six and bus eleven.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=6, to_bus=11)</code></td><td>converged</td></tr><tr><td>33</td><td><code>case14-plain-032-s0</code></td><td>plain</td><td>Load the 14-bus test case (case14).</td><td><code>load_case(case_name=case14)</code></td><td>converged</td></tr><tr><td>34</td><td><code>case14-parameterized-033-s0</code></td><td>parameterized</td><td>Load the IEEE 14-bus system and set the active load at bus 14 to 15.2 MW.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=14, p_mw=15.2)</code></td><td>converged</td></tr><tr><td>35</td><td><code>case14-multistep-034-s0</code></td><td>multistep</td><td>Load case14, disconnect the line between bus 2 and bus 5, set the active load at bus 9 to 19.9 MW, and finally rerun the power flow, then list every line whose loading is above 100%.</td><td><code>load_case(case_name=case14) → disconnect_line(from_bus=2, to_bus=5) → modify_load(bus_id=9, p_mw=19.9) → run_powerflow()</code></td><td>converged</td></tr><tr><td>36</td><td><code>case14-ambiguous-035-s0</code></td><td>ambiguous</td><td>Load the 14-bus test case (case14) and set the active load at bus 5 to 3.8 MVA.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=5, p_mw=3.8)</code></td><td>converged</td></tr><tr><td>37</td><td><code>case14-plain-036-s0</code></td><td>plain</td><td>Load case14 and set the active load at bus 2 to 21.7 MW.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=2, p_mw=21.7)</code></td><td>converged</td></tr><tr><td>38</td><td><code>case14-parameterized-037-s0</code></td><td>parameterized</td><td>Load the IEEE 14-bus system and run the power flow, then list every line whose loading is above 100%.</td><td><code>load_case(case_name=case14) → run_powerflow()</code></td><td>converged</td></tr><tr><td>39</td><td><code>case14-multistep-038-s0</code></td><td>multistep</td><td>Load the IEEE 14-bus system, set the active load at bus 6 to 7 MW, set the active load at bus 4 to 40.3 MW, and finally rerun the power flow, then report the bus with the lowest voltage magnitude.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=6, p_mw=7.0) → modify_load(bus_id=4, p_mw=40.3) → run_powerflow()</code></td><td>converged</td></tr><tr><td>40</td><td><code>case14-ambiguous-039-s0</code></td><td>ambiguous</td><td>Load the 14-bus test case (case14) and set the active load at bus 1 (0-based) to 11 MW.</td><td><code>load_case(case_name=case14) → modify_load(bus_id=2, p_mw=11.0)</code></td><td>converged</td></tr></table></section><section><h2>3b. The tools: what each one is, its inputs, the code that runs it, and a real output</h2><p>These are the only ways any method touches the network. The schema is what the model sees through function calling; the code is the handler the dispatcher runs (PandaPower underneath); the sample output was produced now on the same perturbed case14 the runs use (seed 0, k = 1), in the order listed, so state carries from one call to the next.</p><h3><code>load_case</code> <span class='muted'>· Load IEEE test case.</span></h3><table><tr><th>input</th><th>type</th><th>default</th><th>meaning</th></tr><tr><td><code>case_name</code>*</td><td>string in {case14, case30, case57, case118, case300}</td><td></td><td></td></tr></table><details><summary>Python handler (9 lines)</summary><pre>    def load_case(args: Any) -&gt; Any:
+        out = original(args)
+        if ctx.net is None or (isinstance(out, dict) and out.get(&quot;error&quot;)):
+            return out
+        perturb_network(ctx.net, seed=int(seed), k=int(k))
+        info = case_loader._calc_network_info(ctx.net, case_loader.normalize_case_name(str(args.get(&quot;case_name&quot;))))
+        if ctx.session is not None:
+            ctx.session.network_info = info
+        return info.model_dump()
+</pre></details><details open><summary>real output for <code>load_case(case_name=&#x27;case14&#x27;)</code></summary><pre>{&quot;case_name&quot;: &quot;case14&quot;, &quot;n_buses&quot;: 14, &quot;n_generators&quot;: 5, &quot;n_lines&quot;: 20, &quot;n_loads&quot;: 11, &quot;total_load_mw&quot;: 265.4791489040197, &quot;total_gen_capacity_mw&quot;: 772.4000000000001}</pre></details><h3><code>run_powerflow</code> <span class='muted'>· Run power flow on current case.</span></h3><table><tr><th>input</th><th>type</th><th>default</th><th>meaning</th></tr><tr><td colspan='4' class='muted'>no inputs</td></tr></table><details><summary>Python handler (9 lines)</summary><pre>    def run_powerflow(_: Mapping[str, Any]) -&gt; Any:
+        if ctx.net is None:
+            return {&quot;error&quot;: &quot;Please load a test case first.&quot;}
+        ctx.prev_result = ctx.session.last_result
+        res = _run_pf_with_backend()
+        if isinstance(res, dict) and res.get(&quot;error&quot;):
+            return res
+        ctx.session.last_result = res
+        return res.model_dump()
+</pre></details><details open><summary>real output for <code>run_powerflow()</code></summary><pre>{&quot;case_name&quot;: &quot;case14&quot;, &quot;converged&quot;: true, &quot;bus_voltages&quot;: [{&quot;bus_id&quot;: 1, &quot;vm_pu&quot;: 1.06, &quot;va_deg&quot;: 0.0, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 2, &quot;vm_pu&quot;: 1.0450000000000002, &quot;va_deg&quot;: -5.165973597700102, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 3, &quot;vm_pu&quot;: 1.01, &quot;va_deg&quot;: -13.223794978915384, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 4, &quot;vm_pu&quot;: 1.0174908793527566, &quot;va_deg&quot;: -10.560689847663543, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 5, &quot;vm_pu&quot;: 1.0193154825926036, &quot;va_deg&quot;: -8.98324622346681, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 6, &quot;vm_pu&quot;: 1.0699999999999998, &quot;va_deg&quot;: -14.525326977750739, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 7, &quot;vm_pu&quot;: 1.0612745762648834, &quot;va_deg&quot;: -13.646334160724955, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 8, &quot;vm_pu&quot;: 1.0899999999999999, &quot;va_deg&quot;: -13.646334160724955, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 9, &quot;vm_pu&quot;: 1.0555317865041725, &quot;va_deg&quot;: -15.245705321901836, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 10, &quot;vm_pu&quot;: 1.050341587837599, &quot;va_deg&quot;: -15.415736155416635, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 11, &quot;vm_pu&quot;: 1.0566952973329822, &quot;va_deg&quot;: -15.096440951166029, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 12, &quot;vm_pu&quot;: 1.054944852608939, &quot;va_deg&quot;: -15.395305996175146, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 13, &quot;vm_pu&quot;: 1.049721711129337, &quot;va_deg&quot;: -15.488055810108262, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 14, &quot;vm_pu&quot;: 1.0334959988719832, &quot;va_deg&quot;: -16.43578030892358, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}], &quot;line_flows&quot;: [{&quot;line_id&quot;: 0, &quot;from_bus&quot;: 1, &quot;to_bus&quot;: 2, &quot;p_from_mw&quot;: 162.4297772434428, &quot;q_from_mvar&quot;: -21.69110665502709, &quot;loading_percent&quot;: 1.5615752609041982, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 1, &quot;from_bus&quot;: 1, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: 77.23286440710245, &quot;q_from_mvar&quot;: 3.8041499213490813, &quot;loading_percent&quot;: 0.7372405412569141, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 2, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 3, &quot;p_from_mw&quot;: 76.07930700420015, &quot;q_from_mvar&quot;: 3.2889574586972734, &quot;loading_percent&quot;: 0.7362941464225682, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 3, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 4, &quot;p_from_mw&quot;: 56.781730028391095, &quot;q_from_mvar&quot;: -1.5950939290569117, &quot;loading_percent&quot;: 0.5490709007830827, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 4, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: 41.80032012107618, &quot;q_from_mvar&quot;: 1.2153576630558836, &quot;loading_percent&quot;: 0.40568135933524774, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 5, &quot;from_bus&quot;: 3, &quot;to_bus&quot;: 4, &quot;p_from_mw&quot;: -25.48505024584444, &quot;q_from_mvar&quot;: 5.557521071871322, &quot;loading_percent&quot;: 0.26367234902159126, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 6, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: -62.60925975414001, &quot;q_from_mvar&quot;: 16.37346405932412, &quot;loading_percent&quot;: 0.6424482072593428, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 7, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 11, &quot;p_from_mw&quot;: 7.408215571183496, &quot;q_from_mvar&quot;: 3.64800310042022, &quot;loading_percent&quot;: 0.07795429531957905, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 8, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 12, &quot;p_from_mw&quot;: 7.92129165843793, &quot;q_from_mvar&quot;: 2.542148141099768, &quot;loading_percent&quot;: 0.07853504610317623, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 9, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 13, &quot;p_from_mw&quot;: 18.290261217894464, &quot;q_from_mvar&quot;: 7.490071755815555, &quot;loading_percent&quot;: 0.18658061044323826, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 10, &quot;from_bus&quot;: 9, &quot;to_bus&quot;: 10, &quot;p_from_mw&quot;: 5.549907696526165, &quot;q_from_mvar&quot;: 4.399853078691868, &quot;loading_percent&quot;: 0.06777554886931894, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 11, &quot;from_bus&quot;: 9, &quot;to_bus&quot;: 14, &quot;p_from_mw&quot;: 10.208560813912845, &quot;q_from_mvar&quot;: 3.8903326015336797, &quot;loading_percent&quot;: 0.10454508309296143, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 12, &quot;from_bus&quot;: 10, &quot;to_bus&quot;: 11, &quot;p_from_mw&quot;: -3.9752509878329865, &quot;q_from_mvar&quot;: -1.7673961468172528, &quot;loading_percent&quot;: 0.041837643349563414, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 13, &quot;from_bus&quot;: 12, &quot;to_bus&quot;: 13, &quot;p_from_mw&quot;: 1.7755440928952921, &quot;q_from_mvar&quot;: 0.7949995826381201, &quot;loading_percent&quot;: 0.018627044823856014, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 14, &quot;from_bus&quot;: 13, &quot;to_bus&quot;: 14, &quot;p_from_mw&quot;: 6.1074602687588895, &quot;q_from_mvar&quot;: 1.9370755158681974, &quot;loading_percent&quot;: 0.06165450765042744, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100000, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 7, &quot;p_from_mw&quot;: 28.420854946411556, &quot;q_from_mvar&quot;: -9.630028132216466, &quot;loading_percent&quot;: 0.2979009608538044, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100001, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 9, &quot;p_from_mw&quot;: 16.276724974810516, &quot;q_from_mvar&quot;: -0.37057468635017626, &quot;loading_percent&quot;: 0.16162697077595534, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100002, &quot;from_bus&quot;: 5, &quot;to_bus&quot;: 6, &quot;p_from_mw&quot;: 44.845023822201604, &quot;q_from_mvar&quot;: 12.449594141521455, &quot;loading_percent&quot;: 0.4612031698069293, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100003, &quot;from_bus&quot;: 7, &quot;to_bus&quot;: 8, &quot;p_from_mw&quot;: 2.3144833515019107e-14, &quot;q_from_mvar&quot;: -17.306592053655915, &quot;loading_percent&quot;: 0.16472086023514404, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100004, &quot;from_bus&quot;: 7, &quot;to_bus&quot;: 9, &quot;p_from_mw&quot;: 28.420854946043335, &quot;q_from_mvar&quot;: 5.936811390678684, &quot;loading_percent&quot;: 0.2763429842091459, &quot;is_violation&quot;: false}], &quot;total_generation_mw&quot;: 279.7001364970844, &quot;total_load_mw&quot;: 265.4791489040197, &quot;total_loss_mw&quot;: 14.220987599049327, &quot;voltage_violations&quot;: [{&quot;bus_id&quot;: 1, &quot;vm_pu&quot;: 1.06, &quot;va_deg&quot;: 0.0, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 6, &quot;vm_pu&quot;: 1.0699999999999998, &quot;va_deg&quot;: -14.525326977750739, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 7, &quot;vm_pu&quot;: 1.0612745762648834, &quot;va_deg&quot;: -13.646334160724955, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 8, &quot;vm_pu&quot;: 1.0899999999999999, &quot;va_deg&quot;: -13.646334160724955, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 9, &quot;vm_pu&quot;: 1.055531786504172
+... (601 more chars)</pre></details><h3><code>get_status</code> <span class='muted'>· Get current network status.</span></h3><table><tr><th>input</th><th>type</th><th>default</th><th>meaning</th></tr><tr><td colspan='4' class='muted'>no inputs</td></tr></table><details><summary>Python handler (21 lines)</summary><pre>    def get_status(_: Mapping[str, Any]) -&gt; Any:
+        if ctx.net is None:
+            return {&quot;active_case&quot;: None, &quot;network_info&quot;: None, &quot;last_result&quot;: None}
+        info = _get_network_status(ctx.net)
+        out: dict[str, Any] = {
+            &quot;active_case&quot;: ctx.session.active_case,
+            &quot;network_info&quot;: info.model_dump(),
+            &quot;has_last_result&quot;: ctx.session.last_result is not None,
+        }
+        if ctx.session.last_result is not None:
+            r = ctx.session.last_result
+            out[&quot;last_result_summary&quot;] = {
+                &quot;converged&quot;: r.converged,
+                &quot;total_load_mw&quot;: r.total_load_mw,
+                &quot;total_generation_mw&quot;: r.total_generation_mw,
+                &quot;total_loss_mw&quot;: r.total_loss_mw,
+                &quot;n_voltage_violations&quot;: len(r.voltage_violations),
+                &quot;n_thermal_violations&quot;: len(r.thermal_violations),
+                &quot;solver_backend&quot;: r.solver_backend,
+            }
+        return out
+</pre></details><details open><summary>real output for <code>get_status()</code></summary><pre>{&quot;active_case&quot;: &quot;case14&quot;, &quot;network_info&quot;: {&quot;case_name&quot;: &quot;case14&quot;, &quot;n_buses&quot;: 14, &quot;n_generators&quot;: 5, &quot;n_lines&quot;: 20, &quot;n_loads&quot;: 11, &quot;total_load_mw&quot;: 265.4791489040197, &quot;total_gen_capacity_mw&quot;: 772.4000000000001}, &quot;has_last_result&quot;: true, &quot;last_result_summary&quot;: {&quot;converged&quot;: true, &quot;total_load_mw&quot;: 265.4791489040197, &quot;total_generation_mw&quot;: 279.7001364970844, &quot;total_loss_mw&quot;: 14.220987599049327, &quot;n_voltage_violations&quot;: 8, &quot;n_thermal_violations&quot;: 0, &quot;solver_backend&quot;: &quot;pandapower&quot;}}</pre></details><h3><code>get_most_loaded_branch</code> <span class='muted'>· Get most loaded branch.</span></h3><table><tr><th>input</th><th>type</th><th>default</th><th>meaning</th></tr><tr><td colspan='4' class='muted'>no inputs</td></tr></table><details><summary>Python handler (9 lines)</summary><pre>    def get_most_loaded_branch(_: Mapping[str, Any]) -&gt; Any:
+        if ctx.net is None:
+            return {&quot;error&quot;: &quot;Please load a test case first.&quot;}
+        if ctx.session.last_result is None:
+            return {&quot;error&quot;: &quot;Please run power flow first.&quot;}
+        info = _get_most_loaded_branch(ctx.net)
+        if info is None:
+            return {&quot;error&quot;: &quot;No branch loading info available.&quot;}
+        return info
+</pre></details><details open><summary>real output for <code>get_most_loaded_branch()</code></summary><pre>{&quot;branch_id&quot;: 0, &quot;branch_type&quot;: &quot;line&quot;, &quot;from_bus&quot;: 1, &quot;to_bus&quot;: 2, &quot;loading_percent&quot;: 1.5615752609041982}</pre></details><h3><code>set_active_load</code> <span class='muted'>· Set a bus&#x27;s active load (MW) and recompute. Use this when the request states only an active-power value. This tool has no reactive-power argument: the bus&#x27;s present reactive load is always left unchanged. If the request also states a reactive-power value, use set_load instead.</span></h3><table><tr><th>input</th><th>type</th><th>default</th><th>meaning</th></tr><tr><td><code>bus_id</code>*</td><td>integer</td><td></td><td></td></tr><tr><td><code>p_mw</code>*</td><td>number</td><td></td><td></td></tr></table><details><summary>Python handler (2 lines)</summary><pre>    def set_active_load(args: Mapping[str, Any]) -&gt; Any:
+        return _set_load_impl(args, tool_name=&quot;set_active_load&quot;, force_q_none=True)
+</pre></details><details open><summary>real output for <code>set_active_load(bus_id=6, p_mw=14.7)</code></summary><pre>{&quot;case_name&quot;: &quot;case14&quot;, &quot;converged&quot;: true, &quot;bus_voltages&quot;: [{&quot;bus_id&quot;: 1, &quot;vm_pu&quot;: 1.06, &quot;va_deg&quot;: 0.0, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 2, &quot;vm_pu&quot;: 1.0449999999999997, &quot;va_deg&quot;: -5.246138560477134, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 3, &quot;vm_pu&quot;: 1.01, &quot;va_deg&quot;: -13.353967325090201, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 4, &quot;vm_pu&quot;: 1.017043005156489, &quot;va_deg&quot;: -10.72687837724735, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 5, &quot;vm_pu&quot;: 1.018732817856912, &quot;va_deg&quot;: -9.150607164854216, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 6, &quot;vm_pu&quot;: 1.0700000000000005, &quot;va_deg&quot;: -14.992222025123455, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 7, &quot;vm_pu&quot;: 1.0612317342807862, &quot;va_deg&quot;: -13.888193447317297, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 8, &quot;vm_pu&quot;: 1.09, &quot;va_deg&quot;: -13.888193447317297, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 9, &quot;vm_pu&quot;: 1.0557395139148966, &quot;va_deg&quot;: -15.525714188997538, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 10, &quot;vm_pu&quot;: 1.0505515580904945, &quot;va_deg&quot;: -15.728472772398481, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 11, &quot;vm_pu&quot;: 1.0568434164040237, &quot;va_deg&quot;: -15.48501595582445, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 12, &quot;vm_pu&quot;: 1.0549319366704066, &quot;va_deg&quot;: -15.849132993956058, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 13, &quot;vm_pu&quot;: 1.049789277019921, &quot;va_deg&quot;: -15.928567898466985, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 14, &quot;vm_pu&quot;: 1.033654073717399, &quot;va_deg&quot;: -16.78511654140199, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}], &quot;line_flows&quot;: [{&quot;line_id&quot;: 0, &quot;from_bus&quot;: 1, &quot;to_bus&quot;: 2, &quot;p_from_mw&quot;: 164.85583998946024, &quot;q_from_mvar&quot;: -22.248048893020567, &quot;loading_percent&quot;: 1.5851944354102496, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 1, &quot;from_bus&quot;: 1, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: 78.62473465407112, &quot;q_from_mvar&quot;: 3.963356836364504, &quot;loading_percent&quot;: 0.7505169951287443, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 2, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 3, &quot;p_from_mw&quot;: 76.5301325465838, &quot;q_from_mvar&quot;: 3.2473756421737736, &quot;loading_percent&quot;: 0.7405668887069008, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 3, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 4, &quot;p_from_mw&quot;: 57.67593500961927, &quot;q_from_mvar&quot;: -1.5397699012875263, &quot;loading_percent&quot;: 0.5576964371624882, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 4, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: 42.74074852977182, &quot;q_from_mvar&quot;: 1.3194809984129519, &quot;loading_percent&quot;: 0.4147992735101637, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 5, &quot;from_bus&quot;: 3, &quot;to_bus&quot;: 4, &quot;p_from_mw&quot;: -25.063627012369444, &quot;q_from_mvar&quot;: 5.639184975692544, &quot;loading_percent&quot;: 0.2598261553405631, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 6, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: -62.40753937738359, &quot;q_from_mvar&quot;: 16.63467114741165, &quot;loading_percent&quot;: 0.6414563320746148, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 7, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 11, &quot;p_from_mw&quot;: 6.742251257426335, &quot;q_from_mvar&quot;: 3.879125332141143, &quot;loading_percent&quot;: 0.07343087264950607, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 8, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 12, &quot;p_from_mw&quot;: 7.840985086767784, &quot;q_from_mvar&quot;: 2.584618577591109, &quot;loading_percent&quot;: 0.07793812637483154, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 9, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 13, &quot;p_from_mw&quot;: 17.95033388843299, &quot;q_from_mvar&quot;: 7.600615350733066, &quot;loading_percent&quot;: 0.18401939205728207, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 10, &quot;from_bus&quot;: 9, &quot;to_bus&quot;: 10, &quot;p_from_mw&quot;: 6.208238482792539, &quot;q_from_mvar&quot;: 4.152939708773801, &quot;loading_percent&quot;: 0.07146326201116322, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 11, &quot;from_bus&quot;: 9, &quot;to_bus&quot;: 14, &quot;p_from_mw&quot;: 10.622980783670236, &quot;q_from_mvar&quot;: 3.7270563248150945, &quot;loading_percent&quot;: 0.10771163067214164, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 12, &quot;from_bus&quot;: 10, &quot;to_bus&quot;: 11, &quot;p_from_mw&quot;: -3.3185210546951964, &quot;q_from_mvar&quot;: -2.018562018820583, &quot;loading_percent&quot;: 0.0373466277238422, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 13, &quot;from_bus&quot;: 12, &quot;to_bus&quot;: 13, &quot;p_from_mw&quot;: 1.696362679008103, &quot;q_from_mvar&quot;: 0.8398117863761027, &quot;loading_percent&quot;: 0.018124228859977207, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 14, &quot;from_bus&quot;: 13, &quot;to_bus&quot;: 14, &quot;p_from_mw&quot;: 5.694905568254362, &quot;q_from_mvar&quot;: 2.1049123263056413, &quot;loading_percent&quot;: 0.05841921087997552, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100000, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 7, &quot;p_from_mw&quot;: 29.103142927424614, &quot;q_from_mvar&quot;: -9.794269358918715, &quot;loading_percent&quot;: 0.304974170988946, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100001, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 9, &quot;p_from_mw&quot;: 16.667187749841617, &quot;q_from_mvar&quot;: -0.46398632034261045, &quot;loading_percent&quot;: 0.16559836079143447, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100002, &quot;from_bus&quot;: 5, &quot;to_bus&quot;: 6, &quot;p_from_mw&quot;: 47.23357023131233, &quot;q_from_mvar&quot;: 12.411946416579632, &quot;loading_percent&quot;: 0.484233421797842, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100003, &quot;from_bus&quot;: 7, &quot;to_bus&quot;: 8, &quot;p_from_mw&quot;: -9.844354461865007e-15, &quot;q_from_mvar&quot;: -17.3317039576793, &quot;loading_percent&quot;: 0.16496653001324127, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100004, &quot;from_bus&quot;: 7, &quot;to_bus&quot;: 9, &quot;p_from_mw&quot;: 29.103142927007564, &quot;q_from_mvar&quot;: 5.714085663380479, &quot;loading_percent&quot;: 0.2822981136733907, &quot;is_violation&quot;: false}], &quot;total_generation_mw&quot;: 283.5180694900705, &quot;total_load_mw&quot;: 268.953893528154, &quot;total_loss_mw&quot;: 14.564175968535212, &quot;voltage_violations&quot;: [{&quot;bus_id&quot;: 1, &quot;vm_pu&quot;: 1.06, &quot;va_deg&quot;: 0.0, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 6, &quot;vm_pu&quot;: 1.0700000000000005, &quot;va_deg&quot;: -14.992222025123455, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 7, &quot;vm_pu&quot;: 1.0612317342807862, &quot;va_deg&quot;: -13.888193447317297, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 8, &quot;vm_pu&quot;: 1.09, &quot;va_deg&quot;: -13.888193447317297, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 9, &quot;vm_pu&quot;: 1.0557395139148966, &quot;va_deg&quot;: -15.525714188997538, &quot;is_viol
+... (661 more chars)</pre></details><h3><code>set_load</code> <span class='muted'>· Set a bus&#x27;s active and reactive load (MW, Mvar) and recompute. Use this only when the request states both values. If the request states only an active-power value, use set_active_load instead -- do not invent a reactive-power value here to fill this in.</span></h3><table><tr><th>input</th><th>type</th><th>default</th><th>meaning</th></tr><tr><td><code>bus_id</code>*</td><td>integer</td><td></td><td></td></tr><tr><td><code>p_mw</code>*</td><td>number</td><td></td><td></td></tr><tr><td><code>q_mvar</code>*</td><td>number</td><td></td><td></td></tr></table><details><summary>Python handler (2 lines)</summary><pre>    def set_load(args: Mapping[str, Any]) -&gt; Any:
+        return _set_load_impl(args, tool_name=&quot;set_load&quot;, force_q_none=False)
+</pre></details><details open><summary>real output for <code>set_load(bus_id=9, p_mw=29.5, q_mvar=16.6)</code></summary><pre>{&quot;case_name&quot;: &quot;case14&quot;, &quot;converged&quot;: true, &quot;bus_voltages&quot;: [{&quot;bus_id&quot;: 1, &quot;vm_pu&quot;: 1.06, &quot;va_deg&quot;: 0.0, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 2, &quot;vm_pu&quot;: 1.0450000000000002, &quot;va_deg&quot;: -5.259829801573135, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 3, &quot;vm_pu&quot;: 1.01, &quot;va_deg&quot;: -13.377546231109523, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 4, &quot;vm_pu&quot;: 1.0168729480244292, &quot;va_deg&quot;: -10.755533116733563, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 5, &quot;vm_pu&quot;: 1.0185985703491067, &quot;va_deg&quot;: -9.176009024062136, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 6, &quot;vm_pu&quot;: 1.0699999999999998, &quot;va_deg&quot;: -15.04198776465758, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 7, &quot;vm_pu&quot;: 1.0609514807441736, &quot;va_deg&quot;: -13.94423478484657, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 8, &quot;vm_pu&quot;: 1.09, &quot;va_deg&quot;: -13.944234784846563, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 9, &quot;vm_pu&quot;: 1.0552501716226697, &quot;va_deg&quot;: -15.596420516729856, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 10, &quot;vm_pu&quot;: 1.0501403567293202, &quot;va_deg&quot;: -15.795452246362082, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 11, &quot;vm_pu&quot;: 1.0566273365896468, &quot;va_deg&quot;: -15.543286024277876, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 12, &quot;vm_pu&quot;: 1.0548989545314473, &quot;va_deg&quot;: -15.900719247241964, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 13, &quot;vm_pu&quot;: 1.0497117700903427, &quot;va_deg&quot;: -15.981246482450603, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 14, &quot;vm_pu&quot;: 1.0333370227006267, &quot;va_deg&quot;: -16.84859775793501, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}], &quot;line_flows&quot;: [{&quot;line_id&quot;: 0, &quot;from_bus&quot;: 1, &quot;to_bus&quot;: 2, &quot;p_from_mw&quot;: 165.27026102518246, &quot;q_from_mvar&quot;: -22.342828742412145, &quot;loading_percent&quot;: 1.589228916550409, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 1, &quot;from_bus&quot;: 1, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: 78.83752034560843, &quot;q_from_mvar&quot;: 4.008978125932545, &quot;loading_percent&quot;: 0.7525709023594441, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 2, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 3, &quot;p_from_mw&quot;: 76.61927590953674, &quot;q_from_mvar&quot;: 3.2392005072275234, &quot;loading_percent&quot;: 0.7414119170696705, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 3, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 4, &quot;p_from_mw&quot;: 57.84287600670696, &quot;q_from_mvar&quot;: -1.4794079790606913, &quot;loading_percent&quot;: 0.5592943001367365, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 4, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: 42.87485585448405, &quot;q_from_mvar&quot;: 1.3645841392995839, &quot;loading_percent&quot;: 0.4161341750563323, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 5, &quot;from_bus&quot;: 3, &quot;to_bus&quot;: 4, &quot;p_from_mw&quot;: -24.980318590469093, &quot;q_from_mvar&quot;: 5.704428434681495, &quot;loading_percent&quot;: 0.25919958142992167, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 6, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: -62.53968440910883, &quot;q_from_mvar&quot;: 16.594340903502083, &quot;loading_percent&quot;: 0.6427291993831415, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 7, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 11, &quot;p_from_mw&quot;: 6.855622282200764, &quot;q_from_mvar&quot;: 3.9419573163320845, &quot;loading_percent&quot;: 0.07465433836591942, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 8, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 12, &quot;p_from_mw&quot;: 7.857673261186853, &quot;q_from_mvar&quot;: 2.5906044438047977, &quot;loading_percent&quot;: 0.07810543746590173, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 9, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 13, &quot;p_from_mw&quot;: 18.0103362163473, &quot;q_from_mvar&quot;: 7.634517541044127, &quot;loading_percent&quot;: 0.18466579726000598, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 10, &quot;from_bus&quot;: 9, &quot;to_bus&quot;: 10, &quot;p_from_mw&quot;: 6.096779338783003, &quot;q_from_mvar&quot;: 4.094004281404411, &quot;loading_percent&quot;: 0.07029605990697987, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 11, &quot;from_bus&quot;: 9, &quot;to_bus&quot;: 14, &quot;p_from_mw&quot;: 10.547857987203423, &quot;q_from_mvar&quot;: 3.689943479288058, &quot;loading_percent&quot;: 0.10696547671749117, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 12, &quot;from_bus&quot;: 10, &quot;to_bus&quot;: 11, &quot;p_from_mw&quot;: -3.4294643388387525, &quot;q_from_mvar&quot;: -2.0761271173761697, &quot;loading_percent&quot;: 0.03856080227994965, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 13, &quot;from_bus&quot;: 12, &quot;to_bus&quot;: 13, &quot;p_from_mw&quot;: 1.7127363479599496, &quot;q_from_mvar&quot;: 0.8451430789698634, &quot;loading_percent&quot;: 0.018287967532376933, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 14, &quot;from_bus&quot;: 13, &quot;to_bus&quot;: 14, &quot;p_from_mw&quot;: 5.769607356995248, &quot;q_from_mvar&quot;: 2.1409861970265176, &quot;loading_percent&quot;: 0.059218166087552836, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100000, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 7, &quot;p_from_mw&quot;: 29.342346134409862, &quot;q_from_mvar&quot;: -9.725990864243938, &quot;loading_percent&quot;: 0.30706403330199994, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100001, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 9, &quot;p_from_mw&quot;: 16.802291191415613, &quot;q_from_mvar&quot;: -0.39273752399238626, &quot;loading_percent&quot;: 0.16694953877720878, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100002, &quot;from_bus&quot;: 5, &quot;to_bus&quot;: 6, &quot;p_from_mw&quot;: 47.42363175839671, &quot;q_from_mvar&quot;: 12.367969175869579, &quot;loading_percent&quot;: 0.4860101144109844, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100003, &quot;from_bus&quot;: 7, &quot;to_bus&quot;: 8, &quot;p_from_mw&quot;: -3.523143707338639e-14, &quot;q_from_mvar&quot;: -17.495923654779823, &quot;loading_percent&quot;: 0.16657359433578706, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100004, &quot;from_bus&quot;: 7, &quot;to_bus&quot;: 9, &quot;p_from_mw&quot;: 29.342346133999804, &quot;q_from_mvar&quot;: 5.921508916697372, &quot;loading_percent&quot;: 0.28499181404932505, &quot;is_violation&quot;: false}], &quot;total_generation_mw&quot;: 284.14527621733004, &quot;total_load_mw&quot;: 269.51478211719655, &quot;total_loss_mw&quot;: 14.630494106896203, &quot;voltage_violations&quot;: [{&quot;bus_id&quot;: 1, &quot;vm_pu&quot;: 1.06, &quot;va_deg&quot;: 0.0, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 6, &quot;vm_pu&quot;: 1.0699999999999998, &quot;va_deg&quot;: -15.04198776465758, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 7, &quot;vm_pu&quot;: 1.0609514807441736, &quot;va_deg&quot;: -13.94423478484657, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 8, &quot;vm_pu&quot;: 1.09, &quot;va_deg&quot;: -13.944234784846563, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 9, &quot;vm_pu&quot;: 1.0552501716226697, &quot;va_deg&quot;: -15.59642051
+... (673 more chars)</pre></details><h3><code>disconnect_line</code> <span class='muted'>· Disconnect line/branch between two buses and recompute.</span></h3><table><tr><th>input</th><th>type</th><th>default</th><th>meaning</th></tr><tr><td><code>from_bus</code>*</td><td>integer</td><td></td><td></td></tr><tr><td><code>to_bus</code>*</td><td>integer</td><td></td><td></td></tr></table><details><summary>Python handler (18 lines)</summary><pre>    def disconnect_line(args: Mapping[str, Any]) -&gt; Any:
+        if ctx.net is None:
+            return {&quot;error&quot;: &quot;Please load a test case first.&quot;}
+        fb = int(args.get(&quot;from_bus&quot;))
+        tb = int(args.get(&quot;to_bus&quot;))
+        ctx.prev_result = ctx.session.last_result
+        if _is_llm_only():
+            _disconnect_line_no_solve(ctx.net, from_bus=fb, to_bus=tb)
+            res = _run_pf_with_backend()
+        else:
+            res = _disconnect_line(ctx.net, from_bus=fb, to_bus=tb, config=ctx.solver_config)
+        if isinstance(res, dict) and res.get(&quot;error&quot;):
+            return res
+        ctx.session.last_result = res
+        ctx.session.modification_log.append(
+            Modification(action=&quot;disconnect_line&quot;, description=f&quot;Disconnect branch bus {fb} - bus {tb}&quot;, parameters={&quot;from_bus&quot;: fb, &quot;to_bus&quot;: tb})
+        )
+        return res.model_dump()
+</pre></details><details open><summary>real output for <code>disconnect_line(from_bus=1, to_bus=5)</code></summary><pre>{&quot;case_name&quot;: &quot;case14&quot;, &quot;converged&quot;: true, &quot;bus_voltages&quot;: [{&quot;bus_id&quot;: 1, &quot;vm_pu&quot;: 1.06, &quot;va_deg&quot;: 0.0, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 2, &quot;vm_pu&quot;: 1.0449999999999997, &quot;va_deg&quot;: -8.124831087577652, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 3, &quot;vm_pu&quot;: 1.0100000000000007, &quot;va_deg&quot;: -17.81080863209597, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 4, &quot;vm_pu&quot;: 1.0076645403107123, &quot;va_deg&quot;: -16.437164331972454, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 5, &quot;vm_pu&quot;: 1.0052564323529807, &quot;va_deg&quot;: -15.742365306326922, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 6, &quot;vm_pu&quot;: 1.0699999999999998, &quot;va_deg&quot;: -21.433509451754134, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 7, &quot;vm_pu&quot;: 1.0570973332949904, &quot;va_deg&quot;: -19.80951968823051, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 8, &quot;vm_pu&quot;: 1.09, &quot;va_deg&quot;: -19.80951968823051, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 9, &quot;vm_pu&quot;: 1.0520509652135288, &quot;va_deg&quot;: -21.54622441372029, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 10, &quot;vm_pu&quot;: 1.047560308198634, &quot;va_deg&quot;: -21.822366985383166, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 11, &quot;vm_pu&quot;: 1.0553863827183605, &quot;va_deg&quot;: -21.747894511994584, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 12, &quot;vm_pu&quot;: 1.0545929777024863, &quot;va_deg&quot;: -22.264296782191558, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 13, &quot;vm_pu&quot;: 1.0493117514866321, &quot;va_deg&quot;: -22.310239950862307, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 14, &quot;vm_pu&quot;: 1.0313293206598753, &quot;va_deg&quot;: -22.966941622265352, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}], &quot;line_flows&quot;: [{&quot;line_id&quot;: 0, &quot;from_bus&quot;: 1, &quot;to_bus&quot;: 2, &quot;p_from_mw&quot;: 252.45290882465082, &quot;q_from_mvar&quot;: -39.989855448443166, &quot;loading_percent&quot;: 2.4356831169430286, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 1, &quot;from_bus&quot;: 1, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: 0.0, &quot;q_from_mvar&quot;: 0.0, &quot;loading_percent&quot;: 0.0, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 2, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 3, &quot;p_from_mw&quot;: 90.77418563908218, &quot;q_from_mvar&quot;: 2.1374305459905254, &quot;loading_percent&quot;: 0.8776699709694635, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 3, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 4, &quot;p_from_mw&quot;: 86.32307783796664, &quot;q_from_mvar&quot;: -1.9044219090057242, &quot;loading_percent&quot;: 0.834605215245288, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 4, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: 80.96926161382811, &quot;q_from_mvar&quot;: 0.8084122111060448, &quot;loading_percent&quot;: 0.7826909978484795, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 5, &quot;from_bus&quot;: 3, &quot;to_bus&quot;: 4, &quot;p_from_mw&quot;: -11.840165523442996, &quot;q_from_mvar&quot;: 5.53633377458985, &quot;loading_percent&quot;: 0.13661915234015534, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 6, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: -24.79485216513385, &quot;q_from_mvar&quot;: 13.799943521099895, &quot;loading_percent&quot;: 0.28445066374258543, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 7, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 11, &quot;p_from_mw&quot;: 5.597128489613961, &quot;q_from_mvar&quot;: 5.197293921030797, &quot;loading_percent&quot;: 0.07210463222260798, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 8, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 12, &quot;p_from_mw&quot;: 7.7300612100194135, &quot;q_from_mvar&quot;: 2.77671619525627, &quot;loading_percent&quot;: 0.07753844168580533, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 9, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 13, &quot;p_from_mw&quot;: 17.384984079231565, &quot;q_from_mvar&quot;: 8.265680312539994, &quot;loading_percent&quot;: 0.18172295658530713, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 10, &quot;from_bus&quot;: 9, &quot;to_bus&quot;: 10, &quot;p_from_mw&quot;: 7.354155335147218, &quot;q_from_mvar&quot;: 2.8376841785877662, &quot;loading_percent&quot;: 0.07568326418458031, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 11, &quot;from_bus&quot;: 9, &quot;to_bus&quot;: 14, &quot;p_from_mw&quot;: 11.300426270775997, &quot;q_from_mvar&quot;: 2.8736583268076497, &quot;loading_percent&quot;: 0.11195144019626188, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 12, &quot;from_bus&quot;: 10, &quot;to_bus&quot;: 11, &quot;p_from_mw&quot;: -2.1745401633988872, &quot;q_from_mvar&quot;: -3.338960232249629, &quot;loading_percent&quot;: 0.038421456772638515, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 13, &quot;from_bus&quot;: 12, &quot;to_bus&quot;: 13, &quot;p_from_mw&quot;: 1.5861873854622128, &quot;q_from_mvar&quot;: 1.0334674144662845, &quot;loading_percent&quot;: 0.018132875366425313, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 14, &quot;from_bus&quot;: 13, &quot;to_bus&quot;: 14, &quot;p_from_mw&quot;: 5.024819077316611, &quot;q_from_mvar&quot;: 2.9743504657754265, &quot;loading_percent&quot;: 0.056209436324397996, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100000, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 7, &quot;p_from_mw&quot;: 30.637719835742512, &quot;q_from_mvar&quot;: -12.285418799104864, &quot;loading_percent&quot;: 0.3308892470313099, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100001, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 9, &quot;p_from_mw&quot;: 17.5168617686836, &quot;q_from_mvar&quot;: -1.490107220240939, &quot;loading_percent&quot;: 0.1762263465860038, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100002, &quot;from_bus&quot;: 5, &quot;to_bus&quot;: 6, &quot;p_from_mw&quot;: 45.412173771065454, &quot;q_from_mvar&quot;: 5.9384485207151405, &quot;loading_percent&quot;: 0.4601952242792488, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100003, &quot;from_bus&quot;: 7, &quot;to_bus&quot;: 8, &quot;p_from_mw&quot;: 2.055378301754083e-14, &quot;q_from_mvar&quot;: -19.745285967731807, &quot;loading_percent&quot;: 0.18867452099771287, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100004, &quot;from_bus&quot;: 7, &quot;to_bus&quot;: 9, &quot;p_from_mw&quot;: 30.637719835653503, &quot;q_from_mvar&quot;: 5.313475484793609, &quot;loading_percent&quot;: 0.29712641242293414, &quot;is_violation&quot;: false}], &quot;total_generation_mw&quot;: 292.49040367118994, &quot;total_load_mw&quot;: 269.51478211719655, &quot;total_loss_mw&quot;: 22.975621583291602, &quot;voltage_violations&quot;: [{&quot;bus_id&quot;: 1, &quot;vm_pu&quot;: 1.06, &quot;va_deg&quot;: 0.0, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 6, &quot;vm_pu&quot;: 1.0699999999999998, &quot;va_deg&quot;: -21.433509451754134, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 7, &quot;vm_pu&quot;: 1.0570973332949904, &quot;va_deg&quot;: -19.80951968823051, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 8, &quot;vm_pu&quot;: 1.09, &quot;va_deg&quot;: -19.80951968823051, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 9, &quot;vm_pu&quot;: 1.0520509652135288, &quot;va_deg&quot;: -21.54622441372029, &quot;is_violation&quot;: true, &quot;violation_
+... (405 more chars)</pre></details><h3><code>reconnect_line</code> <span class='muted'>· Reconnect line/branch between two buses and recompute.</span></h3><table><tr><th>input</th><th>type</th><th>default</th><th>meaning</th></tr><tr><td><code>from_bus</code>*</td><td>integer</td><td></td><td></td></tr><tr><td><code>to_bus</code>*</td><td>integer</td><td></td><td></td></tr></table><details><summary>Python handler (18 lines)</summary><pre>    def reconnect_line(args: Mapping[str, Any]) -&gt; Any:
+        if ctx.net is None:
+            return {&quot;error&quot;: &quot;Please load a test case first.&quot;}
+        fb = int(args.get(&quot;from_bus&quot;))
+        tb = int(args.get(&quot;to_bus&quot;))
+        ctx.prev_result = ctx.session.last_result
+        if _is_llm_only():
+            _reconnect_line_no_solve(ctx.net, from_bus=fb, to_bus=tb)
+            res = _run_pf_with_backend()
+        else:
+            res = _reconnect_line(ctx.net, from_bus=fb, to_bus=tb, config=ctx.solver_config)
+        if isinstance(res, dict) and res.get(&quot;error&quot;):
+            return res
+        ctx.session.last_result = res
+        ctx.session.modification_log.append(
+            Modification(action=&quot;reconnect_line&quot;, description=f&quot;Reconnect branch bus {fb} - bus {tb}&quot;, parameters={&quot;from_bus&quot;: fb, &quot;to_bus&quot;: tb})
+        )
+        return res.model_dump()
+</pre></details><details open><summary>real output for <code>reconnect_line(from_bus=1, to_bus=5)</code></summary><pre>{&quot;case_name&quot;: &quot;case14&quot;, &quot;converged&quot;: true, &quot;bus_voltages&quot;: [{&quot;bus_id&quot;: 1, &quot;vm_pu&quot;: 1.06, &quot;va_deg&quot;: 0.0, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 2, &quot;vm_pu&quot;: 1.0450000000000002, &quot;va_deg&quot;: -5.259829801573135, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 3, &quot;vm_pu&quot;: 1.01, &quot;va_deg&quot;: -13.377546231109523, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 4, &quot;vm_pu&quot;: 1.0168729480244292, &quot;va_deg&quot;: -10.755533116733563, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 5, &quot;vm_pu&quot;: 1.0185985703491067, &quot;va_deg&quot;: -9.176009024062136, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 6, &quot;vm_pu&quot;: 1.0699999999999998, &quot;va_deg&quot;: -15.04198776465758, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 7, &quot;vm_pu&quot;: 1.0609514807441736, &quot;va_deg&quot;: -13.94423478484657, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 8, &quot;vm_pu&quot;: 1.09, &quot;va_deg&quot;: -13.944234784846563, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 9, &quot;vm_pu&quot;: 1.0552501716226697, &quot;va_deg&quot;: -15.596420516729856, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 10, &quot;vm_pu&quot;: 1.0501403567293202, &quot;va_deg&quot;: -15.795452246362082, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 11, &quot;vm_pu&quot;: 1.0566273365896468, &quot;va_deg&quot;: -15.543286024277876, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 12, &quot;vm_pu&quot;: 1.0548989545314473, &quot;va_deg&quot;: -15.900719247241964, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 13, &quot;vm_pu&quot;: 1.0497117700903427, &quot;va_deg&quot;: -15.981246482450603, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 14, &quot;vm_pu&quot;: 1.0333370227006267, &quot;va_deg&quot;: -16.84859775793501, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}], &quot;line_flows&quot;: [{&quot;line_id&quot;: 0, &quot;from_bus&quot;: 1, &quot;to_bus&quot;: 2, &quot;p_from_mw&quot;: 165.27026102518246, &quot;q_from_mvar&quot;: -22.342828742412145, &quot;loading_percent&quot;: 1.589228916550409, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 1, &quot;from_bus&quot;: 1, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: 78.83752034560843, &quot;q_from_mvar&quot;: 4.008978125932545, &quot;loading_percent&quot;: 0.7525709023594441, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 2, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 3, &quot;p_from_mw&quot;: 76.61927590953674, &quot;q_from_mvar&quot;: 3.2392005072275234, &quot;loading_percent&quot;: 0.7414119170696705, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 3, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 4, &quot;p_from_mw&quot;: 57.84287600670696, &quot;q_from_mvar&quot;: -1.4794079790606913, &quot;loading_percent&quot;: 0.5592943001367365, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 4, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: 42.87485585448405, &quot;q_from_mvar&quot;: 1.3645841392995839, &quot;loading_percent&quot;: 0.4161341750563323, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 5, &quot;from_bus&quot;: 3, &quot;to_bus&quot;: 4, &quot;p_from_mw&quot;: -24.980318590469093, &quot;q_from_mvar&quot;: 5.704428434681495, &quot;loading_percent&quot;: 0.25919958142992167, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 6, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: -62.53968440910883, &quot;q_from_mvar&quot;: 16.594340903502083, &quot;loading_percent&quot;: 0.6427291993831415, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 7, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 11, &quot;p_from_mw&quot;: 6.855622282200764, &quot;q_from_mvar&quot;: 3.9419573163320845, &quot;loading_percent&quot;: 0.07465433836591942, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 8, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 12, &quot;p_from_mw&quot;: 7.857673261186853, &quot;q_from_mvar&quot;: 2.5906044438047977, &quot;loading_percent&quot;: 0.07810543746590173, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 9, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 13, &quot;p_from_mw&quot;: 18.0103362163473, &quot;q_from_mvar&quot;: 7.634517541044127, &quot;loading_percent&quot;: 0.18466579726000598, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 10, &quot;from_bus&quot;: 9, &quot;to_bus&quot;: 10, &quot;p_from_mw&quot;: 6.096779338783003, &quot;q_from_mvar&quot;: 4.094004281404411, &quot;loading_percent&quot;: 0.07029605990697987, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 11, &quot;from_bus&quot;: 9, &quot;to_bus&quot;: 14, &quot;p_from_mw&quot;: 10.547857987203423, &quot;q_from_mvar&quot;: 3.689943479288058, &quot;loading_percent&quot;: 0.10696547671749117, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 12, &quot;from_bus&quot;: 10, &quot;to_bus&quot;: 11, &quot;p_from_mw&quot;: -3.4294643388387525, &quot;q_from_mvar&quot;: -2.0761271173761697, &quot;loading_percent&quot;: 0.03856080227994965, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 13, &quot;from_bus&quot;: 12, &quot;to_bus&quot;: 13, &quot;p_from_mw&quot;: 1.7127363479599496, &quot;q_from_mvar&quot;: 0.8451430789698634, &quot;loading_percent&quot;: 0.018287967532376933, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 14, &quot;from_bus&quot;: 13, &quot;to_bus&quot;: 14, &quot;p_from_mw&quot;: 5.769607356995248, &quot;q_from_mvar&quot;: 2.1409861970265176, &quot;loading_percent&quot;: 0.059218166087552836, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100000, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 7, &quot;p_from_mw&quot;: 29.342346134409862, &quot;q_from_mvar&quot;: -9.725990864243938, &quot;loading_percent&quot;: 0.30706403330199994, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100001, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 9, &quot;p_from_mw&quot;: 16.802291191415613, &quot;q_from_mvar&quot;: -0.39273752399238626, &quot;loading_percent&quot;: 0.16694953877720878, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100002, &quot;from_bus&quot;: 5, &quot;to_bus&quot;: 6, &quot;p_from_mw&quot;: 47.42363175839671, &quot;q_from_mvar&quot;: 12.367969175869579, &quot;loading_percent&quot;: 0.4860101144109844, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100003, &quot;from_bus&quot;: 7, &quot;to_bus&quot;: 8, &quot;p_from_mw&quot;: -3.523143707338639e-14, &quot;q_from_mvar&quot;: -17.495923654779823, &quot;loading_percent&quot;: 0.16657359433578706, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100004, &quot;from_bus&quot;: 7, &quot;to_bus&quot;: 9, &quot;p_from_mw&quot;: 29.342346133999804, &quot;q_from_mvar&quot;: 5.921508916697372, &quot;loading_percent&quot;: 0.28499181404932505, &quot;is_violation&quot;: false}], &quot;total_generation_mw&quot;: 284.14527621733004, &quot;total_load_mw&quot;: 269.51478211719655, &quot;total_loss_mw&quot;: 14.630494106896203, &quot;voltage_violations&quot;: [{&quot;bus_id&quot;: 1, &quot;vm_pu&quot;: 1.06, &quot;va_deg&quot;: 0.0, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 6, &quot;vm_pu&quot;: 1.0699999999999998, &quot;va_deg&quot;: -15.04198776465758, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 7, &quot;vm_pu&quot;: 1.0609514807441736, &quot;va_deg&quot;: -13.94423478484657, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 8, &quot;vm_pu&quot;: 1.09, &quot;va_deg&quot;: -13.944234784846563, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 9, &quot;vm_pu&quot;: 1.0552501716226697, &quot;va_deg&quot;: -15.59642051
+... (578 more chars)</pre></details><h3><code>run_n1_contingency</code> <span class='muted'>· Run N-1 contingency analysis.</span></h3><table><tr><th>input</th><th>type</th><th>default</th><th>meaning</th></tr><tr><td><code>top_k</code></td><td>integer</td><td>5</td><td>How many worst outages to return.</td></tr><tr><td><code>criteria</code></td><td>string in {max_violations, max_overload, min_voltage}</td><td>max_violations</td><td>Ranking criterion.</td></tr><tr><td><code>max_candidates</code></td><td>integer</td><td>0</td><td>How many branches to scan; 0 scans every branch of the network. Leave 0 unless the request asks to limit the scan.</td></tr></table><details><summary>Python handler (19 lines)</summary><pre>    def run_n1_contingency(args: Mapping[str, Any]) -&gt; Any:
+        if _is_llm_only():
+            return _llm_disabled()
+        if ctx.net is None:
+            return {&quot;error&quot;: &quot;Please load a test case first.&quot;}
+
+        report = _run_n1_contingency(
+            ctx.net,
+            top_k=int(args.get(&quot;top_k&quot;, 5) or 5),
+            criteria=str(args.get(&quot;criteria&quot;, &quot;max_violations&quot;) or &quot;max_violations&quot;),
+            max_candidates=int(args.get(&quot;max_candidates&quot;, 0) or 0),
+            config=ctx.solver_config,
+        )
+        ctx.session.last_n1_report = report
+        ctx.last_n1_report = report
+
+        theme = &quot;dark&quot; if str(ctx.theme).lower().startswith(&quot;dark&quot;) else &quot;light&quot;
+        fig_json = pio.to_json(make_n1_ranking(report, theme=theme, lang=_lang()), validate=False)
+        return {&quot;plot_type&quot;: &quot;n1_ranking&quot;, &quot;figure_json&quot;: fig_json, &quot;n1_report&quot;: report.model_dump()}
+</pre></details><details open><summary>real output for <code>run_n1_contingency(top_k=1, criteria=&#x27;max_violations&#x27;)</code></summary><pre>{&quot;plot_type&quot;: &quot;n1_ranking&quot;, &quot;figure_json&quot;: &quot;&lt;plot, 8 KB, omitted&gt;&quot;, &quot;n1_report&quot;: {&quot;case_name&quot;: &quot;case14&quot;, &quot;base_converged&quot;: true, &quot;top_k&quot;: 1, &quot;criteria&quot;: &quot;max_violations&quot;, &quot;results&quot;: [{&quot;branch_id&quot;: 100002, &quot;branch_type&quot;: &quot;trafo&quot;, &quot;from_bus&quot;: 5, &quot;to_bus&quot;: 6, &quot;converged&quot;: true, &quot;n_voltage_violations&quot;: 9, &quot;n_thermal_violations&quot;: 0, &quot;delta_voltage_violations&quot;: 1, &quot;delta_thermal_violations&quot;: 0, &quot;worst_vm_pu&quot;: 1.0099999999999998, &quot;worst_loading_percent&quot;: 1.640974924666484, &quot;score&quot;: 90001.64097492467, &quot;notes&quot;: &quot;&quot;}], &quot;summary_text&quot;: &quot;N-1 completed over 20 branches. Worst outage: 5-6 (trafo), V violations=9 (delta=1), thermal violations=0 (delta=0).&quot;}}</pre></details><h3><code>recommend_remedial_actions</code> <span class='muted'>· Recommend remedial actions.</span></h3><table><tr><th>input</th><th>type</th><th>default</th><th>meaning</th></tr><tr><td><code>max_actions</code></td><td>integer</td><td>5</td><td></td></tr><tr><td><code>allow_load_shed</code></td><td>boolean</td><td>True</td><td></td></tr><tr><td><code>allow_voltage_control</code></td><td>boolean</td><td>True</td><td></td></tr><tr><td><code>include_best_comparison</code></td><td>boolean</td><td>True</td><td></td></tr></table><details><summary>Python handler (45 lines)</summary><pre>    def recommend_remedial_actions(args: Mapping[str, Any]) -&gt; Any:
+        if _is_llm_only():
+            return _llm_disabled()
+        if ctx.net is None or ctx.session.last_result is None:
+            return {&quot;error&quot;: &quot;Please load case and run power flow first.&quot;}
+
+        plan = _recommend_remedial_actions(
+            ctx.net,
+            ctx.session.last_result,
+            config=ctx.solver_config,
+            max_actions=int(args.get(&quot;max_actions&quot;, 5) or 5),
+            allow_load_shed=bool(args.get(&quot;allow_load_shed&quot;, True)),
+            allow_voltage_control=bool(args.get(&quot;allow_voltage_control&quot;, True)),
+        )
+        ctx.session.last_remedial_plan = plan
+
+        theme = &quot;dark&quot; if str(ctx.theme).lower().startswith(&quot;dark&quot;) else &quot;light&quot;
+        fig_json = pio.to_json(make_remedial_ranking(plan, theme=theme, lang=_lang()), validate=False)
+
+        extra_figures: list[dict[str, Any]] = []
+        if bool(args.get(&quot;include_best_comparison&quot;, True)) and plan.actions and plan.actions[0].preview_result is not None:
+            if ctx.cached_positions is None:
+                ctx.cached_positions = _compute_layout(ctx.net, _build_graph(ctx.net))
+            cmp_fig = make_comparison(
+                ctx.net,
+                ctx.session.last_result,
+                plan.actions[0].preview_result,
+                positions=ctx.cached_positions,
+                theme=theme,
+                lang=_lang(),
+            )
+            extra_figures.append(
+                {
+                    &quot;plot_type&quot;: &quot;comparison&quot;,
+                    &quot;figure_json&quot;: pio.to_json(cmp_fig, validate=False),
+                    &quot;title&quot;: (&quot;Best remedial before/after&quot; if _lang() == &quot;en&quot; else &quot;最佳建议前后对比&quot;),
+                }
+            )
+
+        return {
+            &quot;plot_type&quot;: &quot;remedial_ranking&quot;,
+            &quot;figure_json&quot;: fig_json,
+            &quot;remedial_plan&quot;: plan.model_dump(),
+            &quot;extra_figures&quot;: extra_figures,
+        }
+</pre></details><details open><summary>real output for <code>recommend_remedial_actions(max_actions=2)</code></summary><pre>{&quot;plot_type&quot;: &quot;remedial_ranking&quot;, &quot;figure_json&quot;: &quot;&lt;plot, 13 KB, omitted&gt;&quot;, &quot;remedial_plan&quot;: {&quot;case_name&quot;: &quot;case14&quot;, &quot;base_risk&quot;: 82000.0, &quot;actions&quot;: [{&quot;action&quot;: &quot;adjust_gen_vm&quot;, &quot;description&quot;: &quot;Decrease generator VM at bus 6 by -0.02 p.u.&quot;, &quot;parameters&quot;: {&quot;bus_id&quot;: 6, &quot;delta&quot;: -0.02, &quot;reason&quot;: &quot;overvoltage&quot;}, &quot;predicted_risk&quot;: 31999.99999999999, &quot;risk_reduction&quot;: 50000.000000000015, &quot;preview_result&quot;: {&quot;case_name&quot;: &quot;case14&quot;, &quot;converged&quot;: true, &quot;bus_voltages&quot;: [{&quot;bus_id&quot;: 1, &quot;vm_pu&quot;: 1.06, &quot;va_deg&quot;: 0.0, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 2, &quot;vm_pu&quot;: 1.0450000000000002, &quot;va_deg&quot;: -5.272459136658536, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 3, &quot;vm_pu&quot;: 1.0100000000000005, &quot;va_deg&quot;: -13.420461371172433, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 4, &quot;vm_pu&quot;: 1.0134222245565765, &quot;va_deg&quot;: -10.74022377872813, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 5, &quot;vm_pu&quot;: 1.0143402535534674, &quot;va_deg&quot;: -9.120499092093446, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 6, &quot;vm_pu&quot;: 1.05, &quot;va_deg&quot;: -15.008465910327118, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 7, &quot;vm_pu&quot;: 1.0561257827345094, &quot;va_deg&quot;: -14.019755349191499, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 8, &quot;vm_pu&quot;: 1.0899999999999999, &quot;va_deg&quot;: -14.0197553491915, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 9, &quot;vm_pu&quot;: 1.046800002890717, &quot;va_deg&quot;: -15.72687260870975, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 10, &quot;vm_pu&quot;: 1.0395729545129497, &quot;va_deg&quot;: -15.910521050379758, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 11, &quot;vm_pu&quot;: 1.04139089369103, &quot;va_deg&quot;: -15.596373725389281, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 12, &quot;vm_pu&quot;: 1.0354909719643803, &quot;va_deg&quot;: -15.901468405662712, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 13, &quot;vm_pu&quot;: 1.0310516942409715, &quot;va_deg&quot;: -16.005883141097918, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 14, &quot;vm_pu&quot;: 1.020181183444417, &quot;va_deg&quot;: -16.962435111708654, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}], &quot;line_flows&quot;: [{&quot;line_id&quot;: 0, &quot;from_bus&quot;: 1, &quot;to_bus&quot;: 2, &quot;p_from_mw&quot;: 165.65255923281111, &quot;q_from_mvar&quot;: -22.430169566382027, &quot;loading_percent&quot;: 1.5929506314022142, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 1, &quot;from_bus&quot;: 1, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: 78.53729560810845, &quot;q_from_mvar&quot;: 6.005322710456934, &quot;loading_percent&quot;: 0.7522652844164617, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 2, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 3, &quot;p_from_mw&quot;: 76.89232977337461, &quot;q_from_mvar&quot;: 3.214255887909794, &quot;loading_percent&quot;: 0.7440006440853502, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 3, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 4, &quot;p_from_mw&quot;: 58.00009650182375, &quot;q_from_mvar&quot;: 0.4765462419090521, &quot;loading_percent&quot;: 0.560650081604849, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 4, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: 42.80447376784223, &quot;q_from_mvar&quot;: 3.891778940562608, &quot;loading_percent&quot;: 0.4190675450789278, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 5, &quot;from_bus&quot;: 3, &quot;to_bus&quot;: 4, &quot;p_from_mw&quot;: -24.725181038229458, &quot;q_from_mvar&quot;: 7.6682508996227545, &quot;loading_percent&quot;: 0.26277708416391177, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 6, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: -63.05397355199811, &quot;q_from_mvar&quot;: 18.755831355013946, &quot;loading_percent&quot;: 0.6556879071749568, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 7, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 11, &quot;p_from_mw&quot;: 6.371950984544932, &quot;q_from_mvar&quot;: 1.5309429127488738, &quot;loading_percent&quot;: 0.06304266566771487, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 8, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 12, &quot;p_from_mw&quot;: 7.726634698639538, &quot;q_from_mvar&quot;: 2.294565636779566, &quot;loading_percent&quot;: 0.07753865919449873, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 9, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 13, &quot;p_from_mw&quot;: 17.717171639777266, &quot;q_from_mvar&quot;: 6.401970737482326, &quot;loading_percent&quot;: 0.18122510044120738, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 10, &quot;from_bus&quot;: 9, &quot;to_bus&quot;: 10, &quot;p_from_mw&quot;: 6.569688889954099, &quot;q_from_mvar&quot;: 6.4864453263407285, &quot;loading_percent&quot;: 0.08908601355614292, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 11, &quot;from_bus&quot;: 9, &quot;to_bus&quot;: 14, &quot;p_from_mw&quot;: 10.97847837006802, &quot;q_from_mvar&quot;: 5.236384851888106, &quot;loading_percent&quot;: 0.11736909382227617, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 12, &quot;from_bus&quot;: 10, &quot;to_bus&quot;: 11, &quot;p_from_mw&quot;: -2.965891613173898, &quot;q_from_mvar&quot;: 0.2915116092595791, &quot;loading_percent&quot;: 0.028956948879854585, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 13, &quot;from_bus&quot;: 12, &quot;to_bus&quot;: 13, &quot;p_from_mw&quot;: 1.582760467752433, &quot;q_from_mvar&quot;: 0.5513160103039788, &quot;loading_percent&quot;: 0.016349352052599457, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 14, &quot;from_bus&quot;: 13, &quot;to_bus&quot;: 14, &quot;p_from_mw&quot;: 5.356082854516857, &quot;q_from_mvar&quot;: 0.6320013662214914, &quot;loading_percent&quot;: 0.05283651911898548, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100000, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 7, &quot;p_from_mw&quot;: 29.938060264270838, &quot;q_from_mvar&quot;: -9.00702887691019, &quot;loading_percent&quot;: 0.3116116339928469, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100001, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 9, &quot;p_from_mw&quot;: 17.11010699431936, &quot;q_from_mvar&quot;: 0.5651602328281748, &quot;loading_percent&quot;: 0.17063334010696501, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100002, &quot;from_bus&quot;: 5, &quot;to_bus&quot;: 6, &quot;p_from_mw&quot;: 46.515757320598276, &quot;q_from_mvar&quot;: 18.952726335678584, &quot;loading_percent&quot;: 0.5001877081644753, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100003, &quot;from_bus&quot;: 7, &quot;to_bus&quot;: 8, &quot;p_from_mw&quot;: 1.0800605412132681e-14, &quot;q_from_mvar&quot;: -20.309641909755918, &quot;loading_percent&quot;: 0.19424570579763326, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100004, &quot;from_bus&quot;: 7, &quot;to_bus&quot;: 9, &quot;p_from_mw&quot;: 29.938060264368076, &quot;q_from_mvar&quot;: 9.399033633367777, &quot;loading_percent&quot;: 0.3001135021198884, &quot;is_violation&quot;: false}], &quot;total_generation_mw&quot;: 284.2273496874587, &quot;total_load_mw&quot;: 269.51478211719655, &quot;total_loss_mw&quot;: 14.712567578222163, &quot;voltage_violations&quot;: [{&quot;bus_id&quot;: 1, &quot;vm_pu&quot;: 1.06, &quot;va_deg&quot;: 0.0, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 7, &quot;vm_pu&quot;: 1.0561257827345094, &quot;va_deg&quot;: -14.019755349191499, &quot;i
+... (6952 more chars)</pre></details><h3><code>apply_remedial_action</code> <span class='muted'>· Apply one remedial action by index.</span></h3><table><tr><th>input</th><th>type</th><th>default</th><th>meaning</th></tr><tr><td><code>action_index</code>*</td><td>integer</td><td></td><td></td></tr><tr><td><code>confirmed</code></td><td>boolean</td><td>False</td><td></td></tr></table><details><summary>Python handler (72 lines)</summary><pre>    def apply_remedial_action(args: Mapping[str, Any]) -&gt; Any:
+        if _is_llm_only():
+            return _llm_disabled()
+        if ctx.net is None or ctx.session.last_result is None:
+            return {&quot;error&quot;: &quot;Please load case and run power flow first.&quot;}
+
+        plan = ctx.session.last_remedial_plan
+        if plan is None or not plan.actions:
+            return {&quot;error&quot;: &quot;No remedial plan available. Call recommend_remedial_actions first.&quot;}
+
+        raw_idx = int(args.get(&quot;action_index&quot;))
+        idx = raw_idx - 1 if raw_idx &gt;= 1 else raw_idx
+        if idx &lt; 0 or idx &gt;= len(plan.actions):
+            return {&quot;error&quot;: f&quot;action_index out of range: 1..{len(plan.actions)}&quot;}
+
+        act = plan.actions[idx]
+        if not bool(args.get(&quot;confirmed&quot;, False)):
+            return {
+                &quot;need_confirmation&quot;: True,
+                &quot;action_index&quot;: idx + 1,
+                &quot;action&quot;: {
+                    &quot;action&quot;: act.action,
+                    &quot;description&quot;: act.description,
+                    &quot;parameters&quot;: act.parameters,
+                    &quot;predicted_risk&quot;: act.predicted_risk,
+                    &quot;risk_reduction&quot;: act.risk_reduction,
+                },
+                &quot;message&quot;: &quot;This will modify network and re-solve. Re-call with confirmed=true to proceed.&quot;,
+            }
+
+        ctx.prev_result = ctx.session.last_result
+        new_res = _apply_remedial_action_inplace(ctx.net, act, config=ctx.solver_config)
+        ctx.session.last_result = new_res
+        ctx.session.modification_log.append(
+            Modification(
+                action=&quot;apply_remedial_action&quot;,
+                description=f&quot;Apply remedial action #{idx+1}: {act.description}&quot;,
+                parameters={&quot;action_index&quot;: idx + 1, &quot;action&quot;: act.action, **(act.parameters or {})},
+            )
+        )
+        ctx.session.last_remedial_plan = None
+
+        theme = &quot;dark&quot; if str(ctx.theme).lower().startswith(&quot;dark&quot;) else &quot;light&quot;
+        extra_figures: list[dict[str, Any]] = []
+        try:
+            if ctx.cached_positions is None:
+                ctx.cached_positions = _compute_layout(ctx.net, _build_graph(ctx.net))
+            cmp_fig = make_comparison(
+                ctx.net,
+                ctx.prev_result,
+                new_res,
+                positions=ctx.cached_positions,
+                theme=theme,
+                lang=_lang(),
+            )
+            extra_figures.append(
+                {
+                    &quot;plot_type&quot;: &quot;comparison&quot;,
+                    &quot;figure_json&quot;: pio.to_json(cmp_fig, validate=False),
+                    &quot;title&quot;: (&quot;After apply&quot; if _lang() == &quot;en&quot; else &quot;应用后对比&quot;),
+                }
+            )
+        except Exception:
+            pass
+
+        return {
+            &quot;applied&quot;: True,
+            &quot;applied_action_index&quot;: idx + 1,
+            &quot;applied_action&quot;: {&quot;action&quot;: act.action, &quot;description&quot;: act.description, &quot;parameters&quot;: act.parameters},
+            &quot;result&quot;: new_res.model_dump(),
+            &quot;extra_figures&quot;: extra_figures,
+        }
+</pre></details><details open><summary>real output for <code>apply_remedial_action(action_index=0, confirmed=True)</code></summary><pre>{&quot;applied&quot;: true, &quot;applied_action_index&quot;: 1, &quot;applied_action&quot;: {&quot;action&quot;: &quot;adjust_gen_vm&quot;, &quot;description&quot;: &quot;Decrease generator VM at bus 6 by -0.02 p.u.&quot;, &quot;parameters&quot;: {&quot;bus_id&quot;: 6, &quot;delta&quot;: -0.02, &quot;reason&quot;: &quot;overvoltage&quot;}}, &quot;result&quot;: {&quot;case_name&quot;: &quot;case14&quot;, &quot;converged&quot;: true, &quot;bus_voltages&quot;: [{&quot;bus_id&quot;: 1, &quot;vm_pu&quot;: 1.06, &quot;va_deg&quot;: 0.0, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 2, &quot;vm_pu&quot;: 1.0450000000000002, &quot;va_deg&quot;: -5.272459136658536, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 3, &quot;vm_pu&quot;: 1.0100000000000005, &quot;va_deg&quot;: -13.420461371172433, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 4, &quot;vm_pu&quot;: 1.0134222245565765, &quot;va_deg&quot;: -10.74022377872813, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 5, &quot;vm_pu&quot;: 1.0143402535534674, &quot;va_deg&quot;: -9.120499092093446, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 6, &quot;vm_pu&quot;: 1.05, &quot;va_deg&quot;: -15.008465910327118, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 7, &quot;vm_pu&quot;: 1.0561257827345094, &quot;va_deg&quot;: -14.019755349191499, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 8, &quot;vm_pu&quot;: 1.0899999999999999, &quot;va_deg&quot;: -14.0197553491915, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 9, &quot;vm_pu&quot;: 1.046800002890717, &quot;va_deg&quot;: -15.72687260870975, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 10, &quot;vm_pu&quot;: 1.0395729545129497, &quot;va_deg&quot;: -15.910521050379758, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 11, &quot;vm_pu&quot;: 1.04139089369103, &quot;va_deg&quot;: -15.596373725389281, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 12, &quot;vm_pu&quot;: 1.0354909719643803, &quot;va_deg&quot;: -15.901468405662712, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 13, &quot;vm_pu&quot;: 1.0310516942409715, &quot;va_deg&quot;: -16.005883141097918, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}, {&quot;bus_id&quot;: 14, &quot;vm_pu&quot;: 1.020181183444417, &quot;va_deg&quot;: -16.962435111708654, &quot;is_violation&quot;: false, &quot;violation_type&quot;: null}], &quot;line_flows&quot;: [{&quot;line_id&quot;: 0, &quot;from_bus&quot;: 1, &quot;to_bus&quot;: 2, &quot;p_from_mw&quot;: 165.65255923281111, &quot;q_from_mvar&quot;: -22.430169566382027, &quot;loading_percent&quot;: 1.5929506314022142, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 1, &quot;from_bus&quot;: 1, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: 78.53729560810845, &quot;q_from_mvar&quot;: 6.005322710456934, &quot;loading_percent&quot;: 0.7522652844164617, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 2, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 3, &quot;p_from_mw&quot;: 76.89232977337461, &quot;q_from_mvar&quot;: 3.214255887909794, &quot;loading_percent&quot;: 0.7440006440853502, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 3, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 4, &quot;p_from_mw&quot;: 58.00009650182375, &quot;q_from_mvar&quot;: 0.4765462419090521, &quot;loading_percent&quot;: 0.560650081604849, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 4, &quot;from_bus&quot;: 2, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: 42.80447376784223, &quot;q_from_mvar&quot;: 3.891778940562608, &quot;loading_percent&quot;: 0.4190675450789278, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 5, &quot;from_bus&quot;: 3, &quot;to_bus&quot;: 4, &quot;p_from_mw&quot;: -24.725181038229458, &quot;q_from_mvar&quot;: 7.6682508996227545, &quot;loading_percent&quot;: 0.26277708416391177, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 6, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 5, &quot;p_from_mw&quot;: -63.05397355199811, &quot;q_from_mvar&quot;: 18.755831355013946, &quot;loading_percent&quot;: 0.6556879071749568, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 7, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 11, &quot;p_from_mw&quot;: 6.371950984544932, &quot;q_from_mvar&quot;: 1.5309429127488738, &quot;loading_percent&quot;: 0.06304266566771487, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 8, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 12, &quot;p_from_mw&quot;: 7.726634698639538, &quot;q_from_mvar&quot;: 2.294565636779566, &quot;loading_percent&quot;: 0.07753865919449873, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 9, &quot;from_bus&quot;: 6, &quot;to_bus&quot;: 13, &quot;p_from_mw&quot;: 17.717171639777266, &quot;q_from_mvar&quot;: 6.401970737482326, &quot;loading_percent&quot;: 0.18122510044120738, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 10, &quot;from_bus&quot;: 9, &quot;to_bus&quot;: 10, &quot;p_from_mw&quot;: 6.569688889954099, &quot;q_from_mvar&quot;: 6.4864453263407285, &quot;loading_percent&quot;: 0.08908601355614292, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 11, &quot;from_bus&quot;: 9, &quot;to_bus&quot;: 14, &quot;p_from_mw&quot;: 10.97847837006802, &quot;q_from_mvar&quot;: 5.236384851888106, &quot;loading_percent&quot;: 0.11736909382227617, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 12, &quot;from_bus&quot;: 10, &quot;to_bus&quot;: 11, &quot;p_from_mw&quot;: -2.965891613173898, &quot;q_from_mvar&quot;: 0.2915116092595791, &quot;loading_percent&quot;: 0.028956948879854585, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 13, &quot;from_bus&quot;: 12, &quot;to_bus&quot;: 13, &quot;p_from_mw&quot;: 1.582760467752433, &quot;q_from_mvar&quot;: 0.5513160103039788, &quot;loading_percent&quot;: 0.016349352052599457, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 14, &quot;from_bus&quot;: 13, &quot;to_bus&quot;: 14, &quot;p_from_mw&quot;: 5.356082854516857, &quot;q_from_mvar&quot;: 0.6320013662214914, &quot;loading_percent&quot;: 0.05283651911898548, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100000, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 7, &quot;p_from_mw&quot;: 29.938060264270838, &quot;q_from_mvar&quot;: -9.00702887691019, &quot;loading_percent&quot;: 0.3116116339928469, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100001, &quot;from_bus&quot;: 4, &quot;to_bus&quot;: 9, &quot;p_from_mw&quot;: 17.11010699431936, &quot;q_from_mvar&quot;: 0.5651602328281748, &quot;loading_percent&quot;: 0.17063334010696501, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100002, &quot;from_bus&quot;: 5, &quot;to_bus&quot;: 6, &quot;p_from_mw&quot;: 46.515757320598276, &quot;q_from_mvar&quot;: 18.952726335678584, &quot;loading_percent&quot;: 0.5001877081644753, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100003, &quot;from_bus&quot;: 7, &quot;to_bus&quot;: 8, &quot;p_from_mw&quot;: 1.0800605412132681e-14, &quot;q_from_mvar&quot;: -20.309641909755918, &quot;loading_percent&quot;: 0.19424570579763326, &quot;is_violation&quot;: false}, {&quot;line_id&quot;: 100004, &quot;from_bus&quot;: 7, &quot;to_bus&quot;: 9, &quot;p_from_mw&quot;: 29.938060264368076, &quot;q_from_mvar&quot;: 9.399033633367777, &quot;loading_percent&quot;: 0.3001135021198884, &quot;is_violation&quot;: false}], &quot;total_generation_mw&quot;: 284.2273496874587, &quot;total_load_mw&quot;: 269.51478211719655, &quot;total_loss_mw&quot;: 14.712567578222163, &quot;voltage_violations&quot;: [{&quot;bus_id&quot;: 1, &quot;vm_pu&quot;: 1.06, &quot;va_deg&quot;: 0.0, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 7, &quot;vm_pu&quot;: 1.0561257827345094, &quot;va_deg&quot;: -14.019755349191499, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;overvoltage&quot;}, {&quot;bus_id&quot;: 8, &quot;vm_pu&quot;: 1.0899999999999999, &quot;va_deg&quot;: -14.0197553491915, &quot;is_violation&quot;: true, &quot;violation_type&quot;: &quot;ov
+... (247 more chars)</pre></details><h3><code>generate_plot</code> <span class='muted'>· Generate one plot.</span></h3><table><tr><th>input</th><th>type</th><th>default</th><th>meaning</th></tr><tr><td><code>plot_type</code>*</td><td>string in {voltage_heatmap, flow_diagram, violation_overview, comparison}</td><td></td><td></td></tr></table><details><summary>Python handler (48 lines)</summary><pre>    def generate_plot(args: Mapping[str, Any]) -&gt; Any:
+        if ctx.net is None or ctx.session.last_result is None:
+            return {&quot;error&quot;: &quot;Please load case and run power flow first.&quot;}
+
+        plot_type = str(args.get(&quot;plot_type&quot;))
+        theme = &quot;dark&quot; if str(ctx.theme).lower().startswith(&quot;dark&quot;) else &quot;light&quot;
+
+        if ctx.cached_positions is None:
+            ctx.cached_positions = _compute_layout(ctx.net, _build_graph(ctx.net))
+        positions = ctx.cached_positions
+
+        fig = None
+        if plot_type == &quot;voltage_heatmap&quot;:
+            fig = make_voltage_heatmap(
+                ctx.net,
+                ctx.session.last_result,
+                positions=positions,
+                theme=theme,
+                lang=_lang(),
+            )
+        elif plot_type == &quot;flow_diagram&quot;:
+            fig = make_flow_diagram(ctx.net, ctx.session.last_result, positions=positions, theme=theme, lang=_lang())
+        elif plot_type == &quot;violation_overview&quot;:
+            fig = make_violation_overview(
+                ctx.net,
+                ctx.session.last_result,
+                positions=positions,
+                theme=theme,
+                lang=_lang(),
+            )
+        elif plot_type == &quot;comparison&quot;:
+            if ctx.prev_result is None:
+                return {&quot;error&quot;: &quot;No previous scenario to compare.&quot;}
+            fig = make_comparison(
+                ctx.net,
+                ctx.prev_result,
+                ctx.session.last_result,
+                positions=positions,
+                theme=theme,
+                lang=_lang(),
+            )
+        else:
+            return {&quot;error&quot;: f&quot;Unsupported plot_type: {plot_type}&quot;}
+
+        fig_json = pio.to_json(fig, validate=False)
+        ctx.last_plot_json = fig_json
+        ctx.last_plot_type = plot_type
+        return {&quot;plot_type&quot;: plot_type, &quot;figure_json&quot;: fig_json}
+</pre></details><details open><summary>real output for <code>generate_plot(plot_type=&#x27;voltage_heatmap&#x27;)</code></summary><pre>{&quot;plot_type&quot;: &quot;voltage_heatmap&quot;, &quot;figure_json&quot;: &quot;&lt;plot, 17 KB, omitted&gt;&quot;}</pre></details></section><section><h2>4. What each method receives, exactly</h2><p>Pick a scenario in the header. For each row: the system prompt (hash as it will be stamped on the run), the full user message for that scenario, the tool schema sent through function calling, and the planner prompt where it exists. Long blocks are collapsed; expand to read them whole.</p><h3>Deterministic parser, no LLM <span class='muted'>· rule_based</span></h3><p class='muted'>No LLM: a regex parser maps the request to tool calls and the solver runs them (baselines/rule_based.py). Nothing is sent to a model.</p><h3>Structured prompting <span class='muted'>· llm_only:structured</span></h3><details><summary>system prompt · hash 1b4712c641b5 · 439 chars</summary><pre>You are a power system analysis expert. You need to calculate AC power flow results based on test system data provided by the user.
 
 Important Constraints:
 
@@ -26405,7 +26684,891 @@ After each analysis, reply in this structure:
    }
   }
  }
-]</pre></details></section><section><h2>5. Information matrix, derived from section 4</h2><table><tr><th>row</th><th>case tables in the prompt</th><th>tool schema (function calling)</th><th>text catalogue</th><th>allowed values (enum)</th><th>1-based / (0-based) rule</th><th>sees tool outputs</th><th>abstention clause</th><th>gate</th></tr><tr><td><b>Deterministic parser, no LLM</b></td><td class='x'>n/a</td><td class='x'>n/a</td><td class='n'>no</td><td class='x'>n/a</td><td class='x'>fixed rules</td><td class='n'>no</td><td class='x'>n/a</td><td class='n'>no</td></tr><tr><td><b>Structured prompting</b></td><td class='y'>yes</td><td class='n'>no</td><td class='n'>no</td><td class='n'>no</td><td class='n'>no</td><td class='x'>n/a</td><td class='y'>yes</td><td class='n'>no</td></tr><tr><td><b>Chain-of-thought prompting</b></td><td class='y'>yes</td><td class='n'>no</td><td class='n'>no</td><td class='n'>no</td><td class='n'>no</td><td class='x'>n/a</td><td class='y'>yes</td><td class='n'>no</td></tr><tr><td><b>Structured, forced (§ cells, gpt-4o-mini)</b></td><td class='y'>yes</td><td class='n'>no</td><td class='n'>no</td><td class='n'>no</td><td class='n'>no</td><td class='x'>n/a</td><td class='n'>removed</td><td class='n'>no</td></tr><tr><td><b>Formulation probe, structured (¶ cells)</b></td><td class='y'>yes</td><td class='n'>no</td><td class='y'>yes</td><td class='y'>yes</td><td class='y'>yes</td><td class='x'>n/a</td><td class='x'>n/a</td><td class='n'>no</td></tr><tr><td><b>Formulation probe, chain-of-thought (¶ cells)</b></td><td class='y'>yes</td><td class='n'>no</td><td class='y'>yes</td><td class='y'>yes</td><td class='y'>yes</td><td class='x'>n/a</td><td class='x'>n/a</td><td class='n'>no</td></tr><tr><td><b>Single-call</b></td><td class='y'>yes</td><td class='y'>yes</td><td class='n'>no</td><td class='y'>yes</td><td class='y'>yes</td><td class='n'>no</td><td class='x'>n/a</td><td class='n'>observation</td></tr><tr><td><b>Plan-and-Act</b></td><td class='n'>no</td><td class='y'>yes</td><td class='y'>yes</td><td class='y'>yes</td><td class='y'>yes</td><td class='n'>no</td><td class='x'>n/a</td><td class='n'>no</td></tr><tr><td><b>ReAct</b></td><td class='n'>no</td><td class='y'>yes</td><td class='n'>no</td><td class='y'>yes</td><td class='y'>yes</td><td class='y'>yes, up to 8 rounds</td><td class='x'>n/a</td><td class='n'>no</td></tr><tr><td><b>PFAgent (ReAct + verification gate)</b></td><td class='n'>no</td><td class='y'>yes</td><td class='n'>no</td><td class='y'>yes</td><td class='y'>yes</td><td class='y'>yes, up to 8 rounds</td><td class='x'>n/a</td><td class='n'>final V1–V7</td></tr></table><p class='muted'>Green: the row receives it. Red: it does not. Grey: does not apply. The prompting rows deliberately have no tools; their Formulation is measured by the probes, which receive the catalogue with allowed values and the indexing rule.</p></section><section><h2>6. Verification gate (PFAgent) and scoring (every row)</h2><h3>Gate conditions on the final answer</h3><table><tr><th>label</th><th>key</th><th>condition</th></tr><tr><td>V1</td><td><code>converged</code></td><td>The last power flow the agent ran converged.</td></tr><tr><td>V2</td><td><code>balance</code></td><td>Active-power balance of the reported state holds within tolerance.</td></tr><tr><td>V3</td><td><code>no_isolated_buses</code></td><td>No bus was left isolated by the network changes.</td></tr><tr><td>V4</td><td><code>faithfulness</code></td><td>Every unit-bearing number in the answer appears in a tool output.</td></tr><tr><td>V5</td><td><code>currency</code></td><td>Those numbers come from the solve made after the last network change, not an earlier one.</td></tr><tr><td>V6</td><td><code>argument_grounding</code></td><td>Every argument of a mutating tool traces to the request or to a prior tool output; since 2026-09-24 a positive max_candidates on the N-1 scan must also come from the request.</td></tr><tr><td>V7</td><td><code>claims_from_tools</code></td><td>The answer&#x27;s claims match the agent&#x27;s own last solved state.</td></tr></table><p class='muted'>A rejected answer is retried once with the failed conditions spelled out; a second failure escalates. ReAct and Plan-and-Act run without this gate; single-call runs with the observation gate on tool outputs only.</p><h3>Scoring rules</h3><table><tr><th>metric</th><th>definition</th></tr><tr><td><b>Formulation</b></td><td>The executed tool calls (or, for the prompting rows, the operations the probe declared) match the reference calls in tool, identifiers, values and order. Read-only repeats are ignored; an optional argument the request did not pin is accepted unless it changes the result: an unrequested q_mvar, or an N-1 max_candidates below the branch count of the case (20 on IEEE 14).</td></tr><tr><td><b>Solved</b></td><td>Formulation exact and the reported numbers within tolerance of the reference (1e-3 p.u. on voltages, 1% on flows), answered by the method itself.</td></tr><tr><td><b>Escalated</b></td><td>The method declared it could not answer: an explicit statement of inability, the round limit, or the verification gate rejecting every candidate. Takes precedence over the other two.</td></tr><tr><td><b>Wrong, unflagged</b></td><td>The answer reports numbers that do not match the reference and does not say so. Solved + Escalated + Wrong = 100%.</td></tr><tr><td><b>Traceable</b></td><td>Share of answers whose every number appears in a tool output from the last solve.</td></tr><tr><td><b>V_MAE / B_mean</b></td><td>Bus-voltage MAE against the reference and the mean bus power-balance residual, over all requests and over the solved ones.</td></tr></table></section><section><h2>7. Exactly what will be executed, in order</h2><p>gpt-4o-mini runs first within each command; each run is rescored offline and rendered before the next starts. Nothing starts until you say so.</p><pre>.venv/bin/python run.py run --method rule_based --case ieee14 --n 40 --tag v2
+]</pre></details></section><section><h2>5. Information matrix, derived from section 4</h2><table><tr><th>row</th><th>case tables in the prompt</th><th>tool schema (function calling)</th><th>text catalogue</th><th>allowed values (enum)</th><th>1-based / (0-based) rule</th><th>sees tool outputs</th><th>abstention clause</th><th>gate</th></tr><tr><td><b>Deterministic parser, no LLM</b></td><td class='x'>n/a</td><td class='x'>n/a</td><td class='n'>no</td><td class='x'>n/a</td><td class='x'>fixed rules</td><td class='n'>no</td><td class='x'>n/a</td><td class='n'>no</td></tr><tr><td><b>Structured prompting</b></td><td class='y'>yes</td><td class='n'>no</td><td class='n'>no</td><td class='n'>no</td><td class='n'>no</td><td class='x'>n/a</td><td class='y'>yes</td><td class='n'>no</td></tr><tr><td><b>Chain-of-thought prompting</b></td><td class='y'>yes</td><td class='n'>no</td><td class='n'>no</td><td class='n'>no</td><td class='n'>no</td><td class='x'>n/a</td><td class='y'>yes</td><td class='n'>no</td></tr><tr><td><b>Structured, forced (§ cells, gpt-4o-mini)</b></td><td class='y'>yes</td><td class='n'>no</td><td class='n'>no</td><td class='n'>no</td><td class='n'>no</td><td class='x'>n/a</td><td class='n'>removed</td><td class='n'>no</td></tr><tr><td><b>Formulation probe, structured (¶ cells)</b></td><td class='y'>yes</td><td class='n'>no</td><td class='y'>yes</td><td class='y'>yes</td><td class='y'>yes</td><td class='x'>n/a</td><td class='x'>n/a</td><td class='n'>no</td></tr><tr><td><b>Formulation probe, chain-of-thought (¶ cells)</b></td><td class='y'>yes</td><td class='n'>no</td><td class='y'>yes</td><td class='y'>yes</td><td class='y'>yes</td><td class='x'>n/a</td><td class='x'>n/a</td><td class='n'>no</td></tr><tr><td><b>Single-call</b></td><td class='y'>yes</td><td class='y'>yes</td><td class='n'>no</td><td class='y'>yes</td><td class='y'>yes</td><td class='n'>no</td><td class='x'>n/a</td><td class='n'>observation</td></tr><tr><td><b>Plan-and-Act</b></td><td class='n'>no</td><td class='y'>yes</td><td class='y'>yes</td><td class='y'>yes</td><td class='y'>yes</td><td class='n'>no</td><td class='x'>n/a</td><td class='n'>no</td></tr><tr><td><b>ReAct</b></td><td class='n'>no</td><td class='y'>yes</td><td class='n'>no</td><td class='y'>yes</td><td class='y'>yes</td><td class='y'>yes, up to 8 rounds</td><td class='x'>n/a</td><td class='n'>no</td></tr><tr><td><b>PFAgent (ReAct + verification gate)</b></td><td class='n'>no</td><td class='y'>yes</td><td class='n'>no</td><td class='y'>yes</td><td class='y'>yes</td><td class='y'>yes, up to 8 rounds</td><td class='x'>n/a</td><td class='n'>final V1–V7</td></tr></table><p class='muted'>Green: the row receives it. Red: it does not. Grey: does not apply. The prompting rows deliberately have no tools; their Formulation is measured by the probes, which receive the catalogue with allowed values and the indexing rule.</p></section><section><h2>6. Verification gate (PFAgent) and scoring (every row)</h2><h3>Gate conditions on the final answer</h3><table><tr><th>label</th><th>key</th><th>condition</th></tr><tr><td>V1</td><td><code>converged</code></td><td>The last power flow the agent ran converged.</td></tr><tr><td>V2</td><td><code>balance</code></td><td>Active-power balance of the reported state holds within tolerance.</td></tr><tr><td>V3</td><td><code>no_isolated_buses</code></td><td>No bus was left isolated by the network changes.</td></tr><tr><td>V4</td><td><code>faithfulness</code></td><td>Every unit-bearing number in the answer appears in a tool output.</td></tr><tr><td>V5</td><td><code>currency</code></td><td>Those numbers come from the solve made after the last network change, not an earlier one.</td></tr><tr><td>V6</td><td><code>argument_grounding</code></td><td>Every argument of a mutating tool traces to the request or to a prior tool output; since 2026-09-24 a positive max_candidates on the N-1 scan must also come from the request.</td></tr><tr><td>V7</td><td><code>claims_from_tools</code></td><td>The answer&#x27;s claims match the agent&#x27;s own last solved state.</td></tr></table><p class='muted'>A rejected answer is retried once with the failed conditions spelled out; a second failure escalates. ReAct and Plan-and-Act run without this gate; single-call runs with the observation gate on tool outputs only.</p><h3>Scoring rules</h3><table><tr><th>metric</th><th>definition</th></tr><tr><td><b>Formulation</b></td><td>The executed tool calls (or, for the prompting rows, the operations the probe declared) match the reference calls in tool, identifiers, values and order. Read-only repeats are ignored; an optional argument the request did not pin is accepted unless it changes the result: an unrequested q_mvar, or an N-1 max_candidates below the branch count of the case (20 on IEEE 14).</td></tr><tr><td><b>Solved</b></td><td>Formulation exact and the reported numbers within tolerance of the reference (1e-3 p.u. on voltages, 1% on flows), answered by the method itself.</td></tr><tr><td><b>Escalated</b></td><td>The method declared it could not answer: an explicit statement of inability, the round limit, or the verification gate rejecting every candidate. Takes precedence over the other two.</td></tr><tr><td><b>Wrong, unflagged</b></td><td>The answer reports numbers that do not match the reference and does not say so. Solved + Escalated + Wrong = 100%.</td></tr><tr><td><b>Traceable</b></td><td>Share of answers whose every number appears in a tool output from the last solve.</td></tr><tr><td><b>V_MAE / B_mean</b></td><td>Bus-voltage MAE against the reference and the mean bus power-balance residual, over all requests and over the solved ones.</td></tr></table></section><section><h2>8. The code behind every step, verbatim</h2><p>The actual Python from <code>llm/engine.py</code>, <code>baselines/rule_based.py</code>, <code>benchmarks/metrics.py</code> and <code>benchmarks/scoring.py</code>, as it is in this worktree. Docstrings carry the rules in words; the body is what runs.</p><details><summary><b>Engine: one request, any architecture (run_with_trace)</b> · llm.engine.LLMEngine.run_with_trace · 67 lines</summary><pre>    def run_with_trace(self, user_message: str, session: SessionState) -&gt; Tuple[str, Dict[str, Any]]:
+        &quot;&quot;&quot;Same as run(), but also returns a structured trace dict.
+
+        Trace keys: architecture, gate, memory, max_rounds, status, final_text,
+        rounds (list; each has llm{content,tool_calls,usage,latency_s} and
+        tools[{name,arguments,output,gate,enforced,latency_s}]), plan (plan_act),
+        formulation_failure, n_llm_calls, n_tool_calls, n_tool_rounds,
+        gate_checked, gate_failed, gate_enforced, prompt_tokens,
+        completion_tokens, wall_time_s.
+        &quot;&quot;&quot;
+        t0 = time.perf_counter()
+        trace: Dict[str, Any] = {
+            &quot;architecture&quot;: self.config.architecture,
+            &quot;gate&quot;: bool(self.config.gate),
+            &quot;final_gate&quot;: bool(self.config.final_gate),
+            &quot;memory&quot;: bool(self.config.memory),
+            &quot;max_rounds&quot;: int(self.config.max_tool_rounds),
+            &quot;status&quot;: &quot;ok&quot;,
+            &quot;final_text&quot;: &quot;&quot;,
+            &quot;request_text&quot;: user_message,
+            &quot;rounds&quot;: [],
+            &quot;plan&quot;: None,
+            &quot;formulation_failure&quot;: False,
+            &quot;n_llm_calls&quot;: 0,
+            &quot;n_tool_calls&quot;: 0,
+            &quot;n_tool_rounds&quot;: 0,
+            &quot;gate_checked&quot;: 0,
+            &quot;gate_failed&quot;: 0,
+            &quot;gate_enforced&quot;: 0,
+            &quot;prompt_tokens&quot;: 0,
+            &quot;completion_tokens&quot;: 0,
+            &quot;wall_time_s&quot;: 0.0,
+            &quot;verification&quot;: [],
+            &quot;verification_attempts&quot;: 0,
+            &quot;verification_outcome&quot;: None,
+            &quot;verification_retry_messages&quot;: [],
+        }
+
+        if session.conversation_history is None:
+            session.conversation_history = []
+
+        session.conversation_history = _trim_history(
+            list(session.conversation_history), self.config.max_history_messages
+        )
+
+        # 组装 messages
+        messages: List[Dict[str, Any]] = [{&quot;role&quot;: &quot;system&quot;, &quot;content&quot;: self.system_prompt}]
+        use_memory = self.config.memory and self.config.architecture != &quot;single_call&quot;
+        if use_memory:
+            messages.extend(session.conversation_history)
+        messages.append({&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: user_message})
+
+        # 在 session 中记录 user
+        session.conversation_history.append({&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: user_message})
+
+        arch = self.config.architecture
+        if arch == &quot;react&quot;:
+            text = self._run_react(messages, session, trace)
+        elif arch == &quot;single_call&quot;:
+            text = self._run_single_call(messages, session, trace)
+        else:
+            text = self._run_plan_act(user_message, messages, session, trace)
+
+        trace[&quot;final_text&quot;] = text
+        trace[&quot;wall_time_s&quot;] = time.perf_counter() - t0
+        self.last_trace = trace
+        return text, trace
+</pre></details><details><summary><b>ReAct loop (react_nogate, and PFAgent before its gate)</b> · llm.engine.LLMEngine._run_react · 62 lines</summary><pre>    def _run_react(self, messages: List[Dict[str, Any]], session: SessionState, trace: Dict[str, Any]) -&gt; str:
+        tool_round = 0
+        verify_attempts = 0
+        retry_active = False  # True from the first retry message onward: no more mutations allowed
+        while True:
+            if tool_round &gt;= self.config.max_tool_rounds:
+                return self._finish(MAX_ROUNDS_EXCEEDED_TEXT, session, trace, &quot;max_rounds&quot;)
+
+            round_rec: Dict[str, Any] = {&quot;round&quot;: tool_round + 1}
+            trace[&quot;rounds&quot;].append(round_rec)
+            try:
+                msg = self._call_llm(messages, with_tools=True, trace=trace, round_rec=round_rec)
+            except _LLMCallError as e:
+                return self._finish(e.text, session, trace, &quot;llm_error&quot;)
+
+            assistant_entry = self._assistant_entry(msg)
+            session.conversation_history.append(assistant_entry)
+            messages.append(assistant_entry)
+
+            tool_calls = msg.get(&quot;tool_calls&quot;) or []
+            if tool_calls:
+                if retry_active:
+                    attempted = [tc.get(&quot;name&quot;) for tc in tool_calls if tc.get(&quot;name&quot;) in _RETRY_BLOCKED_TOOLS]
+                    if attempted:
+                        trace[&quot;verification_attempts&quot;] = verify_attempts
+                        trace[&quot;verification_outcome&quot;] = &quot;abstained_retry_mutation&quot;
+                        last_verdict = trace[&quot;verification&quot;][-1]
+                        text = (
+                            _verification_abstention_text(last_verdict)
+                            + &quot; The answer attempted to change the network instead of correcting the report &quot;
+                            f&quot;(blocked tool call(s): {&#x27;, &#x27;.join(attempted)}).&quot;
+                        )
+                        return self._finish(text, session, trace, &quot;verification_failed&quot;)
+                self._execute_tool_calls(tool_calls, messages, session, trace, round_rec)
+                tool_round += 1
+                trace[&quot;n_tool_rounds&quot;] = tool_round
+                continue
+
+            final_text = (msg.get(&quot;content&quot;) or &quot;&quot;).strip()
+            if not self.config.final_gate:
+                trace[&quot;status&quot;] = &quot;ok&quot;
+                return final_text
+
+            verify_attempts += 1
+            verdict = verify_final_answer(trace, final_text, request_text=trace.get(&quot;request_text&quot;), enforce_v6v7=True)
+            trace[&quot;verification&quot;].append(verdict)
+            if verdict[&quot;passed&quot;]:
+                trace[&quot;verification_attempts&quot;] = verify_attempts
+                trace[&quot;verification_outcome&quot;] = &quot;pass_first&quot; if verify_attempts == 1 else &quot;pass_retry&quot;
+                trace[&quot;status&quot;] = &quot;ok&quot;
+                return final_text
+
+            if verify_attempts &gt;= 2:
+                trace[&quot;verification_attempts&quot;] = verify_attempts
+                trace[&quot;verification_outcome&quot;] = &quot;abstained&quot;
+                return self._finish(_verification_abstention_text(verdict), session, trace, &quot;verification_failed&quot;)
+
+            retry_msg = _verification_retry_message(verdict)
+            trace[&quot;verification_retry_messages&quot;].append(retry_msg)
+            session.conversation_history.append({&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: retry_msg})
+            messages.append({&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: retry_msg})
+            retry_active = True
+</pre></details><details><summary><b>Single-call (one round, no memory)</b> · llm.engine.LLMEngine._run_single_call · 35 lines</summary><pre>    def _run_single_call(self, messages: List[Dict[str, Any]], session: SessionState, trace: Dict[str, Any]) -&gt; str:
+        round_rec: Dict[str, Any] = {&quot;round&quot;: 1}
+        trace[&quot;rounds&quot;].append(round_rec)
+        try:
+            msg = self._call_llm(messages, with_tools=True, trace=trace, round_rec=round_rec)
+        except _LLMCallError as e:
+            return self._finish(e.text, session, trace, &quot;llm_error&quot;)
+
+        assistant_entry = self._assistant_entry(msg)
+        session.conversation_history.append(assistant_entry)
+        messages.append(assistant_entry)
+
+        tool_calls = msg.get(&quot;tool_calls&quot;) or []
+        if not tool_calls:
+            # The model answered directly; nothing to ground, no second call needed.
+            trace[&quot;status&quot;] = &quot;ok&quot;
+            return (msg.get(&quot;content&quot;) or &quot;&quot;).strip()
+
+        self._execute_tool_calls(tool_calls, messages, session, trace, round_rec)
+        trace[&quot;n_tool_rounds&quot;] = 1
+
+        # Exactly one final call, without tool definitions. Any tool_calls it
+        # returns are ignored (no further tool rounds by construction).
+        final_rec: Dict[str, Any] = {&quot;round&quot;: 2, &quot;final&quot;: True}
+        trace[&quot;rounds&quot;].append(final_rec)
+        messages.append({&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: FINAL_ANSWER_INSTRUCTION})
+        try:
+            final_msg = self._call_llm(messages, with_tools=False, trace=trace, round_rec=final_rec)
+        except _LLMCallError as e:
+            return self._finish(e.text, session, trace, &quot;llm_error&quot;)
+        text = (final_msg.get(&quot;content&quot;) or &quot;&quot;).strip()
+        if not text:
+            text = &quot;The model returned no final answer text after the tool round.&quot;
+            return self._finish(text, session, trace, &quot;empty_final&quot;)
+        return self._finish(text, session, trace, &quot;ok&quot;)
+</pre></details><details><summary><b>Plan-and-Act (plan once, execute, answer)</b> · llm.engine.LLMEngine._run_plan_act · 72 lines</summary><pre>    def _run_plan_act(
+        self,
+        user_message: str,
+        messages: List[Dict[str, Any]],
+        session: SessionState,
+        trace: Dict[str, Any],
+    ) -&gt; str:
+        # 1) Planning call: either free-text JSON (default) or real function-calling
+        #    (&quot;structured&quot; -- see EngineConfig.plan_variant). Either way this is a single
+        #    call with nothing executed beforehand, so the architecture still commits to
+        #    the whole sequence before seeing any result.
+        structured_plan = self.config.plan_variant == &quot;structured&quot;
+        plan_rec: Dict[str, Any] = {&quot;round&quot;: 1, &quot;phase&quot;: &quot;plan&quot;}
+        trace[&quot;rounds&quot;].append(plan_rec)
+        try:
+            plan_msg = self._call_llm(
+                messages,
+                with_tools=structured_plan,
+                trace=trace,
+                round_rec=plan_rec,
+                system_override=PLAN_SYSTEM_PROMPT_STRUCTURED if structured_plan else _plan_system_prompt(self.config.tool_variant),
+                parallel_tool_calls=True if structured_plan else None,
+            )
+        except _LLMCallError as e:
+            return self._finish(e.text, session, trace, &quot;llm_error&quot;)
+
+        if structured_plan:
+            raw_calls = plan_msg.get(&quot;tool_calls&quot;) or []
+            plan = [{&quot;tool&quot;: tc[&quot;name&quot;], &quot;args&quot;: _safe_json_loads(tc[&quot;arguments&quot;])} for tc in raw_calls] or None
+        else:
+            plan = parse_plan(plan_msg.get(&quot;content&quot;))
+        if plan is None:
+            trace[&quot;formulation_failure&quot;] = True
+            trace[&quot;plan&quot;] = None
+            plan_rec[&quot;plan_raw&quot;] = plan_msg.get(&quot;content&quot;)
+            session.conversation_history.append({&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: plan_msg.get(&quot;content&quot;)})
+            return self._finish(PLAN_UNPARSEABLE_TEXT, session, trace, &quot;plan_unparseable&quot;)
+
+        if len(plan) &gt; self.config.max_tool_rounds:
+            trace[&quot;plan_truncated&quot;] = len(plan) - self.config.max_tool_rounds
+            plan = plan[: self.config.max_tool_rounds]
+        trace[&quot;plan&quot;] = plan
+
+        # 2) Act: execute the plan through the dispatcher, no LLM in between.
+        #    Represented as one synthetic assistant tool_calls entry so the
+        #    transcript stays valid OpenAI format for the final call.
+        synthetic_calls = [
+            {&quot;id&quot;: f&quot;plan_step_{i + 1}&quot;, &quot;name&quot;: step[&quot;tool&quot;], &quot;arguments&quot;: json.dumps(step[&quot;args&quot;], ensure_ascii=False)}
+            for i, step in enumerate(plan)
+        ]
+        assistant_entry = self._assistant_entry({&quot;content&quot;: plan_msg.get(&quot;content&quot;), &quot;tool_calls&quot;: synthetic_calls})
+        session.conversation_history.append(assistant_entry)
+        messages.append(assistant_entry)
+
+        act_rec: Dict[str, Any] = {&quot;round&quot;: 2, &quot;phase&quot;: &quot;act&quot;}
+        trace[&quot;rounds&quot;].append(act_rec)
+        self._execute_tool_calls(synthetic_calls, messages, session, trace, act_rec)
+        trace[&quot;n_tool_rounds&quot;] = 1
+
+        # 3) Final call: write the answer from the outputs, no tools.
+        final_rec: Dict[str, Any] = {&quot;round&quot;: 3, &quot;phase&quot;: &quot;answer&quot;, &quot;final&quot;: True}
+        trace[&quot;rounds&quot;].append(final_rec)
+        messages.append({&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: FINAL_ANSWER_INSTRUCTION})
+        try:
+            final_msg = self._call_llm(messages, with_tools=False, trace=trace, round_rec=final_rec)
+        except _LLMCallError as e:
+            return self._finish(e.text, session, trace, &quot;llm_error&quot;)
+        text = (final_msg.get(&quot;content&quot;) or &quot;&quot;).strip()
+        if not text:
+            text = &quot;The model returned no final answer text after executing the plan.&quot;
+            return self._finish(text, session, trace, &quot;empty_final&quot;)
+        return self._finish(text, session, trace, &quot;ok&quot;)
+</pre></details><details><summary><b>How a run ends (escalation text, status)</b> · llm.engine.LLMEngine._finish · 4 lines</summary><pre>    def _finish(self, text: str, session: SessionState, trace: Dict[str, Any], status: str) -&gt; str:
+        session.conversation_history.append({&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: text})
+        trace[&quot;status&quot;] = status
+        return text
+</pre></details><details><summary><b>Verification gate V1–V7 on the final answer (PFAgent)</b> · llm.engine.verify_final_answer · 134 lines</summary><pre>def verify_final_answer(
+    trace: Dict[str, Any],
+    final_answer_text: str,
+    *,
+    request_text: Optional[str] = None,
+    balance_tol_mw: float = GATE_BALANCE_TOL_MW,
+    balance_rel_tol: float = GATE_BALANCE_REL_TOL,
+    enforce_v6v7: bool = False,
+) -&gt; Dict[str, Any]:
+    &quot;&quot;&quot;Task-level verification V(x, c, z, y), applied once to the final answer text.
+
+    Five conditions, all evaluated on the last ``run_powerflow``-shaped output at or
+    after the last network mutation (or the last such output in the whole trace, when
+    no mutation happened): converged, active-power balance, no isolated buses,
+    faithfulness of the answer&#x27;s numbers, and currency (no stale pre-mutation numbers).
+    ``passed`` requires all five (six or seven with ``enforce_v6v7``). Only ``trace``
+    (the agent&#x27;s own observed tool calls and outputs) and ``final_answer_text`` are
+    used — never a reference solution.
+
+    Conditions 1-3 (converged, balance, no_isolated_buses) read a single-state
+    ``PowerFlowResult`` payload; requests answered from a different kind of tool
+    output entirely (e.g. ``run_n1_contingency``&#x27;s ranking, which is not one network
+    state) never produce one. When the trace carries no such payload anywhere, those
+    three conditions do not apply to this item and are reported ``passed`` with
+    ``&quot;applicable&quot;: False`` rather than penalized as an unconverged solve.
+
+    ``enforce_v6v7`` (2026-09-21, cheap-tier live wiring, default False) adds V6
+    (``benchmarks.metrics.argument_grounding_check``: every argument to a mutating
+    tool traces to the request or a prior tool output) and V7
+    (``benchmarks.scoring.claims_from_tools_check``: the answer&#x27;s claim matches what
+    the agent&#x27;s own tools actually computed) as two more conditions, reusing this
+    function&#x27;s existing retry/abstention machinery unchanged. Default False on
+    purpose: this function is also called from evaluate_llms.py/rescore.py to compute
+    the offline ``v_pass`` measurement for every method, not just PFAgent, and V6/V7
+    must not silently start gating that measurement for architectures with no
+    escalation path of their own (see benchmarks.evaluate_llms._aggregate_group&#x27;s
+    same concern for escalated_rate_v6v7). Only ``llm.engine._run_react`` — PFAgent&#x27;s
+    own loop — passes ``enforce_v6v7=True``.
+    &quot;&quot;&quot;
+    from benchmarks import metrics as bm
+
+    records = bm._tool_records_from_trace(trace)
+
+    last_mut: Optional[int] = None
+    for i, rec in enumerate(records):
+        if str(rec.get(&quot;name&quot;) or &quot;&quot;) == &quot;load_case&quot;:
+            last_mut = None
+        elif bm._mutation_applied(rec):
+            last_mut = i
+
+    has_any_pf_payload = any(
+        bm._find_pf_payload(bm._parse_output(rec.get(&quot;output&quot;))) is not None for rec in records
+    )
+
+    resolve_idx: Optional[int] = None
+    if has_any_pf_payload:
+        search_from = last_mut if last_mut is not None else 0
+        for i in range(len(records) - 1, search_from - 1, -1):
+            if bm._is_resolve(records[i]):
+                resolve_idx = i
+                break
+
+    pf: Optional[Dict[str, Any]] = None
+    if resolve_idx is not None:
+        pf = bm._find_pf_payload(bm._parse_output(records[resolve_idx].get(&quot;output&quot;)))
+
+    conditions: Dict[str, Dict[str, Any]] = {}
+
+    if not has_any_pf_payload:
+        conditions[&quot;converged&quot;] = {&quot;passed&quot;: True, &quot;residual&quot;: 0, &quot;applicable&quot;: False}
+        conditions[&quot;balance&quot;] = {&quot;passed&quot;: True, &quot;residual&quot;: None, &quot;applicable&quot;: False}
+        conditions[&quot;no_isolated_buses&quot;] = {&quot;passed&quot;: True, &quot;residual&quot;: 0, &quot;applicable&quot;: False}
+    else:
+        converged = bool(pf.get(&quot;converged&quot;)) if pf is not None else False
+        conditions[&quot;converged&quot;] = {&quot;passed&quot;: converged, &quot;residual&quot;: 0 if converged else 1, &quot;applicable&quot;: True}
+
+        mismatch: Optional[float] = None
+        balance_ok = False
+        if pf is not None:
+            gen, load, loss = (_finite_or_none(pf.get(k)) for k in _PF_TOTAL_KEYS)
+            if gen is not None and load is not None and loss is not None:
+                mismatch = abs(gen - (load + loss))
+                balance_ok = mismatch &lt;= max(balance_tol_mw, balance_rel_tol * abs(load))
+        conditions[&quot;balance&quot;] = {&quot;passed&quot;: bool(balance_ok), &quot;residual&quot;: mismatch, &quot;applicable&quot;: True}
+
+        isolated_buses: List[Any] = []
+        if pf is not None:
+            isolated_buses = [
+                bv.get(&quot;bus_id&quot;) for bv in pf.get(&quot;bus_voltages&quot;) or [] if isinstance(bv, dict) and not _is_finite_number(bv.get(&quot;vm_pu&quot;))
+            ]
+        conditions[&quot;no_isolated_buses&quot;] = {
+            &quot;passed&quot;: not isolated_buses,
+            &quot;residual&quot;: len(isolated_buses),
+            &quot;applicable&quot;: True,
+            &quot;isolated_buses&quot;: isolated_buses,
+        }
+
+    tool_outputs = bm.tool_outputs_from_trace(trace)
+    faith = bm.faithful_numbers(final_answer_text, tool_outputs, request_text=request_text)
+    n_numbers = faith.get(&quot;n_numbers&quot;) or 0
+    n_untraceable = faith.get(&quot;n_untraceable_numbers&quot;) or 0
+    faith_residual = (n_untraceable / n_numbers) if n_numbers else 0.0
+    conditions[&quot;faithfulness&quot;] = {&quot;passed&quot;: n_untraceable == 0, &quot;residual&quot;: faith_residual}
+
+    stale = bm.stale_state_check(trace, final_answer_text, request_text=request_text)
+    if stale.get(&quot;stale_state_no_rerun&quot;):
+        currency_residual = int(stale.get(&quot;n_answer_numbers&quot;) or 0)
+    else:
+        currency_residual = int(stale.get(&quot;n_numbers_old_only&quot;) or 0)
+    conditions[&quot;currency&quot;] = {&quot;passed&quot;: not bool(stale.get(&quot;stale_state&quot;)), &quot;residual&quot;: currency_residual}
+
+    # V1-V5 (paper/notes labels for the same five conditions), recorded alongside the
+    # existing keys as a &quot;label&quot; field on each condition&#x27;s own dict -- not as extra
+    # top-level dict entries, which would double-count/double-list every condition for
+    # the code that already iterates conditions.items() (the retry message and
+    # abstention text builders below).
+    if enforce_v6v7:
+        from benchmarks import scoring as bs
+
+        v6 = bm.argument_grounding_check(trace, request_text)
+        conditions[&quot;argument_grounding&quot;] = {&quot;passed&quot;: v6[&quot;passed&quot;], &quot;invented_args&quot;: v6[&quot;invented_args&quot;], &quot;detail&quot;: v6[&quot;detail&quot;]}
+        v7 = bs.claims_from_tools_check(trace, final_answer_text, request_text)
+        conditions[&quot;claims_from_tools&quot;] = {&quot;passed&quot;: v7[&quot;passed&quot;], &quot;applicable&quot;: v7[&quot;applicable&quot;], &quot;detail&quot;: v7[&quot;detail&quot;]}
+
+    for key, label in CONDITION_LABELS.items():
+        if key in conditions:
+            conditions[key][&quot;label&quot;] = label
+
+    last_mutation: Optional[Dict[str, Any]] = None
+    if last_mut is not None:
+        rec = records[last_mut]
+        last_mutation = {&quot;tool&quot;: rec.get(&quot;name&quot;), &quot;args&quot;: rec.get(&quot;arguments&quot;) or {}}
+
+    return {&quot;passed&quot;: all(c[&quot;passed&quot;] for c in conditions.values()), &quot;conditions&quot;: conditions, &quot;last_mutation&quot;: last_mutation}
+</pre></details><details><summary><b>V6 argument grounding</b> · benchmarks.metrics.argument_grounding_check · 91 lines</summary><pre>def argument_grounding_check(trace: Optional[Dict[str, Any]], request_text: Optional[str]) -&gt; Dict[str, Any]:
+    &quot;&quot;&quot;V6: every numeric or identifier argument passed to a MUTATING tool must appear
+    in the user request or in the output of a tool call that already ran -- never a
+    value the model introduced on its own (e.g. an unrequested ``q_mvar``, an
+    unrequested bus, an invented N-1 ``criteria``). Closes the reactive-argument-
+    invention class under either tool set (the request&#x27;s numbers ground
+    ``set_active_load``/``set_load`` exactly as they ground ``modify_load``) and,
+    unlike the tool-split redesign, catches unrequested bus/line ids and invented
+    N-1 criteria too, since those are not eliminated by construction the way an
+    extra ``q_mvar`` argument is.
+
+    Typed by argument kind (2026-09-21 retype): ``q_mvar`` only grounds against a
+    value the request or a prior tool output labeled reactive; ``p_mw`` only against a
+    value labeled active/MW (kW/MVA converted or read as-is). Every other argument
+    falls back to the untyped pool, unchanged from before the retype. This closes two
+    known gaps in the untyped version: an unrelated integer in a bulk tool-output dump
+    (e.g. get_status&#x27;s generator/line counts) no longer coincidentally grounds an
+    invented q_mvar just by matching digit for digit, and a request phrased with a
+    comma thousands-separator and a lowercase kW unit (&quot;14,700 kw&quot;) now parses to the
+    MW value the tool call actually uses (14.7), instead of never matching and reading
+    as an invented p_mw.
+
+    Returns ``{&quot;passed&quot;, &quot;invented_args&quot;: [{&quot;tool&quot;, &quot;arg&quot;, &quot;value&quot;}, ...], &quot;detail&quot;}``.
+    A bus-like argument (``bus_id``/``from_bus``/``to_bus``) also grounds against its
+    zero-based-to-one-based neighbor (n-1 or n+1), so a request that states its bus
+    reference in the 0-based convention (``&quot;bus 10 (0-based)&quot;``, converted to the
+    MATPOWER 1-based id before the tool call -- see llm/prompts.py) is not flagged for
+    a conversion the request itself asked for. Conversely, a bus-like argument that
+    reuses the *unconverted* 0-based number verbatim (a real conversion bug, not a
+    conversion) is flagged even though that literal number appears in the request
+    text, since an explicit 0-based marker on it makes the raw digit the wrong
+    reading by construction.
+    &quot;&quot;&quot;
+    records = _tool_records_from_trace(trace)
+    request_text = request_text or &quot;&quot;
+    zero_based_raw = {float(m) for m in _ZERO_BASED_BUS_RE.findall(request_text)}
+    pool = _numbers_by_type(request_text)
+    invented: List[Dict[str, Any]] = []
+
+    for rec in records:
+        name = str(rec.get(&quot;name&quot;) or &quot;&quot;)
+        canonical = _TOOL_NAME_ALIASES.get(name, name)
+        if canonical in MUTATING_TOOLS or name in (&quot;set_active_load&quot;, &quot;set_load&quot;):
+            args = rec.get(&quot;arguments&quot;) or {}
+            if isinstance(args, str):
+                args = _safe_json_loads(args)
+            for key, value in (args or {}).items():
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    continue
+                fv = float(value)
+                if key in _BUS_LIKE_ARGS and fv in zero_based_raw:
+                    invented.append({&quot;tool&quot;: name, &quot;arg&quot;: key, &quot;value&quot;: value})
+                    continue
+                if key == &quot;q_mvar&quot;:
+                    grounded = fv in pool[&quot;mvar&quot;]
+                elif key == &quot;p_mw&quot;:
+                    grounded = fv in pool[&quot;mw&quot;]
+                else:
+                    grounded = fv in pool[&quot;any&quot;]
+                    if not grounded and key in _BUS_LIKE_ARGS:
+                        grounded = (fv - 1) in pool[&quot;any&quot;] or (fv + 1) in pool[&quot;any&quot;]
+                if not grounded:
+                    invented.append({&quot;tool&quot;: name, &quot;arg&quot;: key, &quot;value&quot;: value})
+
+        if canonical == &quot;run_n1_contingency&quot;:
+            # 2026-09-24: a positive max_candidates narrows the scan to a sample of the branches;
+            # unless the request states that number it is an invented argument (V6), the same
+            # class as an invented q_mvar. top_k stays free: &quot;the worst outage&quot; implies 1.
+            args = rec.get(&quot;arguments&quot;) or {}
+            if isinstance(args, str):
+                args = _safe_json_loads(args)
+            mc = (args or {}).get(&quot;max_candidates&quot;)
+            if isinstance(mc, (int, float)) and not isinstance(mc, bool) and float(mc) &gt; 0 and float(mc) not in pool[&quot;any&quot;]:
+                invented.append({&quot;tool&quot;: name, &quot;arg&quot;: &quot;max_candidates&quot;, &quot;value&quot;: mc})
+
+        # This call&#x27;s own output grounds every later call, so a value the request
+        # never stated but a prior tool reported (e.g. a bus id read off get_status)
+        # is not penalized. load_case&#x27;s own output is excluded: it is a bulk network-
+        # metadata dump (n_buses, n_generators, n_lines, total_load_mw, ...), not
+        # something a reasoning agent repurposes as a load&#x27;s reactive power, and its
+        # small integers (a generator count of 5, a line count of 20) otherwise
+        # coincidentally ground an unrelated invented value.
+        if name != &quot;load_case&quot;:
+            _merge_typed_pool(pool, _numbers_by_type_from_json(_parse_output(rec.get(&quot;output&quot;))))
+
+    detail = (
+        &quot;; &quot;.join(f&quot;{i[&#x27;tool&#x27;]}.{i[&#x27;arg&#x27;]}={i[&#x27;value&#x27;]}&quot; for i in invented)
+        if invented
+        else &quot;every mutating-tool argument traces to the request or a prior tool output&quot;
+    )
+    return {&quot;passed&quot;: not invented, &quot;invented_args&quot;: invented, &quot;detail&quot;: detail}
+</pre></details><details><summary><b>Deterministic parser: request → tool calls</b> · baselines.rule_based._parse_clause · 61 lines</summary><pre>def _parse_clause(clause: str, warnings: List[str]) -&gt; List[Dict[str, Any]]:
+    &quot;&quot;&quot;Return the tool steps for one clause, or [] if nothing matched.&quot;&quot;&quot;
+    c = clause.strip()
+
+    # --- load case --------------------------------------------------------
+    m = _CASE_RE.search(c)
+    if m and _LOAD_CASE_CTX_RE.search(c) and not _SET_LOAD_RE.search(c) and not _DISCONNECT_RE.search(c) and not _RECONNECT_RE.search(c):
+        num = next(g for g in m.groups() if g)
+        if num in SUPPORTED_CASES:
+            return [{&quot;tool&quot;: &quot;load_case&quot;, &quot;args&quot;: {&quot;case_name&quot;: f&quot;case{num}&quot;}}]
+        warnings.append(f&quot;unsupported case size {num}; supported: {&#x27;, &#x27;.join(SUPPORTED_CASES)}&quot;)
+        return []
+
+    # --- set load ------------------------------------------------------------
+    m = _SET_LOAD_RE.search(c)
+    q_val: Optional[str] = None
+    if m:
+        bus_tok, p_str, unit, q_val = m.group(1), m.group(2), m.group(3), m.group(4)
+    else:
+        m = _SET_LOAD_ALT_RE.search(c)
+        if m:
+            bus_tok, p_str, unit = m.group(1), m.group(2), m.group(3)
+    if m:
+        step: Dict[str, Any] = {&quot;tool&quot;: &quot;modify_load&quot;, &quot;args&quot;: {&quot;bus_id&quot;: words_to_int(bus_tok), &quot;p_mw&quot;: float(p_str)}}
+        if q_val is not None:
+            step[&quot;args&quot;][&quot;q_mvar&quot;] = float(q_val)
+        if unit.lower() == &quot;mva&quot;:
+            step[&quot;flags&quot;] = [&quot;mva_as_mw&quot;]
+            warnings.append(MVA_WARNING)
+        return [step]
+
+    # --- disconnect / reconnect -------------------------------------------------
+    m = _RECONNECT_RE.search(c)
+    if m:
+        return [{&quot;tool&quot;: &quot;reconnect_line&quot;, &quot;args&quot;: {&quot;from_bus&quot;: words_to_int(m.group(2)), &quot;to_bus&quot;: words_to_int(m.group(3))}}]
+    m = _DISCONNECT_RE.search(c)
+    if m:
+        return [{&quot;tool&quot;: &quot;disconnect_line&quot;, &quot;args&quot;: {&quot;from_bus&quot;: words_to_int(m.group(2)), &quot;to_bus&quot;: words_to_int(m.group(3))}}]
+
+    # --- N-1 ----------------------------------------------------------------------
+    if _N1_RE.search(c):
+        args: Dict[str, Any] = {&quot;top_k&quot;: 5}
+        mk = _TOP_K_RE.search(c)
+        if mk:
+            args[&quot;top_k&quot;] = words_to_int(mk.group(1))
+        return [{&quot;tool&quot;: &quot;run_n1_contingency&quot;, &quot;args&quot;: args}]
+
+    # --- derived reports (need a solved state; re-running PF is idempotent) -------
+    if _WORST_V_RE.search(c):
+        return [{&quot;tool&quot;: &quot;run_powerflow&quot;, &quot;args&quot;: {}, &quot;derive&quot;: {&quot;kind&quot;: &quot;min_voltage_bus&quot;}}]
+    m = _LINES_ABOVE_RE.search(c) or _LINES_ABOVE_ALT_RE.search(c)
+    if m:
+        return [{&quot;tool&quot;: &quot;run_powerflow&quot;, &quot;args&quot;: {}, &quot;derive&quot;: {&quot;kind&quot;: &quot;lines_above_loading&quot;, &quot;threshold_percent&quot;: float(m.group(1))}}]
+    if _OVERLOADED_RE.search(c):
+        return [{&quot;tool&quot;: &quot;run_powerflow&quot;, &quot;args&quot;: {}, &quot;derive&quot;: {&quot;kind&quot;: &quot;lines_above_loading&quot;, &quot;threshold_percent&quot;: 100.0}}]
+
+    # --- run power flow (checked last: many clauses mention &quot;power flow&quot;) -------------
+    if _RUN_PF_RE.search(c):
+        return [{&quot;tool&quot;: &quot;run_powerflow&quot;, &quot;args&quot;: {}}]
+
+    return []
+</pre></details><details><summary><b>Deterministic parser: run</b> · baselines.rule_based.run · 58 lines</summary><pre>def run(request_text: str, ctx: ToolContext, dispatcher: Optional[ToolDispatcher] = None) -&gt; Dict[str, Any]:
+    &quot;&quot;&quot;Parse and execute a request through the real ToolDispatcher.
+
+    Returns {&quot;ok&quot;, &quot;status&quot;, &quot;plan&quot;, &quot;warnings&quot;, &quot;outputs&quot;: [{&quot;tool&quot;,&quot;args&quot;,&quot;output&quot;}],
+             &quot;derived&quot;: [...], &quot;answer&quot;: str}. Parse failures give status
+             &quot;cannot_parse&quot; with an explicit message; nothing is executed.
+    &quot;&quot;&quot;
+    try:
+        parsed = parse_detailed(request_text)
+    except CannotParse as e:
+        return {
+            &quot;ok&quot;: False,
+            &quot;status&quot;: &quot;cannot_parse&quot;,
+            &quot;message&quot;: f&quot;cannot parse: {e.clause!r}&quot;,
+            &quot;unparsed_clause&quot;: e.clause,
+            &quot;plan&quot;: [],
+            &quot;warnings&quot;: [],
+            &quot;outputs&quot;: [],
+            &quot;derived&quot;: [],
+            &quot;answer&quot;: f&quot;I cannot parse this request (unsupported phrasing: {e.clause!r}). No action was taken.&quot;,
+        }
+
+    if dispatcher is None:
+        dispatcher = build_default_dispatcher(ctx)
+
+    outputs: List[Dict[str, Any]] = []
+    derived: List[Dict[str, Any]] = []
+    lines: List[str] = []
+    ok = True
+    for step in parsed[&quot;plan&quot;]:
+        raw = dispatcher.dispatch(step[&quot;tool&quot;], step[&quot;args&quot;])
+        try:
+            out = json.loads(raw)
+        except Exception:
+            out = {&quot;raw&quot;: raw}
+        if not isinstance(out, dict):
+            out = {&quot;raw&quot;: out}
+        outputs.append({&quot;tool&quot;: step[&quot;tool&quot;], &quot;args&quot;: step[&quot;args&quot;], &quot;output&quot;: out})
+        if out.get(&quot;error&quot;):
+            ok = False
+        lines.append(_summarize(step[&quot;tool&quot;], out))
+        if &quot;derive&quot; in step:
+            d = _derive(step[&quot;derive&quot;], out)
+            derived.append(d)
+            lines.append(d.get(&quot;text&quot;) or f&quot;{d.get(&#x27;kind&#x27;)}: {d.get(&#x27;error&#x27;)}&quot;)
+
+    for w in parsed[&quot;warnings&quot;]:
+        lines.append(f&quot;Warning: {w}&quot;)
+
+    return {
+        &quot;ok&quot;: ok,
+        &quot;status&quot;: &quot;ok&quot; if ok else &quot;tool_error&quot;,
+        &quot;plan&quot;: parsed[&quot;plan&quot;],
+        &quot;warnings&quot;: parsed[&quot;warnings&quot;],
+        &quot;outputs&quot;: outputs,
+        &quot;derived&quot;: derived,
+        &quot;answer&quot;: &quot;\n&quot;.join(lines),
+    }
+</pre></details><details><summary><b>Formulation comparator (the rules R0–R10)</b> · benchmarks.metrics.formulation_check · 140 lines</summary><pre>def formulation_check(
+    intended_calls: Optional[Sequence[Dict[str, Any]]],
+    executed_calls: Optional[Sequence[Dict[str, Any]]],
+    *,
+    preloaded_case: Optional[str] = None,
+    final_state_metrics: Optional[Dict[str, Any]] = None,
+) -&gt; Dict[str, Any]:
+    &quot;&quot;&quot;Calibrated comparison of executed tool calls with the request&#x27;s ``intended_calls``.
+
+    The comparator answers &quot;did the method ask the solver for what the request
+    asked for&quot;, not &quot;did it type the reference call verbatim&quot;. Rules, in the
+    order they are applied:
+
+    R0  ``executed_calls=None`` -&gt; ``unparsed`` (nothing could be formulated).
+    R1  ``preloaded_case``: a leading ``load_case`` of that case is optional on
+        either side (single_call prompting starts with the case loaded).
+    R2  Read-only / idempotent calls are ignored wherever they occur:
+        ``run_powerflow`` (any number of repeats; the *solve requirement* of an
+        intended ``run_powerflow`` is checked separately, R10), ``get_status``,
+        ``get_most_loaded_branch``, ``generate_plot`` (``BENIGN_EXTRA_TOOLS``), and a
+        ``load_case`` that re-loads the case already loaded before any mutation.
+    R2b Read-only *analysis* calls (``REPEATABLE_ANALYSIS_TOOLS``, currently
+        ``run_n1_contingency``) are not unconditionally ignored like R2 -- only
+        occurrences beyond how many times the request already intends that tool are
+        dropped, so a repeat (e.g. PFAgent&#x27;s verification retry re-checking its own
+        answer with a read-only call it already made once) is benign but a wholly
+        unrequested occurrence still surfaces to R3, once, as a real deviation.
+    R3  Remaining tool sequences must match in order. Missing intended tools, or a
+        different tool in place of the intended one -&gt; ``missed_step``; unintended
+        tools that survive R2 (every mutating or analysis tool: ``modify_load``,
+        ``disconnect_line``, ``reconnect_line``, ``apply_remedial_action``,
+        ``run_n1_contingency``, ``recommend_remedial_actions``, a ``load_case`` that
+        resets the network) -&gt; ``extra_step``.
+    R4  Identifier normalization before comparing: argument aliases (``bus`` -&gt;
+        ``bus_id``), ints given as floats/strings (``&quot;14&quot;``, ``14.0``, ``&quot;bus 14&quot;``),
+        MW/Mvar given as strings with units, line endpoints in either order for
+        ``disconnect_line`` / ``reconnect_line``, case aliases through
+        ``solver.case_loader.normalize_case_name`` (``&quot;IEEE 30-bus system&quot;`` ==
+        ``&quot;case30&quot;``). Only equivalences the dispatcher itself accepts are applied;
+        enum strings are compared verbatim (``criteria=&quot;MIN_VOLTAGE&quot;`` is *not*
+        ``&quot;min_voltage&quot;`` because ``solver.contingency`` compares exact strings).
+    R5  An argument is *pinned* when the intended call names it (the request text
+        gave a number or a named criterion: ``op_n1(explicit=True)``, ``modify_load``
+        with ``q_mvar`` in stress items). Pinned arguments must match after R4; an
+        omitted pinned argument is compared through the tool default. Mismatch -&gt;
+        ``wrong_id`` for ``bus_id`` / ``from_bus`` / ``to_bus`` / ``case_name``, else
+        ``wrong_unit_or_value``.
+    R6  An optional argument the intended call leaves unspecified accepts ANY value
+        that is valid for the tool schema (``run_n1_contingency(top_k=1)`` for
+        &quot;report the worst single outage&quot;; ``max_candidates=10``; explicit defaults).
+    R7  A value outside the schema -&gt; ``invalid_value``: enum strings not in the
+        enum (``criteria=&quot;min voltage&quot;``, ``&quot;worst&quot;``, ``&quot;MIN_VOLTAGE&quot;``: the tool
+        silently falls back to its default and the ranking changes), non-integer
+        ``top_k`` / ids, ``top_k &lt; 1``, a missing required argument. Checked for
+        pinned and unpinned arguments alike; it outranks R5/R8 within a call.
+    R8  An executed-only argument that changes the solver outcome although the
+        request did not ask for it -&gt; ``extra_arg_changes_result``
+        (``RESULT_CHANGING_OPTIONAL_ARGS``: ``modify_load.q_mvar`` — the dispatcher
+        overwrites the reactive load; ``None`` and the tool default are exempt).
+        Evidence override: when ``final_state_metrics`` (the row&#x27;s ``metrics``
+        with ``voltage_mae`` / ``flow_mae`` vs the ground truth) shows a final
+        state numerically identical to the ground truth, the extra argument did
+        not change the outcome and is benign. ``benchmarks/rescore.py`` does not
+        currently pass it, so offline rescoring applies the schema rule alone.
+    R9  Executed-only argument names unknown to the schema are ignored (the
+        dispatcher never reads them).
+    R10 An intended ``run_powerflow`` requires that some solve (``run_powerflow`` or
+        a tool that re-solves: ``RECOMPUTING_TOOLS``) happened after the last
+        ``load_case``; otherwise ``missed_step``.
+    Within one call the reported type is the most severe issue:
+    ``invalid_value`` &gt; ``wrong_id`` &gt; ``wrong_unit_or_value`` &gt;
+    ``extra_arg_changes_result``; across calls the first offending call wins.
+
+    Returns ``{&quot;formulation_exact&quot;, &quot;formulation_error_type&quot;, &quot;n_intended&quot;,
+    &quot;n_executed&quot;, &quot;detail&quot;, &quot;benign_notes&quot;, &quot;formulation_exact_strict&quot;,
+    &quot;formulation_error_type_strict&quot;}``; the ``*_strict`` fields are the verdict of
+    the original comparator (``formulation_check_strict``) on the same calls.
+    &quot;&quot;&quot;
+    strict = formulation_check_strict(intended_calls, executed_calls, preloaded_case=preloaded_case)
+    strict_fields = {
+        &quot;formulation_exact_strict&quot;: strict[&quot;formulation_exact&quot;],
+        &quot;formulation_error_type_strict&quot;: strict[&quot;formulation_error_type&quot;],
+    }
+    intended_raw = [
+        {&quot;tool&quot;: _tool_name(c), &quot;args&quot;: _calibrated_args(_tool_name(c), _raw_args(c))} for c in (intended_calls or [])
+    ]
+    if executed_calls is None:
+        return {
+            &quot;formulation_exact&quot;: False,
+            &quot;formulation_error_type&quot;: &quot;unparsed&quot;,
+            &quot;n_intended&quot;: len(intended_raw),
+            &quot;n_executed&quot;: 0,
+            &quot;detail&quot;: &quot;no tool calls could be formulated&quot;,
+            &quot;benign_notes&quot;: [],
+            **strict_fields,
+        }
+    executed_raw = [{&quot;tool&quot;: _tool_name(c), &quot;args&quot;: _calibrated_args(_tool_name(c), _raw_args(c))} for c in executed_calls]
+    n_executed = len(executed_raw)
+
+    if preloaded_case is not None:
+        pre = _norm_case_name(preloaded_case)
+        if intended_raw and intended_raw[0][&quot;tool&quot;] == &quot;load_case&quot; and intended_raw[0][&quot;args&quot;].get(&quot;case_name&quot;) == pre:
+            intended_raw = intended_raw[1:]
+        if executed_raw and executed_raw[0][&quot;tool&quot;] == &quot;load_case&quot; and executed_raw[0][&quot;args&quot;].get(&quot;case_name&quot;) == pre:
+            executed_raw = executed_raw[1:]
+
+    intended_core, _ = _strip_benign_calibrated(intended_raw)
+    executed_core, benign_notes = _strip_benign_calibrated(executed_raw)
+    executed_core, repeat_notes = _drop_excess_repeats(executed_core, intended_core)
+    benign_notes = benign_notes + repeat_notes
+    intended_needs_solve = any(c[&quot;tool&quot;] == &quot;run_powerflow&quot; for c in intended_raw)
+
+    def _result(exact: bool, err: str, detail: str) -&gt; Dict[str, Any]:
+        return {
+            &quot;formulation_exact&quot;: bool(exact),
+            &quot;formulation_error_type&quot;: err,
+            &quot;n_intended&quot;: len(intended_raw),
+            &quot;n_executed&quot;: n_executed,
+            &quot;detail&quot;: detail,
+            &quot;benign_notes&quot;: list(benign_notes),
+            **strict_fields,
+        }
+
+    i_tools = [c[&quot;tool&quot;] for c in intended_core]
+    e_tools = [c[&quot;tool&quot;] for c in executed_core]
+    if i_tools != e_tools:
+        err, detail = _sequence_mismatch(i_tools, e_tools)
+        return _result(False, err, detail)
+
+    for ic, ec in zip(intended_core, executed_core):
+        err, detail, notes = _compare_call_args(ic[&quot;tool&quot;], ic[&quot;args&quot;], ec[&quot;args&quot;], final_state_metrics=final_state_metrics, case_name=_case_of(intended_raw, executed_raw, preloaded_case))
+        benign_notes.extend(notes)
+        if err is not None:
+            return _result(False, err, detail)
+
+    if intended_needs_solve and not _has_solve_after_last_state_change(executed_raw):
+        if not (preloaded_case is not None and not executed_raw and not intended_core):
+            return _result(False, &quot;missed_step&quot;, &quot;intended run_powerflow never executed&quot;)
+
+    return _result(True, &quot;ok&quot;, &quot;&quot;)
+</pre></details><details><summary><b>Declared formulation of the probes / no-tools rows</b> · benchmarks.evaluate_llms.declared_formulation_check · 9 lines</summary><pre>def declared_formulation_check(raw_text: str, intended_calls: list[Any], case_name: str) -&gt; tuple[dict[str, Any], Optional[list[dict[str, Any]]]]:
+    &quot;&quot;&quot;Score a no-tools answer&#x27;s declared formulation against the intended calls with the same
+    comparator as the tool rows. A missing field counts as nothing formulated (``unparsed``).
+    The case is treated as preloaded: its tables are in the prompt, so declaring load_case is
+    optional on both sides.&quot;&quot;&quot;
+    decl = declared_formulation(raw_text)
+    fm = bm.formulation_check(list(intended_calls or []), decl, preloaded_case=case_name)
+    fm[&quot;detail&quot;] = (&quot;declared formulation: &quot; if decl is not None else &quot;no formulation field in the answer: &quot;) + str(fm.get(&quot;detail&quot;) or &quot;&quot;)
+    return fm, decl
+</pre></details><details><summary><b>Solved</b> · benchmarks.scoring.solved_check · 56 lines</summary><pre>def solved_check(
+    *,
+    ok: bool,
+    has_tools: bool,
+    formulation_exact: Optional[bool],
+    truth_converged: Optional[bool],
+    final_converged: Optional[bool],
+    metrics: Optional[Dict[str, Any]],
+    answer_text: Optional[str] = None,
+    truth_answer: Any = None,
+    expected_outcome: Optional[str] = None,
+    declared_failure: Optional[bool] = None,
+) -&gt; Dict[str, Any]:
+    &quot;&quot;&quot;``{&quot;solved&quot;: bool, &quot;solved_reason&quot;: str}`` per the module docstring.
+
+    Stress items (``expected_outcome`` in {&quot;non_converged&quot;, &quot;islanded&quot;}) are solved when the
+    request was formulated correctly and the answer declares the failure (safe failure); there
+    is no valid numerical answer to match in that case.
+    &quot;&quot;&quot;
+
+    def _out(solved: bool, reason: str) -&gt; Dict[str, Any]:
+        return {&quot;solved&quot;: bool(solved), &quot;solved_reason&quot;: reason}
+
+    if not ok:
+        return _out(False, &quot;run_failed&quot;)
+    if has_tools and formulation_exact is not True:
+        return _out(False, &quot;formulation&quot;)
+    if expected_outcome in (&quot;non_converged&quot;, &quot;islanded&quot;):
+        return _out(bool(declared_failure), &quot;declared_failure&quot; if declared_failure else &quot;failure_not_declared&quot;)
+    if truth_converged is None:
+        return _out(False, &quot;no_ground_truth&quot;)
+    if final_converged is None:
+        return _out(False, &quot;no_final_state&quot;)
+    if bool(final_converged) != bool(truth_converged):
+        return _out(False, &quot;convergence_mismatch&quot;)
+    if truth_converged is False:
+        return _out(True, &quot;non_converged_match&quot;)
+    num = numeric_within_tolerance(metrics, has_tools=has_tools)
+    if not num[&quot;numeric_ok&quot;]:
+        if not num[&quot;coverage_ok&quot;]:
+            return _out(False, &quot;incomplete_coverage&quot;)
+        if not num[&quot;voltage_ok&quot;]:
+            return _out(False, &quot;voltage_error&quot;)
+        return _out(False, &quot;flow_error&quot;)
+    # State matches the reference (Daniela&#x27;s decision, 2026-09-18): that is necessary but no
+    # longer sufficient on its own. A correct answer can no longer stand in for a wrong state
+    # (the old &quot;answer_ok&quot; path is gone -- an answer that is right on top of a wrong state is
+    # not solver-grounded), and now, additionally, where the request asks a question with a
+    # checkable ground-truth answer, that answer must also be right. answer_matches_truth
+    # returns None when there is nothing to check (no truth_answer, or an operation request
+    # with no specific quantity asked for), which passes -- the state check is then the whole
+    # criterion, as it always was for those items.
+    ans = answer_matches_truth(answer_text, truth_answer)
+    if ans is False:
+        return _out(False, &quot;answer_mismatch&quot;)
+    return _out(True, &quot;numeric_and_answer_ok&quot; if ans is True else &quot;numeric_ok&quot;)
+</pre></details><details><summary><b>Escalated / wrong unflagged (declared inability rule)</b> · benchmarks.scoring.escalation_check · 72 lines</summary><pre>def escalation_check(
+    *,
+    method_name: Optional[str],
+    verification_outcome: Optional[str],
+    formulation_error_type: Optional[str],
+    round_limit_exceeded: bool = False,
+    answer_text: Optional[str] = None,
+    solved: Optional[bool] = None,
+) -&gt; bool:
+    &quot;&quot;&quot;Whether this row ended in an explicit handoff to a person, as opposed to an
+    autonomous answer (right or wrong). Every request lands in exactly one of three
+    outcomes the paper reports: solved autonomously (``solved``), escalated (this),
+    or wrong with nothing flagging it (the complement, ``not solved and not
+    escalated``) -- see notes/tabla_objetivo_pfagent.md.
+
+    Four ways a row escalates, applied identically to every method: the task-level
+    verification gate&#x27;s abstention (``final_gate=True``, see
+    ``llm.engine.verify_final_answer`` / its ``verification_outcome``); the
+    tool-round budget running out before a final answer was ever produced
+    (``round_limit_exceeded``, ``llm.engine``&#x27;s ``MAX_ROUNDS_EXCEEDED_TEXT`` --
+    ``trace[&quot;status&quot;] == &quot;max_rounds&quot;``: the run says in words that no result is
+    reported, the same declared-failure shape as a verification abstention, just
+    from a different exhaustion point); the deterministic parser&#x27;s refusal when it
+    cannot map the request to any tool call; and, since 2026-09-21, the answer text
+    itself explicitly declaring inability or lack of means (``_DECLARED_INABILITY_RE``
+    -- &quot;I cannot provide the exact numerical results...&quot;, &quot;A unique worst outage
+    cannot be determined... because no worst-case ranking criterion is specified&quot;).
+    This last path is the only one derived from free text a model wrote, and it is
+    deliberately narrow: an answer that merely *asserts* a false state (a no-tool
+    method&#x27;s ``{&quot;converged&quot;: false, ...}`` stub with no accompanying inability
+    language, say) is not this -- it stays &quot;wrong, unflagged&quot;, since it is an
+    autonomous (wrong) claim, not a declared refusal. This is also not the same
+    signal as ``failure_reporting``&#x27;s ``abstained`` (a broader JSON/regex heuristic
+    that also catches this same false-state stub, used for SFR/claimed-success, kept
+    unchanged): a method whose answer merely reads uncertain without this specific
+    first-person incapacity language still lands in wrong_silently, not escalated.
+
+    ``round_limit_exceeded`` is deliberately not folded into
+    ``verification_outcome`` upstream: the round budget can run out before
+    ``verify_final_answer`` ever runs (``verification_outcome`` stays ``None``,
+    ``verification_attempts`` stays 0), most often because a failed verification&#x27;s
+    own retry -- which may call tools again to refresh state -- consumed the
+    remaining rounds before the model could produce a second final-answer attempt.
+    That is a real fairness question for a gated architecture&#x27;s round budget, not
+    something this check should paper over by inferring it from V6/V7 (or any
+    other condition) happening to read the round-limit text as a claim mismatch.
+
+    ``solved`` gates only the declared-inability path (2026-09-21 fix, found by the
+    editor: gpt-5.6-sol single_call:structured&#x27;s Solved+Escalated+Wrong-unflagged
+    summed to 105% because two items -- case14-parameterized-029-s0 and -037-s0 --
+    both delivered the correct numeric answer (``solved=True``,
+    ``solved_reason=&quot;numeric_and_answer_ok&quot;``) AND hedged about a *different*,
+    unrequested part of the answer in the same text (&quot;...but no power-flow result
+    was returned, so lines loaded above 80% cannot be identified&quot; -- the request&#x27;s
+    checkable answer never needed the power-flow result at all). The three outcomes
+    are exclusive with precedence solved, then escalated, then wrong_silently: an
+    answer that both hedges and delivers the right result is solved, not escalated,
+    so a solved item&#x27;s own hedge never overrides it. The pre-existing verification-
+    abstention/round-limit/rule_based-refusal paths above are unaffected by
+    ``solved`` and keep their own documented overlap with it (an abstention can
+    reject an answer whose underlying computed state was in fact correct) -- that is
+    an established, different design point this fix does not touch.
+    &quot;&quot;&quot;
+    if verification_outcome in _ESCALATION_VERIFICATION_OUTCOMES:
+        return True
+    if round_limit_exceeded:
+        return True
+    if str(method_name or &quot;&quot;) == &quot;rule_based&quot; and formulation_error_type == &quot;unparsed&quot;:
+        return True
+    if not solved and answer_text and _DECLARED_INABILITY_RE.search(str(answer_text)):
+        return True
+    return False
+</pre></details><details><summary><b>Reporting: traceable numbers (V4 offline)</b> · benchmarks.metrics.faithful_numbers · 23 lines</summary><pre>def faithful_numbers(
+    answer_text: Optional[str],
+    tool_outputs: Iterable[Any],
+    *,
+    request_text: Optional[str] = None,
+) -&gt; Dict[str, Any]:
+    &quot;&quot;&quot;Fraction of answer numbers traceable to tool outputs (see module docstring).
+
+    Numbers that merely echo the request (``request_text``, e.g. a threshold or a
+    requested MW setpoint) are treated as traceable as well.
+    &quot;&quot;&quot;
+    numbers = numbers_in_text(answer_text)
+    candidates = numbers_in_tool_outputs(tool_outputs)
+    candidates.extend(_request_number_candidates(request_text))
+    if not numbers:
+        return {&quot;faithful_numbers&quot;: None, &quot;n_numbers&quot;: 0, &quot;n_untraceable_numbers&quot;: 0, &quot;untraceable&quot;: []}
+    untraceable = [n for n in numbers if not _num_matches(n, candidates)]
+    return {
+        &quot;faithful_numbers&quot;: float((len(numbers) - len(untraceable)) / len(numbers)),
+        &quot;n_numbers&quot;: len(numbers),
+        &quot;n_untraceable_numbers&quot;: len(untraceable),
+        &quot;untraceable&quot;: [n[&quot;text&quot;] for n in untraceable][:20],
+    }
+</pre></details></section><section><h2>7. Exactly what will be executed, in order</h2><p>gpt-4o-mini runs first within each command; each run is rescored offline and rendered before the next starts. Nothing starts until you say so.</p><pre>.venv/bin/python run.py run --method rule_based --case ieee14 --n 40 --tag v2
 .venv/bin/python run.py run --method llm_only_structured --model openrouter:openai/gpt-4o-mini --case ieee14 --n 40 --tag v2
 .venv/bin/python run.py run --method llm_only_forced_structured --model openrouter:openai/gpt-4o-mini --case ieee14 --n 40 --tag v2
 .venv/bin/python run.py run --method formulation_probe_structured --model openrouter:openai/gpt-4o-mini --model openrouter:openai/gpt-5.6-sol --case ieee14 --n 40 --tag v2

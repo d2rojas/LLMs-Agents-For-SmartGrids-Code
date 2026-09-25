@@ -13,7 +13,9 @@ rules. Nothing is typed by hand except the section prose.
 from __future__ import annotations
 
 import html
+import inspect
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -26,7 +28,11 @@ from benchmarks.evaluate_llms import perturbed_case  # noqa: E402
 from benchmarks.requests import generate_requests  # noqa: E402
 from llm import engine  # noqa: E402
 from llm.prompt_variants import build_messages  # noqa: E402
-from llm.tools import get_openai_tools  # noqa: E402
+from llm.tools import ToolContext, get_openai_tools  # noqa: E402
+from llm.engine import LLMEngine, SessionState, verify_final_answer  # noqa: E402
+from benchmarks.evaluate_llms import perturbing_dispatcher, declared_formulation_check  # noqa: E402
+from benchmarks import metrics as bm, scoring as bs  # noqa: E402
+from baselines import rule_based  # noqa: E402
 
 E = html.escape
 CASE, N, SEED, K, ROUNDS, TOOLS = "case14", 40, 0, 1, 8, "load_split"
@@ -64,6 +70,77 @@ SCORING = [
     ("Traceable", "Share of answers whose every number appears in a tool output from the last solve."),
     ("V_MAE / B_mean", "Bus-voltage MAE against the reference and the mean bus power-balance residual, over all requests and over the solved ones."),
 ]
+
+
+FIG = re.compile(r'"figure_json":\s*"((?:[^"\\]|\\.)*)"')
+
+
+def _src(obj: Any) -> str:
+    try:
+        return inspect.getsource(obj)
+    except Exception as exc:  # pragma: no cover
+        return f"(source not available: {exc})"
+
+
+def tools_section() -> str:
+    """One card per tool: description, inputs, the Python that runs it, and a real output on case14."""
+    from solver.power_flow import SolverConfig
+
+    ctx = ToolContext(session=SessionState(), solver_config=SolverConfig())
+    disp = perturbing_dispatcher(ctx, seed=SEED, k=K)
+    sample: Dict[str, Dict[str, Any]] = {
+        "load_case": {"case_name": "case14"}, "run_powerflow": {}, "get_status": {}, "get_most_loaded_branch": {},
+        "set_active_load": {"bus_id": 6, "p_mw": 14.7}, "set_load": {"bus_id": 9, "p_mw": 29.5, "q_mvar": 16.6},
+        "disconnect_line": {"from_bus": 1, "to_bus": 5}, "reconnect_line": {"from_bus": 1, "to_bus": 5},
+        "run_n1_contingency": {"top_k": 1, "criteria": "max_violations"}, "recommend_remedial_actions": {"max_actions": 2},
+        "apply_remedial_action": {"action_index": 0, "confirmed": True}, "generate_plot": {"plot_type": "voltage_heatmap"},
+    }
+    order = ["load_case", "run_powerflow", "get_status", "get_most_loaded_branch", "set_active_load", "set_load", "disconnect_line", "reconnect_line", "run_n1_contingency", "recommend_remedial_actions", "apply_remedial_action", "generate_plot"]
+    schema = {t["function"]["name"] if "function" in t else t["name"]: (t.get("function") or t) for t in get_openai_tools(variant=TOOLS)}
+    out: List[str] = ["<section><h2>3b. The tools: what each one is, its inputs, the code that runs it, and a real output</h2><p>These are the only ways any method touches the network. The schema is what the model sees through function calling; the code is the handler the dispatcher runs (PandaPower underneath); the sample output was produced now on the same perturbed case14 the runs use (seed 0, k = 1), in the order listed, so state carries from one call to the next.</p>"]
+    for name in order:
+        fn = schema.get(name, {})
+        props = (fn.get("parameters") or {}).get("properties") or {}
+        req = set((fn.get("parameters") or {}).get("required") or [])
+        inputs = "".join(f"<tr><td><code>{E(k)}</code>{'*' if k in req else ''}</td><td>{E(str(v.get('type')))}{' in {' + ', '.join(map(str, v['enum'])) + '}' if v.get('enum') else ''}</td><td>{E(str(v.get('default'))) if 'default' in v else ''}</td><td>{E(v.get('description') or '')}</td></tr>" for k, v in props.items()) or "<tr><td colspan='4' class='muted'>no inputs</td></tr>"
+        handler = disp.handlers.get(name)
+        code = _src(handler) if handler else "(no handler)"
+        args = sample.get(name, {})
+        try:
+            result = disp.dispatch(name, args)
+        except Exception as exc:
+            result = f"(error: {exc})"
+        result = FIG.sub(lambda m: f'"figure_json": "<plot, {len(m.group(1)) // 1024} KB, omitted>"', str(result))
+        out.append(f"<h3><code>{E(name)}</code> <span class='muted'>· {E(fn.get('description') or '')}</span></h3><table><tr><th>input</th><th>type</th><th>default</th><th>meaning</th></tr>{inputs}</table>"
+                   f"<details><summary>Python handler ({len(code.splitlines())} lines)</summary><pre>{E(code)}</pre></details>"
+                   f"<details open><summary>real output for <code>{E(name)}({E(', '.join(f'{k}={v!r}' for k, v in args.items()))})</code></summary><pre>{E(result if len(result) < 6000 else result[:6000] + chr(10) + '... (' + str(len(result) - 6000) + ' more chars)')}</pre></details>")
+    out.append("</section>")
+    return "".join(out)
+
+
+def code_section() -> str:
+    parts = [
+        ("Engine: one request, any architecture (run_with_trace)", LLMEngine.run_with_trace),
+        ("ReAct loop (react_nogate, and PFAgent before its gate)", LLMEngine._run_react),
+        ("Single-call (one round, no memory)", LLMEngine._run_single_call),
+        ("Plan-and-Act (plan once, execute, answer)", LLMEngine._run_plan_act),
+        ("How a run ends (escalation text, status)", LLMEngine._finish),
+        ("Verification gate V1–V7 on the final answer (PFAgent)", verify_final_answer),
+        ("V6 argument grounding", bm.argument_grounding_check),
+        ("Deterministic parser: request → tool calls", rule_based._parse_clause),
+        ("Deterministic parser: run", rule_based.run),
+        ("Formulation comparator (the rules R0–R10)", bm.formulation_check),
+        ("Declared formulation of the probes / no-tools rows", declared_formulation_check),
+        ("Solved", bs.solved_check),
+        ("Escalated / wrong unflagged (declared inability rule)", bs.escalation_check),
+        ("Reporting: traceable numbers (V4 offline)", bm.faithful_numbers),
+    ]
+    out = ["<section><h2>8. The code behind every step, verbatim</h2><p>The actual Python from <code>llm/engine.py</code>, <code>baselines/rule_based.py</code>, <code>benchmarks/metrics.py</code> and <code>benchmarks/scoring.py</code>, as it is in this worktree. Docstrings carry the rules in words; the body is what runs.</p>"]
+    for title, obj in parts:
+        src = _src(obj)
+        out.append(f"<details><summary><b>{E(title)}</b> · {E(getattr(obj, '__module__', ''))}.{E(getattr(obj, '__qualname__', getattr(obj, '__name__', '')))} · {len(src.splitlines())} lines</summary><pre>{E(src)}</pre></details>")
+    out.append("</section>")
+    return "".join(out)
 
 
 def tools_block(variant: str) -> str:
@@ -109,6 +186,7 @@ pre{background:#fafbfd;border:1px solid var(--line);border-radius:8px;padding:10
         calls = " → ".join(f"{c['tool']}(" + ", ".join(f"{k}={v}" for k, v in (c.get('args') or {}).items()) + ")" for c in r.intended_calls)
         H.append(f"<tr><td>{i}</td><td><code>{E(r.id)}</code></td><td>{E(r.difficulty)}</td><td>{E(r.text)}</td><td><code>{E(calls)}</code></td><td>{E(r.expected_outcome)}</td></tr>")
     H.append("</table></section>")
+    H.append(tools_section())
 
     # 4 per method: exact messages
     H.append("<section><h2>4. What each method receives, exactly</h2><p>Pick a scenario in the header. For each row: the system prompt (hash as it will be stamped on the run), the full user message for that scenario, the tool schema sent through function calling, and the planner prompt where it exists. Long blocks are collapsed; expand to read them whole.</p>")
@@ -165,6 +243,8 @@ pre{background:#fafbfd;border:1px solid var(--line);border-radius:8px;padding:10
 
     # 6 gate + scoring
     H.append("<section><h2>6. Verification gate (PFAgent) and scoring (every row)</h2><h3>Gate conditions on the final answer</h3><table><tr><th>label</th><th>key</th><th>condition</th></tr>" + "".join(f"<tr><td>{a}</td><td><code>{b}</code></td><td>{E(c)}</td></tr>" for a, b, c in GATE) + "</table><p class='muted'>A rejected answer is retried once with the failed conditions spelled out; a second failure escalates. ReAct and Plan-and-Act run without this gate; single-call runs with the observation gate on tool outputs only.</p><h3>Scoring rules</h3><table><tr><th>metric</th><th>definition</th></tr>" + "".join(f"<tr><td><b>{E(a)}</b></td><td>{E(b)}</td></tr>" for a, b in SCORING) + "</table></section>")
+
+    H.append(code_section())
 
     # 7 commands
     cmds = []
