@@ -7,7 +7,7 @@ included: these runs are the evidence behind the paper tables and travel with th
 ```
 results/
   INDEX.md                                  one line per run directory, newest first (run.py index)
-  visuals/                                  the pages: design.html (the evaluation design), results.html (same scenario under every method), viewer.html (any run, any request, real trace)
+  visuals/                                  index.html (menu: design, results, traces), design.html, results.html, viewer.html
   <case>/                                   ieee14, ieee30, ...
     <YYYY-MM-DD>/                           the day the run was made
       <model>/                              gpt-4o-mini, gpt-5.6-sol, gpt-5.4, no-llm (rule_based)

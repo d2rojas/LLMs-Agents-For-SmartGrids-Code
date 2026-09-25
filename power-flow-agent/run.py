@@ -290,7 +290,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
     handler = lambda *a, **k: http.server.SimpleHTTPRequestHandler(*a, directory=str(RESULTS), **k)  # noqa: E731
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("127.0.0.1", args.port), handler) as httpd:
-        url = f"http://127.0.0.1:{args.port}/visuals/viewer.html"
+        url = f"http://127.0.0.1:{args.port}/visuals/index.html"
         print(f"trace viewer at {url}   (Ctrl+C to stop)")
         if not args.no_browser:
             threading.Timer(0.5, lambda: webbrowser.open(url)).start()
@@ -356,7 +356,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("index", help="rebuild results/INDEX.md").set_defaults(func=cmd_index)
 
-    sv = sub.add_parser("serve", help="open the trace viewer (results/visuals/viewer.html) on a local web server")
+    sv = sub.add_parser("serve", help="open the evaluation pages (results/visuals/index.html: design, results, traces) on a local web server")
     sv.add_argument("--port", type=int, default=8765)
     sv.add_argument("--no-browser", action="store_true")
     sv.set_defaults(func=cmd_serve)

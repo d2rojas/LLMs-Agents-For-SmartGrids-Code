@@ -304,8 +304,6 @@ def blocks_html(parts: List[Tuple[str, str]], collapsed: Tuple[str, ...] = ("u_d
     return "".join(out)
 
 
-STAGE_BAR = "<nav class='stages'><a class='st on' href='design.html'>1 · Design</a><a class='st' href='results.html'>2 · Results</a><a class='st' href='viewer.html'>2 · Traces</a><span class='st off'>3 · Analysis <small>after the runs</small></span></nav>"
-
 
 def build() -> Path:
     reqs = generate_requests(CASE, N, SEED)
@@ -314,7 +312,7 @@ def build() -> Path:
 :root{--bg:#f3f5f8;--panel:#fff;--line:#e3e7ee;--text:#0f172a;--muted:#64748b;--acc:#2f5fd0;--ok:#1f9d55;--esc:#e0891a;--bad:#d53f3f;--shadow:0 1px 2px rgba(15,23,42,.06),0 4px 14px rgba(15,23,42,.05)}
 *{box-sizing:border-box}body{margin:0;font:14px/1.5 Inter,-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:var(--text);background:var(--bg)}
 header{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line);padding:10px 22px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
-header h1{font-size:17px;margin:0;letter-spacing:-.01em}.tabs{display:flex;gap:4px}.stages{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-right:8px}.stages .st{padding:6px 12px;border-radius:8px;border:1px solid #d9dee7;text-decoration:none;color:#5b6472;font-weight:600;font-size:12.5px;background:#fff}.stages .st:hover{border-color:#1e293b;color:#1e293b}.stages .st.on{background:#1e293b;color:#fff;border-color:#1e293b}.stages .st.off{opacity:.5;cursor:default}.stages .st small{font-weight:400;opacity:.8}.tabs button{font:inherit;font-weight:500;padding:7px 14px;border:1px solid transparent;border-radius:8px;background:transparent;cursor:pointer;color:var(--muted)}.tabs button.on{background:var(--acc);color:#fff}
+header h1{font-size:17px;margin:0;letter-spacing:-.01em}.tabs{display:flex;gap:4px}body.embed header{display:none}.tabs button{font:inherit;font-weight:500;padding:7px 14px;border:1px solid transparent;border-radius:8px;background:transparent;cursor:pointer;color:var(--muted)}.tabs button.on{background:var(--acc);color:#fff}
 main{padding:18px 22px;max-width:1500px;margin:0 auto}.tab{display:none}.tab.on{display:block}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow);margin-bottom:12px}.card h2{font-size:16px;margin:0 0 6px}.card h3{font-size:14px;margin:12px 0 6px}
 .grid{display:grid;gap:12px}.g6{grid-template-columns:repeat(6,minmax(0,1fr))}.dg{background:#fafbfd;border:1px solid var(--line);border-radius:10px;padding:8px}.dg h4{margin:0;font-size:12.5px}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -336,11 +334,11 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
 """
     H: List[str] = [f"<!doctype html><html lang='en'><head><meta charset='utf-8'><title>PFAgent · Evaluation design</title><link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap' rel='stylesheet'><style>{css}</style></head><body>"]
     tabs = [("overview", "Overview"), ("methods", "Methods"), ("scenarios", "Scenarios"), ("prompts", "Prompts"), ("tools", "Tools"), ("gate", "Gate & scoring"), ("plan", "Run plan")]
-    H.append("<header>" + STAGE_BAR + "<h1>PFAgent · Evaluation design</h1><nav class='tabs'>" + "".join(f"<button data-tab='{k}' class='{'on' if k == 'overview' else ''}'>{v}</button>" for k, v in tabs) + "</nav><span style='flex:1'></span><span class='muted'>Generated from the code that will run. For approval; nothing runs yet.</span></header><main>")
+    H.append("<header><h1>PFAgent · Evaluation design</h1><nav class='tabs'>" + "".join(f"<button data-tab='{k}' class='{'on' if k == 'overview' else ''}'>{v}</button>" for k, v in tabs) + "</nav><span style='flex:1'></span><span class='muted'>Generated from the code that will run. For approval; nothing runs yet.</span></header><main>")
 
     # ---------------- overview
     H.append("<div class='tab on' id='tab-overview'>")
-    H.append("<div class='card'><h2>Three stages, three pages</h2><p>The dark tabs at the top left switch between them.</p><div class='flow'><div class='box' style='border-color:var(--acc)'><b>1 · Design, this page</b><span>methods, prompts, answer object, evaluator, run plan. Written before any run: no numbers, no verdicts.</span></div><span class='arr'>→</span><div class='box'><b>2 · Results and Traces</b><span>the numbers and every trace, exactly as the runs produced them. Filled after the runs.</span></div><span class='arr'>→</span><div class='box'><b>3 · Analysis</b><span>comparisons, failure catalogue and conclusions, written only from the results. Last.</span></div></div><p class='muted'>Keeping the stages apart is deliberate: the design is approved before the money is spent, the results are recorded before anyone interprets them, and the conclusions cite the results rather than expectations.</p></div>")
+    H.append("<div class='card'><h2>Three stages, three sections</h2><p>The menu on the left moves between them.</p><div class='flow'><div class='box' style='border-color:var(--acc)'><b>1 · Design, this page</b><span>methods, prompts, answer object, evaluator, run plan. Written before any run: no numbers, no verdicts.</span></div><span class='arr'>→</span><div class='box'><b>2 · Results and Traces</b><span>the numbers and every trace, exactly as the runs produced them. Filled after the runs.</span></div><span class='arr'>→</span><div class='box'><b>3 · Analysis</b><span>comparisons, failure catalogue and conclusions, written only from the results. Last.</span></div></div><p class='muted'>Keeping the stages apart is deliberate: the design is approved before the money is spent, the results are recorded before anyone interprets them, and the conclusions cite the results rather than expectations.</p></div>")
     H.append("<div class='card'><h2>One question, six ways to answer it</h2><p>Every method receives the same 40 natural-language power-flow requests on the same perturbed IEEE 14-bus network, answers with the same JSON object, and is scored by the same evaluator. What changes between methods is only <b>who formulates</b> the solver operations, <b>who computes</b> the numbers, whether the method <b>sees the solver's outputs</b> before answering, and whether a <b>gate</b> checks the answer before it is reported.</p>")
     H.append("<div class='flow'><div class='box'><b>Request</b><span>one of 40 scenarios</span></div><span class='arr'>→</span><div class='box'><b>Formulate</b><span>which solver operations, with which arguments</span></div><span class='arr'>→</span><div class='box'><b>Compute</b><span>PandaPower, or the LLM by hand</span></div><span class='arr'>→</span><div class='box'><b>Report</b><span>the answer for the operator</span></div><span class='arr'>→</span><div class='box'><b>Verdict</b><span>solved · escalated · wrong</span></div></div></div>")
     H.append("<div class='grid g3'>")
@@ -493,7 +491,12 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
 
     H.append("""</main><script>
 const tabs=document.querySelectorAll('.tabs button');function show(k){tabs.forEach(b=>b.classList.toggle('on',b.dataset.tab===k));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.id==='tab-'+k));window.scrollTo(0,0);}
-tabs.forEach(b=>b.onclick=()=>show(b.dataset.tab));
+tabs.forEach(b=>b.onclick=()=>{show(b.dataset.tab);history.replaceState(null,'','#'+b.dataset.tab);});
+function fromHash(){const k=(location.hash||'#overview').slice(1);if(document.getElementById('tab-'+k)){show(k);}}
+window.addEventListener('hashchange',fromHash);
+if(window.self!==window.top){document.body.classList.add('embed');}
+const _show=show;show=function(k){_show(k);if(window.self!==window.top){window.parent.postMessage({page:'design',tab:k},'*');}};
+fromHash();
 const scn=document.getElementById('scn'),mth=document.getElementById('mth');
 function ap(){document.querySelectorAll('.um').forEach(p=>p.classList.toggle('hid',p.dataset.scn!==scn.value));document.querySelectorAll('.pm').forEach(p=>p.classList.toggle('hid',p.dataset.mth!==mth.value));}
 scn.onchange=ap;mth.onchange=ap;ap();
