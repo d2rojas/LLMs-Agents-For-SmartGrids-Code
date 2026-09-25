@@ -268,10 +268,13 @@ def test_rule_unpinned_optional_accepts_any_schema_valid_value():
         out = formulation_check(N1_FREE, [LOAD30, _c("run_n1_contingency", top_k=k)])
         assert out["formulation_exact"] is True and out["formulation_error_type"] == "ok", (k, out)
         assert out["formulation_exact_strict"] is False
-    # a named criterion or a candidate cap that the request did not pin is also free
-    out = formulation_check(N1_FREE, [LOAD30, _c("run_n1_contingency", criteria="min_voltage", max_candidates=10)])
+    # a named criterion, or a candidate cap that still covers every branch, is also free
+    out = formulation_check(N1_FREE, [LOAD30, _c("run_n1_contingency", criteria="min_voltage", max_candidates=100)])
     assert out["formulation_exact"] is True
-    assert any("max_candidates=10" in n for n in out["benign_notes"])
+    assert any("max_candidates=100" in n for n in out["benign_notes"])
+    # a cap below the branch count narrows the scan and changes the ranking (2026-09-24 rule)
+    out = formulation_check(N1_FREE, [LOAD30, _c("run_n1_contingency", criteria="min_voltage", max_candidates=10)])
+    assert out["formulation_exact"] is False and out["formulation_error_type"] == "extra_arg_changes_result"
 
 
 def test_rule_pinned_optional_must_match_after_normalization():
@@ -291,7 +294,7 @@ def test_rule_pinned_optional_must_match_after_normalization():
 
 
 def test_rule_extra_optional_argument_is_not_an_error_by_itself():
-    executed = [LOAD30, _c("run_n1_contingency", top_k=3, criteria="min_voltage", max_candidates=10)]
+    executed = [LOAD30, _c("run_n1_contingency", top_k=3, criteria="min_voltage", max_candidates=100)]
     out = formulation_check(N1_PINNED, executed)
     assert out["formulation_exact"] is True and out["formulation_exact_strict"] is False
     # argument names the dispatcher never reads are ignored too

@@ -162,6 +162,14 @@ TOOL_SCHEMA: Dict[str, Dict[str, Any]] = {
 # dispatcher writes them into the network): giving them unasked is an error.
 RESULT_CHANGING_OPTIONAL_ARGS: frozenset[Tuple[str, str]] = frozenset({("modify_load", "q_mvar")})
 
+# run_n1_contingency.max_candidates: 0 (the default) scans every branch; a positive value scans only
+# that many, so the "worst outage" it returns is the worst of a sample, not of the network. It is a
+# result-changing optional argument whenever it is below the branch count of the case (2026-09-24:
+# found on gpt-4o-mini Plan-and-Act, four N-1 requests planned with max_candidates=1 or 3, scored
+# "exact" and answered with the wrong worst outage). The network state does not change, so the
+# final-state override of R8 must not apply here.
+BRANCHES_PER_CASE: Dict[str, int] = {"case14": 20, "case30": 41, "case57": 80, "case118": 186, "case300": 411}
+
 VOLTAGE_ABS_TOL = 1e-3
 RELATIVE_TOL = 0.01
 
@@ -553,6 +561,7 @@ def _compare_call_args(
     executed_args: Dict[str, Any],
     *,
     final_state_metrics: Optional[Dict[str, Any]],
+    case_name: Optional[str] = None,
 ) -> Tuple[Optional[str], str, List[str]]:
     """(error_type | None, detail, benign_notes) for one intended/executed pair of the same tool.
 
@@ -594,6 +603,17 @@ def _compare_call_args(
         if name not in props:
             benign.append(f"{tool}: {name}={e_val!r} not in schema, ignored by the dispatcher")
             continue
+        if (tool, name) == ("run_n1_contingency", "max_candidates"):
+            branches = BRANCHES_PER_CASE.get(_norm_case_name(case_name) if case_name else "", 20)
+            try:
+                v = int(e_val)
+            except (TypeError, ValueError):
+                v = 0
+            if v <= 0 or v >= branches:
+                benign.append(f"{tool}: max_candidates={e_val!r} scans every branch ({branches})")
+                continue
+            issues.append(("extra_arg_changes_result", f"{tool}: max_candidates={e_val!r} scans only {v} of {branches} branches, so the ranking is over a sample and not the network (request did not ask for it)"))
+            continue
         if (tool, name) in RESULT_CHANGING_OPTIONAL_ARGS:
             default = props[name].get("default")
             if default is not None and _values_equal(default, e_val):
@@ -611,6 +631,15 @@ def _compare_call_args(
     issues.sort(key=lambda t: _ERROR_SEVERITY.get(t[0], 9))
     err = issues[0][0]
     return err, "; ".join(d for _, d in issues), benign
+
+
+def _case_of(intended: List[Dict[str, Any]], executed: List[Dict[str, Any]], preloaded_case: Optional[str]) -> Optional[str]:
+    """The case a call sequence works on: the first load_case of either side, else the preloaded case."""
+    for seq in (intended, executed):
+        for c in seq:
+            if c.get("tool") == "load_case" and (c.get("args") or {}).get("case_name"):
+                return str(c["args"]["case_name"])
+    return preloaded_case
 
 
 def _values_equal(a: Any, b: Any) -> bool:
@@ -810,7 +839,7 @@ def formulation_check(
         return _result(False, err, detail)
 
     for ic, ec in zip(intended_core, executed_core):
-        err, detail, notes = _compare_call_args(ic["tool"], ic["args"], ec["args"], final_state_metrics=final_state_metrics)
+        err, detail, notes = _compare_call_args(ic["tool"], ic["args"], ec["args"], final_state_metrics=final_state_metrics, case_name=_case_of(intended_raw, executed_raw, preloaded_case))
         benign_notes.extend(notes)
         if err is not None:
             return _result(False, err, detail)
