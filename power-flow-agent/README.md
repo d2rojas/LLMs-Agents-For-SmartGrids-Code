@@ -14,13 +14,19 @@ so that only numbers traceable to a solver output are reported.
 ```
 run.py            the front door: run a method on a case, then render the results
 methods/          one folder per method: method.json + the prompt .txt files it uses   (methods/README.md)
-results/          every run: <case>/<date>/<model>/<method>/ with traces, summary, REPORT   (results/README.md)
-data/             MATPOWER case files                                                        (data/README.md)
-solver/  llm/  baselines/  models/   the engine (PandaPower tools, LLM engine, baselines, schemas)
-evaluation/       runner.py (runner), rescore.py, postprocess.py, scoring, paper-table builders,
-                  and results_* (the raw archive the paper tables are built from)
-scripts/          run_pf_matrix.sh (full matrix), migrate_paper_results.py, fetch_matpower_cases.py
-viz/  app.py      the Streamlit UI
+agent/            the agents: engine.py (ReAct loop, Plan-and-Act, verification gate), tools.py (the 12 solver
+                  tools and the dispatcher), prompts.py
+prompting/        the no-tools methods: llm_only.py (case tables in the prompt, the LLM-only runner),
+                  prompt_variants.py (prompt assembly for every method), prompts_baseline.py
+deterministic/    rule_based.py, the parser: request text to solver calls by regex, no LLM
+solver/           PandaPower: case_loader, power_flow, contingency (N-1), remedial, validators, schemas
+evaluation/       requests.py (the 40 scenarios per system), runner.py (runs one method), scoring.py,
+                  metrics.py, common_eval.py (one evaluator for every method), rescore.py, postprocess.py,
+                  trace_figures.py, compare_runs.py, design_page.py (results/visuals/design.html)
+results/          every run: <system>/<date>/<model>/<method>/ with traces, summary, REPORT   (results/README.md)
+data/             MATPOWER case files                                                          (data/README.md)
+ui/  viz/         the Streamlit UI (streamlit run ui/app.py) and the Plotly figures
+scripts/          fetch_matpower_cases.py
 tests/            pytest suite, no API keys needed
 ```
 
