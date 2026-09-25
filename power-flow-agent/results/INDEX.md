@@ -1,11 +1,14 @@
 # Results index
 
-Generated 2026-09-25 12:31 by `run.py index`. One line per run directory, newest first. Counts are runs; Form. and Trace. are percentages. Open the folder for `REPORT.md`, `summary.csv` and `traces/`.
+Generated 2026-09-25 14:49 by `run.py index`. One line per run directory, newest first. Counts are runs; Form. and Trace. are percentages. Open the folder for `REPORT.md`, `summary.csv` and `traces/`.
 
 ## ieee14
 
 | date | model | method | cond. | tools | n | solved | escalated | wrong unflagged | Form. % | Trace. % | tokens/run | cost $ | in the paper | folder |
 |---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 2026-09-25 | no-llm | rule_based | normal | load_split | 3 | 3 | 0 | 0 | 100.0 | 100.0 | 0 | 0.00 | new run | [rule_based__smoke](ieee14/2026-09-25/no-llm/rule_based__smoke/REPORT.md) |
+| 2026-09-25 | gpt-4o-mini | llm_only_structured | normal | load_split | 3 | 0 | 0 | 3 | 100.0 | 0.0 | 4218 | 0.00 | new run | [llm_only_structured__smoke](ieee14/2026-09-25/gpt-4o-mini/llm_only_structured__smoke/REPORT.md) |
+| 2026-09-25 | gpt-4o-mini | llm_only_cot | normal | load_split | 3 | 0 | 0 | 3 | 66.7 | 0.0 | 4573 | 0.00 | new run | [llm_only_cot__smoke](ieee14/2026-09-25/gpt-4o-mini/llm_only_cot__smoke/REPORT.md) |
 | 2026-09-23 | gpt-5.6-sol | plan_act_nogate | normal | load_split | 40 | 40 | 0 | 0 | 100.0 | 97.5 | 6453 | 0.64 | new run | [plan_act_nogate__matched](ieee14/2026-09-23/gpt-5.6-sol/plan_act_nogate__matched/REPORT.md) |
 | 2026-09-23 | gpt-5.6-sol | formulation_probe_structured | normal | load_split | 40 | 0 | 0 | 40 | 100.0 | 97.5 | 2469 | 0.24 | new run | [formulation_probe_structured__matched](ieee14/2026-09-23/gpt-5.6-sol/formulation_probe_structured__matched/REPORT.md) |
 | 2026-09-23 | gpt-5.6-sol | formulation_probe_structured | normal | load_split | 40 | 0 | 0 | 40 | 95.0 | 97.5 | 2415 | 0.23 | new run | [formulation_probe_structured__enums](ieee14/2026-09-23/gpt-5.6-sol/formulation_probe_structured__enums/REPORT.md) |
@@ -61,3 +64,34 @@ Generated 2026-09-25 12:31 by `run.py index`. One line per run directory, newest
 | 2026-09-16 | gpt-4o-mini | llm_only_forced_structured | normal | v1 | 40 | 0 | 0 | 40 | – | 0.0 | 2928 | 0.03 | main protocol table (Table 5 / S8) | [llm_only_forced_structured](ieee14/2026-09-16/gpt-4o-mini/llm_only_forced_structured/REPORT.md) |
 | 2026-09-14 | no-llm | rule_based | normal | v1 | 40 | 22 | 9 | 9 | 72.5 | 100.0 | 0 | 0.00 | main protocol table (Table 5 / S8) | [rule_based](ieee14/2026-09-14/no-llm/rule_based/REPORT.md) |
 | 2026-09-14 | gpt-4o-mini | react_nogate | normal | v1 | 40 | 26 | 0 | 14 | 97.5 | 87.5 | 7620 | 0.05 | split-tool appendix, before side (original modify_load tool) | [react_nogate](ieee14/2026-09-14/gpt-4o-mini/react_nogate/REPORT.md) |
+
+## ieee30
+
+| date | model | method | cond. | tools | n | solved | escalated | wrong unflagged | Form. % | Trace. % | tokens/run | cost $ | in the paper | folder |
+|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 2026-09-25 | no-llm | rule_based | normal | load_split | 3 | 3 | 0 | 0 | 100.0 | 100.0 | 0 | 0.00 | new run | [rule_based__smoke](ieee30/2026-09-25/no-llm/rule_based__smoke/REPORT.md) |
+| 2026-09-25 | gpt-4o-mini | llm_only_structured | normal | load_split | 3 | 0 | 0 | 3 | 100.0 | 0.0 | 6527 | 0.01 | new run | [llm_only_structured__smoke](ieee30/2026-09-25/gpt-4o-mini/llm_only_structured__smoke/REPORT.md) |
+| 2026-09-25 | gpt-4o-mini | llm_only_cot | normal | load_split | 3 | 0 | 0 | 3 | 100.0 | 0.0 | 6402 | 0.01 | new run | [llm_only_cot__smoke](ieee30/2026-09-25/gpt-4o-mini/llm_only_cot__smoke/REPORT.md) |
+
+## ieee57
+
+| date | model | method | cond. | tools | n | solved | escalated | wrong unflagged | Form. % | Trace. % | tokens/run | cost $ | in the paper | folder |
+|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 2026-09-25 | no-llm | rule_based | normal | load_split | 3 | 3 | 0 | 0 | 100.0 | 100.0 | 0 | 0.00 | new run | [rule_based__smoke](ieee57/2026-09-25/no-llm/rule_based__smoke/REPORT.md) |
+| 2026-09-25 | gpt-4o-mini | llm_only_structured | normal | load_split | 3 | 0 | 0 | 3 | 100.0 | 0.0 | 10182 | 0.01 | new run | [llm_only_structured__smoke](ieee57/2026-09-25/gpt-4o-mini/llm_only_structured__smoke/REPORT.md) |
+| 2026-09-25 | gpt-4o-mini | llm_only_cot | normal | load_split | 3 | 0 | 0 | 3 | 100.0 | 0.0 | 10129 | 0.01 | new run | [llm_only_cot__smoke](ieee57/2026-09-25/gpt-4o-mini/llm_only_cot__smoke/REPORT.md) |
+
+## ieee118
+
+| date | model | method | cond. | tools | n | solved | escalated | wrong unflagged | Form. % | Trace. % | tokens/run | cost $ | in the paper | folder |
+|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 2026-09-25 | no-llm | rule_based | normal | load_split | 3 | 3 | 0 | 0 | 100.0 | 100.0 | 0 | 0.00 | new run | [rule_based__smoke](ieee118/2026-09-25/no-llm/rule_based__smoke/REPORT.md) |
+| 2026-09-25 | gpt-4o-mini | llm_only_structured | normal | load_split | 3 | 0 | 0 | 3 | 100.0 | 0.0 | 19941 | 0.02 | new run | [llm_only_structured__smoke](ieee118/2026-09-25/gpt-4o-mini/llm_only_structured__smoke/REPORT.md) |
+| 2026-09-25 | gpt-4o-mini | llm_only_cot | normal | load_split | 3 | 0 | 0 | 3 | 100.0 | 0.0 | 20475 | 0.02 | new run | [llm_only_cot__smoke](ieee118/2026-09-25/gpt-4o-mini/llm_only_cot__smoke/REPORT.md) |
+
+## ieee300
+
+| date | model | method | cond. | tools | n | solved | escalated | wrong unflagged | Form. % | Trace. % | tokens/run | cost $ | in the paper | folder |
+|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 2026-09-25 | no-llm | rule_based | normal | load_split | 3 | 3 | 0 | 0 | 100.0 | 100.0 | 0 | 0.00 | new run | [rule_based__smoke](ieee300/2026-09-25/no-llm/rule_based__smoke/REPORT.md) |
+| 2026-09-25 | gpt-4o-mini | llm_only_structured | normal | load_split | 3 | 0 | 1 | 2 | 100.0 | 0.0 | 25772 | 0.01 | new run | [llm_only_structured__smoke](ieee300/2026-09-25/gpt-4o-mini/llm_only_structured__smoke/REPORT.md) |
