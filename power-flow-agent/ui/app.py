@@ -555,7 +555,7 @@ def _render_runtime_status_bar(T: Dict[str, str]) -> None:
 def _extract_fetch_command(text: str) -> Optional[str]:
     if not text:
         return None
-    m = re.search(r"(python scripts/fetch_matpower_cases\.py[^\n\r`]*)", str(text))
+    m = re.search(r"(python data/fetch_matpower_cases\.py[^\n\r`]*)", str(text))
     if m:
         return m.group(1).strip()
     return None

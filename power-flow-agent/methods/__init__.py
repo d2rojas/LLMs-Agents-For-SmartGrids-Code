@@ -46,7 +46,7 @@ def prompt_hash(text: str) -> str:
 @dataclass(frozen=True)
 class Method:
     """One ``method.json``. ``runner_name`` is what ``evaluation/runner.py --method`` expects; ``code`` points
-    at the file and function that run the method (see docs/ARCHITECTURE.md)."""
+    at the file and function that run the method (see README.md, Where things are)."""
 
     folder: str
     runner_name: str

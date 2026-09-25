@@ -1,0 +1,2977 @@
+{
+  "config": {
+    "models": [
+      "openai:gpt-4o-mini",
+      "gemini:gemini-2.5-flash-lite"
+    ],
+    "tasks": [
+      "rule_based"
+    ],
+    "methods": [
+      "rule_based"
+    ],
+    "cases": [
+      "case30"
+    ],
+    "condition": "normal",
+    "tool_variant": "load_split",
+    "plan_variant": "text",
+    "shard_index": null,
+    "shard_count": null,
+    "runs": 1,
+    "k": 1,
+    "seeds": [
+      0
+    ],
+    "max_rounds": 8,
+    "requests": {
+      "source": "generated",
+      "n_per_case_seed": 3,
+      "difficulties": [
+        "parameterized",
+        "multistep",
+        "ambiguous"
+      ]
+    },
+    "temperature": 0.0,
+    "timeout_s": 90.0,
+    "solver_config": {
+      "v_min": 0.95,
+      "v_max": 1.05,
+      "max_loading": 100.0
+    }
+  },
+  "core_scoreboard_fields": [
+    "success_rate",
+    "voltage_mae_mean",
+    "flow_mae_mean",
+    "loading_rmse_mean",
+    "voltage_f1_mean",
+    "thermal_f1_mean",
+    "convergence_match_rate",
+    "prompt_tokens_mean",
+    "completion_tokens_mean",
+    "total_tokens_mean",
+    "cost_usd_mean",
+    "cost_usd_total"
+  ],
+  "extended_scoreboard_fields": [
+    "n_items",
+    "formulation_exact_rate",
+    "formulation_exact_count",
+    "formulation_exact_total",
+    "faithful_numbers_mean",
+    "n_untraceable_numbers_mean",
+    "safe_failure_rate",
+    "safe_failure_count",
+    "safe_failure_total",
+    "claimed_success_on_failure_rate",
+    "claimed_success_on_failure_count",
+    "claimed_success_on_failure_total",
+    "stale_state_rate",
+    "stale_state_count",
+    "stale_state_total",
+    "stale_state_no_rerun_rate",
+    "stale_state_no_rerun_count",
+    "stale_state_no_rerun_total",
+    "stale_state_quoted_old_rate",
+    "stale_state_quoted_old_count",
+    "stale_state_quoted_old_total",
+    "converged_rate",
+    "convergence_match_count",
+    "convergence_match_total",
+    "kcl_mean_mismatch_mw_mean",
+    "power_balance_error_mean",
+    "n_llm_calls_mean",
+    "n_tool_calls_mean",
+    "n_tool_rounds_mean",
+    "wall_time_s_mean",
+    "solved_rate",
+    "solved_count",
+    "solved_total",
+    "abstained_on_solvable_rate",
+    "abstained_on_solvable_count",
+    "abstained_on_solvable_total",
+    "verification_pass_first_rate",
+    "verification_pass_retry_rate",
+    "verification_abstained_rate",
+    "verification_abstained_retry_mutation_rate",
+    "verification_total",
+    "v_pass_rate",
+    "v_pass_count",
+    "v_pass_total",
+    "voltage_mae_pq_mean",
+    "faithful_answers_rate",
+    "faithful_answers_count",
+    "faithful_answers_total",
+    "condition",
+    "voltage_mae_formulation_exact_mean",
+    "flow_mae_formulation_exact_mean",
+    "kcl_mean_mismatch_mw_formulation_exact_mean",
+    "feasible_rate",
+    "escalated_rate",
+    "escalated_count",
+    "escalated_total",
+    "solved_autonomously_rate",
+    "solved_autonomously_count",
+    "solved_autonomously_total",
+    "wrong_silently_rate",
+    "wrong_silently_count",
+    "wrong_silently_total",
+    "escalated_rate_v6v7",
+    "escalated_count_v6v7",
+    "escalated_total_v6v7",
+    "wrong_silently_rate_v6v7",
+    "wrong_silently_count_v6v7",
+    "wrong_silently_total_v6v7"
+  ],
+  "metric_definitions": "Per-item benchmark metrics computed from an engine trace and a request.\n\nThese metrics separate *formulation* correctness (did the method call the right\ntools with the right arguments, in the right order) from *solve* correctness\n(Tier I-III numbers vs the PandaPower ground truth, computed elsewhere with\n``methods.prompting.llm_only.evaluate_against_truth_extended``) and from *reporting*\nfaithfulness (are the numbers in the final answer traceable to tool outputs).\n\nEvery function is pure and JSON-friendly; nothing here calls an LLM or a solver.\n\nDefinitions\n-----------\nformulation_exact\n    The executed tool-call sequence asks the solver for what ``intended_calls``\n    asks for (calibrated comparator, rules R0-R10 in ``formulation_check``):\n    argument names/types are normalized (``bus`` -> ``bus_id``, ``\"14\"`` -> ``14``,\n    unordered line endpoints, case aliases), read-only calls are ignored\n    (``run_powerflow`` repeats, ``get_status``, ``get_most_loaded_branch``,\n    ``generate_plot``), optional arguments the request does not pin accept any\n    schema-valid value, and out-of-schema values or extra arguments that change\n    the solver outcome are errors.\nformulation_exact_strict\n    The verdict of the original comparator (``formulation_check_strict``): the\n    normalized sequences must match argument-by-argument with defaults dropped.\n    Kept in the ``formulation_check`` result for before/after comparison.\nformulation_error_type\n    ``ok`` | ``wrong_id`` (bus / line / case identifier differs) |\n    ``wrong_unit_or_value`` (a pinned numeric/enum argument differs) |\n    ``invalid_value`` (a value the tool schema rejects, e.g. ``criteria=\"min\n    voltage\"``; the tool falls back to a default) | ``extra_arg_changes_result``\n    (an unrequested optional argument that changes the solver outcome, e.g.\n    ``modify_load(..., q_mvar=0)`` when only MW was asked) | ``missed_step``\n    (an intended tool was never executed or a different tool was used) |\n    ``extra_step`` (an unintended tool that mutates the network or runs an\n    analysis was executed) | ``unparsed`` (the request could not be turned into\n    any tool call).\nfaithful_numbers\n    Fraction of the numbers in the final answer that match some number in the\n    tool outputs within tolerance: 1e-3 p.u. for voltages, 1 % relative for MW,\n    Mvar and percent values. Numbers without a unit are matched if either\n    tolerance holds. Additionally, an answer number written with ``k`` decimals\n    matches a tool value whose rounding to ``k`` decimals equals it (``0.93`` vs\n    ``0.9312``), so a coarser quotation of a solver value is not penalized.\n    Bare integers with no unit (bus/line ids, counts) are not\n    counted. ``None`` when the answer carries no numbers.\nn_untraceable_numbers\n    Count of answer numbers that match no tool-output number.\nsafe_failure\n    When the final solver state is non-converged (or the gate failed and there\n    is no final state): did the answer say so rather than report a result.\nclaimed_success_on_failure\n    Same failure condition, but the answer asserts success or reports\n    unit-bearing numbers without acknowledging the failure.\nstale_state\n    The agent changed the network (``MUTATING_TOOLS``) and then reported\n    power-flow numbers that do not come from a solve of the changed network.\n    Computed from the trace only, over the tool calls in execution order; a\n    ``load_case`` after a mutation resets the state (fresh network). Mutating\n    calls that returned an ``error`` / ``need_confirmation`` payload did not\n    change the network and are ignored. A \"re-solve\" is any tool output that\n    carries a PowerFlowResult payload (``RESOLVING_TOOLS``; in PFAgent every\n    mutating tool re-solves and returns the new result itself, so its own\n    output counts as the re-solve).\n    ``stale_state_no_rerun``: there is a mutation in effect, no re-solve at or\n    after the last mutation, and the answer reports numbers (numbers merely\n    echoing the request are ignored, as in ``faithful_numbers``).\n    ``stale_state_quoted_old``: a re-solve did happen after the last mutation,\n    but at least one answer number matches only a power-flow output produced\n    *before* the mutation and none matches only the post-mutation output(s),\n    with the ``faithful_numbers`` tolerances. Answers that quote both (a\n    before/after comparison) are not stale.\n    ``stale_state`` is either flag. All three are ``None`` when no mutation is\n    in effect at answer time (n/a), so rates are over items with a mutation.\n",
+  "scoreboard": [
+    {
+      "model": "none:rule_based",
+      "task": "rule_based",
+      "method": "rule_based",
+      "success_rate": 1.0,
+      "solved_rate": 1.0,
+      "solved_count": 3,
+      "solved_total": 3,
+      "voltage_mae_mean": 2.151342011141249e-07,
+      "voltage_mae_formulation_exact_mean": 2.151342011141249e-07,
+      "voltage_mae_pq_mean": 2.6891775136490057e-07,
+      "flow_mae_mean": 0.0002281313627899819,
+      "flow_mae_formulation_exact_mean": 0.0002281313627899819,
+      "kcl_mean_mismatch_mw_formulation_exact_mean": 0.00017781495296745773,
+      "feasible_rate": 1.0,
+      "loading_rmse_mean": 0.0029392162339035295,
+      "voltage_f1_mean": 1.0,
+      "thermal_f1_mean": 1.0,
+      "convergence_match_rate": 1.0,
+      "convergence_match_count": 3,
+      "convergence_match_total": 3,
+      "prompt_tokens_mean": 0.0,
+      "completion_tokens_mean": 0.0,
+      "total_tokens_mean": 0.0,
+      "cost_usd_mean": 0.0,
+      "cost_usd_total": 0.0,
+      "n_items": 3,
+      "formulation_exact_rate": 1.0,
+      "formulation_exact_count": 3,
+      "formulation_exact_total": 3,
+      "formulation_error_counts": {
+        "ok": 3,
+        "wrong_id": 0,
+        "wrong_unit_or_value": 0,
+        "invalid_value": 0,
+        "extra_arg_changes_result": 0,
+        "missed_step": 0,
+        "extra_step": 0,
+        "unparsed": 0
+      },
+      "faithful_numbers_mean": 1.0,
+      "faithful_answers_rate": 1.0,
+      "faithful_answers_count": 3,
+      "faithful_answers_total": 3,
+      "n_untraceable_numbers_mean": 0.0,
+      "safe_failure_rate": null,
+      "safe_failure_count": 0,
+      "safe_failure_total": 0,
+      "claimed_success_on_failure_rate": null,
+      "claimed_success_on_failure_count": 0,
+      "claimed_success_on_failure_total": 0,
+      "abstained_on_solvable_rate": 0.0,
+      "abstained_on_solvable_count": 0,
+      "abstained_on_solvable_total": 3,
+      "escalated_rate": 0.0,
+      "escalated_count": 0,
+      "escalated_total": 3,
+      "solved_autonomously_rate": 1.0,
+      "solved_autonomously_count": 3,
+      "solved_autonomously_total": 3,
+      "wrong_silently_rate": 0.0,
+      "wrong_silently_count": 0,
+      "wrong_silently_total": 3,
+      "stale_state_rate": 0.0,
+      "stale_state_count": 0,
+      "stale_state_total": 3,
+      "stale_state_no_rerun_rate": 0.0,
+      "stale_state_no_rerun_count": 0,
+      "stale_state_no_rerun_total": 3,
+      "stale_state_quoted_old_rate": 0.0,
+      "stale_state_quoted_old_count": 0,
+      "stale_state_quoted_old_total": 3,
+      "converged_rate": 1.0,
+      "kcl_mean_mismatch_mw_mean": 0.00017781495296745773,
+      "power_balance_error_mean": 9.473903143468002e-15,
+      "n_llm_calls_mean": 0.0,
+      "n_tool_calls_mean": 2.6666666666666665,
+      "n_tool_rounds_mean": 1.0,
+      "wall_time_s_mean": 0.09669212496373802,
+      "verification_pass_first_rate": null,
+      "verification_pass_retry_rate": null,
+      "verification_abstained_rate": null,
+      "verification_abstained_retry_mutation_rate": null,
+      "verification_total": 0,
+      "v_pass_rate": 1.0,
+      "v_pass_count": 3,
+      "v_pass_total": 3,
+      "common_n": 3,
+      "common_solved_rate": 1.0,
+      "common_escalated_rate": 0.0,
+      "common_wrong_rate": 0.0,
+      "common_solved_count": 3,
+      "common_escalated_count": 0,
+      "common_wrong_count": 0,
+      "common_formulation_rate": 1.0,
+      "common_formulation_count": 3,
+      "common_formulation_total": 3,
+      "common_voltage_mae_mean": 2.151342011141249e-07,
+      "common_flow_mae_mean": 0.0002281313627899819,
+      "common_kcl_mismatch_mean": 0.00017781495296745773,
+      "common_voltage_mae_solved_mean": 2.151342011141249e-07,
+      "common_traceable_rate": 1.0,
+      "common_traceable_count": 3,
+      "common_traceable_total": 3,
+      "common_reported_state_rate": 1.0
+    }
+  ],
+  "scoreboard_per_case": [
+    {
+      "model": "none:rule_based",
+      "task": "rule_based",
+      "method": "rule_based",
+      "case_name": "case30",
+      "success_rate": 1.0,
+      "solved_rate": 1.0,
+      "solved_count": 3,
+      "solved_total": 3,
+      "voltage_mae_mean": 2.151342011141249e-07,
+      "voltage_mae_formulation_exact_mean": 2.151342011141249e-07,
+      "voltage_mae_pq_mean": 2.6891775136490057e-07,
+      "flow_mae_mean": 0.0002281313627899819,
+      "flow_mae_formulation_exact_mean": 0.0002281313627899819,
+      "kcl_mean_mismatch_mw_formulation_exact_mean": 0.00017781495296745773,
+      "feasible_rate": 1.0,
+      "loading_rmse_mean": 0.0029392162339035295,
+      "voltage_f1_mean": 1.0,
+      "thermal_f1_mean": 1.0,
+      "convergence_match_rate": 1.0,
+      "convergence_match_count": 3,
+      "convergence_match_total": 3,
+      "prompt_tokens_mean": 0.0,
+      "completion_tokens_mean": 0.0,
+      "total_tokens_mean": 0.0,
+      "cost_usd_mean": 0.0,
+      "cost_usd_total": 0.0,
+      "n_items": 3,
+      "formulation_exact_rate": 1.0,
+      "formulation_exact_count": 3,
+      "formulation_exact_total": 3,
+      "formulation_error_counts": {
+        "ok": 3,
+        "wrong_id": 0,
+        "wrong_unit_or_value": 0,
+        "invalid_value": 0,
+        "extra_arg_changes_result": 0,
+        "missed_step": 0,
+        "extra_step": 0,
+        "unparsed": 0
+      },
+      "faithful_numbers_mean": 1.0,
+      "faithful_answers_rate": 1.0,
+      "faithful_answers_count": 3,
+      "faithful_answers_total": 3,
+      "n_untraceable_numbers_mean": 0.0,
+      "safe_failure_rate": null,
+      "safe_failure_count": 0,
+      "safe_failure_total": 0,
+      "claimed_success_on_failure_rate": null,
+      "claimed_success_on_failure_count": 0,
+      "claimed_success_on_failure_total": 0,
+      "abstained_on_solvable_rate": 0.0,
+      "abstained_on_solvable_count": 0,
+      "abstained_on_solvable_total": 3,
+      "escalated_rate": 0.0,
+      "escalated_count": 0,
+      "escalated_total": 3,
+      "solved_autonomously_rate": 1.0,
+      "solved_autonomously_count": 3,
+      "solved_autonomously_total": 3,
+      "wrong_silently_rate": 0.0,
+      "wrong_silently_count": 0,
+      "wrong_silently_total": 3,
+      "stale_state_rate": 0.0,
+      "stale_state_count": 0,
+      "stale_state_total": 3,
+      "stale_state_no_rerun_rate": 0.0,
+      "stale_state_no_rerun_count": 0,
+      "stale_state_no_rerun_total": 3,
+      "stale_state_quoted_old_rate": 0.0,
+      "stale_state_quoted_old_count": 0,
+      "stale_state_quoted_old_total": 3,
+      "converged_rate": 1.0,
+      "kcl_mean_mismatch_mw_mean": 0.00017781495296745773,
+      "power_balance_error_mean": 9.473903143468002e-15,
+      "n_llm_calls_mean": 0.0,
+      "n_tool_calls_mean": 2.6666666666666665,
+      "n_tool_rounds_mean": 1.0,
+      "wall_time_s_mean": 0.09669212496373802,
+      "verification_pass_first_rate": null,
+      "verification_pass_retry_rate": null,
+      "verification_abstained_rate": null,
+      "verification_abstained_retry_mutation_rate": null,
+      "verification_total": 0,
+      "v_pass_rate": 1.0,
+      "v_pass_count": 3,
+      "v_pass_total": 3,
+      "common_n": 3,
+      "common_solved_rate": 1.0,
+      "common_escalated_rate": 0.0,
+      "common_wrong_rate": 0.0,
+      "common_solved_count": 3,
+      "common_escalated_count": 0,
+      "common_wrong_count": 0,
+      "common_formulation_rate": 1.0,
+      "common_formulation_count": 3,
+      "common_formulation_total": 3,
+      "common_voltage_mae_mean": 2.151342011141249e-07,
+      "common_flow_mae_mean": 0.0002281313627899819,
+      "common_kcl_mismatch_mean": 0.00017781495296745773,
+      "common_voltage_mae_solved_mean": 2.151342011141249e-07,
+      "common_traceable_rate": 1.0,
+      "common_traceable_count": 3,
+      "common_traceable_total": 3,
+      "common_reported_state_rate": 1.0
+    }
+  ],
+  "runs": [
+    {
+      "model": "none:rule_based",
+      "provider": "none",
+      "task": "rule_based",
+      "method": "rule_based",
+      "case_name": "case30",
+      "run": 0,
+      "k": 1,
+      "seed": 1813382119,
+      "gen_seed": 0,
+      "request_id": "case30-parameterized-000-s0",
+      "difficulty": "parameterized",
+      "request_text": "Load case30 and disconnect the line between bus 10 and bus 20.",
+      "ok": true,
+      "error": null,
+      "latency_s": 0.0870586249511689,
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0
+      },
+      "cost_usd": 0.0,
+      "metrics": {
+        "voltage_mae": 2.120441091750062e-07,
+        "flow_mae": 0.00023498275560229529,
+        "bus_coverage": {
+          "pred": 30,
+          "truth": 30,
+          "intersection": 30
+        },
+        "line_coverage": {
+          "pred": 41,
+          "truth": 41,
+          "intersection": 41
+        },
+        "voltage_violation_precision": 1.0,
+        "voltage_violation_recall": 1.0,
+        "thermal_violation_precision": 1.0,
+        "thermal_violation_recall": 1.0,
+        "pred_voltage_violations": [
+          18,
+          19,
+          20
+        ],
+        "truth_voltage_violations": [
+          18,
+          19,
+          20
+        ],
+        "pred_thermal_violations": [
+          9,
+          21
+        ],
+        "truth_thermal_violations": [
+          9,
+          21
+        ],
+        "voltage_rmse": 2.656268881891556e-07,
+        "voltage_mape": 2.1803163590232944e-05,
+        "voltage_max_error": 4.7662515811897066e-07,
+        "voltage_mae_pq": 2.650551364595059e-07,
+        "angle_rmse": 0.0002845927793358876,
+        "flow_rmse": 0.000272687349385166,
+        "flow_max_error": 0.0004970065898572962,
+        "flow_p95_error": 0.0004831270332736892,
+        "loading_rmse": 0.0029446829046770677,
+        "power_balance_error": 1.3322676295501878e-15,
+        "flow_deviation_rate": 0.0,
+        "kcl_self_violation_rate": 0.0,
+        "kcl_max_mismatch_mw": 0.00053385671579953,
+        "kcl_mean_mismatch_mw": 0.0001016960338270176,
+        "feasible": true,
+        "voltage_f1": 1.0,
+        "thermal_f1": 1.0,
+        "convergence_match": true,
+        "flow_direction_accuracy": 100.0,
+        "critical_bus_jaccard": 1.0,
+        "_raw_vm_pairs": [
+          [
+            1,
+            1.0,
+            1.0
+          ],
+          [
+            2,
+            1.0,
+            1.0
+          ],
+          [
+            3,
+            0.982941,
+            0.9829412092825148
+          ],
+          [
+            4,
+            0.979813,
+            0.9798131834213076
+          ],
+          [
+            5,
+            0.981792,
+            0.981791907747212
+          ],
+          [
+            6,
+            0.972727,
+            0.9727272081972604
+          ],
+          [
+            7,
+            0.966411,
+            0.9664106644858026
+          ],
+          [
+            8,
+            0.959105,
+            0.9591048849134292
+          ],
+          [
+            9,
+            0.981754,
+            0.9817544364174701
+          ],
+          [
+            10,
+            0.986496,
+            0.9864961223567542
+          ],
+          [
+            11,
+            0.981754,
+            0.9817544364174701
+          ],
+          [
+            12,
+            0.983369,
+            0.9833685249331787
+          ],
+          [
+            13,
+            1.0,
+            0.9999999999999999
+          ],
+          [
+            14,
+            0.971902,
+            0.9719020012845014
+          ],
+          [
+            15,
+            0.972819,
+            0.9728185329796946
+          ],
+          [
+            16,
+            0.97742,
+            0.9774202460948304
+          ],
+          [
+            17,
+            0.978773,
+            0.9787726809585032
+          ],
+          [
+            18,
+            0.941885,
+            0.9418852407010099
+          ],
+          [
+            19,
+            0.927865,
+            0.9278647065363812
+          ],
+          [
+            20,
+            0.926664,
+            0.9266641902433236
+          ],
+          [
+            21,
+            0.993929,
+            0.9939290826463504
+          ],
+          [
+            22,
+            1.0,
+            1.0
+          ],
+          [
+            23,
+            1.0,
+            0.9999999999999999
+          ],
+          [
+            24,
+            0.989369,
+            0.9893693671674886
+          ],
+          [
+            25,
+            0.990886,
+            0.9908861282332118
+          ],
+          [
+            26,
+            0.974111,
+            0.9741107053319775
+          ],
+          [
+            27,
+            1.0,
+            1.0
+          ],
+          [
+            28,
+            0.97406,
+            0.9740595233748419
+          ],
+          [
+            29,
+            0.979794,
+            0.9797942857025878
+          ],
+          [
+            30,
+            0.96802,
+            0.9680203544182151
+          ]
+        ],
+        "_raw_va_pairs": [
+          [
+            1,
+            0.0,
+            0.0
+          ],
+          [
+            2,
+            -0.387,
+            -0.38720766229068093
+          ],
+          [
+            3,
+            -1.392,
+            -1.392170834885208
+          ],
+          [
+            4,
+            -1.639,
+            -1.6385931603427601
+          ],
+          [
+            5,
+            -1.793,
+            -1.7930697100254005
+          ],
+          [
+            6,
+            -2.106,
+            -2.1056319892294866
+          ],
+          [
+            7,
+            -2.551,
+            -2.5509583311547757
+          ],
+          [
+            8,
+            -2.603,
+            -2.602690892292125
+          ],
+          [
+            9,
+            -2.44,
+            -2.4397479590152016
+          ],
+          [
+            10,
+            -2.612,
+            -2.6123176420594745
+          ],
+          [
+            11,
+            -2.44,
+            -2.4397479590152016
+          ],
+          [
+            12,
+            -1.169,
+            -1.1688155469972905
+          ],
+          [
+            13,
+            2.069,
+            2.06858224271148
+          ],
+          [
+            14,
+            -2.053,
+            -2.053186821047646
+          ],
+          [
+            15,
+            -2.081,
+            -2.08091241275026
+          ],
+          [
+            16,
+            -2.103,
+            -2.103094836066419
+          ],
+          [
+            17,
+            -2.679,
+            -2.678963143471738
+          ],
+          [
+            18,
+            -3.819,
+            -3.819483090971333
+          ],
+          [
+            19,
+            -4.692,
+            -4.691866273991303
+          ],
+          [
+            20,
+            -4.778,
+            -4.7775275810988465
+          ],
+          [
+            21,
+            -2.683,
+            -2.6826245608979904
+          ],
+          [
+            22,
+            -2.577,
+            -2.57662488257764
+          ],
+          [
+            23,
+            -1.207,
+            -1.2072971307164426
+          ],
+          [
+            24,
+            -2.062,
+            -2.0622100158204013
+          ],
+          [
+            25,
+            -1.394,
+            -1.3935889744029626
+          ],
+          [
+            26,
+            -1.812,
+            -1.8116598552401082
+          ],
+          [
+            27,
+            -0.719,
+            -0.7188385517462407
+          ],
+          [
+            28,
+            -2.119,
+            -2.1188331987339777
+          ],
+          [
+            29,
+            -2.009,
+            -2.008637925070426
+          ],
+          [
+            30,
+            -2.924,
+            -2.9243268742042283
+          ]
+        ],
+        "_raw_p_pairs": [
+          [
+            0,
+            10.148,
+            10.148413493728636
+          ],
+          [
+            1,
+            14.002,
+            14.002227423025948
+          ],
+          [
+            2,
+            14.963,
+            14.962843405621468
+          ],
+          [
+            3,
+            11.56,
+            11.560126004164543
+          ],
+          [
+            4,
+            13.512,
+            13.512301383308376
+          ],
+          [
+            5,
+            19.203,
+            19.20328566300035
+          ],
+          [
+            6,
+            22.382,
+            22.382483127033275
+          ],
+          [
+            7,
+            13.404,
+            13.403759839790782
+          ],
+          [
+            8,
+            10.544,
+            10.543739841844621
+          ],
+          [
+            9,
+            26.859,
+            26.85879663603221
+          ],
+          [
+            10,
+            2.652,
+            2.651836731033769
+          ],
+          [
+            11,
+            1.515,
+            1.5153352753683282
+          ],
+          [
+            12,
+            0.0,
+            0.0
+          ],
+          [
+            13,
+            2.652,
+            2.651836733570584
+          ],
+          [
+            14,
+            -3.038,
+            -3.0384427157531606
+          ],
+          [
+            15,
+            -39.667,
+            -39.667112452762474
+          ],
+          [
+            16,
+            6.344,
+            6.344056707825994
+          ],
+          [
+            17,
+            12.451,
+            12.451219788014829
+          ],
+          [
+            18,
+            7.635,
+            7.634927097884284
+          ],
+          [
+            19,
+            -0.118,
+            -0.11814764447765382
+          ],
+          [
+            20,
+            4.059,
+            4.058808902892328
+          ],
+          [
+            21,
+            15.657,
+            15.656864760668643
+          ],
+          [
+            22,
+            12.333,
+            12.332751509106949
+          ],
+          [
+            23,
+            2.128,
+            2.1281151458641383
+          ],
+          [
+            24,
+            0.0,
+            0.0
+          ],
+          [
+            25,
+            4.362,
+            4.362237998192222
+          ],
+          [
+            26,
+            -2.34,
+            -2.340236581494019
+          ],
+          [
+            27,
+            -3.74,
+            -3.739688968264817
+          ],
+          [
+            28,
+            -19.42,
+            -19.419964284449513
+          ],
+          [
+            29,
+            -11.199,
+            -11.198886794780712
+          ],
+          [
+            30,
+            -0.68,
+            -0.6803835443817581
+          ],
+          [
+            31,
+            5.993,
+            5.993325528915202
+          ],
+          [
+            32,
+            -2.791,
+            -2.791497006589857
+          ],
+          [
+            33,
+            3.305,
+            3.305163752666352
+          ],
+          [
+            34,
+            -6.114,
+            -6.114455752007919
+          ],
+          [
+            35,
+            -5.95,
+            -5.949576207354502
+          ],
+          [
+            36,
+            6.122,
+            6.122230019793486
+          ],
+          [
+            37,
+            7.097,
+            7.096594656849224
+          ],
+          [
+            38,
+            3.698,
+            3.6980281481622743
+          ],
+          [
+            39,
+            -5.588,
+            -5.588202053894256
+          ],
+          [
+            40,
+            -0.321,
+            -0.3205165473009511
+          ]
+        ],
+        "_violation_cm": {
+          "tp": 3,
+          "fp": 0,
+          "fn": 0,
+          "tn": 27
+        },
+        "_thermal_cm": {
+          "tp": 2,
+          "fp": 0,
+          "fn": 0,
+          "tn": 39
+        }
+      },
+      "raw_response": "{\"formulation\": [{\"tool\": \"load_case\", \"args\": {\"case_name\": \"case30\"}}, {\"tool\": \"disconnect_line\", \"args\": {\"from_bus\": 10, \"to_bus\": 20}}], \"converged\": true, \"summary\": \"Loaded case30 (30 buses, 41 branches). disconnect_line: converged; load 189.292 MW, generation 191.953 MW, losses 2.661 MW; 3 voltage and 2 thermal violation(s).\", \"answer\": \"disconnect_line: converged; load 189.292 MW, generation 191.953 MW, losses 2.661 MW; 3 voltage and 2 thermal violation(s).\", \"bus_voltages\": [{\"bus_id\": 1, \"vm_pu\": 1.0, \"va_deg\": 0.0}, {\"bus_id\": 2, \"vm_pu\": 1.0, \"va_deg\": -0.387}, {\"bus_id\": 3, \"vm_pu\": 0.982941, \"va_deg\": -1.392}, {\"bus_id\": 4, \"vm_pu\": 0.979813, \"va_deg\": -1.639}, {\"bus_id\": 5, \"vm_pu\": 0.981792, \"va_deg\": -1.793}, {\"bus_id\": 6, \"vm_pu\": 0.972727, \"va_deg\": -2.106}, {\"bus_id\": 7, \"vm_pu\": 0.966411, \"va_deg\": -2.551}, {\"bus_id\": 8, \"vm_pu\": 0.959105, \"va_deg\": -2.603}, {\"bus_id\": 9, \"vm_pu\": 0.981754, \"va_deg\": -2.44}, {\"bus_id\": 10, \"vm_pu\": 0.986496, \"va_deg\": -2.612}, {\"bus_id\": 11, \"vm_pu\": 0.981754, \"va_deg\": -2.44}, {\"bus_id\": 12, \"vm_pu\": 0.983369, \"va_deg\": -1.169}, {\"bus_id\": 13, \"vm_pu\": 1.0, \"va_deg\": 2.069}, {\"bus_id\": 14, \"vm_pu\": 0.971902, \"va_deg\": -2.053}, {\"bus_id\": 15, \"vm_pu\": 0.972819, \"va_deg\": -2.081}, {\"bus_id\": 16, \"vm_pu\": 0.97742, \"va_deg\": -2.103}, {\"bus_id\": 17, \"vm_pu\": 0.978773, \"va_deg\": -2.679}, {\"bus_id\": 18, \"vm_pu\": 0.941885, \"va_deg\": -3.819}, {\"bus_id\": 19, \"vm_pu\": 0.927865, \"va_deg\": -4.692}, {\"bus_id\": 20, \"vm_pu\": 0.926664, \"va_deg\": -4.778}, {\"bus_id\": 21, \"vm_pu\": 0.993929, \"va_deg\": -2.683}, {\"bus_id\": 22, \"vm_pu\": 1.0, \"va_deg\": -2.577}, {\"bus_id\": 23, \"vm_pu\": 1.0, \"va_deg\": -1.207}, {\"bus_id\": 24, \"vm_pu\": 0.989369, \"va_deg\": -2.062}, {\"bus_id\": 25, \"vm_pu\": 0.990886, \"va_deg\": -1.394}, {\"bus_id\": 26, \"vm_pu\": 0.974111, \"va_deg\": -1.812}, {\"bus_id\": 27, \"vm_pu\": 1.0, \"va_deg\": -0.719}, {\"bus_id\": 28, \"vm_pu\": 0.97406, \"va_deg\": -2.119}, {\"bus_id\": 29, \"vm_pu\": 0.979794, \"va_deg\": -2.009}, {\"bus_id\": 30, \"vm_pu\": 0.96802, \"va_deg\": -2.924}], \"line_flows\": [{\"line_id\": 0, \"from_bus\": 1, \"to_bus\": 2, \"p_from_mw\": 10.148, \"loading_percent\": 8.65}, {\"line_id\": 1, \"from_bus\": 1, \"to_bus\": 3, \"p_from_mw\": 14.002, \"loading_percent\": 11.84}, {\"line_id\": 2, \"from_bus\": 2, \"to_bus\": 4, \"p_from_mw\": 14.963, \"loading_percent\": 25.87}, {\"line_id\": 3, \"from_bus\": 3, \"to_bus\": 4, \"p_from_mw\": 11.56, \"loading_percent\": 9.8}, {\"line_id\": 4, \"from_bus\": 2, \"to_bus\": 5, \"p_from_mw\": 13.512, \"loading_percent\": 11.64}, {\"line_id\": 5, \"from_bus\": 2, \"to_bus\": 6, \"p_from_mw\": 19.203, \"loading_percent\": 33.25}, {\"line_id\": 6, \"from_bus\": 4, \"to_bus\": 6, \"p_from_mw\": 22.382, \"loading_percent\": 28.71}, {\"line_id\": 7, \"from_bus\": 5, \"to_bus\": 7, \"p_from_mw\": 13.404, \"loading_percent\": 22.37}, {\"line_id\": 8, \"from_bus\": 6, \"to_bus\": 7, \"p_from_mw\": 10.544, \"loading_percent\": 8.98}, {\"line_id\": 9, \"from_bus\": 6, \"to_bus\": 8, \"p_from_mw\": 26.859, \"loading_percent\": 121.22}, {\"line_id\": 10, \"from_bus\": 6, \"to_bus\": 9, \"p_from_mw\": 2.652, \"loading_percent\": 7.82}, {\"line_id\": 11, \"from_bus\": 6, \"to_bus\": 10, \"p_from_mw\": 1.515, \"loading_percent\": 9.08}, {\"line_id\": 12, \"from_bus\": 9, \"to_bus\": 11, \"p_from_mw\": 0.0, \"loading_percent\": 0.0}, {\"line_id\": 13, \"from_bus\": 9, \"to_bus\": 10, \"p_from_mw\": 2.652, \"loading_percent\": 7.82}, {\"line_id\": 14, \"from_bus\": 4, \"to_bus\": 12, \"p_from_mw\": -3.038, \"loading_percent\": 5.21}, {\"line_id\": 15, \"from_bus\": 12, \"to_bus\": 13, \"p_from_mw\": -39.667, \"loading_percent\": 64.22}, {\"line_id\": 16, \"from_bus\": 12, \"to_bus\": 14, \"p_from_mw\": 6.344, \"loading_percent\": 20.68}, {\"line_id\": 17, \"from_bus\": 12, \"to_bus\": 15, \"p_from_mw\": 12.451, \"loading_percent\": 39.81}, {\"line_id\": 18, \"from_bus\": 12, \"to_bus\": 16, \"p_from_mw\": 7.635, \"loading_percent\": 24.3}, {\"line_id\": 19, \"from_bus\": 14, \"to_bus\": 15, \"p_from_mw\": -0.118, \"loading_percent\": 2.17}, {\"line_id\": 20, \"from_bus\": 16, \"to_bus\": 17, \"p_from_mw\": 4.059, \"loading_percent\": 30.08}, {\"line_id\": 21, \"from_bus\": 15, \"to_bus\": 18, \"p_from_mw\": 15.657, \"loading_percent\": 107.82}, {\"line_id\": 22, \"from_bus\": 18, \"to_bus\": 19, \"p_from_mw\": 12.333, \"loading_percent\": 87.21}, {\"line_id\": 23, \"from_bus\": 19, \"to_bus\": 20, \"p_from_mw\": 2.128, \"loading_percent\": 7.53}, {\"line_id\": 24, \"from_bus\": 10, \"to_bus\": 20, \"p_from_mw\": 0.0, \"loading_percent\": 0.0}, {\"line_id\": 25, \"from_bus\": 10, \"to_bus\": 17, \"p_from_mw\": 4.362, \"loading_percent\": 28.56}, {\"line_id\": 26, \"from_bus\": 10, \"to_bus\": 21, \"p_from_mw\": -2.34, \"loading_percent\": 30.9}, {\"line_id\": 27, \"from_bus\": 10, \"to_bus\": 22, \"p_from_mw\": -3.74, \"loading_percent\": 25.52}, {\"line_id\": 28, \"from_bus\": 21, \"to_bus\": 22, \"p_from_mw\": -19.42, \"loading_percent\": 88.67}, {\"line_id\": 29, \"from_bus\": 15, \"to_bus\": 23, \"p_from_mw\": -11.199, \"loading_percent\": 86.83}, {\"line_id\": 30, \"from_bus\": 22, \"to_bus\": 24, \"p_from_mw\": -0.68, \"loading_percent\": 40.11}, {\"line_id\": 31, \"from_bus\": 23, \"to_bus\": 24, \"p_from_mw\": 5.993, \"loading_percent\": 38.08}, {\"line_id\": 32, \"from_bus\": 24, \"to_bus\": 25, \"p_from_mw\": -2.791, \"loading_percent\": 19.13}, {\"line_id\": 33, \"from_bus\": 25, \"to_bus\": 26, \"p_from_mw\": 3.305, \"loading_percent\": 25.07}, {\"line_id\": 34, \"from_bus\": 25, \"to_bus\": 27, \"p_from_mw\": -6.114, \"loading_percent\": 39.15}, {\"line_id\": 35, \"from_bus\": 28, \"to_bus\": 27, \"p_from_mw\": -5.95, \"loading_percent\": 13.62}, {\"line_id\": 36, \"from_bus\": 27, \"to_bus\": 29, \"p_from_mw\": 6.122, \"loading_percent\": 39.65}, {\"line_id\": 37, \"from_bus\": 27, \"to_bus\": 30, \"p_from_mw\": 7.097, \"loading_percent\": 45.56}, {\"line_id\": 38, \"from_bus\": 29, \"to_bus\": 30, \"p_from_mw\": 3.698, \"loading_percent\": 23.92}, {\"line_id\": 39, \"from_bus\": 8, \"to_bus\": 28, \"p_from_mw\": -5.588, \"loading_percent\": 27.68}, {\"line_id\": 40, \"from_bus\": 6, \"to_bus\": 28, \"p_from_mw\": -0.321, \"loading_percent\": 8.18}], \"total_generation_mw\": 191.953, \"total_load_mw\": 189.292, \"total_loss_mw\": 2.661, \"violations\": {\"voltage\": [{\"bus_id\": 18, \"vm_pu\": 0.941885}, {\"bus_id\": 19, \"vm_pu\": 0.927865}, {\"bus_id\": 20, \"vm_pu\": 0.926664}], \"thermal\": [{\"line_id\": 9, \"loading_percent\": 121.22}, {\"line_id\": 21, \"loading_percent\": 107.82}]}, \"next_step\": \"Review the listed violations and consider remedial actions.\", \"cannot_answer\": null}",
+      "intended_calls": [
+        {
+          "tool": "load_case",
+          "args": {
+            "case_name": "case30"
+          }
+        },
+        {
+          "tool": "disconnect_line",
+          "args": {
+            "from_bus": 10,
+            "to_bus": 20
+          }
+        }
+      ],
+      "executed_calls": [
+        {
+          "tool": "load_case",
+          "args": {
+            "case_name": "case30"
+          }
+        },
+        {
+          "tool": "disconnect_line",
+          "args": {
+            "from_bus": 10,
+            "to_bus": 20
+          }
+        }
+      ],
+      "declared_formulation": null,
+      "common_json_ok": true,
+      "common_reported_state": true,
+      "common_cannot_answer": null,
+      "common_converged": true,
+      "common_voltage_mae": 2.120441091750062e-07,
+      "common_flow_mae": 0.00023498275560229529,
+      "common_kcl_mismatch_mw": 0.0001016960338270176,
+      "common_bus_coverage": {
+        "pred": 30,
+        "truth": 30,
+        "intersection": 30
+      },
+      "common_numeric_ok": true,
+      "common_answer_ok": true,
+      "common_formulation_exact": true,
+      "common_formulation_error_type": "ok",
+      "common_formulation_detail": "declared: ",
+      "common_declared_formulation": [
+        {
+          "tool": "load_case",
+          "args": {
+            "case_name": "case30"
+          }
+        },
+        {
+          "tool": "disconnect_line",
+          "args": {
+            "from_bus": 10,
+            "to_bus": 20
+          }
+        }
+      ],
+      "common_escalated": false,
+      "common_escalation_reason": null,
+      "common_solved": true,
+      "common_reason": "state_and_answer_ok",
+      "common_outcome": "solved",
+      "common_n_numbers": 156,
+      "common_n_untraceable": 0,
+      "common_traceable": true,
+      "formulation_exact": true,
+      "formulation_error_type": "ok",
+      "formulation_detail": "",
+      "faithful_numbers": 1.0,
+      "faithful_answers": true,
+      "n_numbers": 156,
+      "n_untraceable_numbers": 0,
+      "untraceable_numbers": [],
+      "final_converged": true,
+      "expected_outcome": "converged",
+      "truth_converged": true,
+      "reference_solvable": true,
+      "truth_tool_errors": [],
+      "truth_answer": {
+        "converged": true,
+        "total_load_mw": 189.2922,
+        "total_generation_mw": 191.9534,
+        "total_loss_mw": 2.6612,
+        "n_voltage_violations": 3,
+        "n_thermal_violations": 2
+      },
+      "solved": true,
+      "solved_reason": "numeric_and_answer_ok",
+      "escalated": false,
+      "solved_autonomously": true,
+      "wrong_silently": false,
+      "is_failure": false,
+      "safe_failure": null,
+      "claimed_success_on_failure": null,
+      "abstained": false,
+      "abstained_on_solvable": false,
+      "failure_detection_path": "json",
+      "has_mutation": true,
+      "stale_state": false,
+      "stale_state_no_rerun": false,
+      "stale_state_quoted_old": false,
+      "stale_state_detail": "re-solved at [1] after disconnect_line at call 1",
+      "stale_state_trace": {
+        "last_mutation_index": 1,
+        "last_mutation_tool": "disconnect_line",
+        "last_mutation_args": {
+          "from_bus": 10,
+          "to_bus": 20
+        },
+        "prior_result_indices": [],
+        "resolve_indices_after": [
+          1
+        ],
+        "old_only": []
+      },
+      "verification_outcome": null,
+      "verification_attempts": null,
+      "v_pass": true,
+      "system_prompt_hash": null,
+      "n_llm_calls": 0,
+      "n_tool_calls": 2,
+      "n_tool_rounds": 1,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "wall_time_s": 0.0870586249511689,
+      "gate_checked": 1,
+      "gate_failed": 0,
+      "gate_enforced": 0,
+      "trace": {
+        "architecture": "rule_based",
+        "status": "ok",
+        "rounds": [
+          {
+            "round": 1,
+            "tools": [
+              {
+                "name": "load_case",
+                "arguments": {
+                  "case_name": "case30"
+                },
+                "output": "{\"case_name\": \"case30\", \"n_buses\": 30, \"n_generators\": 6, \"n_lines\": 41, \"n_loads\": 20, \"total_load_mw\": 189.292, \"total_gen_capacity_mw\": 335.0}",
+                "gate": null
+              },
+              {
+                "name": "disconnect_line",
+                "arguments": {
+                  "from_bus": 10,
+                  "to_bus": 20
+                },
+                "output": "{\"case_name\": \"case30\", \"converged\": true, \"bus_voltages\": [{\"bus_id\": 1, \"vm_pu\": 1.0, \"va_deg\": 0.0, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 2, \"vm_pu\": 1.0, \"va_deg\": -0.387, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 3, \"vm_pu\": 0.982941, \"va_deg\": -1.392, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 4, \"vm_pu\": 0.979813, \"va_deg\": -1.639, \"is_v",
+                "gate": {
+                  "converged": true,
+                  "power_balance_ok": true,
+                  "mismatch_mw": 0.0,
+                  "topology_ok": true,
+                  "isolated_buses": [],
+                  "carries_numbers": true,
+                  "passed": true,
+                  "reasons": []
+                }
+              }
+            ]
+          }
+        ],
+        "plan": [
+          {
+            "tool": "load_case",
+            "args": {
+              "case_name": "case30"
+            }
+          },
+          {
+            "tool": "disconnect_line",
+            "args": {
+              "from_bus": 10,
+              "to_bus": 20
+            }
+          }
+        ],
+        "warnings": [],
+        "formulation_failure": false,
+        "n_llm_calls": 0,
+        "n_tool_calls": 2,
+        "n_tool_rounds": 1,
+        "gate_checked": 1,
+        "gate_failed": 0,
+        "gate_enforced": 0,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "wall_time_s": 0.0870586249511689
+      },
+      "v6_argument_grounding_passed": true,
+      "v6_invented_args": [],
+      "v7_claims_from_tools_passed": true,
+      "v7_claims_from_tools_detail": "answer matches the agent's own last solved state",
+      "rescore": {
+        "trace_source": "file",
+        "truth_source": "recomputed",
+        "metrics_source": "recomputed:trace"
+      }
+    },
+    {
+      "model": "none:rule_based",
+      "provider": "none",
+      "task": "rule_based",
+      "method": "rule_based",
+      "case_name": "case30",
+      "run": 0,
+      "k": 1,
+      "seed": 827308000,
+      "gen_seed": 0,
+      "request_id": "case30-multistep-001-s0",
+      "difficulty": "multistep",
+      "request_text": "Load the IEEE 30-bus system, set the active load at bus 24 to 7 MW, disconnect the line between bus 5 and bus 7, and finally rerun the power flow, then report the bus with the lowest voltage magnitude.",
+      "ok": true,
+      "error": null,
+      "latency_s": 0.11690041597466916,
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0
+      },
+      "cost_usd": 0.0,
+      "metrics": {
+        "voltage_mae": 2.2132433667628366e-07,
+        "flow_mae": 0.00022920097403455935,
+        "bus_coverage": {
+          "pred": 30,
+          "truth": 30,
+          "intersection": 30
+        },
+        "line_coverage": {
+          "pred": 41,
+          "truth": 41,
+          "intersection": 41
+        },
+        "voltage_violation_precision": 1.0,
+        "voltage_violation_recall": 1.0,
+        "thermal_violation_precision": 1.0,
+        "thermal_violation_recall": 1.0,
+        "pred_voltage_violations": [],
+        "truth_voltage_violations": [],
+        "pred_thermal_violations": [
+          9
+        ],
+        "truth_thermal_violations": [
+          9
+        ],
+        "voltage_rmse": 2.7657046714414674e-07,
+        "voltage_mape": 2.2658728758136443e-05,
+        "voltage_max_error": 4.99631071848583e-07,
+        "voltage_mae_pq": 2.7665542080372124e-07,
+        "angle_rmse": 0.0002955121791369187,
+        "flow_rmse": 0.00027784520297975733,
+        "flow_max_error": 0.0004839194342025621,
+        "flow_p95_error": 0.00047462029929246086,
+        "loading_rmse": 0.0029893090543996704,
+        "power_balance_error": 8.881784197001252e-15,
+        "flow_deviation_rate": 0.0,
+        "kcl_self_violation_rate": 0.0,
+        "kcl_max_mismatch_mw": 0.0009885656619479377,
+        "kcl_mean_mismatch_mw": 0.0002480495945826781,
+        "feasible": true,
+        "voltage_f1": 1.0,
+        "thermal_f1": 1.0,
+        "convergence_match": true,
+        "flow_direction_accuracy": 100.0,
+        "critical_bus_jaccard": 1.0,
+        "_raw_vm_pairs": [
+          [
+            1,
+            1.0,
+            1.0
+          ],
+          [
+            2,
+            1.0,
+            0.9999999999999996
+          ],
+          [
+            3,
+            0.979151,
+            0.9791505211189708
+          ],
+          [
+            4,
+            0.975354,
+            0.9753542696574437
+          ],
+          [
+            5,
+            1.002385,
+            1.002385499631072
+          ],
+          [
+            6,
+            0.966105,
+            0.9661046891654966
+          ],
+          [
+            7,
+            0.950617,
+            0.9506167739043379
+          ],
+          [
+            8,
+            0.952535,
+            0.952535104283968
+          ],
+          [
+            9,
+            0.976988,
+            0.9769876881430447
+          ],
+          [
+            10,
+            0.982731,
+            0.9827309924211708
+          ],
+          [
+            11,
+            0.976988,
+            0.9769876881430447
+          ],
+          [
+            12,
+            0.984757,
+            0.9847566000729054
+          ],
+          [
+            13,
+            1.0,
+            1.0
+          ],
+          [
+            14,
+            0.976622,
+            0.9766217044560167
+          ],
+          [
+            15,
+            0.979522,
+            0.9795222160979026
+          ],
+          [
+            16,
+            0.976023,
+            0.9760232481842603
+          ],
+          [
+            17,
+            0.975392,
+            0.9753916879715211
+          ],
+          [
+            18,
+            0.966923,
+            0.9669229684043598
+          ],
+          [
+            19,
+            0.963527,
+            0.9635266208773596
+          ],
+          [
+            20,
+            0.967509,
+            0.967509221694865
+          ],
+          [
+            21,
+            0.993259,
+            0.9932594961401393
+          ],
+          [
+            22,
+            1.0,
+            0.9999999999999997
+          ],
+          [
+            23,
+            1.0,
+            0.9999999999999999
+          ],
+          [
+            24,
+            0.989117,
+            0.989117199508887
+          ],
+          [
+            25,
+            0.990455,
+            0.9904549009464182
+          ],
+          [
+            26,
+            0.972547,
+            0.9725472627445265
+          ],
+          [
+            27,
+            1.0,
+            0.9999999999999999
+          ],
+          [
+            28,
+            0.96822,
+            0.9682195833723966
+          ],
+          [
+            29,
+            0.978764,
+            0.9787639005643389
+          ],
+          [
+            30,
+            0.967131,
+            0.9671305586515829
+          ]
+        ],
+        "_raw_va_pairs": [
+          [
+            1,
+            0.0,
+            0.0
+          ],
+          [
+            2,
+            -0.212,
+            -0.21212493323526763
+          ],
+          [
+            3,
+            -1.682,
+            -1.6816290474460247
+          ],
+          [
+            4,
+            -1.987,
+            -1.9865660309573565
+          ],
+          [
+            5,
+            -0.246,
+            -0.24629724811272125
+          ],
+          [
+            6,
+            -2.621,
+            -2.6211365610300104
+          ],
+          [
+            7,
+            -3.528,
+            -3.5281179958382953
+          ],
+          [
+            8,
+            -3.123,
+            -3.122597355857495
+          ],
+          [
+            9,
+            -3.226,
+            -3.225760203756324
+          ],
+          [
+            10,
+            -3.537,
+            -3.5371053722035075
+          ],
+          [
+            11,
+            -3.226,
+            -3.225760203756324
+          ],
+          [
+            12,
+            -1.428,
+            -1.428222064850418
+          ],
+          [
+            13,
+            1.866,
+            1.8655695280762898
+          ],
+          [
+            14,
+            -2.225,
+            -2.224899135666271
+          ],
+          [
+            15,
+            -2.303,
+            -2.3027188669204635
+          ],
+          [
+            16,
+            -2.66,
+            -2.6595368381548474
+          ],
+          [
+            17,
+            -3.506,
+            -3.5059279597773827
+          ],
+          [
+            18,
+            -3.555,
+            -3.554617542411652
+          ],
+          [
+            19,
+            -4.074,
+            -4.073674542906623
+          ],
+          [
+            20,
+            -3.993,
+            -3.992967359789088
+          ],
+          [
+            21,
+            -3.661,
+            -3.660713756440903
+          ],
+          [
+            22,
+            -3.581,
+            -3.5806281168562353
+          ],
+          [
+            23,
+            -1.717,
+            -1.7173952451734453
+          ],
+          [
+            24,
+            -2.703,
+            -2.7032056990511735
+          ],
+          [
+            25,
+            -1.86,
+            -1.8597621139392084
+          ],
+          [
+            26,
+            -2.306,
+            -2.3061968805692716
+          ],
+          [
+            27,
+            -1.06,
+            -1.0604135430738408
+          ],
+          [
+            28,
+            -2.627,
+            -2.627461611267486
+          ],
+          [
+            29,
+            -2.406,
+            -2.405600832456192
+          ],
+          [
+            30,
+            -3.319,
+            -3.3188784654276593
+          ]
+        ],
+        "_raw_p_pairs": [
+          [
+            0,
+            5.557,
+            5.556831791771
+          ],
+          [
+            1,
+            16.899,
+            16.898966754925837
+          ],
+          [
+            2,
+            20.434,
+            20.434158782913258
+          ],
+          [
+            3,
+            14.154,
+            14.153857499087088
+          ],
+          [
+            4,
+            0.001,
+            0.0007114321352385875
+          ],
+          [
+            5,
+            26.096,
+            26.095562170120544
+          ],
+          [
+            6,
+            29.896,
+            29.896174075009863
+          ],
+          [
+            7,
+            0.0,
+            0.0
+          ],
+          [
+            8,
+            22.128,
+            22.127860837147136
+          ],
+          [
+            9,
+            26.683,
+            26.68297654490509
+          ],
+          [
+            10,
+            4.743,
+            4.742948606501652
+          ],
+          [
+            11,
+            2.71,
+            2.710256347400386
+          ],
+          [
+            12,
+            0.0,
+            0.0
+          ],
+          [
+            13,
+            4.743,
+            4.742948610778357
+          ],
+          [
+            14,
+            -3.6,
+            -3.5998985567938195
+          ],
+          [
+            15,
+            -40.414,
+            -40.414304761666955
+          ],
+          [
+            16,
+            5.426,
+            5.425878185001096
+          ],
+          [
+            17,
+            10.47,
+            10.47029627696157
+          ],
+          [
+            18,
+            10.239,
+            10.238617701707176
+          ],
+          [
+            19,
+            -0.411,
+            -0.4107936025818181
+          ],
+          [
+            20,
+            6.422,
+            6.422483919434202
+          ],
+          [
+            21,
+            9.81,
+            9.80960230710036
+          ],
+          [
+            22,
+            6.325,
+            6.324552501642289
+          ],
+          [
+            23,
+            -3.569,
+            -3.5691676261043708
+          ],
+          [
+            24,
+            5.628,
+            5.627610005361902
+          ],
+          [
+            25,
+            2.393,
+            2.3925169444298757
+          ],
+          [
+            26,
+            -2.809,
+            -2.8090463895958018
+          ],
+          [
+            27,
+            -3.927,
+            -3.926864167679182
+          ],
+          [
+            28,
+            -18.942,
+            -18.94154257055077
+          ],
+          [
+            29,
+            -8.004,
+            -8.004047505117716
+          ],
+          [
+            30,
+            -3.005,
+            -3.00543839246492
+          ],
+          [
+            31,
+            6.713,
+            6.713291440625809
+          ],
+          [
+            32,
+            -3.442,
+            -3.4415253797007077
+          ],
+          [
+            33,
+            3.525,
+            3.525159945558962
+          ],
+          [
+            34,
+            -6.995,
+            -6.994737876398768
+          ],
+          [
+            35,
+            -6.619,
+            -6.619411978757897
+          ],
+          [
+            36,
+            6.398,
+            6.397567915806706
+          ],
+          [
+            37,
+            7.272,
+            7.2720380345172195
+          ],
+          [
+            38,
+            3.672,
+            3.6720738273926967
+          ],
+          [
+            39,
+            -5.707,
+            -5.7071290582395635
+          ],
+          [
+            40,
+            -0.867,
+            -0.8667091596993615
+          ]
+        ],
+        "_violation_cm": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 0,
+          "tn": 30
+        },
+        "_thermal_cm": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "tn": 40
+        }
+      },
+      "raw_response": "{\"formulation\": [{\"tool\": \"load_case\", \"args\": {\"case_name\": \"case30\"}}, {\"tool\": \"modify_load\", \"args\": {\"bus_id\": 24, \"p_mw\": 7.0}}, {\"tool\": \"disconnect_line\", \"args\": {\"from_bus\": 5, \"to_bus\": 7}}, {\"tool\": \"run_powerflow\", \"args\": {}}], \"converged\": true, \"summary\": \"Loaded case30 (30 buses, 41 branches). modify_load: converged; load 187.856 MW, generation 190.317 MW, losses 2.462 MW; 0 voltage and 1 thermal violation(s). disconnect_line: converged; load 187.856 MW, generation 190.721 MW, losses 2.865 MW; 0 voltage and 1 thermal violation(s). run_powerflow: converged; load 187.856 MW, generation 190.721 MW, losses 2.865 MW; 0 voltage and 1 thermal violation(s). Minimum voltage: bus 7 at 0.9506 p.u.\", \"answer\": \"Minimum voltage: bus 7 at 0.9506 p.u.\", \"bus_voltages\": [{\"bus_id\": 1, \"vm_pu\": 1.0, \"va_deg\": 0.0}, {\"bus_id\": 2, \"vm_pu\": 1.0, \"va_deg\": -0.212}, {\"bus_id\": 3, \"vm_pu\": 0.979151, \"va_deg\": -1.682}, {\"bus_id\": 4, \"vm_pu\": 0.975354, \"va_deg\": -1.987}, {\"bus_id\": 5, \"vm_pu\": 1.002385, \"va_deg\": -0.246}, {\"bus_id\": 6, \"vm_pu\": 0.966105, \"va_deg\": -2.621}, {\"bus_id\": 7, \"vm_pu\": 0.950617, \"va_deg\": -3.528}, {\"bus_id\": 8, \"vm_pu\": 0.952535, \"va_deg\": -3.123}, {\"bus_id\": 9, \"vm_pu\": 0.976988, \"va_deg\": -3.226}, {\"bus_id\": 10, \"vm_pu\": 0.982731, \"va_deg\": -3.537}, {\"bus_id\": 11, \"vm_pu\": 0.976988, \"va_deg\": -3.226}, {\"bus_id\": 12, \"vm_pu\": 0.984757, \"va_deg\": -1.428}, {\"bus_id\": 13, \"vm_pu\": 1.0, \"va_deg\": 1.866}, {\"bus_id\": 14, \"vm_pu\": 0.976622, \"va_deg\": -2.225}, {\"bus_id\": 15, \"vm_pu\": 0.979522, \"va_deg\": -2.303}, {\"bus_id\": 16, \"vm_pu\": 0.976023, \"va_deg\": -2.66}, {\"bus_id\": 17, \"vm_pu\": 0.975392, \"va_deg\": -3.506}, {\"bus_id\": 18, \"vm_pu\": 0.966923, \"va_deg\": -3.555}, {\"bus_id\": 19, \"vm_pu\": 0.963527, \"va_deg\": -4.074}, {\"bus_id\": 20, \"vm_pu\": 0.967509, \"va_deg\": -3.993}, {\"bus_id\": 21, \"vm_pu\": 0.993259, \"va_deg\": -3.661}, {\"bus_id\": 22, \"vm_pu\": 1.0, \"va_deg\": -3.581}, {\"bus_id\": 23, \"vm_pu\": 1.0, \"va_deg\": -1.717}, {\"bus_id\": 24, \"vm_pu\": 0.989117, \"va_deg\": -2.703}, {\"bus_id\": 25, \"vm_pu\": 0.990455, \"va_deg\": -1.86}, {\"bus_id\": 26, \"vm_pu\": 0.972547, \"va_deg\": -2.306}, {\"bus_id\": 27, \"vm_pu\": 1.0, \"va_deg\": -1.06}, {\"bus_id\": 28, \"vm_pu\": 0.96822, \"va_deg\": -2.627}, {\"bus_id\": 29, \"vm_pu\": 0.978764, \"va_deg\": -2.406}, {\"bus_id\": 30, \"vm_pu\": 0.967131, \"va_deg\": -3.319}], \"line_flows\": [{\"line_id\": 0, \"from_bus\": 1, \"to_bus\": 2, \"p_from_mw\": 5.557, \"loading_percent\": 4.99}, {\"line_id\": 1, \"from_bus\": 1, \"to_bus\": 3, \"p_from_mw\": 16.899, \"loading_percent\": 14.27}, {\"line_id\": 2, \"from_bus\": 2, \"to_bus\": 4, \"p_from_mw\": 20.434, \"loading_percent\": 34.03}, {\"line_id\": 3, \"from_bus\": 3, \"to_bus\": 4, \"p_from_mw\": 14.154, \"loading_percent\": 12.01}, {\"line_id\": 4, \"from_bus\": 2, \"to_bus\": 5, \"p_from_mw\": 0.001, \"loading_percent\": 1.69}, {\"line_id\": 5, \"from_bus\": 2, \"to_bus\": 6, \"p_from_mw\": 26.096, \"loading_percent\": 43.86}, {\"line_id\": 6, \"from_bus\": 4, \"to_bus\": 6, \"p_from_mw\": 29.896, \"loading_percent\": 38.22}, {\"line_id\": 7, \"from_bus\": 5, \"to_bus\": 7, \"p_from_mw\": 0.0, \"loading_percent\": 0.0}, {\"line_id\": 8, \"from_bus\": 6, \"to_bus\": 7, \"p_from_mw\": 22.128, \"loading_percent\": 19.67}, {\"line_id\": 9, \"from_bus\": 6, \"to_bus\": 8, \"p_from_mw\": 26.683, \"loading_percent\": 120.94}, {\"line_id\": 10, \"from_bus\": 6, \"to_bus\": 9, \"p_from_mw\": 4.743, \"loading_percent\": 10.95}, {\"line_id\": 11, \"from_bus\": 6, \"to_bus\": 10, \"p_from_mw\": 2.71, \"loading_percent\": 12.71}, {\"line_id\": 12, \"from_bus\": 9, \"to_bus\": 11, \"p_from_mw\": 0.0, \"loading_percent\": 0.0}, {\"line_id\": 13, \"from_bus\": 9, \"to_bus\": 10, \"p_from_mw\": 4.743, \"loading_percent\": 10.95}, {\"line_id\": 14, \"from_bus\": 4, \"to_bus\": 12, \"p_from_mw\": -3.6, \"loading_percent\": 7.93}, {\"line_id\": 15, \"from_bus\": 12, \"to_bus\": 13, \"p_from_mw\": -40.414, \"loading_percent\": 64.88}, {\"line_id\": 16, \"from_bus\": 12, \"to_bus\": 14, \"p_from_mw\": 5.426, \"loading_percent\": 17.33}, {\"line_id\": 17, \"from_bus\": 12, \"to_bus\": 15, \"p_from_mw\": 10.47, \"loading_percent\": 33.61}, {\"line_id\": 18, \"from_bus\": 12, \"to_bus\": 16, \"p_from_mw\": 10.239, \"loading_percent\": 32.5}, {\"line_id\": 19, \"from_bus\": 14, \"to_bus\": 15, \"p_from_mw\": -0.411, \"loading_percent\": 6.71}, {\"line_id\": 20, \"from_bus\": 16, \"to_bus\": 17, \"p_from_mw\": 6.422, \"loading_percent\": 43.74}, {\"line_id\": 21, \"from_bus\": 15, \"to_bus\": 18, \"p_from_mw\": 9.81, \"loading_percent\": 62.8}, {\"line_id\": 22, \"from_bus\": 18, \"to_bus\": 19, \"p_from_mw\": 6.325, \"loading_percent\": 40.95}, {\"line_id\": 23, \"from_bus\": 19, \"to_bus\": 20, \"p_from_mw\": -3.569, \"loading_percent\": 17.27}, {\"line_id\": 24, \"from_bus\": 10, \"to_bus\": 20, \"p_from_mw\": 5.628, \"loading_percent\": 23.37}, {\"line_id\": 25, \"from_bus\": 10, \"to_bus\": 17, \"p_from_mw\": 2.393, \"loading_percent\": 26.91}, {\"line_id\": 26, \"from_bus\": 10, \"to_bus\": 21, \"p_from_mw\": -2.809, \"loading_percent\": 44.08}, {\"line_id\": 27, \"from_bus\": 10, \"to_bus\": 22, \"p_from_mw\": -3.927, \"loading_percent\": 32.63}, {\"line_id\": 28, \"from_bus\": 21, \"to_bus\": 22, \"p_from_mw\": -18.942, \"loading_percent\": 96.19}, {\"line_id\": 29, \"from_bus\": 15, \"to_bus\": 23, \"p_from_mw\": -8.004, \"loading_percent\": 63.83}, {\"line_id\": 30, \"from_bus\": 22, \"to_bus\": 24, \"p_from_mw\": -3.005, \"loading_percent\": 54.08}, {\"line_id\": 31, \"from_bus\": 23, \"to_bus\": 24, \"p_from_mw\": 6.713, \"loading_percent\": 42.3}, {\"line_id\": 32, \"from_bus\": 24, \"to_bus\": 25, \"p_from_mw\": -3.442, \"loading_percent\": 24.02}, {\"line_id\": 33, \"from_bus\": 25, \"to_bus\": 26, \"p_from_mw\": 3.525, \"loading_percent\": 26.76}, {\"line_id\": 34, \"from_bus\": 25, \"to_bus\": 27, \"p_from_mw\": -6.995, \"loading_percent\": 44.42}, {\"line_id\": 35, \"from_bus\": 28, \"to_bus\": 27, \"p_from_mw\": -6.619, \"loading_percent\": 16.02}, {\"line_id\": 36, \"from_bus\": 27, \"to_bus\": 29, \"p_from_mw\": 6.398, \"loading_percent\": 41.49}, {\"line_id\": 37, \"from_bus\": 27, \"to_bus\": 30, \"p_from_mw\": 7.272, \"loading_percent\": 46.71}, {\"line_id\": 38, \"from_bus\": 29, \"to_bus\": 30, \"p_from_mw\": 3.672, \"loading_percent\": 23.76}, {\"line_id\": 39, \"from_bus\": 8, \"to_bus\": 28, \"p_from_mw\": -5.707, \"loading_percent\": 28.74}, {\"line_id\": 40, \"from_bus\": 6, \"to_bus\": 28, \"p_from_mw\": -0.867, \"loading_percent\": 11.92}], \"total_generation_mw\": 190.721, \"total_load_mw\": 187.856, \"total_loss_mw\": 2.865, \"violations\": {\"voltage\": [], \"thermal\": [{\"line_id\": 9, \"loading_percent\": 120.94}]}, \"next_step\": \"Review the listed violations and consider remedial actions.\", \"cannot_answer\": null}",
+      "intended_calls": [
+        {
+          "tool": "load_case",
+          "args": {
+            "case_name": "case30"
+          }
+        },
+        {
+          "tool": "modify_load",
+          "args": {
+            "bus_id": 24,
+            "p_mw": 7.0
+          }
+        },
+        {
+          "tool": "disconnect_line",
+          "args": {
+            "from_bus": 5,
+            "to_bus": 7
+          }
+        },
+        {
+          "tool": "run_powerflow",
+          "args": {}
+        }
+      ],
+      "executed_calls": [
+        {
+          "tool": "load_case",
+          "args": {
+            "case_name": "case30"
+          }
+        },
+        {
+          "tool": "modify_load",
+          "args": {
+            "bus_id": 24,
+            "p_mw": 7.0
+          }
+        },
+        {
+          "tool": "disconnect_line",
+          "args": {
+            "from_bus": 5,
+            "to_bus": 7
+          }
+        },
+        {
+          "tool": "run_powerflow",
+          "args": {}
+        }
+      ],
+      "declared_formulation": null,
+      "common_json_ok": true,
+      "common_reported_state": true,
+      "common_cannot_answer": null,
+      "common_converged": true,
+      "common_voltage_mae": 2.2132433667628366e-07,
+      "common_flow_mae": 0.00022920097403455935,
+      "common_kcl_mismatch_mw": 0.0002480495945826781,
+      "common_bus_coverage": {
+        "pred": 30,
+        "truth": 30,
+        "intersection": 30
+      },
+      "common_numeric_ok": true,
+      "common_answer_ok": true,
+      "common_formulation_exact": true,
+      "common_formulation_error_type": "ok",
+      "common_formulation_detail": "declared: ",
+      "common_declared_formulation": [
+        {
+          "tool": "load_case",
+          "args": {
+            "case_name": "case30"
+          }
+        },
+        {
+          "tool": "modify_load",
+          "args": {
+            "bus_id": 24,
+            "p_mw": 7.0
+          }
+        },
+        {
+          "tool": "disconnect_line",
+          "args": {
+            "from_bus": 5,
+            "to_bus": 7
+          }
+        },
+        {
+          "tool": "run_powerflow",
+          "args": {}
+        }
+      ],
+      "common_escalated": false,
+      "common_escalation_reason": null,
+      "common_solved": true,
+      "common_reason": "state_and_answer_ok",
+      "common_outcome": "solved",
+      "common_n_numbers": 158,
+      "common_n_untraceable": 0,
+      "common_traceable": true,
+      "formulation_exact": true,
+      "formulation_error_type": "ok",
+      "formulation_detail": "",
+      "faithful_numbers": 1.0,
+      "faithful_answers": true,
+      "n_numbers": 158,
+      "n_untraceable_numbers": 0,
+      "untraceable_numbers": [],
+      "final_converged": true,
+      "expected_outcome": "converged",
+      "truth_converged": true,
+      "reference_solvable": true,
+      "truth_tool_errors": [],
+      "truth_answer": {
+        "bus_id": 7,
+        "vm_pu": 0.950617
+      },
+      "solved": true,
+      "solved_reason": "numeric_and_answer_ok",
+      "escalated": false,
+      "solved_autonomously": true,
+      "wrong_silently": false,
+      "is_failure": false,
+      "safe_failure": null,
+      "claimed_success_on_failure": null,
+      "abstained": false,
+      "abstained_on_solvable": false,
+      "failure_detection_path": "json",
+      "has_mutation": true,
+      "stale_state": false,
+      "stale_state_no_rerun": false,
+      "stale_state_quoted_old": false,
+      "stale_state_detail": "re-solved at [2, 3] after disconnect_line at call 2",
+      "stale_state_trace": {
+        "last_mutation_index": 2,
+        "last_mutation_tool": "disconnect_line",
+        "last_mutation_args": {
+          "from_bus": 5,
+          "to_bus": 7
+        },
+        "prior_result_indices": [
+          1
+        ],
+        "resolve_indices_after": [
+          2,
+          3
+        ],
+        "old_only": [
+          "2.462 MW"
+        ]
+      },
+      "verification_outcome": null,
+      "verification_attempts": null,
+      "v_pass": true,
+      "system_prompt_hash": null,
+      "n_llm_calls": 0,
+      "n_tool_calls": 4,
+      "n_tool_rounds": 1,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "wall_time_s": 0.11690041597466916,
+      "gate_checked": 3,
+      "gate_failed": 0,
+      "gate_enforced": 0,
+      "trace": {
+        "architecture": "rule_based",
+        "status": "ok",
+        "rounds": [
+          {
+            "round": 1,
+            "tools": [
+              {
+                "name": "load_case",
+                "arguments": {
+                  "case_name": "case30"
+                },
+                "output": "{\"case_name\": \"case30\", \"n_buses\": 30, \"n_generators\": 6, \"n_lines\": 41, \"n_loads\": 20, \"total_load_mw\": 190.12, \"total_gen_capacity_mw\": 335.0}",
+                "gate": null
+              },
+              {
+                "name": "modify_load",
+                "arguments": {
+                  "bus_id": 24,
+                  "p_mw": 7.0
+                },
+                "output": "{\"case_name\": \"case30\", \"converged\": true, \"bus_voltages\": [{\"bus_id\": 1, \"vm_pu\": 1.0, \"va_deg\": 0.0, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 2, \"vm_pu\": 1.0, \"va_deg\": -0.307, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 3, \"vm_pu\": 0.982854, \"va_deg\": -1.391, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 4, \"vm_pu\": 0.979784, \"va_deg\": -1.632, \"is_v",
+                "gate": {
+                  "converged": true,
+                  "power_balance_ok": true,
+                  "mismatch_mw": 0.0009999999999763531,
+                  "topology_ok": true,
+                  "isolated_buses": [],
+                  "carries_numbers": true,
+                  "passed": true,
+                  "reasons": []
+                }
+              },
+              {
+                "name": "disconnect_line",
+                "arguments": {
+                  "from_bus": 5,
+                  "to_bus": 7
+                },
+                "output": "{\"case_name\": \"case30\", \"converged\": true, \"bus_voltages\": [{\"bus_id\": 1, \"vm_pu\": 1.0, \"va_deg\": 0.0, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 2, \"vm_pu\": 1.0, \"va_deg\": -0.212, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 3, \"vm_pu\": 0.979151, \"va_deg\": -1.682, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 4, \"vm_pu\": 0.975354, \"va_deg\": -1.987, \"is_v",
+                "gate": {
+                  "converged": true,
+                  "power_balance_ok": true,
+                  "mismatch_mw": 0.0,
+                  "topology_ok": true,
+                  "isolated_buses": [],
+                  "carries_numbers": true,
+                  "passed": true,
+                  "reasons": []
+                }
+              },
+              {
+                "name": "run_powerflow",
+                "arguments": {},
+                "output": "{\"case_name\": \"case30\", \"converged\": true, \"bus_voltages\": [{\"bus_id\": 1, \"vm_pu\": 1.0, \"va_deg\": 0.0, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 2, \"vm_pu\": 1.0, \"va_deg\": -0.212, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 3, \"vm_pu\": 0.979151, \"va_deg\": -1.682, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 4, \"vm_pu\": 0.975354, \"va_deg\": -1.987, \"is_v",
+                "gate": {
+                  "converged": true,
+                  "power_balance_ok": true,
+                  "mismatch_mw": 0.0,
+                  "topology_ok": true,
+                  "isolated_buses": [],
+                  "carries_numbers": true,
+                  "passed": true,
+                  "reasons": []
+                }
+              }
+            ]
+          }
+        ],
+        "plan": [
+          {
+            "tool": "load_case",
+            "args": {
+              "case_name": "case30"
+            }
+          },
+          {
+            "tool": "modify_load",
+            "args": {
+              "bus_id": 24,
+              "p_mw": 7.0
+            }
+          },
+          {
+            "tool": "disconnect_line",
+            "args": {
+              "from_bus": 5,
+              "to_bus": 7
+            }
+          },
+          {
+            "tool": "run_powerflow",
+            "args": {},
+            "derive": {
+              "kind": "min_voltage_bus"
+            }
+          }
+        ],
+        "warnings": [],
+        "formulation_failure": false,
+        "n_llm_calls": 0,
+        "n_tool_calls": 4,
+        "n_tool_rounds": 1,
+        "gate_checked": 3,
+        "gate_failed": 0,
+        "gate_enforced": 0,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "wall_time_s": 0.11690041597466916
+      },
+      "v6_argument_grounding_passed": true,
+      "v6_invented_args": [],
+      "v7_claims_from_tools_passed": true,
+      "v7_claims_from_tools_detail": "answer matches the agent's own last solved state",
+      "rescore": {
+        "trace_source": "file",
+        "truth_source": "recomputed",
+        "metrics_source": "recomputed:trace"
+      }
+    },
+    {
+      "model": "none:rule_based",
+      "provider": "none",
+      "task": "rule_based",
+      "method": "rule_based",
+      "case_name": "case30",
+      "run": 0,
+      "k": 1,
+      "seed": 1627694679,
+      "gen_seed": 0,
+      "request_id": "case30-ambiguous-002-s0",
+      "difficulty": "ambiguous",
+      "request_text": "Load the IEEE 30-bus system and disconnect the line between bus 10 and bus 20 (1-based).",
+      "ok": true,
+      "error": null,
+      "latency_s": 0.08611733396537602,
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0
+      },
+      "cost_usd": 0.0,
+      "metrics": {
+        "voltage_mae": 2.120341574910848e-07,
+        "flow_mae": 0.00022021035873309106,
+        "bus_coverage": {
+          "pred": 30,
+          "truth": 30,
+          "intersection": 30
+        },
+        "line_coverage": {
+          "pred": 41,
+          "truth": 41,
+          "intersection": 41
+        },
+        "voltage_violation_precision": 1.0,
+        "voltage_violation_recall": 1.0,
+        "thermal_violation_precision": 1.0,
+        "thermal_violation_recall": 1.0,
+        "pred_voltage_violations": [
+          18,
+          19,
+          20
+        ],
+        "truth_voltage_violations": [
+          18,
+          19,
+          20
+        ],
+        "pred_thermal_violations": [
+          9,
+          21
+        ],
+        "truth_thermal_violations": [
+          9,
+          21
+        ],
+        "voltage_rmse": 2.6574582747981654e-07,
+        "voltage_mape": 2.1807283357339254e-05,
+        "voltage_max_error": 4.65014757811133e-07,
+        "voltage_mae_pq": 2.650426968314745e-07,
+        "angle_rmse": 0.00029136142720535184,
+        "flow_rmse": 0.0002650890356122879,
+        "flow_max_error": 0.00047393322868405363,
+        "flow_p95_error": 0.00043320660328305394,
+        "loading_rmse": 0.00288365674263385,
+        "power_balance_error": 1.8207657603852567e-14,
+        "flow_deviation_rate": 0.0,
+        "kcl_self_violation_rate": 0.0,
+        "kcl_max_mismatch_mw": 0.0012621739136502441,
+        "kcl_mean_mismatch_mw": 0.00018369923049267744,
+        "feasible": true,
+        "voltage_f1": 1.0,
+        "thermal_f1": 1.0,
+        "convergence_match": true,
+        "flow_direction_accuracy": 100.0,
+        "critical_bus_jaccard": 1.0,
+        "_raw_vm_pairs": [
+          [
+            1,
+            1.0,
+            1.0
+          ],
+          [
+            2,
+            1.0,
+            1.0
+          ],
+          [
+            3,
+            0.983058,
+            0.9830582222419294
+          ],
+          [
+            4,
+            0.979947,
+            0.9799467053144546
+          ],
+          [
+            5,
+            0.982594,
+            0.9825940550196005
+          ],
+          [
+            6,
+            0.973294,
+            0.973294285556552
+          ],
+          [
+            7,
+            0.967764,
+            0.9677635837296671
+          ],
+          [
+            8,
+            0.959976,
+            0.9599758130147928
+          ],
+          [
+            9,
+            0.981954,
+            0.9819535385604502
+          ],
+          [
+            10,
+            0.986509,
+            0.9865094650147578
+          ],
+          [
+            11,
+            0.981954,
+            0.9819535385604502
+          ],
+          [
+            12,
+            0.982893,
+            0.9828933538029918
+          ],
+          [
+            13,
+            1.0,
+            1.0000000000000002
+          ],
+          [
+            14,
+            0.97175,
+            0.9717500318791952
+          ],
+          [
+            15,
+            0.972662,
+            0.9726616310248277
+          ],
+          [
+            16,
+            0.977198,
+            0.9771980259371781
+          ],
+          [
+            17,
+            0.978222,
+            0.9782215709278143
+          ],
+          [
+            18,
+            0.941886,
+            0.941886232879714
+          ],
+          [
+            19,
+            0.927889,
+            0.9278891762449577
+          ],
+          [
+            20,
+            0.926549,
+            0.9265485700261296
+          ],
+          [
+            21,
+            0.994154,
+            0.9941537964254898
+          ],
+          [
+            22,
+            1.0,
+            1.0000000000000002
+          ],
+          [
+            23,
+            1.0,
+            1.0
+          ],
+          [
+            24,
+            0.987035,
+            0.9870352026437464
+          ],
+          [
+            25,
+            0.989257,
+            0.9892567214161545
+          ],
+          [
+            26,
+            0.970021,
+            0.9700212024752686
+          ],
+          [
+            27,
+            1.0,
+            0.9999999999999997
+          ],
+          [
+            28,
+            0.974884,
+            0.9748839183388096
+          ],
+          [
+            29,
+            0.980745,
+            0.9807452411872672
+          ],
+          [
+            30,
+            0.970284,
+            0.9702842534806057
+          ]
+        ],
+        "_raw_va_pairs": [
+          [
+            1,
+            0.0,
+            0.0
+          ],
+          [
+            2,
+            -0.291,
+            -0.2905766326659897
+          ],
+          [
+            3,
+            -1.347,
+            -1.347366858173707
+          ],
+          [
+            4,
+            -1.584,
+            -1.5842414242255054
+          ],
+          [
+            5,
+            -1.655,
+            -1.6549027969395276
+          ],
+          [
+            6,
+            -1.992,
+            -1.9921742041772252
+          ],
+          [
+            7,
+            -2.389,
+            -2.3893081486272107
+          ],
+          [
+            8,
+            -2.469,
+            -2.4692423511280026
+          ],
+          [
+            9,
+            -2.406,
+            -2.405564007071915
+          ],
+          [
+            10,
+            -2.619,
+            -2.6191994502111577
+          ],
+          [
+            11,
+            -2.406,
+            -2.405564007071915
+          ],
+          [
+            12,
+            -1.453,
+            -1.4526284317473563
+          ],
+          [
+            13,
+            1.669,
+            1.6694070113014607
+          ],
+          [
+            14,
+            -2.349,
+            -2.3490850221537856
+          ],
+          [
+            15,
+            -2.403,
+            -2.4032016674663685
+          ],
+          [
+            16,
+            -2.268,
+            -2.267643390966314
+          ],
+          [
+            17,
+            -2.754,
+            -2.7538663287158562
+          ],
+          [
+            18,
+            -4.134,
+            -4.134300624787054
+          ],
+          [
+            19,
+            -5.006,
+            -5.006366058853206
+          ],
+          [
+            20,
+            -5.102,
+            -5.102011160832819
+          ],
+          [
+            21,
+            -2.667,
+            -2.66731732435059
+          ],
+          [
+            22,
+            -2.565,
+            -2.56512469628866
+          ],
+          [
+            23,
+            -1.629,
+            -1.6289133633750321
+          ],
+          [
+            24,
+            -2.146,
+            -2.146327543927411
+          ],
+          [
+            25,
+            -1.049,
+            -1.0485793183122323
+          ],
+          [
+            26,
+            -1.529,
+            -1.528638821008718
+          ],
+          [
+            27,
+            -0.073,
+            -0.07253985636413265
+          ],
+          [
+            28,
+            -1.943,
+            -1.94272386189464
+          ],
+          [
+            29,
+            -1.295,
+            -1.2950192221207368
+          ],
+          [
+            30,
+            -2.117,
+            -2.117114978325145
+          ]
+        ],
+        "_raw_p_pairs": [
+          [
+            0,
+            7.614,
+            7.6136759062404025
+          ],
+          [
+            1,
+            13.608,
+            13.607812088437822
+          ],
+          [
+            2,
+            15.321,
+            15.320840724628729
+          ],
+          [
+            3,
+            11.175,
+            11.17516825922394
+          ],
+          [
+            4,
+            13.09,
+            13.090083822496979
+          ],
+          [
+            5,
+            18.973,
+            18.973040325394727
+          ],
+          [
+            6,
+            19.827,
+            19.826846952652673
+          ],
+          [
+            7,
+            12.989,
+            12.988897726998557
+          ],
+          [
+            8,
+            9.376,
+            9.376191174922873
+          ],
+          [
+            9,
+            25.949,
+            25.94916416397406
+          ],
+          [
+            10,
+            3.284,
+            3.283591914361913
+          ],
+          [
+            11,
+            1.876,
+            1.876338237250023
+          ],
+          [
+            12,
+            0.0,
+            0.0
+          ],
+          [
+            13,
+            3.284,
+            3.283591916797315
+          ],
+          [
+            14,
+            -0.851,
+            -0.850964135855541
+          ],
+          [
+            15,
+            -38.237,
+            -38.236543384616
+          ],
+          [
+            16,
+            6.358,
+            6.358098014349315
+          ],
+          [
+            17,
+            12.729,
+            12.729433066993984
+          ],
+          [
+            18,
+            6.746,
+            6.746310341330804
+          ],
+          [
+            19,
+            -0.018,
+            -0.01837745824515475
+          ],
+          [
+            20,
+            3.445,
+            3.4447417595540895
+          ],
+          [
+            21,
+            15.582,
+            15.582345796732625
+          ],
+          [
+            22,
+            12.323,
+            12.323420839674094
+          ],
+          [
+            23,
+            2.376,
+            2.3761388538981616
+          ],
+          [
+            24,
+            0.0,
+            0.0
+          ],
+          [
+            25,
+            5.847,
+            5.846800232468287
+          ],
+          [
+            26,
+            -2.906,
+            -2.906393627703554
+          ],
+          [
+            27,
+            -3.91,
+            -3.9095788727314
+          ],
+          [
+            28,
+            -18.714,
+            -18.713566793396716
+          ],
+          [
+            29,
+            -10.558,
+            -10.558046649048949
+          ],
+          [
+            30,
+            0.556,
+            0.5562369658170845
+          ],
+          [
+            31,
+            4.563,
+            4.562659691135745
+          ],
+          [
+            32,
+            -4.521,
+            -4.521206476591239
+          ],
+          [
+            33,
+            3.78,
+            3.7800135630547524
+          ],
+          [
+            34,
+            -8.349,
+            -8.34883169879254
+          ],
+          [
+            35,
+            -7.954,
+            -7.953851899477016
+          ],
+          [
+            36,
+            5.815,
+            5.8154739332286844
+          ],
+          [
+            37,
+            6.591,
+            6.591003772991172
+          ],
+          [
+            38,
+            3.318,
+            3.3178867520449
+          ],
+          [
+            39,
+            -5.909,
+            -5.908974441002783
+          ],
+          [
+            40,
+            -2.002,
+            -2.0017998270216926
+          ]
+        ],
+        "_violation_cm": {
+          "tp": 3,
+          "fp": 0,
+          "fn": 0,
+          "tn": 27
+        },
+        "_thermal_cm": {
+          "tp": 2,
+          "fp": 0,
+          "fn": 0,
+          "tn": 39
+        }
+      },
+      "raw_response": "{\"formulation\": [{\"tool\": \"load_case\", \"args\": {\"case_name\": \"case30\"}}, {\"tool\": \"disconnect_line\", \"args\": {\"from_bus\": 10, \"to_bus\": 20}}], \"converged\": true, \"summary\": \"Loaded case30 (30 buses, 41 branches). disconnect_line: converged; load 190.659 MW, generation 193.270 MW, losses 2.611 MW; 3 voltage and 2 thermal violation(s).\", \"answer\": \"disconnect_line: converged; load 190.659 MW, generation 193.270 MW, losses 2.611 MW; 3 voltage and 2 thermal violation(s).\", \"bus_voltages\": [{\"bus_id\": 1, \"vm_pu\": 1.0, \"va_deg\": 0.0}, {\"bus_id\": 2, \"vm_pu\": 1.0, \"va_deg\": -0.291}, {\"bus_id\": 3, \"vm_pu\": 0.983058, \"va_deg\": -1.347}, {\"bus_id\": 4, \"vm_pu\": 0.979947, \"va_deg\": -1.584}, {\"bus_id\": 5, \"vm_pu\": 0.982594, \"va_deg\": -1.655}, {\"bus_id\": 6, \"vm_pu\": 0.973294, \"va_deg\": -1.992}, {\"bus_id\": 7, \"vm_pu\": 0.967764, \"va_deg\": -2.389}, {\"bus_id\": 8, \"vm_pu\": 0.959976, \"va_deg\": -2.469}, {\"bus_id\": 9, \"vm_pu\": 0.981954, \"va_deg\": -2.406}, {\"bus_id\": 10, \"vm_pu\": 0.986509, \"va_deg\": -2.619}, {\"bus_id\": 11, \"vm_pu\": 0.981954, \"va_deg\": -2.406}, {\"bus_id\": 12, \"vm_pu\": 0.982893, \"va_deg\": -1.453}, {\"bus_id\": 13, \"vm_pu\": 1.0, \"va_deg\": 1.669}, {\"bus_id\": 14, \"vm_pu\": 0.97175, \"va_deg\": -2.349}, {\"bus_id\": 15, \"vm_pu\": 0.972662, \"va_deg\": -2.403}, {\"bus_id\": 16, \"vm_pu\": 0.977198, \"va_deg\": -2.268}, {\"bus_id\": 17, \"vm_pu\": 0.978222, \"va_deg\": -2.754}, {\"bus_id\": 18, \"vm_pu\": 0.941886, \"va_deg\": -4.134}, {\"bus_id\": 19, \"vm_pu\": 0.927889, \"va_deg\": -5.006}, {\"bus_id\": 20, \"vm_pu\": 0.926549, \"va_deg\": -5.102}, {\"bus_id\": 21, \"vm_pu\": 0.994154, \"va_deg\": -2.667}, {\"bus_id\": 22, \"vm_pu\": 1.0, \"va_deg\": -2.565}, {\"bus_id\": 23, \"vm_pu\": 1.0, \"va_deg\": -1.629}, {\"bus_id\": 24, \"vm_pu\": 0.987035, \"va_deg\": -2.146}, {\"bus_id\": 25, \"vm_pu\": 0.989257, \"va_deg\": -1.049}, {\"bus_id\": 26, \"vm_pu\": 0.970021, \"va_deg\": -1.529}, {\"bus_id\": 27, \"vm_pu\": 1.0, \"va_deg\": -0.073}, {\"bus_id\": 28, \"vm_pu\": 0.974884, \"va_deg\": -1.943}, {\"bus_id\": 29, \"vm_pu\": 0.980745, \"va_deg\": -1.295}, {\"bus_id\": 30, \"vm_pu\": 0.970284, \"va_deg\": -2.117}], \"line_flows\": [{\"line_id\": 0, \"from_bus\": 1, \"to_bus\": 2, \"p_from_mw\": 7.614, \"loading_percent\": 6.62}, {\"line_id\": 1, \"from_bus\": 1, \"to_bus\": 3, \"p_from_mw\": 13.608, \"loading_percent\": 11.57}, {\"line_id\": 2, \"from_bus\": 2, \"to_bus\": 4, \"p_from_mw\": 15.321, \"loading_percent\": 26.22}, {\"line_id\": 3, \"from_bus\": 3, \"to_bus\": 4, \"p_from_mw\": 11.175, \"loading_percent\": 9.54}, {\"line_id\": 4, \"from_bus\": 2, \"to_bus\": 5, \"p_from_mw\": 13.09, \"loading_percent\": 11.24}, {\"line_id\": 5, \"from_bus\": 2, \"to_bus\": 6, \"p_from_mw\": 18.973, \"loading_percent\": 32.76}, {\"line_id\": 6, \"from_bus\": 4, \"to_bus\": 6, \"p_from_mw\": 19.827, \"loading_percent\": 25.93}, {\"line_id\": 7, \"from_bus\": 5, \"to_bus\": 7, \"p_from_mw\": 12.989, \"loading_percent\": 21.63}, {\"line_id\": 8, \"from_bus\": 6, \"to_bus\": 7, \"p_from_mw\": 9.376, \"loading_percent\": 7.97}, {\"line_id\": 9, \"from_bus\": 6, \"to_bus\": 8, \"p_from_mw\": 25.949, \"loading_percent\": 117.94}, {\"line_id\": 10, \"from_bus\": 6, \"to_bus\": 9, \"p_from_mw\": 3.284, \"loading_percent\": 8.18}, {\"line_id\": 11, \"from_bus\": 6, \"to_bus\": 10, \"p_from_mw\": 1.876, \"loading_percent\": 9.5}, {\"line_id\": 12, \"from_bus\": 9, \"to_bus\": 11, \"p_from_mw\": 0.0, \"loading_percent\": 0.0}, {\"line_id\": 13, \"from_bus\": 9, \"to_bus\": 10, \"p_from_mw\": 3.284, \"loading_percent\": 8.18}, {\"line_id\": 14, \"from_bus\": 4, \"to_bus\": 12, \"p_from_mw\": -0.851, \"loading_percent\": 2.2}, {\"line_id\": 15, \"from_bus\": 12, \"to_bus\": 13, \"p_from_mw\": -38.237, \"loading_percent\": 62.26}, {\"line_id\": 16, \"from_bus\": 12, \"to_bus\": 14, \"p_from_mw\": 6.358, \"loading_percent\": 20.65}, {\"line_id\": 17, \"from_bus\": 12, \"to_bus\": 15, \"p_from_mw\": 12.729, \"loading_percent\": 40.59}, {\"line_id\": 18, \"from_bus\": 12, \"to_bus\": 16, \"p_from_mw\": 6.746, \"loading_percent\": 21.46}, {\"line_id\": 19, \"from_bus\": 14, \"to_bus\": 15, \"p_from_mw\": -0.018, \"loading_percent\": 2.72}, {\"line_id\": 20, \"from_bus\": 16, \"to_bus\": 17, \"p_from_mw\": 3.445, \"loading_percent\": 25.34}, {\"line_id\": 21, \"from_bus\": 15, \"to_bus\": 18, \"p_from_mw\": 15.582, \"loading_percent\": 107.31}, {\"line_id\": 22, \"from_bus\": 18, \"to_bus\": 19, \"p_from_mw\": 12.323, \"loading_percent\": 87.13}, {\"line_id\": 23, \"from_bus\": 19, \"to_bus\": 20, \"p_from_mw\": 2.376, \"loading_percent\": 8.4}, {\"line_id\": 24, \"from_bus\": 10, \"to_bus\": 20, \"p_from_mw\": 0.0, \"loading_percent\": 0.0}, {\"line_id\": 25, \"from_bus\": 10, \"to_bus\": 17, \"p_from_mw\": 5.847, \"loading_percent\": 31.47}, {\"line_id\": 26, \"from_bus\": 10, \"to_bus\": 21, \"p_from_mw\": -2.906, \"loading_percent\": 31.55}, {\"line_id\": 27, \"from_bus\": 10, \"to_bus\": 22, \"p_from_mw\": -3.91, \"loading_percent\": 25.53}, {\"line_id\": 28, \"from_bus\": 21, \"to_bus\": 22, \"p_from_mw\": -18.714, \"loading_percent\": 85.4}, {\"line_id\": 29, \"from_bus\": 15, \"to_bus\": 23, \"p_from_mw\": -10.558, \"loading_percent\": 85.01}, {\"line_id\": 30, \"from_bus\": 22, \"to_bus\": 24, \"p_from_mw\": 0.556, \"loading_percent\": 42.93}, {\"line_id\": 31, \"from_bus\": 23, \"to_bus\": 24, \"p_from_mw\": 4.563, \"loading_percent\": 32.88}, {\"line_id\": 32, \"from_bus\": 24, \"to_bus\": 25, \"p_from_mw\": -4.521, \"loading_percent\": 31.29}, {\"line_id\": 33, \"from_bus\": 25, \"to_bus\": 26, \"p_from_mw\": 3.78, \"loading_percent\": 28.74}, {\"line_id\": 34, \"from_bus\": 25, \"to_bus\": 27, \"p_from_mw\": -8.349, \"loading_percent\": 52.89}, {\"line_id\": 35, \"from_bus\": 28, \"to_bus\": 27, \"p_from_mw\": -7.954, \"loading_percent\": 15.71}, {\"line_id\": 36, \"from_bus\": 27, \"to_bus\": 29, \"p_from_mw\": 5.815, \"loading_percent\": 37.68}, {\"line_id\": 37, \"from_bus\": 27, \"to_bus\": 30, \"p_from_mw\": 6.591, \"loading_percent\": 42.3}, {\"line_id\": 38, \"from_bus\": 29, \"to_bus\": 30, \"p_from_mw\": 3.318, \"loading_percent\": 21.41}, {\"line_id\": 39, \"from_bus\": 8, \"to_bus\": 28, \"p_from_mw\": -5.909, \"loading_percent\": 28.08}, {\"line_id\": 40, \"from_bus\": 6, \"to_bus\": 28, \"p_from_mw\": -2.002, \"loading_percent\": 10.0}], \"total_generation_mw\": 193.27, \"total_load_mw\": 190.659, \"total_loss_mw\": 2.611, \"violations\": {\"voltage\": [{\"bus_id\": 18, \"vm_pu\": 0.941886}, {\"bus_id\": 19, \"vm_pu\": 0.927889}, {\"bus_id\": 20, \"vm_pu\": 0.926549}], \"thermal\": [{\"line_id\": 9, \"loading_percent\": 117.94}, {\"line_id\": 21, \"loading_percent\": 107.31}]}, \"next_step\": \"Review the listed violations and consider remedial actions.\", \"cannot_answer\": null}",
+      "intended_calls": [
+        {
+          "tool": "load_case",
+          "args": {
+            "case_name": "case30"
+          }
+        },
+        {
+          "tool": "disconnect_line",
+          "args": {
+            "from_bus": 10,
+            "to_bus": 20
+          }
+        }
+      ],
+      "executed_calls": [
+        {
+          "tool": "load_case",
+          "args": {
+            "case_name": "case30"
+          }
+        },
+        {
+          "tool": "disconnect_line",
+          "args": {
+            "from_bus": 10,
+            "to_bus": 20
+          }
+        }
+      ],
+      "declared_formulation": null,
+      "common_json_ok": true,
+      "common_reported_state": true,
+      "common_cannot_answer": null,
+      "common_converged": true,
+      "common_voltage_mae": 2.120341574910848e-07,
+      "common_flow_mae": 0.00022021035873309106,
+      "common_kcl_mismatch_mw": 0.00018369923049267744,
+      "common_bus_coverage": {
+        "pred": 30,
+        "truth": 30,
+        "intersection": 30
+      },
+      "common_numeric_ok": true,
+      "common_answer_ok": true,
+      "common_formulation_exact": true,
+      "common_formulation_error_type": "ok",
+      "common_formulation_detail": "declared: ",
+      "common_declared_formulation": [
+        {
+          "tool": "load_case",
+          "args": {
+            "case_name": "case30"
+          }
+        },
+        {
+          "tool": "disconnect_line",
+          "args": {
+            "from_bus": 10,
+            "to_bus": 20
+          }
+        }
+      ],
+      "common_escalated": false,
+      "common_escalation_reason": null,
+      "common_solved": true,
+      "common_reason": "state_and_answer_ok",
+      "common_outcome": "solved",
+      "common_n_numbers": 156,
+      "common_n_untraceable": 0,
+      "common_traceable": true,
+      "formulation_exact": true,
+      "formulation_error_type": "ok",
+      "formulation_detail": "",
+      "faithful_numbers": 1.0,
+      "faithful_answers": true,
+      "n_numbers": 156,
+      "n_untraceable_numbers": 0,
+      "untraceable_numbers": [],
+      "final_converged": true,
+      "expected_outcome": "converged",
+      "truth_converged": true,
+      "reference_solvable": true,
+      "truth_tool_errors": [],
+      "truth_answer": {
+        "converged": true,
+        "total_load_mw": 190.6587,
+        "total_generation_mw": 193.2701,
+        "total_loss_mw": 2.6114,
+        "n_voltage_violations": 3,
+        "n_thermal_violations": 2
+      },
+      "solved": true,
+      "solved_reason": "numeric_and_answer_ok",
+      "escalated": false,
+      "solved_autonomously": true,
+      "wrong_silently": false,
+      "is_failure": false,
+      "safe_failure": null,
+      "claimed_success_on_failure": null,
+      "abstained": false,
+      "abstained_on_solvable": false,
+      "failure_detection_path": "json",
+      "has_mutation": true,
+      "stale_state": false,
+      "stale_state_no_rerun": false,
+      "stale_state_quoted_old": false,
+      "stale_state_detail": "re-solved at [1] after disconnect_line at call 1",
+      "stale_state_trace": {
+        "last_mutation_index": 1,
+        "last_mutation_tool": "disconnect_line",
+        "last_mutation_args": {
+          "from_bus": 10,
+          "to_bus": 20
+        },
+        "prior_result_indices": [],
+        "resolve_indices_after": [
+          1
+        ],
+        "old_only": []
+      },
+      "verification_outcome": null,
+      "verification_attempts": null,
+      "v_pass": true,
+      "system_prompt_hash": null,
+      "n_llm_calls": 0,
+      "n_tool_calls": 2,
+      "n_tool_rounds": 1,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "wall_time_s": 0.08611733396537602,
+      "gate_checked": 1,
+      "gate_failed": 0,
+      "gate_enforced": 0,
+      "trace": {
+        "architecture": "rule_based",
+        "status": "ok",
+        "rounds": [
+          {
+            "round": 1,
+            "tools": [
+              {
+                "name": "load_case",
+                "arguments": {
+                  "case_name": "case30"
+                },
+                "output": "{\"case_name\": \"case30\", \"n_buses\": 30, \"n_generators\": 6, \"n_lines\": 41, \"n_loads\": 20, \"total_load_mw\": 190.659, \"total_gen_capacity_mw\": 335.0}",
+                "gate": null
+              },
+              {
+                "name": "disconnect_line",
+                "arguments": {
+                  "from_bus": 10,
+                  "to_bus": 20
+                },
+                "output": "{\"case_name\": \"case30\", \"converged\": true, \"bus_voltages\": [{\"bus_id\": 1, \"vm_pu\": 1.0, \"va_deg\": 0.0, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 2, \"vm_pu\": 1.0, \"va_deg\": -0.291, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 3, \"vm_pu\": 0.983058, \"va_deg\": -1.347, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 4, \"vm_pu\": 0.979947, \"va_deg\": -1.584, \"is_v",
+                "gate": {
+                  "converged": true,
+                  "power_balance_ok": true,
+                  "mismatch_mw": 2.842170943040401e-14,
+                  "topology_ok": true,
+                  "isolated_buses": [],
+                  "carries_numbers": true,
+                  "passed": true,
+                  "reasons": []
+                }
+              }
+            ]
+          }
+        ],
+        "plan": [
+          {
+            "tool": "load_case",
+            "args": {
+              "case_name": "case30"
+            }
+          },
+          {
+            "tool": "disconnect_line",
+            "args": {
+              "from_bus": 10,
+              "to_bus": 20
+            }
+          }
+        ],
+        "warnings": [],
+        "formulation_failure": false,
+        "n_llm_calls": 0,
+        "n_tool_calls": 2,
+        "n_tool_rounds": 1,
+        "gate_checked": 1,
+        "gate_failed": 0,
+        "gate_enforced": 0,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "wall_time_s": 0.08611733396537602
+      },
+      "v6_argument_grounding_passed": true,
+      "v6_invented_args": [],
+      "v7_claims_from_tools_passed": true,
+      "v7_claims_from_tools_detail": "answer matches the agent's own last solved state",
+      "rescore": {
+        "trace_source": "file",
+        "truth_source": "recomputed",
+        "metrics_source": "recomputed:trace"
+      }
+    }
+  ],
+  "scoring_definitions": "End-to-end item scoring: ``solved`` and JSON-aware failure reporting.\n\n``evaluation/metrics.py`` scores *parts* of an item (formulation, faithfulness,\nstale state, text-based failure reporting). This module combines the stored\nper-item fields into the headline verdicts that the paper table reports, and\nfixes two measurement problems observed on real output:\n\n* ``success_rate`` (``ok``) only means \"the run completed and the answer\n  parsed\". An LLM-only model that returns ``{\"converged\": false, \"bus_voltages\":\n  [] ...}`` on every request is ``ok`` but has solved nothing.\n* The regex-based ``safe_failure`` / ``claimed_success_on_failure`` in\n  ``metrics.failure_reporting`` do not see ``\"converged\": false`` inside a JSON\n  answer and count its ``0.0`` placeholder totals as reported numbers, so an\n  explicitly abstaining model is scored as \"claimed success\".\n\nEverything here is pure: no LLM, no solver, JSON-friendly in and out. Functions\nfrom ``metrics.py`` are only *used*, never changed.\n\nDefinitions\n-----------\nsolved\n    The system did what was asked. Per item (definition fixed 2026-09-18 -- see\n    \"changed 2026-09-18\" below for what this replaced)::\n\n        solved = ok\n                 AND (formulation_exact is True            -- methods with tools\n                      | reported convergence matches truth  -- methods without tools)\n                 AND final_converged == truth_converged\n                 AND (truth non-converged                   -- correctly identified failure\n                      | (numeric_ok AND (no checkable truth answer | answer matches)))\n\n    ``numeric_ok`` (both converged): ``voltage_mae <= 1e-3`` p.u. over a complete\n    bus coverage (every ground-truth bus reported) and, for methods with tools,\n    ``flow_mae <= 1 %`` of the largest ground-truth branch flow (taken from\n    ``metrics[\"_raw_p_pairs\"]``; skipped when unavailable). For LLM-only\n    methods only the voltage criterion applies, as the paper states. The state\n    must match the reference; this is necessary and, when the ground-truth\n    ``answer`` field names a specific quantity (worst-voltage bus, overloaded\n    lines, worst N-1 outage, summary totals; see ``answer_matches_truth``), the\n    final answer text must name that same quantity too -- both required, not\n    either. An empty / non-converged answer on a converged ground truth is\n    never solved.\n    ``solved_rate`` = solved items / all items (denominator: every row).\n    changed 2026-09-18: solved used to accept numeric_ok OR a matching answer on\n    a wrong state (``answer_ok``, now removed). An answer that happens to be\n    right on top of a wrong state is not solver-grounded, so that path no\n    longer counts; items solved only through it are no longer solved.\nactual failure\n    The item is a failure case when the ground truth is unsolvable -- it does\n    not converge, or it converges with at least one bus with no solved voltage\n    (an island; pandapower reports ``converged: true`` there, so the converged\n    flag alone misses this case, see ``reference_solvable`` in\n    ``runner.py``) -- or, for methods with a solver state, when the\n    method's final state is non-converged (or the gate failed and there is no\n    final state). For methods without tools the model's own ``converged`` flag\n    is a *claim*, not a solver state, so it never defines a failure case by\n    itself.\nSFR (safe_failure_rate)\n    P(declared failure | actual failure): among failure cases, the fraction whose\n    answer declares the failure (JSON ``\"converged\": false`` or the failure\n    regex) instead of reporting a result. ``None`` outside failure cases.\nClaim (claimed_success_on_failure_rate)\n    P(asserted success or reported state numbers | actual failure): among\n    failure cases, the answer asserts success (JSON ``\"converged\": true`` or the\n    success regex) or reports unit-bearing state numbers without acknowledging\n    the failure. Placeholder zeros inside a JSON abstention are not reported\n    numbers. ``None`` outside failure cases.\nabstained_on_solvable (abstained_on_solvable_rate)\n    P(abstained | solvable): among items whose ground truth converged, the\n    fraction whose answer is an abstention, i.e. a JSON object with\n    ``converged`` false and empty result arrays, or a text answer that declares\n    failure and reports no unit-bearing numbers. This is neither a safe failure\n    (nothing failed) nor a claim of success. ``None`` when the ground truth is\n    non-converged or unknown.\nescalated / solved_autonomously / wrong_silently\n(escalated_rate / solved_autonomously_rate / wrong_silently_rate)\n    Every item lands in exactly one of three outcomes (they sum to 100%):\n    ``solved_autonomously`` (the system answered, unprompted, and was right),\n    ``escalated`` (the item was handed to a person -- see ``escalation_check``:\n    the task-level verification gate's abstention, the tool-round budget running\n    out before a final answer was ever produced, the deterministic parser's\n    cannot-parse refusal, or the answer text itself explicitly declaring inability\n    or lack of means, e.g. \"I cannot provide the exact numerical results...\" or \"A\n    unique worst outage cannot be determined... because no worst-case ranking\n    criterion is specified\" -- applied identically to every method, 2026-09-21),\n    or ``wrong_silently`` (autonomous and wrong, with nothing flagging it -- the\n    outcome an operator most needs to see). An answer that merely *asserts* a\n    false state with no accompanying inability language (a no-tool method's\n    ``{\"converged\": false, ...}`` stub on every item, say) is not an escalation:\n    it is an autonomous wrong claim, not a declared refusal, and stays\n    wrong_silently. A method with no handoff mechanism and no declared-inability\n    language in its answer is always False here, even when its free text\n    otherwise reads as uncertain.\n    ``solved`` (no suffix) and ``escalated`` are NOT mutually exclusive on their\n    own: a verification abstention can land on an item whose underlying computed\n    state was in fact correct (verification rejected a right answer, or rejected\n    it on a condition ``solved_check`` doesn't check). ``solved_autonomously`` is\n    ``solved and not escalated`` -- escalation takes precedence, since an\n    escalated item was never an autonomous answer from the operator's point of\n    view, right or wrong. Use ``solved`` (unsuffixed) for \"was the computation\n    correct\" independent of what got surfaced (the pre-existing Solved column\n    elsewhere); use ``solved_autonomously`` only for this three-way outcome\n    split. Unconditioned on solvability, unlike ``abstained_on_solvable``: this\n    is about where every request in the run ends up, not just the solvable ones.\n",
+  "rescore": {
+    "source_report": "/Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2-reorg/power-flow-agent/results/ieee30/2026-09-25/no-llm/rule_based__smoke/raw/report.json",
+    "rescored_at": "2026-09-25T14:17:37",
+    "recompute_truth": true,
+    "trace_dirs": [
+      "/Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2-reorg/power-flow-agent/results/ieee30/2026-09-25/no-llm/rule_based__smoke/raw/traces"
+    ],
+    "n_rows": 3,
+    "sources": {
+      "trace": {
+        "file": 3
+      },
+      "truth": {
+        "recomputed": 3
+      },
+      "metrics": {
+        "recomputed:trace": 3
+      }
+    },
+    "n_solver_runs": 6,
+    "previous_scoreboard": [
+      {
+        "model": "none:rule_based",
+        "task": "rule_based",
+        "method": "rule_based",
+        "condition": "normal",
+        "success_rate": 1.0,
+        "solved_rate": 1.0,
+        "solved_count": 3,
+        "solved_total": 3,
+        "voltage_mae_mean": 2.151342011141249e-07,
+        "voltage_mae_formulation_exact_mean": 2.151342011141249e-07,
+        "voltage_mae_pq_mean": 2.6891775136490057e-07,
+        "flow_mae_mean": 0.0002281313627899819,
+        "flow_mae_formulation_exact_mean": 0.0002281313627899819,
+        "kcl_mean_mismatch_mw_formulation_exact_mean": 0.00017781495296745773,
+        "feasible_rate": 1.0,
+        "loading_rmse_mean": 0.0029392162339035295,
+        "voltage_f1_mean": 1.0,
+        "thermal_f1_mean": 1.0,
+        "convergence_match_rate": 1.0,
+        "convergence_match_count": 3,
+        "convergence_match_total": 3,
+        "prompt_tokens_mean": 0.0,
+        "completion_tokens_mean": 0.0,
+        "total_tokens_mean": 0.0,
+        "cost_usd_mean": 0.0,
+        "cost_usd_total": 0.0,
+        "n_items": 3,
+        "formulation_exact_rate": 1.0,
+        "formulation_exact_count": 3,
+        "formulation_exact_total": 3,
+        "formulation_error_counts": {
+          "ok": 3,
+          "wrong_id": 0,
+          "wrong_unit_or_value": 0,
+          "invalid_value": 0,
+          "extra_arg_changes_result": 0,
+          "missed_step": 0,
+          "extra_step": 0,
+          "unparsed": 0
+        },
+        "faithful_numbers_mean": 1.0,
+        "faithful_answers_rate": 1.0,
+        "faithful_answers_count": 3,
+        "faithful_answers_total": 3,
+        "n_untraceable_numbers_mean": 0.0,
+        "safe_failure_rate": null,
+        "safe_failure_count": 0,
+        "safe_failure_total": 0,
+        "claimed_success_on_failure_rate": null,
+        "claimed_success_on_failure_count": 0,
+        "claimed_success_on_failure_total": 0,
+        "abstained_on_solvable_rate": 0.0,
+        "abstained_on_solvable_count": 0,
+        "abstained_on_solvable_total": 3,
+        "escalated_rate": 0.0,
+        "escalated_count": 0,
+        "escalated_total": 3,
+        "solved_autonomously_rate": 1.0,
+        "solved_autonomously_count": 3,
+        "solved_autonomously_total": 3,
+        "wrong_silently_rate": 0.0,
+        "wrong_silently_count": 0,
+        "wrong_silently_total": 3,
+        "stale_state_rate": 0.0,
+        "stale_state_count": 0,
+        "stale_state_total": 3,
+        "stale_state_no_rerun_rate": 0.0,
+        "stale_state_no_rerun_count": 0,
+        "stale_state_no_rerun_total": 3,
+        "stale_state_quoted_old_rate": 0.0,
+        "stale_state_quoted_old_count": 0,
+        "stale_state_quoted_old_total": 3,
+        "converged_rate": 1.0,
+        "kcl_mean_mismatch_mw_mean": 0.00017781495296745773,
+        "power_balance_error_mean": 9.473903143468002e-15,
+        "n_llm_calls_mean": 0.0,
+        "n_tool_calls_mean": 2.6666666666666665,
+        "n_tool_rounds_mean": 1.0,
+        "wall_time_s_mean": 0.09669212496373802,
+        "verification_pass_first_rate": null,
+        "verification_pass_retry_rate": null,
+        "verification_abstained_rate": null,
+        "verification_abstained_retry_mutation_rate": null,
+        "verification_total": 0,
+        "v_pass_rate": 1.0,
+        "v_pass_count": 3,
+        "v_pass_total": 3,
+        "common_n": 3,
+        "common_solved_rate": 1.0,
+        "common_escalated_rate": 0.0,
+        "common_wrong_rate": 0.0,
+        "common_solved_count": 3,
+        "common_escalated_count": 0,
+        "common_wrong_count": 0,
+        "common_formulation_rate": 1.0,
+        "common_formulation_count": 3,
+        "common_formulation_total": 3,
+        "common_voltage_mae_mean": 2.151342011141249e-07,
+        "common_flow_mae_mean": 0.0002281313627899819,
+        "common_kcl_mismatch_mean": 0.00017781495296745773,
+        "common_voltage_mae_solved_mean": 2.151342011141249e-07,
+        "common_traceable_rate": 1.0,
+        "common_traceable_count": 3,
+        "common_traceable_total": 3,
+        "common_reported_state_rate": 1.0
+      }
+    ]
+  }
+}

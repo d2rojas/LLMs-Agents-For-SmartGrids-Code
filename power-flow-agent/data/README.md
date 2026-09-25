@@ -1,7 +1,7 @@
 # data/
 
 - `matpower/<case>/<date>/<case>.m`: MATPOWER case files (IEEE 14, 30, 57, 118, 300 bus) as
-  fetched by `scripts/fetch_matpower_cases.py`. `solver/case_loader.py` reads them; the
+  fetched by `data/fetch_matpower_cases.py`. `solver/case_loader.py` reads them; the
   benchmark perturbs loads and setpoints around the base case (`--k 1`) so the models cannot
   answer from memory.
 - Requests are not stored here. `benchmarks/requests.py` generates them deterministically from
