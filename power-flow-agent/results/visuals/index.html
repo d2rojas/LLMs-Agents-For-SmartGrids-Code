@@ -21,6 +21,12 @@ main{flex:1;min-width:0;display:flex;overflow:auto}iframe{border:0;width:100%;he
 .stg:hover{border-color:var(--acc)}.stg .n{display:inline-flex;width:26px;height:26px;border-radius:50%;background:var(--side);color:#fff;align-items:center;justify-content:center;font-weight:700;font-size:12px;margin-bottom:10px}
 .stg h3{margin:0 0 6px;font-size:16px}.stg p{margin:0;color:var(--muted);font-size:13.5px}.stg .st{margin-top:12px;font-size:12px;font-weight:600;color:var(--acc)}
 .stg.off{opacity:.55;cursor:default}.stg.off:hover{border-color:var(--line)}.stg.off .st{color:var(--muted)}
+.prob{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin:0 0 22px;box-shadow:0 1px 2px rgba(15,23,42,.06),0 4px 14px rgba(15,23,42,.05)}
+.prob h2{margin:0 0 10px;font-size:17px}.prob p{margin:0 0 10px;font-size:14px;max-width:860px}.prob .g{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:14px}@media(max-width:800px){.prob .g{grid-template-columns:1fr}}
+.prob .b{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}.prob .b h4{margin:0 0 6px;font-size:13px}.prob .b p,.prob .b li{font-size:13px;color:#334155;margin:0}.prob .b ul{margin:0;padding-left:18px}
+.req{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;background:#0f1b2d;color:#e2e8f0;border-radius:8px;padding:10px 12px;margin:8px 0 4px}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11.5px;font-weight:600;margin-right:4px}.tag.ok{background:#e6f4ea;color:#166534}.tag.esc{background:#fdf0e3;color:#9a5b0a}.tag.bad{background:#fdecec;color:#991b1b}
+#home h2.sec{font-size:13px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
 #home .why{margin-top:26px;background:#eef2fb;border:1px solid #d6e0f7;border-radius:12px;padding:14px 18px;color:#1e293b;font-size:13.5px;max-width:900px}
 @media(max-width:800px){aside{position:fixed;top:48px;bottom:0;left:0;transform:translateX(-100%);transition:transform .2s;z-index:10}aside.open{transform:none}.top .burger{display:block}.top .note{display:none}}
 </style></head><body>
@@ -45,13 +51,22 @@ main{flex:1;min-width:0;display:flex;overflow:auto}iframe{border:0;width:100%;he
 <div class='grp'><span class='n'>3</span>Analysis</div>
 <span class='off'>Comparisons &amp; conclusions<small>written after the results exist</small></span>
 </aside>
-<main><section id='home'><h1>PFAgent · IEEE 14-bus evaluation</h1><p class='lead'>Six ways to answer the same 40 power-flow requests, from a deterministic parser to the solver-grounded agent, scored by one evaluator. The work is kept in three stages, so that conclusions come from recorded results and not from expectations.</p>
+<main><section id='home'><h1>PFAgent · IEEE 14-bus evaluation</h1><p class='lead'>Can a language model act as a power-flow analyst an operator can trust? This evaluation asks that of six ways to answer the same requests, from a deterministic parser to the solver-grounded agent, on the same network, with the same scoring.</p>
+<div class='prob'><h2>The problem</h2><p>An operator writes a request in plain English about the IEEE 14-bus network: run the power flow, change a load, take a line out, scan every single outage. Somebody has to turn that sentence into the right solver operations with the right arguments, compute the result, and report the numbers the operator needs, in the units they expect. Today that somebody is an engineer with a power-flow tool. The question is what happens when it is a language model.</p>
+<div class='req'>"Load the 14-bus test case (case14), set the active load at bus 4 to 42.7 MW, disconnect the line between bus 3 and bus 4, reconnect the line between bus 3 and bus 4, and finally rerun the power flow, then list every line whose loading is above 80%."</div>
+<p style='font-size:12.5px;color:var(--muted)'>One of the 40 requests. Ten are plain, ten state a value or a criterion, ten chain several operations, ten are ambiguous on purpose (numbers spelled out, units in kW, 0-based indices).</p>
+<div class='g'>
+<div class='b'><h4>What a correct answer needs</h4><ul><li><b>Formulation:</b> the right operations, in order, with the arguments the request implies and nothing invented.</li><li><b>Numbers:</b> voltages, flows, losses and violations of the resulting state, within tolerance of the solver's solution.</li><li><b>The operator's answer:</b> the bus, the line, the ranking, or the list that was asked for.</li></ul></div>
+<div class='b'><h4>What can go wrong</h4><ul><li>Plausible numbers that are not the solver's: <b>wrong, presented as right</b>.</li><li>A right-looking plan with a wrong argument: the wrong bus, a made-up MVAr value, an index off by one.</li><li>Answering a request that cannot be completed instead of saying so.</li></ul></div>
+<div class='b'><h4>What we expect from PFAgent</h4><p>Every reported number comes from PandaPower and passes a verification gate before it reaches the operator. When the gate cannot pass, the request is <b>escalated</b> to a person rather than answered. The target for the solver-grounded row: <span class='tag ok'>solved</span> + <span class='tag esc'>escalated</span> = 100%, <span class='tag bad'>wrong, unflagged</span> = 0%.</p></div>
+</div></div>
+<h2 class='sec'>Three stages</h2>
 <div class='stages'>
 <a class='stg' href='#design/overview'><span class='n'>1</span><h3>Design</h3><p>Methods, prompts, the answer object every method returns, the evaluator and the run plan with its cost. Written before any run: no numbers, no verdicts.</p><div class='st'>Open the design →</div></a>
 <a class='stg' href='#results/table'><span class='n'>2</span><h3>Results</h3><p>The numbers and every trace, exactly as the runs produced them. The table, the same scenario under each method, and a viewer for any run.</p><div class='st'>Open the results →</div></a>
 <span class='stg off'><span class='n'>3</span><h3>Analysis</h3><p>Comparisons, failure catalogue and conclusions, written only from the results. Comes last.</p><div class='st'>After the runs</div></span>
 </div>
-<div class='why'><b>Why three stages.</b> The design is approved before the money is spent. The results are recorded before anyone interprets them. The conclusions cite the results.</div>
+<div class='why'><b>Why three stages.</b> The design is approved before the money is spent. The results are recorded before anyone interprets them. The conclusions cite the results, not expectations.</div>
 </section><iframe id='frame' title='content' hidden></iframe></main>
 </div>
 <script>
