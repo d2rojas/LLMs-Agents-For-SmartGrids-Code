@@ -23,7 +23,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 import methods  # noqa: E402
 from baselines import rule_based  # noqa: E402
 from benchmarks import metrics as bm, scoring as bs  # noqa: E402
-from benchmarks.evaluate_llms import declared_formulation_check, perturbed_case, perturbing_dispatcher  # noqa: E402
+from benchmarks.evaluate_llms import perturbed_case, perturbing_dispatcher  # noqa: E402
 from benchmarks.requests import generate_requests  # noqa: E402
 from llm.engine import LLMEngine, SessionState, verify_final_answer  # noqa: E402
 from llm.prompt_variants import build_messages  # noqa: E402
@@ -39,13 +39,9 @@ ROWS: List[Dict[str, Any]] = [
     {"key": "rule_based", "label": "Deterministic parser", "sub": "no LLM", "runner": "rule_based", "formulates": "fixed regex rules", "computes": "PandaPower", "sees": "—", "gate": "none",
      "story": "The conventional automation baseline: a hand-written parser maps the request to solver calls. Everything it cannot parse, it cannot do."},
     {"key": "llm_only_structured", "label": "Structured prompting", "sub": "LLM only, no tools", "runner": "llm_only:structured", "formulates": "the LLM, implicitly", "computes": "the LLM, by hand", "sees": "—", "gate": "none",
-     "story": "The model gets the full case tables in the prompt and must return the power-flow numbers itself, or set converged to false if it cannot.",
-     "companions": [("formulation_probe:structured", "Formulation: measured by a companion probe that asks only for the solver operations the request needs, never numbers."),
-                    ("llm_only_forced:structured", "Voltage and balance error on gpt-4o-mini: measured on the same prompt without the abstention clause, so the model must report numbers.")]},
+     "story": "The model gets the full case tables in the prompt and must return the power-flow numbers itself, or set converged to false if it cannot. It makes no tool calls, so Formulation does not apply; its error is measured on the answers that report numbers."},
     {"key": "llm_only_cot", "label": "Chain-of-thought prompting", "sub": "LLM only, no tools", "runner": "llm_only:cot", "formulates": "the LLM, implicitly", "computes": "the LLM, by hand", "sees": "—", "gate": "none",
-     "story": "Same as structured, plus a reasoning section that asks the model to think step by step before the final JSON.",
-     "companions": [("formulation_probe:cot", "Formulation: measured by the companion probe, chain-of-thought variant."),
-                    ("llm_only_forced:cot", "Voltage and balance error on gpt-4o-mini: measured on the forced variant.")]},
+     "story": "Same as structured, plus a reasoning section that asks the model to think step by step before the final JSON."},
     {"key": "plan_act_nogate", "label": "Plan-and-Act", "sub": "LLM + solver", "runner": "plan_act_nogate", "formulates": "the LLM, whole plan at once", "computes": "PandaPower", "sees": "no: commits before seeing any result", "gate": "none",
      "story": "One planning call writes the complete list of tool calls as JSON; the executor runs them; the LLM writes the answer from the outputs."},
     {"key": "react_nogate", "label": "ReAct", "sub": "LLM + solver", "runner": "react_nogate", "formulates": "the LLM, one call at a time", "computes": "PandaPower", "sees": "yes, up to 8 rounds", "gate": "none",
@@ -58,10 +54,6 @@ RUN_PLAN = [  # (runner, models, note)
     ("rule_based", [], "free, no LLM"),
     ("llm_only:structured", ["gpt-4o-mini"], "gpt-4o-mini rerun (its 2026-09-16 prompt predates a fix); gpt-5.6-sol reused from 2026-09-21, prompt unchanged"),
     ("llm_only:cot", [], "both reused (gpt-4o-mini 2026-09-18, gpt-5.6-sol 2026-09-21), prompt unchanged"),
-    ("llm_only_forced:structured", ["gpt-4o-mini"], "companion: forced variant"),
-    ("llm_only_forced:cot", ["gpt-4o-mini"], "companion: forced variant"),
-    ("formulation_probe:structured", MODELS, "companion probe; catalogue now explains the N-1 arguments"),
-    ("formulation_probe:cot", MODELS, "companion probe"),
     ("plan_act_nogate", MODELS, "planner catalogue and tool schema now explain the N-1 arguments"),
     ("react_nogate", MODELS, "tool schema now explains the N-1 arguments; messages stored"),
     ("pfagent", MODELS, "tool schema; V6 now covers max_candidates; messages stored"),
@@ -217,7 +209,7 @@ select{font:inherit;padding:5px 8px;max-width:760px}a.lnk{color:var(--acc);text-
     H.append("<div class='card'><h2>Who receives what</h2><p class='muted'>Derived from the assembled prompts, not typed by hand. Green: the method receives it. Red: it does not. Grey: not applicable.</p><table><tr><th>method</th>" + "".join(f"<th>{E(c)}</th>" for c in cols) + "</tr>")
     for label, row in matrix:
         H.append(f"<tr><td><b>{E(label)}</b></td>" + "".join(f"<td style='background:{'#e6f4ea' if v.startswith('yes') or v.startswith('final') else ('#f3f4f6' if v in ('n/a', 'fixed rules') else '#fdecec')}'>{E(v)}</td>" for v in row.values()) + "</tr>")
-    H.append("</table><p class='muted'>The prompting methods get no tools by design; their Formulation is measured by the companion probes, which receive the operations catalogue with allowed values and the indexing rule, so that the comparison is on understanding the request, not on information.</p></div></div>")
+    H.append("</table><p class='muted'>The prompting methods get no tools by design: Formulation does not apply to them, and their numbers are the model's own arithmetic.</p></div></div>")
 
     # ---------------- scenarios
     H.append("<div class='tab' id='tab-scenarios'>")
@@ -231,7 +223,7 @@ select{font:inherit;padding:5px 8px;max-width:760px}a.lnk{color:var(--acc);text-
 
     # ---------------- prompts
     H.append("<div class='tab' id='tab-prompts'>")
-    H.append("<div class='card'><h2>What the model receives, block by block</h2><p>Pick a scenario and a method. Each prompt is shown as the blocks it is assembled from; the colour tells the kind of block and the grey label says which file or code produces it. The case-tables block is long and collapsed; it is identical for every scenario (same perturbed network).</p><div class='legend'>" + "".join(f"<span><span class='sw' style='background:{c}'></span>{E(l)}</span>" for k, (c, l, s) in BLOCKS.items() if k in ('sys_base', 'sys_agent', 'sys_cot', 'sys_probe', 'sys_forced', 'u_data', 'u_task', 'u_reason', 'u_form', 'u_out', 'planner', 'tools')) + "</div>")
+    H.append("<div class='card'><h2>What the model receives, block by block</h2><p>Pick a scenario and a method. Each prompt is shown as the blocks it is assembled from; the colour tells the kind of block and the grey label says which file or code produces it. The case-tables block is long and collapsed; it is identical for every scenario (same perturbed network).</p><div class='legend'>" + "".join(f"<span><span class='sw' style='background:{c}'></span>{E(l)}</span>" for k, (c, l, s) in BLOCKS.items() if k in ('sys_base', 'sys_agent', 'sys_cot', 'u_data', 'u_task', 'u_reason', 'u_out', 'planner', 'tools')) + "</div>")
     all_methods = [r["runner"] for r in ROWS] + [c for r in ROWS for c, _ in r.get("companions", [])]
     labels = {r["runner"]: r["label"] for r in ROWS}
     for r in ROWS:
@@ -285,9 +277,9 @@ select{font:inherit;padding:5px 8px;max-width:760px}a.lnk{color:var(--acc);text-
 
     # ---------------- gate & scoring
     GATE = [("V1", "converged", "The last power flow the agent ran converged."), ("V2", "balance", "Active-power balance of the reported state holds within tolerance."), ("V3", "no_isolated_buses", "No bus was left isolated by the network changes."), ("V4", "faithfulness", "Every unit-bearing number in the answer appears in a tool output."), ("V5", "currency", "Those numbers come from the solve made after the last network change."), ("V6", "argument_grounding", "Every argument of a mutating tool traces to the request or to a prior tool output; a positive max_candidates on the N-1 scan must also come from the request."), ("V7", "claims_from_tools", "The answer's claims match the agent's own last solved state.")]
-    SCORING = [("Formulation", "Executed calls (or, for the prompting methods, the operations the probe declared) match the reference calls in tool, identifiers, values and order. Read-only repeats are ignored; an unpinned optional argument is accepted unless it changes the result: an unrequested q_mvar, or an N-1 max_candidates below the branch count (20 on IEEE 14)."), ("Solved", "Formulation exact and the reported numbers within tolerance of the reference (1e-3 p.u. on voltages, 1% on flows), answered by the method itself."), ("Escalated", "The method declared it could not answer: an explicit statement of inability, the round limit, or the gate rejecting every candidate. Takes precedence."), ("Wrong, unflagged", "The answer reports numbers that do not match the reference and does not say so. Solved + Escalated + Wrong = 100%."), ("Traceable", "Share of answers whose every number appears in a tool output from the last solve."), ("V_MAE, B_mean", "Bus-voltage MAE against the reference and the mean bus power-balance residual, over all requests and over the solved ones.")]
+    SCORING = [("Formulation", "Executed tool calls match the reference calls in tool, identifiers, values and order. Read-only repeats are ignored; an unpinned optional argument is accepted unless it changes the result: an unrequested q_mvar, or an N-1 max_candidates below the branch count (20 on IEEE 14)."), ("Solved", "Formulation exact and the reported numbers within tolerance of the reference (1e-3 p.u. on voltages, 1% on flows), answered by the method itself."), ("Escalated", "The method declared it could not answer: an explicit statement of inability, the round limit, or the gate rejecting every candidate. Takes precedence."), ("Wrong, unflagged", "The answer reports numbers that do not match the reference and does not say so. Solved + Escalated + Wrong = 100%."), ("Traceable", "Share of answers whose every number appears in a tool output from the last solve."), ("V_MAE, B_mean", "Bus-voltage MAE against the reference and the mean bus power-balance residual, over all requests and over the solved ones.")]
     H.append("<div class='tab' id='tab-gate'><div class='grid g2'><div class='card'><h2>Verification gate, PFAgent only</h2><p class='muted'>Runs once on the final answer. A failure is sent back to the model with the failed conditions spelled out; a second failure escalates the request.</p><table><tr><th></th><th>condition</th></tr>" + "".join(f"<tr><td><b>{a}</b><br><span class='muted'>{b}</span></td><td>{E(c)}</td></tr>" for a, b, c in GATE) + "</table></div><div class='card'><h2>Scoring, every method</h2><table><tr><th>metric</th><th>definition</th></tr>" + "".join(f"<tr><td><b>{E(a)}</b></td><td>{E(b)}</td></tr>" for a, b in SCORING) + "</table></div></div>")
-    parts = [("Engine: one request, any architecture", LLMEngine.run_with_trace), ("ReAct loop", LLMEngine._run_react), ("Plan-and-Act", LLMEngine._run_plan_act), ("How a run ends", LLMEngine._finish), ("Verification gate V1–V7", verify_final_answer), ("V6 argument grounding", bm.argument_grounding_check), ("Deterministic parser: request → calls", rule_based._parse_clause), ("Deterministic parser: run", rule_based.run), ("Formulation comparator, rules R0–R10", bm.formulation_check), ("Declared formulation (probes)", declared_formulation_check), ("Solved", bs.solved_check), ("Escalated / wrong unflagged", bs.escalation_check), ("Traceable numbers", bm.faithful_numbers)]
+    parts = [("Engine: one request, any architecture", LLMEngine.run_with_trace), ("ReAct loop", LLMEngine._run_react), ("Plan-and-Act", LLMEngine._run_plan_act), ("How a run ends", LLMEngine._finish), ("Verification gate V1–V7", verify_final_answer), ("V6 argument grounding", bm.argument_grounding_check), ("Deterministic parser: request → calls", rule_based._parse_clause), ("Deterministic parser: run", rule_based.run), ("Formulation comparator, rules R0–R10", bm.formulation_check), ("Solved", bs.solved_check), ("Escalated / wrong unflagged", bs.escalation_check), ("Traceable numbers", bm.faithful_numbers)]
     H.append("<div class='card'><h2>The code behind each step, verbatim</h2><p class='muted'>From llm/engine.py, baselines/rule_based.py, benchmarks/metrics.py and benchmarks/scoring.py in this worktree.</p>" + "".join(f"<details><summary><b>{E(t)}</b> · {E(o.__module__)}.{E(getattr(o, '__qualname__', o.__name__))} · {len(_src(o).splitlines())} lines</summary><pre>{E(_src(o))}</pre></details>" for t, o in parts) + "</div></div>")
 
     # ---------------- run plan
