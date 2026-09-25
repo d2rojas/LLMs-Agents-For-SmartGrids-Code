@@ -50,7 +50,7 @@ chain-of-thought prompting, Plan-and-Act, ReAct and PFAgent. They share one rule
 operations catalogue, one answer object and one evaluator (`evaluation/common_eval.py`);
 `results/visuals/design.html` documents all of it, prompts included. Other variants are kept
 under `methods/_archive/` for their old runs. The design runs on five IEEE systems, 14, 30, 57, 118
-and 300 buses, with the same 40-request shape on each (`--case ieee14 | ieee30 | ieee57 | ieee118 | ieee300`);
+and 300 buses, with the same 20-request shape on each (5 per difficulty) (`--case ieee14 | ieee30 | ieee57 | ieee118 | ieee300`);
 `run.py run` has no default case.
 
 `run` calls `evaluation/runner.py` with the flags the paper runs used, rescores the
@@ -67,7 +67,7 @@ Interactive UI: `streamlit run ui/app.py`.
 MATPOWER IEEE 14/30/57/118-bus cases (bundled in [`data/`](data/) and [`solver/cases/`](solver/cases/)).
 Loads and generator setpoints are perturbed around the base case (`--k 1`) to mitigate
 memorization; requests are generated deterministically from (case, N, seed) by
-`evaluation/requests.py`, N = 40 per case. Ground truth is the PandaPower solution of the
+`evaluation/requests.py`, N = 20 per case (5 per difficulty; the runs before 2026-09-25 used N = 40 on the 14-bus system). Ground truth is the PandaPower solution of the
 intended tool calls on the same perturbed case.
 
 ## Metrics
