@@ -62,7 +62,8 @@ _BASELINE_OUTPUT_SECTION = _split_baseline_template()[1].format().strip()
 
 LLM_ONLY_BUS_ID_NOTE = _read_method_text("_shared/llm_only_bus_id_note.txt")
 
-LLM_ONLY_OUTPUT_SECTION = _BASELINE_OUTPUT_SECTION + "\n\n" + LLM_ONLY_BUS_ID_NOTE
+# 2026-09-25 (v2): every method replies with the same JSON object (methods/_shared/output_contract.txt).
+LLM_ONLY_OUTPUT_SECTION = _read_method_text("_shared/output_contract.txt")
 
 SINGLE_CALL_OUTPUT_SECTION = _read_method_text("single_call_structured/output_section.txt")
 

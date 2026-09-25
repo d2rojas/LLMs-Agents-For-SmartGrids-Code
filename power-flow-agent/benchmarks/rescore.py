@@ -417,6 +417,20 @@ def rescore_row(
     if trace is not None:
         new.update(bm.cost_from_trace(trace))
 
+    # v2 (2026-09-25): the one evaluator every method shares, recomputed from the answer JSON
+    from benchmarks.common_eval import score_common
+
+    try:
+        new.update(score_common(
+            answer_text=raw, truth=truth_result, truth_answer=truth_answer, expected_outcome=row.get("expected_outcome"),
+            reference_solvable=reference_solvable, trace=trace, intended_calls=list(row.get("intended_calls") or []),
+            executed_calls=new.get("executed_calls") if has_tools else None, has_tools=has_tools,
+            preloaded_case=str(row.get("case_name")) if spec.preload_case else None, request_text=request_text,
+            solver_config=solver_config, net=truth_net if (not has_tools or formulation_exact is True) else None,
+        ))
+    except Exception as exc:  # never let the evaluator break a rescore
+        new.update({"common_outcome": None, "common_reason": f"evaluator error: {type(exc).__name__}: {exc}"})
+
     from llm.engine import verify_final_answer
 
     new["v_pass"] = bool(verify_final_answer(trace or {}, raw or "", request_text=request_text)["passed"])

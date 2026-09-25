@@ -20,13 +20,13 @@ from methods import prompt_hash, read_text, system_prompt_for, planner_prompt_fo
 # Hashes of the raw texts, recorded from the module constants on 2026-09-23 before the
 # constants were moved to methods/*.txt.
 PINNED_TEXTS = {
-    "_shared/agent_system_prompt.txt": "7da5e2a37ec4",
+    "_shared/agent_system_prompt.txt": "2efb17dd2582",
     "_shared/agent_system_prompt_zh_ui.txt": "96e8ca25a690",
-    "_shared/llm_only_system_prompt.txt": "e6649caa90af",
+    "_shared/llm_only_system_prompt.txt": "a898139a82c8",
     "_shared/llm_only_user_template.txt": "27694cb49698",
     "_shared/llm_only_bus_id_note.txt": "2fe74c2cfcd8",
     "_shared/cot_system_suffix.txt": "1847f5d898fb",
-    "_shared/final_answer_instruction.txt": "98fdc16e073d",
+    "_shared/final_answer_instruction.txt": "b75a1298bbb1",
     "llm_only_cot/reasoning_section.txt": "bad7f5c07dde",
     "llm_only_nr/reasoning_section.txt": "36a6acb2c5d7",
     "llm_only_forced_structured/escape_clause_removed.txt": "728177f8847a",
@@ -36,24 +36,26 @@ PINNED_TEXTS = {
     "single_call_cot/reasoning_section.txt": "e0bd7a11b9d9",
     "plan_act/plan_system_prompt_structured.txt": "5e9fee34a0db",
     "plan_act/plan_system_prompt_prefix.txt": "6519a84e612a",
+    "_shared/common_rules.txt": "95a47a1faefe",
+    "_shared/output_contract.txt": "7254b2ddd0d6",
     "_shared/formulation_probe_system_prompt.txt": "4f70e94323e1",
     "_shared/formulation_probe_section.txt": "537f737bee76",
     "_shared/formulation_probe_output_section.txt": "7781da365dcd",
 }
 
-# ``system_prompt_hash`` values found on the rows of the N=40 case14 runs that fill Table 5
-# (results_validation_split_tool_launch, results_validation_sol_n40_clean, 2026-09-21).
+# v2 (2026-09-25): one shared rules block and one output contract for every method; the
+# 2026-09-21 runs were stamped 7da5e2a37ec4 (agents), 23e5d9b407f9 (single_call), 1b4712c641b5 / 063482ad676f (llm_only).
 PINNED_SYSTEM_PROMPTS = {
-    "react": "7da5e2a37ec4",
-    "react_nogate": "7da5e2a37ec4",
-    "plan_act": "7da5e2a37ec4",
-    "plan_act_nogate": "7da5e2a37ec4",
-    "pfagent": "7da5e2a37ec4",
-    "single_call:structured": "23e5d9b407f9",
-    "llm_only:structured": "1b4712c641b5",
-    "llm_only:cot": "063482ad676f",
-    "llm_only_forced:structured": "3fdf007e43a0",
-    "llm_only_forced:cot": "563a38e7a450",
+    "react": "2efb17dd2582",
+    "react_nogate": "2efb17dd2582",
+    "plan_act": "2efb17dd2582",
+    "plan_act_nogate": "2efb17dd2582",
+    "pfagent": "2efb17dd2582",
+    "single_call:structured": "f1d16f4e43bf",
+    "llm_only:structured": "183abd966fbd",
+    "llm_only:cot": "be09b0a3b7d2",
+    "llm_only_forced:structured": "16554a4d37ce",
+    "llm_only_forced:cot": "caab80817184",
     # 2026-09-23: Formulation for the prompting rows comes from this companion probe (no numbers asked)
     "formulation_probe:structured": "4f70e94323e1",
     "formulation_probe:cot": "324529448686",

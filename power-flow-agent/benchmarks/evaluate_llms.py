@@ -942,6 +942,7 @@ def evaluate_item(
 
     try:
         declared: Optional[list[dict[str, Any]]] = None
+        net = None
         if item.truth_error:
             raise RuntimeError(item.truth_error)
 
@@ -1196,6 +1197,18 @@ def evaluate_item(
     # precedence for this outcome triple; see benchmarks.scoring's module docstring.
     solved_autonomously = solved["solved"] and not escalated
     wrong_silently = (not solved["solved"]) and not escalated
+    # v2 (2026-09-25): the one evaluator every method shares, scored from the answer JSON
+    from benchmarks.common_eval import score_common
+
+    try:
+        common = score_common(
+            answer_text=raw_text, truth=item.truth, truth_answer=truth_answer, expected_outcome=item.expected_outcome,
+            reference_solvable=reference_solvable, trace=trace, intended_calls=item.intended_calls, executed_calls=executed,
+            has_tools=has_tools, preloaded_case=preloaded_case, request_text=item.text, solver_config=solver_config,
+            net=(ctx.net if (has_tools and formulation.get("formulation_exact") is True) else (net if method.kind in ("task", "llm_only") else None)),
+        )
+    except Exception as exc:  # never let the new evaluator break a run
+        common = {"common_outcome": None, "common_reason": f"evaluator error: {type(exc).__name__}: {exc}"}
     cost = bm.cost_from_trace(trace)
     cost_usd = _estimate_cost_usd(model_spec.key, usage, pricing) if method.uses_llm else 0.0
 
@@ -1250,6 +1263,7 @@ def evaluate_item(
         "intended_calls": item.intended_calls,
         "executed_calls": executed,
         "declared_formulation": declared,
+        **common,
         "formulation_exact": formulation.get("formulation_exact"),
         "formulation_error_type": formulation.get("formulation_error_type"),
         "formulation_detail": formulation.get("detail"),
@@ -1297,6 +1311,14 @@ def evaluate_item(
 
 
 def _aggregate_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    out = _aggregate_group_legacy(rows)
+    from benchmarks.common_eval import aggregate_common
+
+    out.update(aggregate_common(rows))
+    return out
+
+
+def _aggregate_group_legacy(rows: list[dict[str, Any]]) -> dict[str, Any]:
     ok_rows = [r for r in rows if r.get("ok")]
     # Rows whose formulation was exact, or n/a (LLM-only methods have no formulation
     # step, so "not False" -- True or None -- keeps them, matching voltage_mae_mean's

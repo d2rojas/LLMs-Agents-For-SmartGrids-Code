@@ -84,7 +84,30 @@ def select_rows(report: Dict[str, Any], *, method: Optional[str], model: Optiona
     if condition:
         rows = [r for r in rows if (r.get("condition") or report.get("config", {}).get("condition") or "normal") == condition]
     rows.sort(key=lambda r: (str(r.get("case_name")), str(r.get("request_id")), int(r.get("run") or 0)))
+    for r in rows:
+        _overlay_common(r)
     return rows
+
+
+def _overlay_common(r: Dict[str, Any]) -> None:
+    """v2 rows carry the unified evaluator's verdict (common_*); make it the verdict every renderer reads."""
+    oc = r.get("common_outcome")
+    if oc is None:
+        return
+    r["_unified"] = True
+    r["escalated"] = oc == "escalated"
+    r["wrong_silently"] = oc == "wrong_unflagged"
+    r["solved_autonomously"] = oc == "solved"
+    r["solved"] = bool(r.get("common_solved"))
+    r["solved_reason"] = r.get("common_reason")
+    r["failure_detection_path"] = r.get("common_escalation_reason")
+    r["formulation_exact"] = r.get("common_formulation_exact")
+    r["formulation_error_type"] = r.get("common_formulation_error_type") if r.get("common_formulation_exact") is not None else None
+    r["formulation_detail"] = r.get("common_formulation_detail")
+    r["faithful_answers"] = r.get("common_traceable")
+    r["n_numbers"] = r.get("common_n_numbers")
+    r["n_untraceable_numbers"] = r.get("common_n_untraceable")
+    r["metrics"] = {"voltage_mae": r.get("common_voltage_mae"), "flow_mae": r.get("common_flow_mae"), "kcl_mean_mismatch_mw": r.get("common_kcl_mismatch_mw"), "bus_coverage": r.get("common_bus_coverage")}
 
 
 def find_trace_file(raw_dir: Path, row: Dict[str, Any]) -> Optional[Path]:
@@ -616,7 +639,7 @@ def render_report(header: Dict[str, Any], rows: List[Dict[str, Any]], agg: Dict[
     out: List[str] = []
     out.append(f"# {method_name} on {CASE_ALIASES.get(str(header.get('case')), header.get('case'))} with {header.get('model_short') or _model_short(header.get('model'))}")
     out.append("")
-    out.append(f"Generated {_dt.datetime.now().strftime('%Y-%m-%d %H:%M')} by benchmarks/postprocess.py from `{Path(header.get('report_file', '')).name}`. Runs: {n}.")
+    out.append(f"Generated {_dt.datetime.now().strftime('%Y-%m-%d %H:%M')} by benchmarks/postprocess.py from `{Path(header.get('report_file', '')).name}`. Runs: {n}." + (" Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method." if any(r.get('_unified') for r in rows) else ""))
     out.append("")
     out.append("## Run")
     out.append("")
@@ -693,7 +716,11 @@ def render_report(header: Dict[str, Any], rows: List[Dict[str, Any]], agg: Dict[
         out.append("")
         out.append("| metric | runner scoreboard | this report |")
         out.append("|---|---:|---:|")
+        unified = any(r.get("_unified") for r in rows)
         pairs = [
+            ("common_solved_count", agg["solved_autonomously"]), ("common_escalated_count", agg["escalated"]), ("common_wrong_count", agg["wrong_unflagged"]),
+            ("common_formulation_count", agg["formulation_exact"]), ("common_traceable_count", agg["traceable_answers"]), ("common_n", n),
+        ] if unified else [
             ("solved_autonomously_count", agg["solved_autonomously"]), ("escalated_count", agg["escalated"]), ("wrong_silently_count", agg["wrong_unflagged"]),
             ("formulation_exact_count", agg["formulation_exact"]), ("v_pass_count", agg["v_pass"]), ("faithful_answers_count", agg["traceable_answers"]), ("n_items", n),
         ]

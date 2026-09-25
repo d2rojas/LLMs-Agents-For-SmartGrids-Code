@@ -57,7 +57,7 @@ def test_output_format_identical_within_mode(net, mode):
     expected = LLM_ONLY_OUTPUT_SECTION if mode == "llm_only" else SINGLE_CALL_OUTPUT_SECTION
     for strategy in STRATEGIES:
         user = _user(build_messages(strategy, mode, REQUEST, net, "case14"))
-        assert user.rstrip().endswith(expected), (strategy, mode)
+        assert user.rstrip().endswith(expected.rstrip()), (strategy, mode)
         assert user.count("## Output Requirements") == 1
 
 

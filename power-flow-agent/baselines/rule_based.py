@@ -308,6 +308,38 @@ def _summarize(tool: str, out: Dict[str, Any]) -> str:
     return f"{tool}: done."
 
 
+def contract_answer(outputs: List[Dict[str, Any]], derived: List[Dict[str, Any]], lines: List[str], *, ok: bool, cannot: Optional[str] = None) -> str:
+    """The parser's answer in the common output contract (methods/_shared/output_contract.txt),
+    built from the last power-flow state the solver returned (2026-09-25, v2). The same JSON
+    every LLM method must return, so every method is scored by the same evaluator."""
+    pf: Dict[str, Any] = {}
+    for rec in outputs:
+        o = rec.get("output") or {}
+        if isinstance(o, dict) and "bus_voltages" in o:
+            pf = o
+    if cannot is None and not ok:
+        errs = [str(rec["output"].get("error")) for rec in outputs if isinstance(rec.get("output"), dict) and rec["output"].get("error")]
+        cannot = "; ".join(errs) or "a tool call failed"
+    converged = bool(pf.get("converged")) if pf else False
+    body: Dict[str, Any] = {
+        "converged": converged if cannot is None else False,
+        "summary": " ".join(lines)[:600] if lines else (cannot or ""),
+        "answer": " ".join(d.get("text") for d in derived if d.get("text")) or (lines[-1] if lines else (cannot or "")),
+        "bus_voltages": [{"bus_id": b.get("bus_id"), "vm_pu": b.get("vm_pu"), "va_deg": b.get("va_deg")} for b in (pf.get("bus_voltages") or [])] if cannot is None else [],
+        "line_flows": [{"line_id": l.get("line_id"), "from_bus": l.get("from_bus"), "to_bus": l.get("to_bus"), "p_from_mw": l.get("p_from_mw"), "loading_percent": l.get("loading_percent")} for l in (pf.get("line_flows") or [])] if cannot is None else [],
+        "total_generation_mw": float(pf.get("total_generation_mw") or 0.0) if cannot is None else 0.0,
+        "total_load_mw": float(pf.get("total_load_mw") or 0.0) if cannot is None else 0.0,
+        "total_loss_mw": float(pf.get("total_loss_mw") or 0.0) if cannot is None else 0.0,
+        "violations": {
+            "voltage": [{"bus_id": b.get("bus_id"), "vm_pu": b.get("vm_pu")} for b in (pf.get("voltage_violations") or [])] if cannot is None else [],
+            "thermal": [{"line_id": l.get("line_id"), "loading_percent": l.get("loading_percent")} for l in (pf.get("thermal_violations") or [])] if cannot is None else [],
+        },
+        "next_step": "Review the listed violations and consider remedial actions." if (pf.get("voltage_violations") or pf.get("thermal_violations")) else "No violations in the reported state; no action needed.",
+        "cannot_answer": cannot,
+    }
+    return json.dumps(body, ensure_ascii=False)
+
+
 def run(request_text: str, ctx: ToolContext, dispatcher: Optional[ToolDispatcher] = None) -> Dict[str, Any]:
     """Parse and execute a request through the real ToolDispatcher.
 
@@ -327,7 +359,7 @@ def run(request_text: str, ctx: ToolContext, dispatcher: Optional[ToolDispatcher
             "warnings": [],
             "outputs": [],
             "derived": [],
-            "answer": f"I cannot parse this request (unsupported phrasing: {e.clause!r}). No action was taken.",
+            "answer": contract_answer([], [], [], ok=False, cannot=f"I cannot parse this request (unsupported phrasing: {e.clause!r}). No action was taken."),
         }
 
     if dispatcher is None:
@@ -364,5 +396,5 @@ def run(request_text: str, ctx: ToolContext, dispatcher: Optional[ToolDispatcher
         "warnings": parsed["warnings"],
         "outputs": outputs,
         "derived": derived,
-        "answer": "\n".join(lines),
+        "answer": contract_answer(outputs, derived, lines, ok=ok),
     }
