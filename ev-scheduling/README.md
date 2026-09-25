@@ -10,7 +10,7 @@ This project builds a day-ahead EV charging scheduler for a shared parking facil
 | `baseline/` | Direct LLM prompting baseline |
 | `config/` | Site constraints, TOU rates, experiment configs |
 | `constraints/` | Constraint checker (availability, per-charger, site cap, energy) |
-| `data/` | ACN-Data loader and standardized session format |
+| `data/` | ACN-Data loader, standardized session format, frozen benchmark days, synthetic fixtures |
 | `evaluation/` | Metrics, benchmark runner, faithfulness evaluation |
 | `optimization/` | CVXPY cost-minimization formulation and solver |
 | `scripts/` | CLI entry points for all pipelines and benchmarks |
@@ -57,6 +57,56 @@ OPENAI_API_KEY=your_openai_key
 ```
 
 `ACN_DATA_API_TOKEN` is needed for any script that fetches live session data. `OPENAI_API_KEY` is needed for the baseline, agent, and web GUI. Neither is committed — `.env` is gitignored.
+
+## Session data
+
+Sessions come from three places, in this order of preference.
+
+| Source | Where it lives | When it is used |
+|--------|----------------|-----------------|
+| Frozen benchmark days | `data/benchmark/<site>_<date>.json` | Always, when the day is committed. No token, no network |
+| ACN-Data API | https://ev.caltech.edu | Only when the day is not frozen and `ACN_DATA_API_TOKEN` is set |
+| Synthetic fixtures | `data/benchmark/fixtures/SYNTHETIC_<site>_<date>.json` | Only when asked for explicitly |
+
+`load_sessions(site_id, day_date, ...)` resolves this automatically. A caller selects the
+source with the `source` argument (`"auto"`, `"cache"`, `"api"`, `"fixture"`) or, for scripts
+that do not pass it, with the `EV_SESSIONS_SOURCE` environment variable:
+
+```bash
+python -m scripts.run_agent --site caltech --date 2019-06-15                     # frozen day, else API
+EV_SESSIONS_SOURCE=fixture python -m scripts.run_agent_vs_baseline               # synthetic days, offline
+EV_SESSIONS_SOURCE=cache python -m scripts.run_agent_vs_baseline                 # frozen days only, never the network
+```
+
+### Freezing the benchmark days
+
+The 20 evaluation days behind the paper's §VI-B table are frozen once and then committed, so
+the benchmark reproduces without a token. With `ACN_DATA_API_TOKEN` in `.env`, from the project
+root:
+
+```bash
+python -m scripts.freeze_benchmark_days --dry-run   # list the days, fetch nothing
+python -m scripts.freeze_benchmark_days             # fetch and write the missing days
+```
+
+Each day file holds the raw API records for that day, the fetch timestamp, the record count,
+and a sha256 of the records. `data/benchmark/manifest.json` collects the same per day. Existing
+files are never overwritten without `--force`, and a day file edited after freezing fails its
+hash check on the next load.
+
+### Synthetic fixtures
+
+`data/benchmark/fixtures/` holds 20 generated days, one standing in for each benchmark date, so
+the optimizer, constraint checker, baseline, agent, and tests can run before a token is
+available. They are **not measurements**: the file name starts with `SYNTHETIC_`, the document
+carries `synthetic: true` and a warning, every session and charger ID starts with `SYNTH-`, and
+every fixture load prints a warning to stderr. Never report a number computed from them. Four of
+the days request more energy than a 50 kW cap can deliver, so they exercise the unmet-energy and
+infeasibility paths. Regenerate them (deterministically) with:
+
+```bash
+python -m data.benchmark.fixtures_gen --force
+```
 
 ## LLM model
 
