@@ -303,7 +303,7 @@ def test_ground_truth_and_method_see_the_same_perturbed_net():
     assert row["ok"] and row["k"] == 1 and row["seed"] == 3
     # the agent's final state equals the truth on the perturbed case: zero error
     assert row["metrics"]["voltage_mae"] == pytest.approx(0.0, abs=1e-6)
-    assert row["metrics"]["flow_mae"] == pytest.approx(0.0, abs=1e-6)
+    assert row["metrics"]["flow_mae"] == pytest.approx(0.0, abs=1e-3)  # flows are rounded to 3 decimals (MW)
     # ...and that truth is not the base case
     base_truth = run_power_flow(case_loader.load("case14")[0], config=SolverConfig())
     pf = _last_pf(client.calls[-1]["messages"])

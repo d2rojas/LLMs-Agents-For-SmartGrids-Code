@@ -45,7 +45,8 @@ def prompt_hash(text: str) -> str:
 
 @dataclass(frozen=True)
 class Method:
-    """One ``method.json``. ``runner_name`` is what ``evaluation/runner.py --method`` expects."""
+    """One ``method.json``. ``runner_name`` is what ``evaluation/runner.py --method`` expects; ``code`` points
+    at the file and function that run the method (see docs/ARCHITECTURE.md)."""
 
     folder: str
     runner_name: str
@@ -65,6 +66,7 @@ class Method:
     prompt_files: List[str] = field(default_factory=list)
     dynamic_parts: List[str] = field(default_factory=list)
     archived: bool = False  # under methods/_archive: runnable and scorable, but not part of the current design
+    code: str = ""  # where the code that runs this method lives (file: function)
 
     @property
     def path(self) -> Path:

@@ -105,7 +105,7 @@ def run_dir_for(case: str, model: str, m: methods.Method, *, date: str, conditio
 def cmd_list_methods(_: argparse.Namespace) -> int:
     print(f"{'folder':28s} {'runner name':27s} {'group':56s} tools  gate   final")
     for m in methods.list_methods():
-        print(f"{m.folder:28s} {m.runner_name:27s} {m.group:56s} {str(m.uses_tools):5s}  {str(m.gate):5s}  {str(m.final_gate):5s}" + ("   [archived]" if m.archived else ""))
+        print(f"{m.folder:28s} {m.runner_name:27s} {m.group:56s} {str(m.uses_tools):5s}  {str(m.gate):5s}  {str(m.final_gate):5s}" + ("   [archived]" if m.archived else "") + (f"\n{'':28s} code: {m.code}" if m.code else ""))
     print("\nDetails: run.py show-prompt --method <folder>. [archived] = under methods/_archive, not part of the current design.")
     return 0
 

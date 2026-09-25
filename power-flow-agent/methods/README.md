@@ -21,7 +21,7 @@ committed ones. Do not strip or reflow whitespace in these files.
 | `react_nogate` | `react_nogate` | ReAct loop: thought, tool call, observation, up to 8 rounds. | yes | none |
 | `pfagent` | `pfagent` | ReAct loop plus the task-level verification gate V1 to V7 on the final answer. The solver-grounded row. | yes | final gate |
 
-These six are the current design (`run.py list-methods` shows them first). Every method receives
+These six are the current design (`run.py list-methods` shows them first, with the file and function that run each one; the map is also in `docs/ARCHITECTURE.md`). Every method receives
 the same rules block (`_shared/common_rules.txt`), the same operations catalogue (`agent/tools.py`,
 rendered with the argument enums for the no-tools methods) and the same answer contract
 (`_shared/output_contract.txt`), and every method's answer is scored by the same evaluator
