@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
-"""Build results/v2_plan.html: the evaluation design, as it will run, for approval before spending.
+"""Build results/v2_plan.html: the evaluation design as an app-like page, for approval before spending.
 
-Everything on the page is generated from the code that the runner will use (methods/, llm/,
-benchmarks/requests.py): the rows to run, the 40 scenarios with their reference calls, and for
-every method the exact system prompt, the exact user message for any scenario, the tool schema
-sent through function calling, the planner prompt, the verification conditions and the scoring
-rules. Nothing is typed by hand except the section prose.
+Tabs: Overview, Methods, Scenarios, Prompts, Tools, Gate & scoring, Run plan. Everything is
+generated from the code that will run (methods/, llm/, benchmarks/requests.py, the dispatcher).
 
     .venv/bin/python benchmarks/build_plan_page.py
 """
@@ -18,61 +15,122 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import methods  # noqa: E402
-from benchmarks.evaluate_llms import perturbed_case  # noqa: E402
+from baselines import rule_based  # noqa: E402
+from benchmarks import metrics as bm, scoring as bs  # noqa: E402
+from benchmarks.evaluate_llms import declared_formulation_check, perturbed_case, perturbing_dispatcher  # noqa: E402
 from benchmarks.requests import generate_requests  # noqa: E402
-from llm import engine  # noqa: E402
+from llm.engine import LLMEngine, SessionState, verify_final_answer  # noqa: E402
 from llm.prompt_variants import build_messages  # noqa: E402
 from llm.tools import ToolContext, get_openai_tools  # noqa: E402
-from llm.engine import LLMEngine, SessionState, verify_final_answer  # noqa: E402
-from benchmarks.evaluate_llms import perturbing_dispatcher, declared_formulation_check  # noqa: E402
-from benchmarks import metrics as bm, scoring as bs  # noqa: E402
-from baselines import rule_based  # noqa: E402
 
 E = html.escape
 CASE, N, SEED, K, ROUNDS, TOOLS = "case14", 40, 0, 1, 8, "load_split"
-MODELS = ["openrouter:openai/gpt-4o-mini", "openrouter:openai/gpt-5.6-sol"]
+MODELS = ["gpt-4o-mini", "gpt-5.6-sol"]
+MODEL_IDS = {"gpt-4o-mini": "openrouter:openai/gpt-4o-mini", "gpt-5.6-sol": "openrouter:openai/gpt-5.6-sol"}
 
-# rows of Table 6 and the companion probes, in table order; (label, runner name, rerun?, why)
-ROWS = [
-    ("Deterministic parser, no LLM", "rule_based", True, "no LLM; rerun for free on the current tool set"),
-    ("Structured prompting", "llm_only:structured", None, "no tools; sol reused from 2026-09-21 (prompt unchanged); gpt-4o-mini rerun (its 2026-09-16 prompt predates a fix)"),
-    ("Chain-of-thought prompting", "llm_only:cot", False, "no tools; reused (sol 2026-09-21, gpt-4o-mini 2026-09-18), prompt unchanged"),
-    ("Structured, forced (§ cells, gpt-4o-mini)", "llm_only_forced:structured", True, "gpt-4o-mini only; rerun with the paper's answer prompt"),
-    ("Formulation probe, structured (¶ cells)", "formulation_probe:structured", True, "catalogue now explains the N-1 arguments"),
-    ("Formulation probe, chain-of-thought (¶ cells)", "formulation_probe:cot", True, "catalogue now explains the N-1 arguments"),
-    ("Single-call", "single_call:structured", True, "tool schema now explains the N-1 arguments"),
-    ("Plan-and-Act", "plan_act_nogate", True, "planner catalogue and tool schema now explain the N-1 arguments"),
-    ("ReAct", "react_nogate", True, "tool schema now explains the N-1 arguments; messages stored"),
-    ("PFAgent (ReAct + verification gate)", "pfagent", True, "tool schema; V6 now covers max_candidates; messages stored"),
+# The six rows of Table 6. Companion measurements hang off the prompting rows.
+ROWS: List[Dict[str, Any]] = [
+    {"key": "rule_based", "label": "Deterministic parser", "sub": "no LLM", "runner": "rule_based", "formulates": "fixed regex rules", "computes": "PandaPower", "sees": "—", "gate": "none",
+     "story": "The conventional automation baseline: a hand-written parser maps the request to solver calls. Everything it cannot parse, it cannot do."},
+    {"key": "llm_only_structured", "label": "Structured prompting", "sub": "LLM only, no tools", "runner": "llm_only:structured", "formulates": "the LLM, implicitly", "computes": "the LLM, by hand", "sees": "—", "gate": "none",
+     "story": "The model gets the full case tables in the prompt and must return the power-flow numbers itself, or set converged to false if it cannot.",
+     "companions": [("formulation_probe:structured", "Formulation cell (¶): companion probe that asks only for the solver operations the request needs, never numbers."),
+                    ("llm_only_forced:structured", "V_MAE / B_mean cells for gpt-4o-mini (§): same prompt without the abstention clause, so the model must report numbers.")]},
+    {"key": "llm_only_cot", "label": "Chain-of-thought prompting", "sub": "LLM only, no tools", "runner": "llm_only:cot", "formulates": "the LLM, implicitly", "computes": "the LLM, by hand", "sees": "—", "gate": "none",
+     "story": "Same as structured, plus a reasoning section that asks the model to think step by step before the final JSON.",
+     "companions": [("formulation_probe:cot", "Formulation cell (¶): companion probe, chain-of-thought variant."),
+                    ("llm_only_forced:cot", "V_MAE / B_mean cells for gpt-4o-mini (§): forced variant.")]},
+    {"key": "plan_act_nogate", "label": "Plan-and-Act", "sub": "LLM + solver", "runner": "plan_act_nogate", "formulates": "the LLM, whole plan at once", "computes": "PandaPower", "sees": "no: commits before seeing any result", "gate": "none",
+     "story": "One planning call writes the complete list of tool calls as JSON; the executor runs them; the LLM writes the answer from the outputs."},
+    {"key": "react_nogate", "label": "ReAct", "sub": "LLM + solver", "runner": "react_nogate", "formulates": "the LLM, one call at a time", "computes": "PandaPower", "sees": "yes, up to 8 rounds", "gate": "none",
+     "story": "Thought, tool call, observation, repeat. The model sees every solver output before deciding the next call."},
+    {"key": "pfagent", "label": "PFAgent", "sub": "ReAct + verification gate", "runner": "pfagent", "formulates": "the LLM, one call at a time", "computes": "PandaPower", "sees": "yes, up to 8 rounds", "gate": "final answer, V1–V7",
+     "story": "ReAct, plus a gate on the final answer: numbers must come from the last solve of a converged, connected network and every argument must trace to the request. A rejected answer is retried once, then escalated."},
 ]
-COST = {"rule_based": (0, 0), "llm_only:structured": (0.02, 0), "llm_only:cot": (0, 0), "llm_only_forced:structured": (0.05, 0), "formulation_probe:structured": (0.02, 0.25), "formulation_probe:cot": (0.02, 0.3), "single_call:structured": (0.03, 0.5), "plan_act_nogate": (0.05, 0.7), "react_nogate": (0.1, 1.5), "pfagent": (0.1, 1.5)}
-
-GATE = [
-    ("V1", "converged", "The last power flow the agent ran converged."),
-    ("V2", "balance", "Active-power balance of the reported state holds within tolerance."),
-    ("V3", "no_isolated_buses", "No bus was left isolated by the network changes."),
-    ("V4", "faithfulness", "Every unit-bearing number in the answer appears in a tool output."),
-    ("V5", "currency", "Those numbers come from the solve made after the last network change, not an earlier one."),
-    ("V6", "argument_grounding", "Every argument of a mutating tool traces to the request or to a prior tool output; since 2026-09-24 a positive max_candidates on the N-1 scan must also come from the request."),
-    ("V7", "claims_from_tools", "The answer's claims match the agent's own last solved state."),
-]
-SCORING = [
-    ("Formulation", "The executed tool calls (or, for the prompting rows, the operations the probe declared) match the reference calls in tool, identifiers, values and order. Read-only repeats are ignored; an optional argument the request did not pin is accepted unless it changes the result: an unrequested q_mvar, or an N-1 max_candidates below the branch count of the case (20 on IEEE 14)."),
-    ("Solved", "Formulation exact and the reported numbers within tolerance of the reference (1e-3 p.u. on voltages, 1% on flows), answered by the method itself."),
-    ("Escalated", "The method declared it could not answer: an explicit statement of inability, the round limit, or the verification gate rejecting every candidate. Takes precedence over the other two."),
-    ("Wrong, unflagged", "The answer reports numbers that do not match the reference and does not say so. Solved + Escalated + Wrong = 100%."),
-    ("Traceable", "Share of answers whose every number appears in a tool output from the last solve."),
-    ("V_MAE / B_mean", "Bus-voltage MAE against the reference and the mean bus power-balance residual, over all requests and over the solved ones."),
+COST = {"rule_based": (0, 0), "llm_only:structured": (0.02, 0), "llm_only:cot": (0, 0), "llm_only_forced:structured": (0.05, 0), "llm_only_forced:cot": (0.05, 0), "formulation_probe:structured": (0.02, 0.25), "formulation_probe:cot": (0.02, 0.3), "plan_act_nogate": (0.05, 0.7), "react_nogate": (0.1, 1.5), "pfagent": (0.1, 1.5)}
+RUN_PLAN = [  # (runner, models, note)
+    ("rule_based", [], "free, no LLM"),
+    ("llm_only:structured", ["gpt-4o-mini"], "gpt-4o-mini rerun (its 2026-09-16 prompt predates a fix); gpt-5.6-sol reused from 2026-09-21, prompt unchanged"),
+    ("llm_only:cot", [], "both reused (gpt-4o-mini 2026-09-18, gpt-5.6-sol 2026-09-21), prompt unchanged"),
+    ("llm_only_forced:structured", ["gpt-4o-mini"], "companion for the § cells"),
+    ("llm_only_forced:cot", ["gpt-4o-mini"], "companion for the § cells"),
+    ("formulation_probe:structured", MODELS, "companion for the ¶ cells; catalogue now explains the N-1 arguments"),
+    ("formulation_probe:cot", MODELS, "companion for the ¶ cells"),
+    ("plan_act_nogate", MODELS, "planner catalogue and tool schema now explain the N-1 arguments"),
+    ("react_nogate", MODELS, "tool schema now explains the N-1 arguments; messages stored"),
+    ("pfagent", MODELS, "tool schema; V6 now covers max_candidates; messages stored"),
 ]
 
-
+# prompt building blocks: (id, color, label, where it comes from)
+BLOCKS = {
+    "sys_base": ("#2f5fd0", "system · role and rules", "methods/_shared/llm_only_system_prompt.txt"),
+    "sys_agent": ("#2f5fd0", "system · agent role, tools, rules, reply format", "methods/_shared/agent_system_prompt.txt"),
+    "sys_forced": ("#d53f3f", "system · forced clause (abstention removed)", "methods/llm_only_forced_structured/forced_replacement.txt"),
+    "sys_cot": ("#6d4fc4", "system · reasoning-mode suffix", "methods/_shared/cot_system_suffix.txt"),
+    "sys_probe": ("#0f8f84", "system · probe role (declare, do not compute)", "methods/_shared/formulation_probe_system_prompt.txt"),
+    "u_role": ("#64748b", "user · role line", "methods/_shared/llm_only_user_template.txt"),
+    "u_data": ("#e0891a", "user · system data: the case tables", "rendered from the perturbed case (baselines/llm_only.py)"),
+    "u_task": ("#1f9d55", "user · task: the request", "benchmarks/requests.py"),
+    "u_reason": ("#6d4fc4", "user · reasoning instructions", "methods/llm_only_cot/reasoning_section.txt"),
+    "u_form": ("#0f8f84", "user · formulation: operations catalogue", "methods/_shared/formulation_probe_section.txt + llm/tools.py"),
+    "u_out": ("#c99a06", "user · output requirements (JSON schema)", "methods/_shared/llm_only_user_template.txt"),
+    "u_out_probe": ("#c99a06", "user · output requirements (formulation only)", "methods/_shared/formulation_probe_output_section.txt"),
+    "u_request": ("#1f9d55", "user · the request, verbatim", "benchmarks/requests.py"),
+    "planner": ("#6d4fc4", "planner system prompt (plan step only)", "methods/plan_act/plan_system_prompt_prefix.txt + llm/tools.py"),
+    "tools": ("#0f8f84", "tool schema (function calling)", "llm/tools.py"),
+}
 FIG = re.compile(r'"figure_json":\s*"((?:[^"\\]|\\.)*)"')
+
+
+def split_user(text: str, probe: bool) -> List[Tuple[str, str]]:
+    """Split an assembled user message into labeled blocks at its '## ' headings."""
+    heads = {"## System Data": "u_data", "## Worked Examples": "u_examples", "## Task": "u_task", "## Reasoning Instructions": "u_reason", "## Formulation": "u_form", "## Output Requirements": "u_out_probe" if probe else "u_out"}
+    parts: List[Tuple[str, str]] = []
+    idx = [(m.start(), m.group(0)) for m in re.finditer(r"^## [A-Za-z ]+", text, flags=re.M)]
+    if not idx:
+        return [("u_request", text)]
+    if idx[0][0] > 0:
+        parts.append(("u_role", text[: idx[0][0]].strip()))
+    for i, (pos, head) in enumerate(idx):
+        end = idx[i + 1][0] if i + 1 < len(idx) else len(text)
+        key = next((v for k, v in heads.items() if head.startswith(k)), "u_other")
+        parts.append((key, text[pos:end].strip()))
+    return parts
+
+
+def split_system(text: str, m: methods.Method) -> List[Tuple[str, str]]:
+    parts: List[Tuple[str, str]] = []
+    if m.kind == "llm_only" and m.probe:
+        base = methods.read_text("_shared/formulation_probe_system_prompt.txt")
+        parts.append(("sys_probe", base))
+        rest = text[len(base):]
+    elif m.kind == "llm_only":
+        base = methods.read_text("_shared/llm_only_system_prompt.txt").strip()
+        if m.forced:
+            from llm.prompt_variants import forced_system_prompt
+
+            fb = forced_system_prompt(base)
+            clause = methods.read_text("llm_only_forced_structured/forced_replacement.txt")
+            i = fb.find(clause)
+            parts.append(("sys_base", fb[:i].rstrip()))
+            parts.append(("sys_forced", clause))
+            rest = text[len(fb):]
+        else:
+            parts.append(("sys_base", base))
+            rest = text[len(base):]
+    else:
+        base = methods.read_text("_shared/agent_system_prompt.txt")
+        parts.append(("sys_agent", base))
+        rest = text[len(base):]
+    if rest.strip():
+        parts.append(("sys_cot" if "Reasoning mode" in rest else "sys_other", rest.strip()))
+    return parts
 
 
 def _src(obj: Any) -> str:
@@ -82,186 +140,186 @@ def _src(obj: Any) -> str:
         return f"(source not available: {exc})"
 
 
-def tools_section() -> str:
-    """One card per tool: description, inputs, the Python that runs it, and a real output on case14."""
-    from solver.power_flow import SolverConfig
-
-    ctx = ToolContext(session=SessionState(), solver_config=SolverConfig())
-    disp = perturbing_dispatcher(ctx, seed=SEED, k=K)
-    sample: Dict[str, Dict[str, Any]] = {
-        "load_case": {"case_name": "case14"}, "run_powerflow": {}, "get_status": {}, "get_most_loaded_branch": {},
-        "set_active_load": {"bus_id": 6, "p_mw": 14.7}, "set_load": {"bus_id": 9, "p_mw": 29.5, "q_mvar": 16.6},
-        "disconnect_line": {"from_bus": 1, "to_bus": 5}, "reconnect_line": {"from_bus": 1, "to_bus": 5},
-        "run_n1_contingency": {"top_k": 1, "criteria": "max_violations"}, "recommend_remedial_actions": {"max_actions": 2},
-        "apply_remedial_action": {"action_index": 0, "confirmed": True}, "generate_plot": {"plot_type": "voltage_heatmap"},
-    }
-    order = ["load_case", "run_powerflow", "get_status", "get_most_loaded_branch", "set_active_load", "set_load", "disconnect_line", "reconnect_line", "run_n1_contingency", "recommend_remedial_actions", "apply_remedial_action", "generate_plot"]
-    schema = {t["function"]["name"] if "function" in t else t["name"]: (t.get("function") or t) for t in get_openai_tools(variant=TOOLS)}
-    out: List[str] = ["<section><h2>3b. The tools: what each one is, its inputs, the code that runs it, and a real output</h2><p>These are the only ways any method touches the network. The schema is what the model sees through function calling; the code is the handler the dispatcher runs (PandaPower underneath); the sample output was produced now on the same perturbed case14 the runs use (seed 0, k = 1), in the order listed, so state carries from one call to the next.</p>"]
-    for name in order:
-        fn = schema.get(name, {})
-        props = (fn.get("parameters") or {}).get("properties") or {}
-        req = set((fn.get("parameters") or {}).get("required") or [])
-        inputs = "".join(f"<tr><td><code>{E(k)}</code>{'*' if k in req else ''}</td><td>{E(str(v.get('type')))}{' in {' + ', '.join(map(str, v['enum'])) + '}' if v.get('enum') else ''}</td><td>{E(str(v.get('default'))) if 'default' in v else ''}</td><td>{E(v.get('description') or '')}</td></tr>" for k, v in props.items()) or "<tr><td colspan='4' class='muted'>no inputs</td></tr>"
-        handler = disp.handlers.get(name)
-        code = _src(handler) if handler else "(no handler)"
-        args = sample.get(name, {})
-        try:
-            result = disp.dispatch(name, args)
-        except Exception as exc:
-            result = f"(error: {exc})"
-        result = FIG.sub(lambda m: f'"figure_json": "<plot, {len(m.group(1)) // 1024} KB, omitted>"', str(result))
-        out.append(f"<h3><code>{E(name)}</code> <span class='muted'>· {E(fn.get('description') or '')}</span></h3><table><tr><th>input</th><th>type</th><th>default</th><th>meaning</th></tr>{inputs}</table>"
-                   f"<details><summary>Python handler ({len(code.splitlines())} lines)</summary><pre>{E(code)}</pre></details>"
-                   f"<details open><summary>real output for <code>{E(name)}({E(', '.join(f'{k}={v!r}' for k, v in args.items()))})</code></summary><pre>{E(result if len(result) < 6000 else result[:6000] + chr(10) + '... (' + str(len(result) - 6000) + ' more chars)')}</pre></details>")
-    out.append("</section>")
+def blocks_html(parts: List[Tuple[str, str]], collapsed: Tuple[str, ...] = ("u_data",)) -> str:
+    out = []
+    for key, txt in parts:
+        color, label, src = BLOCKS.get(key, ("#94a3b8", key, ""))
+        body = f"<pre>{E(txt)}</pre>"
+        if key in collapsed:
+            body = f"<details><summary>show the {len(txt)} characters</summary>{body}</details><pre class='peek'>{E(txt[:420])}…</pre>"
+        out.append(f"<div class='blk' style='border-left-color:{color}'><div class='blk-h'><span class='sw' style='background:{color}'></span><b>{E(label)}</b><span class='src'>{E(src)}</span></div>{body}</div>")
     return "".join(out)
-
-
-def code_section() -> str:
-    parts = [
-        ("Engine: one request, any architecture (run_with_trace)", LLMEngine.run_with_trace),
-        ("ReAct loop (react_nogate, and PFAgent before its gate)", LLMEngine._run_react),
-        ("Single-call (one round, no memory)", LLMEngine._run_single_call),
-        ("Plan-and-Act (plan once, execute, answer)", LLMEngine._run_plan_act),
-        ("How a run ends (escalation text, status)", LLMEngine._finish),
-        ("Verification gate V1–V7 on the final answer (PFAgent)", verify_final_answer),
-        ("V6 argument grounding", bm.argument_grounding_check),
-        ("Deterministic parser: request → tool calls", rule_based._parse_clause),
-        ("Deterministic parser: run", rule_based.run),
-        ("Formulation comparator (the rules R0–R10)", bm.formulation_check),
-        ("Declared formulation of the probes / no-tools rows", declared_formulation_check),
-        ("Solved", bs.solved_check),
-        ("Escalated / wrong unflagged (declared inability rule)", bs.escalation_check),
-        ("Reporting: traceable numbers (V4 offline)", bm.faithful_numbers),
-    ]
-    out = ["<section><h2>8. The code behind every step, verbatim</h2><p>The actual Python from <code>llm/engine.py</code>, <code>baselines/rule_based.py</code>, <code>benchmarks/metrics.py</code> and <code>benchmarks/scoring.py</code>, as it is in this worktree. Docstrings carry the rules in words; the body is what runs.</p>"]
-    for title, obj in parts:
-        src = _src(obj)
-        out.append(f"<details><summary><b>{E(title)}</b> · {E(getattr(obj, '__module__', ''))}.{E(getattr(obj, '__qualname__', getattr(obj, '__name__', '')))} · {len(src.splitlines())} lines</summary><pre>{E(src)}</pre></details>")
-    out.append("</section>")
-    return "".join(out)
-
-
-def tools_block(variant: str) -> str:
-    return E(json.dumps(get_openai_tools(variant=variant), indent=1, ensure_ascii=False))
 
 
 def build() -> Path:
     reqs = generate_requests(CASE, N, SEED)
     net = perturbed_case(CASE, seed=SEED, k=K)
     css = """
-:root{--line:#e3e7ee;--muted:#64748b;--acc:#2f5fd0;--ok:#1f9d55;--bad:#d53f3f}body{font:14px/1.5 Inter,-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a;margin:0;background:#f3f5f8}
-header{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line);padding:10px 22px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;z-index:5}header h1{font-size:17px;margin:0}header label{font-size:13px}select{font:inherit;padding:4px 8px;max-width:640px}
-main{padding:16px 22px;max-width:1500px;margin:0 auto}section{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin-bottom:16px}h2{font-size:17px;margin:0 0 8px}h3{font-size:14.5px;margin:16px 0 6px}p{margin:6px 0}
-table{border-collapse:collapse;font-size:13px;width:100%}th,td{border:1px solid var(--line);padding:5px 8px;vertical-align:top;text-align:left}th{background:#f6f8fb}td.y{background:#e6f4ea}td.n{background:#fdecec}td.x{color:var(--muted)}
-pre{background:#fafbfd;border:1px solid var(--line);border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-word;font:12px/1.45 "JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;margin:4px 0;max-height:480px;overflow:auto}
-.muted{color:var(--muted);font-size:12.5px}.hid{display:none}details summary{cursor:pointer;color:var(--acc)}.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;color:#fff;background:var(--acc)}.tag.reuse{background:var(--muted)}
+:root{--bg:#f3f5f8;--panel:#fff;--line:#e3e7ee;--text:#0f172a;--muted:#64748b;--acc:#2f5fd0;--ok:#1f9d55;--esc:#e0891a;--bad:#d53f3f;--shadow:0 1px 2px rgba(15,23,42,.06),0 4px 14px rgba(15,23,42,.05)}
+*{box-sizing:border-box}body{margin:0;font:14px/1.5 Inter,-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:var(--text);background:var(--bg)}
+header{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line);padding:10px 22px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+header h1{font-size:17px;margin:0;letter-spacing:-.01em}.tabs{display:flex;gap:4px}.tabs button{font:inherit;font-weight:500;padding:7px 14px;border:1px solid transparent;border-radius:8px;background:transparent;cursor:pointer;color:var(--muted)}.tabs button.on{background:var(--acc);color:#fff}
+main{padding:18px 22px;max-width:1500px;margin:0 auto}.tab{display:none}.tab.on{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow);margin-bottom:12px}.card h2{font-size:16px;margin:0 0 6px}.card h3{font-size:14px;margin:12px 0 6px}
+.grid{display:grid;gap:12px}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.muted{color:var(--muted);font-size:12.5px}.chip{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:600;background:#eef1f5;color:#334155;margin:2px 4px 2px 0}.chip.acc{background:var(--acc);color:#fff}.chip.ok{background:#e6f4ea;color:#166534}.chip.bad{background:#fdecec;color:#991b1b}
+.flow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}.flow .box{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 12px;box-shadow:var(--shadow)}.flow .box b{display:block;font-size:13px}.flow .box span{font-size:12px;color:var(--muted)}.flow .arr{color:var(--muted);font-size:18px}
+table{border-collapse:collapse;width:100%;font-size:13px;background:#fff}th,td{border:1px solid var(--line);padding:6px 8px;vertical-align:top;text-align:left}th{background:#f6f8fb;font-weight:600}
+pre{background:#fafbfd;border:1px solid var(--line);border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-word;font:12px/1.45 "JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;margin:4px 0;max-height:460px;overflow:auto}pre.peek{max-height:none;color:var(--muted)}
+.blk{border-left:5px solid #ccc;background:#fff;border-radius:0 8px 8px 0;padding:8px 12px;margin:8px 0;border-top:1px solid var(--line);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}.blk-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.blk-h .src{color:var(--muted);font-size:11.5px;font-family:ui-monospace,Menlo,monospace}.sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+details summary{cursor:pointer;color:var(--acc);font-size:12.5px}.hid{display:none}
+.mcard{cursor:pointer}.mcard:hover{border-color:var(--acc)}.mcard.on{border-color:var(--acc);box-shadow:0 0 0 2px #dbe5fb}
+.steps{margin:0;padding-left:18px;font:12px/1.5 "JetBrains Mono",ui-monospace,Menlo,monospace}.steps li{margin:1px 0}
+select{font:inherit;padding:5px 8px;max-width:760px}a.lnk{color:var(--acc);text-decoration:none;font-weight:500}a.lnk:hover{text-decoration:underline}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted)}.legend span{display:inline-flex;gap:5px;align-items:center}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:13px}.kv b{color:var(--muted);font-weight:500}
 """
-    H: List[str] = [f"<!doctype html><html lang='en'><head><meta charset='utf-8'><title>PFAgent v2 evaluation plan</title><style>{css}</style></head><body>"]
-    H.append("<header><h1>PFAgent v2 evaluation plan · for approval</h1><label>Scenario shown in section 4: <select id='req'>" + "".join(f"<option value='{r.id}'>{i+1:02d} · {E(r.difficulty)} · {E(r.text)}</option>" for i, r in enumerate(reqs)) + "</select></label><span class='muted'>Generated from the code that will run; nothing is spent until you approve.</span></header><main>")
+    H: List[str] = [f"<!doctype html><html lang='en'><head><meta charset='utf-8'><title>PFAgent · Evaluation design</title><link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap' rel='stylesheet'><style>{css}</style></head><body>"]
+    tabs = [("overview", "Overview"), ("methods", "Methods"), ("scenarios", "Scenarios"), ("prompts", "Prompts"), ("tools", "Tools"), ("gate", "Gate & scoring"), ("plan", "Run plan")]
+    H.append("<header><h1>PFAgent · Evaluation design</h1><nav class='tabs'>" + "".join(f"<button data-tab='{k}' class='{'on' if k == 'overview' else ''}'>{v}</button>" for k, v in tabs) + "</nav><span style='flex:1'></span><span class='muted'>Generated from the code that will run. For approval; nothing runs yet.</span></header><main>")
 
-    # 1 summary
-    tot_mini = sum(COST[r][0] for _, r, rerun, _ in ROWS if rerun is not False)
-    tot_sol = sum(COST[r][1] for _, r, rerun, _ in ROWS if rerun is not False)
-    H.append(f"""<section><h2>1. What v2 fixes, in one rule each</h2>
-<ul><li><b>One tool set</b>: <code>{TOOLS}</code>, whose N-1 arguments now carry a description (0 = scan every branch). No run uses the old set.</li>
-<li><b>One set of prompts</b> with the same information in every row: the planner and the probe see each argument's allowed values and the indexing rule, as ReAct and PFAgent do through the schema and the agent system prompt. The no-tools answer prompts are the paper's, unchanged.</li>
-<li><b>One scoring version</b>: current comparator (a narrowed N-1 scan is a formulation error) and verification gate (V6 covers max_candidates).</li>
-<li><b>Every trace stores the exact messages sent</b>, so the transcript is the real exchange, never rebuilt.</li></ul>
-<p><b>Common parameters</b>: IEEE 14-bus, N = {N} generated requests, perturbation seed {SEED}, k = {K}, up to {ROUNDS} tool rounds, temperature 0, models {', '.join(f'<code>{m}</code>' for m in MODELS)}. Output: <code>results/ieee14/2026-09-24/&lt;model&gt;/&lt;method&gt;__v2/</code> with REPORT.md, summary.csv, traces (transcript, narrative, figure, JSON) and raw/.</p>
-<p><b>Estimated cost</b>: gpt-4o-mini about ${tot_mini:.2f}, gpt-5.6-sol about ${tot_sol:.2f}; total about ${tot_mini + tot_sol:.2f} of the credit left (about 16 USD). Real cost on sol has run 1.5 to 2 times the estimate before.</p></section>""")
+    # ---------------- overview
+    H.append("<div class='tab on' id='tab-overview'>")
+    H.append("<div class='card'><h2>One question, six ways to answer it</h2><p>Every row of Table 6 receives the same 40 natural-language power-flow requests on the same perturbed IEEE 14-bus network and is scored the same way. What changes between rows is only <b>who formulates</b> the solver operations, <b>who computes</b> the numbers, whether the method <b>sees the solver's outputs</b> before answering, and whether a <b>gate</b> checks the answer before it is reported.</p>")
+    H.append("<div class='flow'><div class='box'><b>Request</b><span>one of 40 scenarios</span></div><span class='arr'>→</span><div class='box'><b>Formulate</b><span>which solver operations, with which arguments</span></div><span class='arr'>→</span><div class='box'><b>Compute</b><span>PandaPower, or the LLM by hand</span></div><span class='arr'>→</span><div class='box'><b>Report</b><span>the answer for the operator</span></div><span class='arr'>→</span><div class='box'><b>Verdict</b><span>solved · escalated · wrong</span></div></div></div>")
+    H.append("<div class='grid g3'>")
+    for r in ROWS:
+        H.append(f"<div class='card'><h2>{E(r['label'])} <span class='chip'>{E(r['sub'])}</span></h2><div class='kv'><b>formulates</b><span>{E(r['formulates'])}</span><b>computes</b><span>{E(r['computes'])}</span><b>sees outputs</b><span>{E(r['sees'])}</span><b>gate</b><span>{E(r['gate'])}</span></div><p class='muted'>{E(r['story'])}</p></div>")
+    H.append("</div>")
+    H.append(f"<div class='card'><h2>Common to every row</h2><span class='chip'>IEEE 14-bus</span><span class='chip'>N = {N} requests</span><span class='chip'>perturbation seed {SEED}, k = {K}</span><span class='chip'>≤ {ROUNDS} tool rounds</span><span class='chip'>temperature 0</span><span class='chip'>tool set {TOOLS}</span><span class='chip'>models: gpt-4o-mini · gpt-5.6-sol</span><span class='chip'>every message sent is stored in the trace</span></div>")
+    H.append("</div>")
 
-    # 2 rows
-    H.append("<section><h2>2. Rows to run</h2><table><tr><th>Table 6 row</th><th>runner name</th><th>what it is</th><th>run now?</th><th>why</th><th>cost mini / sol</th></tr>")
-    for label, runner, rerun, why in ROWS:
-        m = methods.get_method(runner)
-        tag = "<span class='tag'>run</span>" if rerun else ("<span class='tag reuse'>reuse</span>" if rerun is False else "<span class='tag'>run gpt-4o-mini</span> <span class='tag reuse'>reuse sol</span>")
-        H.append(f"<tr><td><b>{E(label)}</b></td><td><code>{E(runner)}</code></td><td>{E(m.description)}</td><td>{tag}</td><td>{E(why)}</td><td>${COST[runner][0]:.2f} / ${COST[runner][1]:.2f}</td></tr>")
-    H.append("</table><p class='muted'>Human with solver is not an LLM run (human_run.py). Few-shot and RAG variants are not in Table 6 and are not run.</p></section>")
-
-    # 3 scenarios
-    H.append(f"<section><h2>3. The {N} scenarios (same for every row and both models)</h2><p>Generated by <code>benchmarks/requests.py</code> from (case14, N=40, seed 0): four difficulties, ten each. The reference calls define Formulation; the reference solution (PandaPower on the same perturbed case) defines Solved.</p><table><tr><th>#</th><th>id</th><th>difficulty</th><th>request</th><th>reference calls</th><th>expected</th></tr>")
-    for i, r in enumerate(reqs, start=1):
-        calls = " → ".join(f"{c['tool']}(" + ", ".join(f"{k}={v}" for k, v in (c.get('args') or {}).items()) + ")" for c in r.intended_calls)
-        H.append(f"<tr><td>{i}</td><td><code>{E(r.id)}</code></td><td>{E(r.difficulty)}</td><td>{E(r.text)}</td><td><code>{E(calls)}</code></td><td>{E(r.expected_outcome)}</td></tr>")
-    H.append("</table></section>")
-    H.append(tools_section())
-
-    # 4 per method: exact messages
-    H.append("<section><h2>4. What each method receives, exactly</h2><p>Pick a scenario in the header. For each row: the system prompt (hash as it will be stamped on the run), the full user message for that scenario, the tool schema sent through function calling, and the planner prompt where it exists. Long blocks are collapsed; expand to read them whole.</p>")
-    matrix_rows = []
-    cols = ["case tables in the prompt", "tool schema (function calling)", "text catalogue", "allowed values (enum)", "1-based / (0-based) rule", "sees tool outputs", "abstention clause", "gate"]
-    for label, runner, rerun, _ in ROWS:
-        m = methods.get_method(runner)
-        H.append(f"<h3>{E(label)} <span class='muted'>· {E(runner)}</span></h3>")
-        sp = methods.system_prompt_for(m, tool_variant=TOOLS)
+    # ---------------- methods
+    H.append("<div class='tab' id='tab-methods'>")
+    cols = ["case tables in the prompt", "tool schema (function calling)", "allowed values of each argument", "1-based / (0-based) indexing rule", "sees the solver outputs", "may abstain (converged=false)", "gate"]
+    matrix: List[Tuple[str, Dict[str, str]]] = []
+    for r in ROWS:
+        m = methods.get_method(r["runner"])
+        sp = methods.system_prompt_for(m, tool_variant=TOOLS) or ""
         planner = methods.planner_prompt_for(m, tool_variant=TOOLS) if m.architecture == "plan_act" else None
-        if m.kind == "rule_based":
-            H.append("<p class='muted'>No LLM: a regex parser maps the request to tool calls and the solver runs them (baselines/rule_based.py). Nothing is sent to a model.</p>")
-        if sp:
-            H.append(f"<details><summary>system prompt · hash {methods.prompt_hash(sp)} · {len(sp)} chars</summary><pre>{E(sp)}</pre></details>")
-        if planner:
-            H.append(f"<details><summary>planner system prompt (the planning call sends this plus the request) · hash {methods.prompt_hash(planner)}</summary><pre>{E(planner)}</pre></details>")
-        # user messages per scenario
-        user_msgs: Dict[str, str] = {}
+        u0 = ""
         if m.kind == "llm_only":
-            for r in reqs:
-                user_msgs[r.id] = build_messages(m.strategy or "structured", "llm_only", r.text, net, CASE, forced=bool(m.forced), probe=bool(m.probe), tool_variant=TOOLS)[1]["content"]
-        elif m.architecture == "single_call":
-            for r in reqs:
-                user_msgs[r.id] = build_messages(m.strategy or "structured", "single_call", r.text, net, CASE, tool_variant=TOOLS)[1]["content"]
-        elif m.uses_llm:
-            for r in reqs:
-                user_msgs[r.id] = r.text
-        if user_msgs:
-            H.append("<details open><summary>user message for the selected scenario</summary>" + "".join(f"<pre class='um' data-req='{rid}'>{E(txt)}</pre>" for rid, txt in user_msgs.items()) + "</details>")
-        if m.uses_tools and m.uses_llm:
-            H.append(f"<details><summary>tool schema sent through function calling ({TOOLS})</summary><pre>{tools_block(TOOLS)}</pre></details>")
-        # matrix
-        sysm = (sp or "") + (planner or "")
-        u0 = user_msgs.get(reqs[0].id, "") if user_msgs else ""
+            u0 = build_messages(m.strategy or "structured", "llm_only", reqs[0].text, net, CASE, forced=bool(m.forced), probe=bool(m.probe), tool_variant=TOOLS)[1]["content"]
         tools = get_openai_tools(variant=TOOLS) if (m.uses_tools and m.uses_llm) else []
-        row = {
-            cols[0]: "yes" if ("### Node Data" in u0 or "## System Data" in u0) else ("n/a" if m.kind == "rule_based" else "no"),
-            cols[1]: "yes" if tools else ("n/a" if m.kind == "rule_based" else "no"),
-            cols[2]: "yes" if ("Available tools:" in sysm or "Available operations:" in u0) else "no",
-            cols[3]: "yes" if (tools or " in {" in u0 or " in {" in sysm) else ("n/a" if m.kind == "rule_based" else "no"),
-            cols[4]: "yes" if "0-based" in sysm else ("fixed rules" if m.kind == "rule_based" else "no"),
-            cols[5]: "yes, up to 8 rounds" if m.architecture == "react" else ("no" if m.uses_tools else "n/a"),
-            cols[6]: "yes" if "set `converged` to false" in sysm else ("removed" if m.forced else "n/a"),
-            cols[7]: "final V1–V7" if m.final_gate else ("observation" if (m.gate and m.uses_tools) else "no"),
-        }
-        matrix_rows.append((label, row))
-    H.append("</section>")
+        sysm = sp + (planner or "")
+        row = {cols[0]: "yes" if "### Node Data" in u0 else ("n/a" if m.kind == "rule_based" else "no"),
+               cols[1]: "yes" if tools else ("n/a" if m.kind == "rule_based" else "no"),
+               cols[2]: "yes" if (tools or " in {" in sysm) else ("n/a" if m.kind == "rule_based" else "no"),
+               cols[3]: "yes" if "0-based" in sysm else ("fixed rules" if m.kind == "rule_based" else "no"),
+               cols[4]: "yes" if m.architecture == "react" else ("no" if m.uses_tools else "n/a"),
+               cols[5]: "yes" if "set `converged` to false" in sp else ("n/a" if m.uses_tools or m.kind == "rule_based" else "no"),
+               cols[6]: "final V1–V7" if m.final_gate else "no"}
+        matrix.append((r["label"], row))
+        comp = ""
+        if r.get("companions"):
+            comp = "<h3>Companion measurements for this row</h3><ul>" + "".join(f"<li><b>{E(methods.get_method(c).folder)}</b> — {E(why)} <a class='lnk' href='#' data-goto='{E(c)}'>see its prompt →</a></li>" for c, why in r["companions"]) + "</ul>"
+        H.append(f"<div class='card'><h2>{E(r['label'])} <span class='chip'>{E(r['sub'])}</span> <span class='muted'>runner: {E(r['runner'])}</span></h2><p>{E(r['story'])}</p><div class='kv'><b>formulates</b><span>{E(r['formulates'])}</span><b>computes</b><span>{E(r['computes'])}</span><b>sees outputs</b><span>{E(r['sees'])}</span><b>gate</b><span>{E(r['gate'])}</span><b>prompt blocks</b><span>" + " ".join(f"<span class='chip'>{E(Path(f).name)}</span>" for f in m.prompt_files) + ("" if m.prompt_files else "<span class='muted'>none: no LLM</span>") + f"</span></div>{comp}<p><a class='lnk' href='#' data-goto='{E(r['runner'])}'>see exactly what this method receives →</a></p></div>")
+    H.append("<div class='card'><h2>Who receives what</h2><p class='muted'>Derived from the assembled prompts, not typed by hand. Green: the row receives it. Red: it does not. Grey: not applicable.</p><table><tr><th>row</th>" + "".join(f"<th>{E(c)}</th>" for c in cols) + "</tr>")
+    for label, row in matrix:
+        H.append(f"<tr><td><b>{E(label)}</b></td>" + "".join(f"<td style='background:{'#e6f4ea' if v.startswith('yes') or v.startswith('final') else ('#f3f4f6' if v in ('n/a', 'fixed rules') else '#fdecec')}'>{E(v)}</td>" for v in row.values()) + "</tr>")
+    H.append("</table><p class='muted'>The prompting rows get no tools by design; their Formulation is measured by the companion probes, which receive the operations catalogue with allowed values and the indexing rule, so that the comparison is on understanding the request, not on information.</p></div></div>")
 
-    # 5 information matrix
-    H.append("<section><h2>5. Information matrix, derived from section 4</h2><table><tr><th>row</th>" + "".join(f"<th>{E(c)}</th>" for c in cols) + "</tr>")
-    for label, row in matrix_rows:
-        H.append(f"<tr><td><b>{E(label)}</b></td>" + "".join(f"<td class='{'y' if v.startswith('yes') else ('x' if v in ('n/a', 'fixed rules') else 'n')}'>{E(v)}</td>" for v in row.values()) + "</tr>")
-    H.append("</table><p class='muted'>Green: the row receives it. Red: it does not. Grey: does not apply. The prompting rows deliberately have no tools; their Formulation is measured by the probes, which receive the catalogue with allowed values and the indexing rule.</p></section>")
+    # ---------------- scenarios
+    H.append("<div class='tab' id='tab-scenarios'>")
+    H.append(f"<div class='card'><h2>The {N} scenarios</h2><p>The same requests every row and every model see, generated by <code>benchmarks/requests.py</code> from (case14, N = 40, seed 0): ten <b>plain</b>, ten <b>parameterized</b> (a value or a criterion is stated), ten <b>multistep</b> (several operations), ten <b>ambiguous</b> (numbers spelled out, units in kW, 0-based indices). They are the same 40 used by every run since 2026-09-14.</p><p><b>Why every expected outcome is “converged”.</b> This is the normal request set: the reference solution of each request converges on a connected network, so the reference calls and the reference numbers are deterministic and every method can be judged on the same ground truth. Requests whose reference fails (islanding, non-convergence) are a separate <b>stress</b> set that feeds Table S6 and measures safe failure; they are not part of Table 6.</p><p class='muted'>Reference calls are what a correct formulation must match: same tools, same identifiers and values, same order; read-only repeats are ignored. Click “prompts” to see how every method receives that scenario.</p><div class='legend'><span><span class='sw' style='background:#1f9d55'></span>plain</span><span><span class='sw' style='background:#2f5fd0'></span>parameterized</span><span><span class='sw' style='background:#6d4fc4'></span>multistep</span><span><span class='sw' style='background:#e0891a'></span>ambiguous</span></div></div>")
+    dcol = {"plain": "#1f9d55", "parameterized": "#2f5fd0", "multistep": "#6d4fc4", "ambiguous": "#e0891a"}
+    H.append("<div class='card'><table><tr><th>#</th><th>scenario</th><th>request</th><th>reference calls, in order</th><th></th></tr>")
+    for i, r in enumerate(reqs, start=1):
+        steps = "".join(f"<li>{E(c['tool'])}(" + E(", ".join(f"{k}={v}" for k, v in (c.get('args') or {}).items())) + ")</li>" for c in r.intended_calls)
+        H.append(f"<tr><td>{i}</td><td><span class='sw' style='background:{dcol[r.difficulty]}'></span> {E(r.difficulty)}<br><span class='muted'>{E(r.id)}</span></td><td>{E(r.text)}</td><td><ol class='steps'>{steps}</ol></td><td><a class='lnk' href='#' data-scn='{E(r.id)}'>prompts →</a></td></tr>")
+    H.append("</table></div></div>")
 
-    # 6 gate + scoring
-    H.append("<section><h2>6. Verification gate (PFAgent) and scoring (every row)</h2><h3>Gate conditions on the final answer</h3><table><tr><th>label</th><th>key</th><th>condition</th></tr>" + "".join(f"<tr><td>{a}</td><td><code>{b}</code></td><td>{E(c)}</td></tr>" for a, b, c in GATE) + "</table><p class='muted'>A rejected answer is retried once with the failed conditions spelled out; a second failure escalates. ReAct and Plan-and-Act run without this gate; single-call runs with the observation gate on tool outputs only.</p><h3>Scoring rules</h3><table><tr><th>metric</th><th>definition</th></tr>" + "".join(f"<tr><td><b>{E(a)}</b></td><td>{E(b)}</td></tr>" for a, b in SCORING) + "</table></section>")
-
-    H.append(code_section())
-
-    # 7 commands
-    cmds = []
-    for label, runner, rerun, _ in ROWS:
+    # ---------------- prompts
+    H.append("<div class='tab' id='tab-prompts'>")
+    H.append("<div class='card'><h2>What the model receives, block by block</h2><p>Pick a scenario and a method. Each prompt is shown as the blocks it is assembled from; the colour tells the kind of block and the grey label says which file or code produces it. The case-tables block is long and collapsed; it is identical for every scenario (same perturbed network).</p><div class='legend'>" + "".join(f"<span><span class='sw' style='background:{c}'></span>{E(l)}</span>" for k, (c, l, s) in BLOCKS.items() if k in ('sys_base', 'sys_agent', 'sys_cot', 'sys_probe', 'sys_forced', 'u_data', 'u_task', 'u_reason', 'u_form', 'u_out', 'planner', 'tools')) + "</div>")
+    all_methods = [r["runner"] for r in ROWS] + [c for r in ROWS for c, _ in r.get("companions", [])]
+    labels = {r["runner"]: r["label"] for r in ROWS}
+    for r in ROWS:
+        for c, why in r.get("companions", []):
+            labels[c] = f"{r['label']} · companion: {methods.get_method(c).folder}"
+    H.append("<p><label>Scenario <select id='scn'>" + "".join(f"<option value='{r.id}'>{i+1:02d} · {E(r.difficulty)} · {E(r.text)}</option>" for i, r in enumerate(reqs)) + "</select></label> <label>Method <select id='mth'>" + "".join(f"<option value='{E(k)}'>{E(labels[k])}</option>" for k in all_methods) + "</select></label></p></div>")
+    for runner in all_methods:
         m = methods.get_method(runner)
-        if rerun is False:
+        H.append(f"<div class='pm card' data-mth='{E(runner)}'><h2>{E(labels[runner])} <span class='muted'>runner: {E(runner)}</span></h2>")
+        if m.kind == "rule_based":
+            H.append("<p class='muted'>No LLM and no prompt. The parser reads the request text and calls the solver; its code is in the Tools tab and the Gate & scoring tab (deterministic parser).</p></div>")
             continue
+        sp = methods.system_prompt_for(m, tool_variant=TOOLS) or ""
+        H.append(f"<h3>System prompt <span class='muted'>hash {methods.prompt_hash(sp)}</span></h3>" + blocks_html(split_system(sp, m), collapsed=()))
+        if m.architecture == "plan_act":
+            planner = methods.planner_prompt_for(m, tool_variant=TOOLS) or ""
+            H.append(f"<h3>Planner system prompt <span class='muted'>used only by the planning call, with the request as user message · hash {methods.prompt_hash(planner)}</span></h3>" + blocks_html([("planner", planner)], collapsed=()))
+        H.append("<h3>User message for the selected scenario</h3>")
+        for r in reqs:
+            if m.kind == "llm_only":
+                u = build_messages(m.strategy or "structured", "llm_only", r.text, net, CASE, forced=bool(m.forced), probe=bool(m.probe), tool_variant=TOOLS)[1]["content"]
+                parts = split_user(u, bool(m.probe))
+            else:
+                parts = [("u_request", r.text)]
+            H.append(f"<div class='um' data-scn='{r.id}'>{blocks_html(parts)}</div>")
+        if m.uses_tools and m.uses_llm:
+            H.append("<h3>Tool schema, sent through function calling with every call</h3>" + blocks_html([("tools", json.dumps(get_openai_tools(variant=TOOLS), indent=1, ensure_ascii=False))], collapsed=("tools",)))
+        H.append("</div>")
+    H.append("</div>")
+
+    # ---------------- tools
+    from solver.power_flow import SolverConfig
+
+    ctx = ToolContext(session=SessionState(), solver_config=SolverConfig())
+    disp = perturbing_dispatcher(ctx, seed=SEED, k=K)
+    sample: Dict[str, Dict[str, Any]] = {"load_case": {"case_name": "case14"}, "run_powerflow": {}, "get_status": {}, "get_most_loaded_branch": {}, "set_active_load": {"bus_id": 6, "p_mw": 14.7}, "set_load": {"bus_id": 9, "p_mw": 29.5, "q_mvar": 16.6}, "disconnect_line": {"from_bus": 1, "to_bus": 5}, "reconnect_line": {"from_bus": 1, "to_bus": 5}, "run_n1_contingency": {"top_k": 1, "criteria": "max_violations"}, "recommend_remedial_actions": {"max_actions": 2}, "apply_remedial_action": {"action_index": 0, "confirmed": True}, "generate_plot": {"plot_type": "voltage_heatmap"}}
+    order = list(sample)
+    schema = {(t.get("function") or t)["name"]: (t.get("function") or t) for t in get_openai_tools(variant=TOOLS)}
+    H.append("<div class='tab' id='tab-tools'><div class='card'><h2>The solver interface</h2><p>These twelve tools are the only way any method touches the network. The schema is what the model sees; the handler is the Python the dispatcher runs (PandaPower underneath); the output was produced now on the same perturbed case14 the runs use, in this order, so state carries from one call to the next.</p></div>")
+    for name in order:
+        fn = schema.get(name, {}); props = (fn.get("parameters") or {}).get("properties") or {}; req = set((fn.get("parameters") or {}).get("required") or [])
+        inputs = "".join(f"<tr><td><code>{E(k)}</code>{'*' if k in req else ''}</td><td>{E(str(v.get('type')))}{' in {' + ', '.join(map(str, v['enum'])) + '}' if v.get('enum') else ''}</td><td>{E(str(v.get('default'))) if 'default' in v else ''}</td><td>{E(v.get('description') or '')}</td></tr>" for k, v in props.items()) or "<tr><td colspan='4' class='muted'>no inputs</td></tr>"
+        code = _src(disp.handlers.get(name)) if disp.handlers.get(name) else "(no handler)"
+        try:
+            result = disp.dispatch(name, sample[name])
+        except Exception as exc:
+            result = f"(error: {exc})"
+        result = FIG.sub(lambda mm: f'"figure_json": "<plot, {len(mm.group(1)) // 1024} KB, omitted>"', str(result))
+        H.append(f"<div class='card'><h2><code>{E(name)}</code> <span class='muted'>{E(fn.get('description') or '')}</span></h2><div class='grid g2'><div><h3>Inputs</h3><table><tr><th>input</th><th>type</th><th>default</th><th>meaning</th></tr>{inputs}</table><h3>Output for <code>{E(name)}({E(', '.join(f'{k}={v!r}' for k, v in sample[name].items()))})</code></h3><pre>{E(result if len(result) < 5000 else result[:5000] + chr(10) + '... (' + str(len(result) - 5000) + ' more chars)')}</pre></div><div><h3>Handler, Python</h3><pre>{E(code)}</pre></div></div></div>")
+    H.append("</div>")
+
+    # ---------------- gate & scoring
+    GATE = [("V1", "converged", "The last power flow the agent ran converged."), ("V2", "balance", "Active-power balance of the reported state holds within tolerance."), ("V3", "no_isolated_buses", "No bus was left isolated by the network changes."), ("V4", "faithfulness", "Every unit-bearing number in the answer appears in a tool output."), ("V5", "currency", "Those numbers come from the solve made after the last network change."), ("V6", "argument_grounding", "Every argument of a mutating tool traces to the request or to a prior tool output; a positive max_candidates on the N-1 scan must also come from the request."), ("V7", "claims_from_tools", "The answer's claims match the agent's own last solved state.")]
+    SCORING = [("Formulation", "Executed calls (or, for the prompting rows, the operations the probe declared) match the reference calls in tool, identifiers, values and order. Read-only repeats are ignored; an unpinned optional argument is accepted unless it changes the result: an unrequested q_mvar, or an N-1 max_candidates below the branch count (20 on IEEE 14)."), ("Solved", "Formulation exact and the reported numbers within tolerance of the reference (1e-3 p.u. on voltages, 1% on flows), answered by the method itself."), ("Escalated", "The method declared it could not answer: an explicit statement of inability, the round limit, or the gate rejecting every candidate. Takes precedence."), ("Wrong, unflagged", "The answer reports numbers that do not match the reference and does not say so. Solved + Escalated + Wrong = 100%."), ("Traceable", "Share of answers whose every number appears in a tool output from the last solve."), ("V_MAE, B_mean", "Bus-voltage MAE against the reference and the mean bus power-balance residual, over all requests and over the solved ones.")]
+    H.append("<div class='tab' id='tab-gate'><div class='grid g2'><div class='card'><h2>Verification gate, PFAgent only</h2><p class='muted'>Runs once on the final answer. A failure is sent back to the model with the failed conditions spelled out; a second failure escalates the request.</p><table><tr><th></th><th>condition</th></tr>" + "".join(f"<tr><td><b>{a}</b><br><span class='muted'>{b}</span></td><td>{E(c)}</td></tr>" for a, b, c in GATE) + "</table></div><div class='card'><h2>Scoring, every row</h2><table><tr><th>metric</th><th>definition</th></tr>" + "".join(f"<tr><td><b>{E(a)}</b></td><td>{E(b)}</td></tr>" for a, b in SCORING) + "</table></div></div>")
+    parts = [("Engine: one request, any architecture", LLMEngine.run_with_trace), ("ReAct loop", LLMEngine._run_react), ("Plan-and-Act", LLMEngine._run_plan_act), ("How a run ends", LLMEngine._finish), ("Verification gate V1–V7", verify_final_answer), ("V6 argument grounding", bm.argument_grounding_check), ("Deterministic parser: request → calls", rule_based._parse_clause), ("Deterministic parser: run", rule_based.run), ("Formulation comparator, rules R0–R10", bm.formulation_check), ("Declared formulation (probes)", declared_formulation_check), ("Solved", bs.solved_check), ("Escalated / wrong unflagged", bs.escalation_check), ("Traceable numbers", bm.faithful_numbers)]
+    H.append("<div class='card'><h2>The code behind each step, verbatim</h2><p class='muted'>From llm/engine.py, baselines/rule_based.py, benchmarks/metrics.py and benchmarks/scoring.py in this worktree.</p>" + "".join(f"<details><summary><b>{E(t)}</b> · {E(o.__module__)}.{E(getattr(o, '__qualname__', o.__name__))} · {len(_src(o).splitlines())} lines</summary><pre>{E(_src(o))}</pre></details>" for t, o in parts) + "</div></div>")
+
+    # ---------------- run plan
+    H.append("<div class='tab' id='tab-plan'><div class='card'><h2>What runs, what is reused, what it costs</h2><table><tr><th>method</th><th>gpt-4o-mini</th><th>gpt-5.6-sol</th><th>note</th></tr>")
+    tm = ts = 0.0
+    for runner, models_, note in RUN_PLAN:
+        m = methods.get_method(runner)
+        cm, cs = COST[runner]
+        a = "run" if (not m.uses_llm or "gpt-4o-mini" in models_) else "reuse"
+        b = "run" if (not m.uses_llm or "gpt-5.6-sol" in models_) else ("reuse" if runner in ("llm_only:structured", "llm_only:cot") else "—")
+        if a == "run": tm += cm
+        if b == "run": ts += cs
+        H.append(f"<tr><td><b>{E(m.folder)}</b></td><td><span class='chip {'acc' if a == 'run' else ''}'>{a}</span> {'$%.2f' % cm if a == 'run' else ''}</td><td><span class='chip {'acc' if b == 'run' else ''}'>{b}</span> {'$%.2f' % cs if b == 'run' else ''}</td><td class='muted'>{E(note)}</td></tr>")
+    H.append(f"</table><p>Estimated: gpt-4o-mini about ${tm:.2f}, gpt-5.6-sol about ${ts:.2f}, total about ${tm + ts:.2f}. Real cost on sol has run up to twice the estimate. Output goes to <code>results/ieee14/2026-09-24/&lt;model&gt;/&lt;method&gt;__v2/</code>; afterwards Table 6, the results page and the table builder point only there.</p><h3>Commands, in order (gpt-4o-mini first within each)</h3><pre>")
+    cmds = []
+    for runner, models_, _ in RUN_PLAN:
+        m = methods.get_method(runner)
         if not m.uses_llm:
             cmds.append(f".venv/bin/python run.py run --method {m.folder} --case ieee14 --n 40 --tag v2")
-        elif rerun is None:
-            cmds.append(f".venv/bin/python run.py run --method {m.folder} --model openrouter:openai/gpt-4o-mini --case ieee14 --n 40 --tag v2")
-        elif runner == "llm_only_forced:structured":
-            cmds.append(f".venv/bin/python run.py run --method {m.folder} --model openrouter:openai/gpt-4o-mini --case ieee14 --n 40 --tag v2")
-        else:
-            cmds.append(f".venv/bin/python run.py run --method {m.folder} --model openrouter:openai/gpt-4o-mini --model openrouter:openai/gpt-5.6-sol --case ieee14 --n 40 --tag v2")
-    H.append("<section><h2>7. Exactly what will be executed, in order</h2><p>gpt-4o-mini runs first within each command; each run is rescored offline and rendered before the next starts. Nothing starts until you say so.</p><pre>" + E("\n".join(cmds)) + "</pre><p>Afterwards: Table 6 in <code>borrador</code>, <code>results/table6.html</code> and <code>benchmarks/build_paper_tables.py</code> point only to the <code>__v2</code> folders (plus the reused prompting rows named above).</p></section>")
-    H.append("</main><script>const s=document.getElementById('req');function ap(){document.querySelectorAll('.um').forEach(p=>p.classList.toggle('hid',p.dataset.req!==s.value));}s.onchange=ap;ap();</script></body></html>")
+        elif models_:
+            cmds.append(f".venv/bin/python run.py run --method {m.folder} " + " ".join(f"--model {MODEL_IDS[x]}" for x in models_) + " --case ieee14 --n 40 --tag v2")
+    H.append(E("\n".join(cmds)) + "</pre></div></div>")
+
+    H.append("""</main><script>
+const tabs=document.querySelectorAll('.tabs button');function show(k){tabs.forEach(b=>b.classList.toggle('on',b.dataset.tab===k));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.id==='tab-'+k));window.scrollTo(0,0);}
+tabs.forEach(b=>b.onclick=()=>show(b.dataset.tab));
+const scn=document.getElementById('scn'),mth=document.getElementById('mth');
+function ap(){document.querySelectorAll('.um').forEach(p=>p.classList.toggle('hid',p.dataset.scn!==scn.value));document.querySelectorAll('.pm').forEach(p=>p.classList.toggle('hid',p.dataset.mth!==mth.value));}
+scn.onchange=ap;mth.onchange=ap;ap();
+document.querySelectorAll('a[data-goto]').forEach(a=>a.onclick=e=>{e.preventDefault();mth.value=a.dataset.goto;ap();show('prompts');});
+document.querySelectorAll('a[data-scn]').forEach(a=>a.onclick=e=>{e.preventDefault();scn.value=a.dataset.scn;ap();show('prompts');});
+</script></body></html>""")
     out = PROJECT_ROOT / "results" / "v2_plan.html"
     out.write_text("".join(H), encoding="utf-8")
     return out
