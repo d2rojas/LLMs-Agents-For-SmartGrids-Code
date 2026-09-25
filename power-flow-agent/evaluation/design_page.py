@@ -54,14 +54,14 @@ BASE14 = {
 AGENT_FIXED_SHARE = 0.6  # share of an agent's prompt tokens that does not grow with the network (system prompt, tool schema, request)
 
 
-def case_sizes() -> Dict[str, Dict[str, int]]:
+def case_sizes(nets: Optional[Dict[str, Any]] = None) -> Dict[str, Dict[str, int]]:
     """Measured per case: buses, branches, tokens of the prompting user message (case tables), tokens of one
     run_powerflow output (what an agent reads per solve and what the answer object carries)."""
     from methods.agent.tools import SessionState as _SS, build_default_dispatcher
     from solver.power_flow import SolverConfig
     out: Dict[str, Dict[str, int]] = {}
     for c in SIZE_CASES:
-        net = perturbed_case(c, seed=SEED, k=K)
+        net = (nets or {}).get(c) or perturbed_case(c, seed=SEED, k=K)
         u = build_messages("structured", "llm_only", "Run the power flow and report the lowest voltage bus.", net, c, tool_variant=TOOLS)
         d = build_default_dispatcher(ToolContext(session=_SS(), solver_config=SolverConfig()))
         d.dispatch("load_case", {"case_name": c})
@@ -140,12 +140,33 @@ BLOCKS = {
 FIG = re.compile(r'"figure_json":\s*"((?:[^"\\]|\\.)*)"')
 
 # existing runs used only for the examples on the Methods tab (they will be re-run under this design)
-EXAMPLE_RUNS = {
-    "gpt-5.6-sol": {"rule_based": "ieee14/2026-09-21/no-llm/rule_based", "llm_only:structured": "ieee14/2026-09-21/gpt-5.6-sol/llm_only_structured", "llm_only:cot": "ieee14/2026-09-21/gpt-5.6-sol/llm_only_cot", "plan_act_nogate": "ieee14/2026-09-23/gpt-5.6-sol/plan_act_nogate__matched", "react_nogate": "ieee14/2026-09-21/gpt-5.6-sol/react_nogate", "pfagent": "ieee14/2026-09-21/gpt-5.6-sol/pfagent"},
-    "gpt-4o-mini": {"rule_based": "ieee14/2026-09-21/no-llm/rule_based", "llm_only:structured": "ieee14/2026-09-16/gpt-4o-mini/llm_only_structured", "llm_only:cot": "ieee14/2026-09-18/gpt-4o-mini/llm_only_cot", "plan_act_nogate": "ieee14/2026-09-23/gpt-4o-mini/plan_act_nogate__matched", "react_nogate": "ieee14/2026-09-21/gpt-4o-mini/react_nogate", "pfagent": "ieee14/2026-09-21/gpt-4o-mini/pfagent"},
-}
-EXAMPLE_SCENARIOS = ["case14-plain-004-s0", "case14-ambiguous-027-s0", "case14-multistep-006-s0", "case14-parameterized-009-s0"]
 RESULTS = PROJECT_ROOT / "results"
+EXAMPLE_MODEL = "gpt-4o-mini"
+
+
+def smoke_runs() -> Dict[str, Dict[str, str]]:
+    """{case: {runner: relative run dir}} of the latest ``__smoke`` run of each method on EXAMPLE_MODEL."""
+    out: Dict[str, Dict[str, str]] = {}
+    for c in CASES:
+        base = RESULTS / CASE_FOLDER[c]
+        if not base.is_dir():
+            continue
+        for r in ROWS:
+            m = methods.get_method(r["runner"])
+            model_dir = "no-llm" if not m.uses_llm else EXAMPLE_MODEL
+            hits = sorted(base.glob(f"*/{model_dir}/{m.folder}__smoke"))
+            if hits:
+                out.setdefault(c, {})[r["runner"]] = str(hits[-1].relative_to(RESULTS))
+    return out
+
+
+def run_request_ids(rel: str) -> List[str]:
+    try:
+        return [x["request_id"] for x in json.loads((RESULTS / rel / "raw" / "report.rescored.json").read_text(encoding="utf-8"))["runs"]]
+    except Exception:
+        return []
+
+
 
 
 def _fmt_args(a: Any) -> str:
@@ -231,7 +252,7 @@ def load_example(rel: str, rid: str) -> Tuple[Optional[Dict[str, Any]], Optional
     return payload, row
 
 
-def prompt_for(runner: str, rid: str, reqs: Any, net: Any) -> str:
+def prompt_for(runner: str, rid: str, reqs: Any, net: Any, case: str = CASE) -> str:
     """The prompt this design sends to ``runner`` for scenario ``rid``, rendered as labeled blocks."""
     m = methods.get_method(runner)
     r = next((x for x in reqs if x.id == rid), None)
@@ -242,8 +263,8 @@ def prompt_for(runner: str, rid: str, reqs: Any, net: Any) -> str:
     if m.architecture == "plan_act":
         out += ["<div class='muted'>planner system prompt (planning call only)</div>", blocks_html([("planner", methods.planner_prompt_for(m, tool_variant=TOOLS) or "")], collapsed=("planner",))]
     if m.kind == "llm_only":
-        u = build_messages(m.strategy or "structured", "llm_only", r.text, net, CASE, forced=bool(m.forced), probe=bool(m.probe), tool_variant=TOOLS)[1]["content"]
-        out += ["<div class='muted'>user message</div>", blocks_html(split_user(u, bool(m.probe)))]
+        u = build_messages(m.strategy or "structured", "llm_only", r.text, net, case, forced=bool(m.forced), probe=bool(m.probe), tool_variant=TOOLS)[1]["content"]
+        out += ["<div class='muted'>user message</div>", blocks_html(split_user(u, bool(m.probe)), shared=case)]
     else:
         out += ["<div class='muted'>user message</div>", blocks_html([("u_request", r.text)])]
     if m.uses_tools and m.uses_llm:
@@ -251,23 +272,34 @@ def prompt_for(runner: str, rid: str, reqs: Any, net: Any) -> str:
     return "".join(out)
 
 
-def examples_section(reqs: Any, net: Any = None) -> str:
-    out = ["<div class='card'><h2>The same request under each method, step by step</h2><p class='muted'><b>Illustration, not a result.</b> The steps come from pilot runs, so you can see how each method moves: what it says, what it calls, what the solver returns. Nothing here is scored; scores belong to the results page. Click a line to expand it.</p>"
-           "<p><label>Model <span class='seg' id='exm'><button data-v='gpt-5.6-sol' class='on'>gpt-5.6-sol</button><button data-v='gpt-4o-mini'>gpt-4o-mini</button></span></label> <label>Scenario <select id='exs'>" + "".join(f"<option value='{rid}'>{E(next((f'{i+1:02d} · {r.difficulty} · {r.text}' for i, r in enumerate(reqs) if r.id == rid), rid))}</option>" for rid in EXAMPLE_SCENARIOS) + "</select></label></p></div>"]
-    for model, runs in EXAMPLE_RUNS.items():
-        for rid in EXAMPLE_SCENARIOS:
-            out.append(f"<div class='ex' data-model='{model}' data-scn='{rid}'><div class='cols6'>")
+def examples_section(reqs_by_case: Dict[str, Any], nets_by_case: Dict[str, Any]) -> str:
+    runs = smoke_runs()
+    scen: Dict[str, List[Tuple[str, str]]] = {}
+    for c in CASES:
+        ids: List[str] = []
+        for rel in (runs.get(c) or {}).values():
+            for rid in run_request_ids(rel):
+                if rid not in ids:
+                    ids.append(rid)
+        scen[c] = [(rid, next((f"{r.difficulty} · {r.text}" for r in reqs_by_case[c] if r.id == rid), rid)) for rid in ids]
+    out = ["<div class='card'><h2>The same request under each method, step by step</h2><p class='muted'><b>Real runs of this design, not scored here.</b> The smoke test: three hard requests per system (one parameterized, one multistep, one ambiguous), every method, on " + E(EXAMPLE_MODEL) + ". Each column is the log of what the method said, what it called and what the solver returned; click a line to expand it, and open the prompt it received. The verdicts of these runs are on the results pages, where scores belong.</p>"
+           "<p><label>System <select id='exc'>" + "".join(f"<option value='{c}'>{E(CASE_LABEL[c])}</option>" for c in CASES) + "</select></label> <label>Scenario <select id='exs'></select></label></p></div>",
+           "<script>const EXS=" + json.dumps({c: [[rid, lab] for rid, lab in v] for c, v in scen.items()}) + ";</script>"]
+    for c in CASES:
+        for rid, _ in scen[c]:
+            out.append(f"<div class='ex' data-case='{c}' data-scn='{rid}'><div class='cols6'>")
             for r in ROWS:
-                rel = runs.get(r["runner"])
+                rel = (runs.get(c) or {}).get(r["runner"])
                 payload, row = load_example(rel, rid) if rel else (None, None)
                 if not row:
                     out.append(f"<div class='col'><h4>{E(r['label'])}</h4><p class='muted'>no run</p></div>"); continue
                 lines = example_rows(payload, row)
                 stored = bool(((payload or {}).get("trace") or {}).get("messages"))
-                out.append(f"<div class='col'><h4>{E(r['label'])}</h4><details class='pr'><summary>prompt sent to this method for this scenario</summary><div class='prb'>{prompt_for(r['runner'], rid, reqs, net)}</div><div class='muted' style='padding:4px 10px'>{'This example run stored exactly these messages.' if stored else 'Shown as this design will send it; this example run stored only the request and the prompt hash (' + E(str(row.get('system_prompt_hash'))) + ').'}</div></details><div class='log'>" + "".join(f"<div class='ln' data-full='{E(full)}'><span class='k {k}'>{k}</span><span class='s'>{E(short)}</span></div>" for k, short, full in lines) + f"</div><div class='vt'>{row.get('n_llm_calls')} model calls, {row.get('n_tool_calls')} solver calls<br><span class='muted'>from {E(rel)}</span></div></div>")
+                out.append(f"<div class='col'><h4>{E(r['label'])}</h4><details class='pr'><summary>prompt sent to this method for this scenario</summary><div class='prb'>{prompt_for(r['runner'], rid, reqs_by_case[c], nets_by_case[c], c)}</div><div class='muted' style='padding:4px 10px'>{'This run stored exactly these messages.' if stored else 'Shown as this design sends it; this run stored the request and the prompt hash (' + E(str(row.get('system_prompt_hash'))) + ').'}</div></details><div class='log'>" + "".join(f"<div class='ln' data-full='{E(full)}'><span class='k {k}'>{k}</span><span class='s'>{E(short)}</span></div>" for k, short, full in lines) + f"</div><div class='vt'>{row.get('n_llm_calls')} model calls, {row.get('n_tool_calls')} solver calls<br><span class='muted'>from {E(rel)}</span></div></div>")
             out.append("</div></div>")
+    if not runs:
+        out.append("<div class='card muted'>No smoke run found yet under results/&lt;system&gt;/&lt;date&gt;/" + E(EXAMPLE_MODEL) + "/&lt;method&gt;__smoke.</div>")
     return "".join(out)
-
 
 
 def split_user(text: str, probe: bool) -> List[Tuple[str, str]]:
@@ -348,12 +380,21 @@ def _src(obj: Any) -> str:
         return f"(source not available: {exc})"
 
 
-def blocks_html(parts: List[Tuple[str, str]], collapsed: Tuple[str, ...] = ("u_data",)) -> str:
+SHARED_BLOCKS = ("u_data", "u_ops", "u_out")  # constant per system (u_data) or per page (u_ops, u_out): rendered once as <template>
+
+
+def blocks_html(parts: List[Tuple[str, str]], collapsed: Tuple[str, ...] = ("u_data",), shared: Optional[str] = None) -> str:
+    """``shared`` names a system whose case-tables block is rendered once per page (a <template
+    id='udata-<case>'>) and referenced here, so 40 scenarios do not repeat a 60 KB table."""
     out = []
     for key, txt in parts:
         color, label, src = BLOCKS.get(key, ("#94a3b8", key, ""))
         body = f"<pre>{E(txt)}</pre>"
-        if key in collapsed:
+        if shared and key in SHARED_BLOCKS:
+            ref = f"udata-{shared}" if key == "u_data" else key
+            note = f"the same tables for every scenario of {E(CASE_LABEL.get(shared, shared))}" if key == "u_data" else "the same text in every prompt"
+            body = f"<details class='udata' data-ref='{ref}'><summary>show the {len(txt)} characters ({note})</summary><pre></pre></details><pre class='peek'>{E(txt[:240])}…</pre>"
+        elif key in collapsed:
             body = f"<details><summary>show the {len(txt)} characters</summary>{body}</details><pre class='peek'>{E(txt[:420])}…</pre>"
         out.append(f"<div class='blk' style='border-left-color:{color}'><div class='blk-h'><span class='sw' style='background:{color}'></span><b>{E(label)}</b><span class='src'>{E(src)}</span></div>{body}</div>")
     return "".join(out)
@@ -363,7 +404,8 @@ def blocks_html(parts: List[Tuple[str, str]], collapsed: Tuple[str, ...] = ("u_d
 def build() -> Path:
     reqs = generate_requests(CASE, N, SEED)
     net = perturbed_case(CASE, seed=SEED, k=K)
-    sizes = case_sizes()
+    nets_by_case = {c: (net if c == CASE else perturbed_case(c, seed=SEED, k=K)) for c in CASES}
+    sizes = case_sizes(nets_by_case)
     reqs_by_case = {c: (reqs if c == CASE else generate_requests(c, N, SEED)) for c in CASES}
     css = """
 :root{--bg:#f3f5f8;--panel:#fff;--line:#e3e7ee;--text:#0f172a;--muted:#64748b;--acc:#2f5fd0;--ok:#1f9d55;--esc:#e0891a;--bad:#d53f3f;--shadow:0 1px 2px rgba(15,23,42,.06),0 4px 14px rgba(15,23,42,.05)}
@@ -428,7 +470,7 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
     for c in cols:
         H.append(f"<tr><td><b>{E(c)}</b></td>" + "".join(f"<td style='background:{'#e6f4ea' if v.startswith('yes') or v.startswith('final') else ('#f3f4f6' if v in ('n/a', 'fixed rules') else '#fdecec')}'>{E(v)}</td>" for _, row in matrix for v in [row[c]]) + "</tr>")
     H.append("<tr><td><b>prompt blocks</b></td>" + "".join("<td>" + (" ".join(f"<span class='chip'>{E(Path(f).name)}</span>" for f in methods.get_method(r['runner']).prompt_files) or "<span class='muted'>none, no LLM</span>") + "</td>" for r in ROWS) + "</tr></table><p class='muted'>Derived from the assembled prompts. Green: the method receives it. Red: it does not. Grey: not applicable. The prompting methods get no tools by design: they declare the operations the request needs and their numbers are their own arithmetic.</p></details></div>")
-    H.append(examples_section(reqs, net))
+    H.append(examples_section(reqs_by_case, nets_by_case))
     H.append("</div>")
 
     # ---------------- scenarios
@@ -441,7 +483,7 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
         H.append(f"<div class='sct' data-case='{c}'><table><tr><th>#</th><th>scenario</th><th>request</th><th>reference calls, in order</th><th></th></tr>")
         for i, r in enumerate(reqs_by_case[c], start=1):
             steps = "".join(f"<li>{E(cl['tool'])}(" + E(", ".join(f"{k}={v}" for k, v in (cl.get('args') or {}).items())) + ")</li>" for cl in r.intended_calls)
-            link = f"<a class='lnk' href='#' data-scn='{E(r.id)}'>prompts →</a>" if c == CASE else ""
+            link = f"<a class='lnk' href='#' data-scn='{E(r.id)}' data-case='{c}'>prompts →</a>"
             H.append(f"<tr><td>{i}</td><td><span class='sw' style='background:{dcol[r.difficulty]}'></span> {E(r.difficulty)}<br><span class='muted'>{E(r.id)}</span></td><td>{E(r.text)}</td><td><ol class='steps'>{steps}</ol></td><td>{link}</td></tr>")
         H.append("</table></div>")
     H.append("</div></div>")
@@ -454,7 +496,17 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
     for r in ROWS:
         for c, why in r.get("companions", []):
             labels[c] = f"{r['label']} · companion: {methods.get_method(c).folder}"
-    H.append("<p><label>Scenario <select id='scn'>" + "".join(f"<option value='{r.id}'>{i+1:02d} · {E(r.difficulty)} · {E(r.text)}</option>" for i, r in enumerate(reqs)) + "</select></label> <label>Method <select id='mth'>" + "".join(f"<option value='{E(k)}'>{E(labels[k])}</option>" for k in all_methods) + "</select></label></p></div>")
+    scn_opts = {c: [[r.id, f"{i+1:02d} · {r.difficulty} · {r.text}"] for i, r in enumerate(reqs_by_case[c])] for c in CASES}
+    H.append("<p><label>System <select id='pcase'>" + "".join(f"<option value='{c}'>{E(CASE_LABEL[c])}</option>" for c in CASES) + "</select></label> <label>Scenario <select id='scn'></select></label> <label>Method <select id='mth'>" + "".join(f"<option value='{E(k)}'>{E(labels[k])}</option>" for k in all_methods) + "</select></label></p><script>const SCN=" + json.dumps(scn_opts) + ";</script>")
+    # the case tables of each system, and the operations and output sections, once
+    for c in CASES:
+        u0 = build_messages("structured", "llm_only", reqs_by_case[c][0].text, nets_by_case[c], c, tool_variant=TOOLS)[1]["content"]
+        parts0 = split_user(u0, False)
+        data_txt = next((txt for key, txt in parts0 if key == "u_data"), "")
+        H.append(f"<template id='udata-{c}'>{E(data_txt)}</template>")
+        if c == CASES[0]:
+            for key in ("u_ops", "u_out"):
+                H.append(f"<template id='{key}'>{E(next((txt for k, txt in parts0 if k == key), ''))}</template>")
     for runner in all_methods:
         m = methods.get_method(runner)
         H.append(f"<div class='pm card' data-mth='{E(runner)}'><h2>{E(labels[runner])} <span class='muted'>runner: {E(runner)}</span></h2>")
@@ -466,14 +518,15 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
         if m.architecture == "plan_act":
             planner = methods.planner_prompt_for(m, tool_variant=TOOLS) or ""
             H.append(f"<h3>Planner system prompt <span class='muted'>used only by the planning call, with the request as user message · hash {methods.prompt_hash(planner)}</span></h3>" + blocks_html([("planner", planner)], collapsed=()))
-        H.append("<h3>User message for the selected scenario</h3>")
-        for r in reqs:
-            if m.kind == "llm_only":
-                u = build_messages(m.strategy or "structured", "llm_only", r.text, net, CASE, forced=bool(m.forced), probe=bool(m.probe), tool_variant=TOOLS)[1]["content"]
-                parts = split_user(u, bool(m.probe))
-            else:
-                parts = [("u_request", r.text)]
-            H.append(f"<div class='um' data-scn='{r.id}'>{blocks_html(parts)}</div>")
+        H.append("<h3>User message for the selected system and scenario</h3>")
+        for c in CASES:
+            for r in reqs_by_case[c]:
+                if m.kind == "llm_only":
+                    u = build_messages(m.strategy or "structured", "llm_only", r.text, nets_by_case[c], c, forced=bool(m.forced), probe=bool(m.probe), tool_variant=TOOLS)[1]["content"]
+                    parts = split_user(u, bool(m.probe))
+                else:
+                    parts = [("u_request", r.text)]
+                H.append(f"<div class='um' data-case='{c}' data-scn='{r.id}'>{blocks_html(parts, shared=c)}</div>")
         if m.uses_tools and m.uses_llm:
             H.append("<h3>Tool schema, sent through function calling with every call</h3>" + blocks_html([("tools", json.dumps(get_openai_tools(variant=TOOLS), indent=1, ensure_ascii=False))], collapsed=("tools",)))
         H.append("</div>")
@@ -570,15 +623,18 @@ window.addEventListener('hashchange',fromHash);
 if(window.self!==window.top){document.body.classList.add('embed');}
 const _show=show;show=function(k){_show(k);if(window.self!==window.top){window.parent.postMessage({page:'design',tab:k},'*');}};
 fromHash();
-const scn=document.getElementById('scn'),mth=document.getElementById('mth');
-function ap(){document.querySelectorAll('.um').forEach(p=>p.classList.toggle('hid',p.dataset.scn!==scn.value));document.querySelectorAll('.pm').forEach(p=>p.classList.toggle('hid',p.dataset.mth!==mth.value));}
-scn.onchange=ap;mth.onchange=ap;ap();
-const scase=document.getElementById('scase');function sc(){document.querySelectorAll('.sct').forEach(t=>t.style.display=t.dataset.case===scase.value?'':'none');}scase.onchange=sc;sc();
-const exm=document.getElementById('exm'),exs=document.getElementById('exs');let exModel='gpt-5.6-sol';function exAp(){document.querySelectorAll('.ex').forEach(x=>x.classList.toggle('on',x.dataset.model===exModel&&x.dataset.scn===exs.value));}
-exm.querySelectorAll('button').forEach(b=>b.onclick=()=>{exModel=b.dataset.v;exm.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));exAp();});exs.onchange=exAp;exAp();
+const pcase=document.getElementById('pcase'),scn=document.getElementById('scn'),mth=document.getElementById('mth');
+function fillScn(keep){const c=pcase.value;scn.innerHTML=(SCN[c]||[]).map(([id,l])=>`<option value="${id}">${l.replace(/</g,'&lt;')}</option>`).join('');if(keep&&[...scn.options].some(o=>o.value===keep))scn.value=keep;}
+function ap(){document.querySelectorAll('.um').forEach(p=>p.classList.toggle('hid',!(p.dataset.scn===scn.value&&p.dataset.case===pcase.value)));document.querySelectorAll('.pm').forEach(p=>p.classList.toggle('hid',p.dataset.mth!==mth.value));}
+pcase.onchange=()=>{fillScn();ap();};scn.onchange=ap;mth.onchange=ap;fillScn();ap();
+document.addEventListener('toggle',e=>{const d=e.target;if(d.classList&&d.classList.contains('udata')&&d.open){const pre=d.querySelector('pre');if(!pre.textContent){const t=document.getElementById('udata-'+d.dataset.ref);pre.textContent=t?t.innerHTML.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&'):'';}}},true);
+const exc=document.getElementById('exc'),exs=document.getElementById('exs');
+function fillExs(){exs.innerHTML=(EXS[exc.value]||[]).map(([id,l])=>`<option value="${id}">${l.replace(/</g,'&lt;')}</option>`).join('');}
+function exAp(){document.querySelectorAll('.ex').forEach(x=>x.classList.toggle('on',x.dataset.case===exc.value&&x.dataset.scn===exs.value));}
+if(exc){exc.onchange=()=>{fillExs();exAp();};exs.onchange=exAp;fillExs();exAp();}
 document.querySelectorAll('.ln').forEach(l=>l.onclick=()=>{const o=l.classList.toggle('open');l.querySelector('.s').textContent=o?l.dataset.full:l.dataset.short||l.querySelector('.s').textContent;if(o&&!l.dataset.short){l.dataset.short=l.querySelector('.s').textContent;}});
 document.querySelectorAll('a[data-goto]').forEach(a=>a.onclick=e=>{e.preventDefault();mth.value=a.dataset.goto;ap();show('prompts');});
-document.querySelectorAll('a[data-scn]').forEach(a=>a.onclick=e=>{e.preventDefault();scn.value=a.dataset.scn;ap();show('prompts');});
+document.querySelectorAll('a[data-scn]').forEach(a=>a.onclick=e=>{e.preventDefault();pcase.value=a.dataset.case||pcase.value;fillScn(a.dataset.scn);scn.value=a.dataset.scn;ap();show('prompts');});
 </script></body></html>""")
     out = PROJECT_ROOT / "results" / "visuals" / "design.html"
     out.write_text("".join(H), encoding="utf-8")

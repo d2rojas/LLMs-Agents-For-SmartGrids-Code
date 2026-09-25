@@ -26,7 +26,7 @@ evaluation/       requests.py (the 40 scenarios per system), runner.py (runs one
 results/          every run: <system>/<date>/<model>/<method>/ with traces, summary, REPORT   (results/README.md)
 data/             MATPOWER case files                                                          (data/README.md)
 ui/  viz/         the Streamlit UI (streamlit run ui/app.py) and the Plotly figures
-scripts/          fetch_matpower_cases.py
+data/fetch_matpower_cases.py   refresh the MATPOWER case files
 tests/            pytest suite, no API keys needed
 ```
 
