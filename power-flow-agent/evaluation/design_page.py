@@ -490,14 +490,14 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
 
     # ---------------- prompts
     H.append("<div class='tab' id='tab-prompts'>")
-    H.append("<div class='card'><h2>What the model receives, block by block</h2><p>Pick a scenario and a method. Each prompt is shown as the blocks it is assembled from; the colour tells the kind of block and the grey label says which file or code produces it. The case-tables block is long and collapsed; it is identical for every scenario (same perturbed network). Shown for the 14-bus system; on the other systems only the case tables and the request text change.</p><div class='legend'>" + "".join(f"<span><span class='sw' style='background:{c}'></span>{E(l)}</span>" for k, (c, l, s) in BLOCKS.items() if k in ('sys_base', 'sys_agent', 'sys_cot', 'u_data', 'u_task', 'u_reason', 'u_ops', 'u_out', 'planner', 'tools')) + "</div>")
+    H.append("<div class='card'><h2>What the model receives, block by block</h2><p>Pick a scenario and a method. Each prompt is shown as the blocks it is assembled from; the colour tells the kind of block and the grey label says which file or code produces it. Pick the system too: the case-tables block changes with it (long, collapsed, identical for every scenario of that system); the rules, the operations catalogue and the output requirements are the same text in every prompt.</p><div class='legend'>" + "".join(f"<span><span class='sw' style='background:{c}'></span>{E(l)}</span>" for k, (c, l, s) in BLOCKS.items() if k in ('sys_base', 'sys_agent', 'sys_cot', 'u_data', 'u_task', 'u_reason', 'u_ops', 'u_out', 'planner', 'tools')) + "</div>")
     all_methods = [r["runner"] for r in ROWS] + [c for r in ROWS for c, _ in r.get("companions", [])]
     labels = {r["runner"]: r["label"] for r in ROWS}
     for r in ROWS:
         for c, why in r.get("companions", []):
             labels[c] = f"{r['label']} · companion: {methods.get_method(c).folder}"
     scn_opts = {c: [[r.id, f"{i+1:02d} · {r.difficulty} · {r.text}"] for i, r in enumerate(reqs_by_case[c])] for c in CASES}
-    H.append("<p><label>System <select id='pcase'>" + "".join(f"<option value='{c}'>{E(CASE_LABEL[c])}</option>" for c in CASES) + "</select></label> <label>Scenario <select id='scn'></select></label> <label>Method <select id='mth'>" + "".join(f"<option value='{E(k)}'>{E(labels[k])}</option>" for k in all_methods) + "</select></label></p><script>const SCN=" + json.dumps(scn_opts) + ";</script>")
+    H.append("<p><label>System <select id='pcase'>" + "".join(f"<option value='{c}'>{E(CASE_LABEL[c])}</option>" for c in CASES) + "</select></label> <label>Scenario <select id='scn'></select></label> <label>Method <select id='mth'>" + "".join(f"<option value='{E(k)}'>{E(labels[k])}</option>" for k in all_methods) + "</select></label></p></div><script>const SCN=" + json.dumps(scn_opts) + ";</script>")
     # the case tables of each system, and the operations and output sections, once
     for c in CASES:
         u0 = build_messages("structured", "llm_only", reqs_by_case[c][0].text, nets_by_case[c], c, tool_variant=TOOLS)[1]["content"]
