@@ -649,6 +649,7 @@ function fillScn(keep){const c=pcase.value;scn.innerHTML=(SCN[c]||[]).map(([id,l
 function ap(){document.querySelectorAll('.um').forEach(p=>p.classList.toggle('hid',!(p.dataset.scn===scn.value&&p.dataset.case===pcase.value)));document.querySelectorAll('.pm').forEach(p=>p.classList.toggle('hid',p.dataset.mth!==mth.value));}
 pcase.onchange=()=>{fillScn();ap();};scn.onchange=ap;mth.onchange=ap;fillScn();ap();
 document.addEventListener('toggle',e=>{const d=e.target;if(d.classList&&d.classList.contains('udata')&&d.open){const pre=d.querySelector('pre');if(!pre.textContent){const t=document.getElementById('udata-'+d.dataset.ref);pre.textContent=t?t.innerHTML.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&'):'';}}},true);
+const scase=document.getElementById('scase');function sc(){document.querySelectorAll('.sct').forEach(t=>t.style.display=t.dataset.case===scase.value?'':'none');}if(scase){scase.onchange=sc;sc();}
 const tcase=document.getElementById('tcase');function tAp(){document.querySelectorAll('.tout').forEach(x=>x.style.display=x.dataset.case===tcase.value?'':'none');}if(tcase){tcase.onchange=tAp;tAp();}
 const exc=document.getElementById('exc'),exs=document.getElementById('exs');
 function fillExs(){exs.innerHTML=(EXS[exc.value]||[]).map(([id,l])=>`<option value="${id}">${l.replace(/</g,'&lt;')}</option>`).join('');}
