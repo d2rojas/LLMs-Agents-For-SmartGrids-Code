@@ -43,7 +43,9 @@ Six methods make up the evaluation design: the deterministic parser, structured 
 chain-of-thought prompting, Plan-and-Act, ReAct and PFAgent. They share one rules block, one
 operations catalogue, one answer object and one evaluator (`benchmarks/common_eval.py`);
 `results/visuals/design.html` documents all of it, prompts included. Other variants are kept
-under `methods/_archive/` for their old runs.
+under `methods/_archive/` for their old runs. The design runs on four IEEE systems, 14, 30, 57 and
+118 buses, with the same 40-request shape on each (`--case ieee14 | ieee30 | ieee57 | ieee118`);
+`run.py run` has no default case.
 
 `run` calls `benchmarks/evaluate_llms.py` with the flags the paper runs used, rescores the
 report offline, and renders one folder per (method, model, case): a per-run transcript

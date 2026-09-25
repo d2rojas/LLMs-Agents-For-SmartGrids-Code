@@ -116,7 +116,10 @@ def cmd_show_prompt(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    cases = [normalize_case(c) for c in args.cases] or ["case14"]
+    cases = [normalize_case(c) for c in args.cases]
+    if not cases:  # no silent default: the design runs on four systems and every run names its own
+        print("give --case: ieee14, ieee30, ieee57 or ieee118 (repeatable)", file=sys.stderr)
+        return 2
     ms = [methods.get_method(name) for name in args.methods]
     models = list(args.models) or ["openai:gpt-4o-mini"]
     date = args.date or _dt.date.today().isoformat()
@@ -324,7 +327,7 @@ def build_parser() -> argparse.ArgumentParser:
     r = sub.add_parser("run", help="run methods x models x cases, then render")
     r.add_argument("--method", dest="methods", action="append", required=True, help="methods/ folder or runner name; repeatable")
     r.add_argument("--model", dest="models", action="append", default=[], help="provider:model; repeatable (ignored for rule_based)")
-    r.add_argument("--case", dest="cases", action="append", default=[], help="ieee14, case14, ieee30 ...; repeatable")
+    r.add_argument("--case", dest="cases", action="append", default=[], help="ieee14, ieee30, ieee57, ieee118 (or case14 ...); repeatable; required")
     r.add_argument("--n", type=int, default=40, help="requests per case and seed (--gen-requests)")
     r.add_argument("--seeds", type=int, default=1, help="number of perturbation seeds 0..N-1")
     r.add_argument("--seed-list", default=None, help="explicit seeds, comma separated")
