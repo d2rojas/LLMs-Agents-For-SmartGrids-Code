@@ -53,7 +53,7 @@ async function render(){const runs=runsOf();const byM={};for(const r of runs){by
  $('#status').textContent=`${runs.length} runs · index ${INDEX.generated}`;}
 async function init(){INDEX=await (await fetch('../INDEX.json')).json();
  const sets=[...new Set(INDEX.runs.filter(r=>r.kind==='run').map(r=>`${tagOf(r)||'main'}·${r.date}`))].sort((a,b)=>b.split('·')[1].localeCompare(a.split('·')[1])||a.localeCompare(b));
- setOptions($('#set'),sets.map(k=>[k,k.replace('·',' · ')]));const smoke=sets.find(k=>k.startsWith('smoke·'));if(smoke)$('#set').value=smoke;
+ setOptions($('#set'),sets.map(k=>[k,k.replace('·',' · ')]));const main=sets.find(k=>k.startsWith('main·'))||sets.find(k=>k.startsWith('smoke·'));if(main)$('#set').value=main;
  function refill(){const rs=INDEX.runs.filter(r=>r.kind==='run'&&`${tagOf(r)||'main'}·${r.date}`===$('#set').value);const cases=[...new Set(rs.map(r=>r.case))].sort((a,b)=>parseInt(a.slice(4))-parseInt(b.slice(4)));setOptions($('#sys'),cases.map(c=>[c,SYS[c]||c]),true);const models=[...new Set(rs.map(r=>r.model).filter(m=>m!=='no-llm'))];setOptions($('#model'),[['all','all models'],...models.map(m=>[m,m])],true);if(models.length===1)$('#model').value=models[0];}
  refill();$('#set').onchange=()=>{refill();render();};$('#sys').onchange=render;$('#model').onchange=render;render();}
 init();

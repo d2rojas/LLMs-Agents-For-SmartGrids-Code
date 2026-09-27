@@ -1,0 +1,28 @@
+RUN 11  |  case30-parameterized-001-s0  |  rule_based  |  no-llm  |  IEEE 30-bus  |  seed 0  |  difficulty parameterized
+Request: Load the IEEE 30-bus system and run an N-1 contingency analysis ranked by min voltage and report the 3 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 2-step plan: load_case(case_name="case30") -> run_n1_contingency(top_k=3, criteria="min_voltage")
+  2. parser called load_case(case_name="case30")
+       tool load_case -> case_name="case30", n_buses=30, n_lines=41, total_load_mw=190.12
+  3. parser called run_n1_contingency(top_k=3, criteria="min_voltage")
+       tool run_n1_contingency -> N-1 completed over 41 branches. Worst outage: 6-8 (line), V violations=1 (delta=1), thermal violations=4 (delta=3).
+  4. parser called run_powerflow()
+       tool run_powerflow -> case_name="case30", converged=true, total_load_mw=190.12, total_generation_mw=192.656, total_loss_mw=2.536, bus_voltages[30], line_flows[41], voltage_violations[0], thermal_violations[1]  [gate pass]
+  Totals: 0 LLM calls, 3 tool calls, 1 tool rounds, 0 in / 0 out tokens, $0.0000, 1.5 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case30") -> run_n1_contingency(top_k=3, criteria="min_voltage")
+  executed: load_case(case_name="case30") -> run_n1_contingency(top_k=3, criteria="min_voltage") -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 152, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 2.10e-07 p.u., flow MAE 2.42e-04 MW, KCL mismatch 2.04e-04 MW, power-balance error n/a
+  raw trace: case30-parameterized-001-s0_run0.json
