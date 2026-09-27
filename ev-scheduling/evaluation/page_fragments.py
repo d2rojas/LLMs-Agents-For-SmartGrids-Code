@@ -32,6 +32,8 @@ from visuals.shell import (  # noqa: E402
     E,
     card,
     chip,
+    diagram,
+    diagram_card,
     flow,
     kv,
     note,
@@ -39,6 +41,41 @@ from visuals.shell import (  # noqa: E402
     table,
     verdict,
 )
+
+# How each method gets from the request to an answer, drawn with the shared
+# renderer so a method that works like one in another case study looks like it.
+DIAGRAMS: Dict[str, Dict[str, Any]] = {
+    "rule_based": {
+        "steps": [("request", "input"), ("regex parser", "code"), ("solver (CVXPY)", "solver"),
+                  ("template answer", "out")],
+        "footnote": "no LLM · no gate",
+    },
+    "llm_only_structured": {
+        "steps": [("request", "input"), ("LLM writes the kW matrix", "llm"), ("text answer", "out")],
+        "footnote": "no solver · no tool calls · no gate",
+    },
+    "llm_only_cot": {
+        "steps": [("request", "input"), ("LLM reasons, then writes it", "llm"), ("text answer", "out")],
+        "footnote": "one added prompt section · otherwise identical",
+    },
+    "plan_act_nogate": {
+        "steps": [("request", "input"), ("LLM writes the whole plan", "plan"), ("solver runs every step", "solver"),
+                  ("LLM writes the answer", "llm")],
+        "footnote": "plans once, never sees results before committing",
+    },
+    "react_nogate": {
+        "steps": [("request", "input"), ("LLM decides a tool call", "llm"), ("solver executes it", "solver"),
+                  ("LLM writes the answer", "llm")],
+        "loop": (2, "up to 3 rounds"),
+        "footnote": "sees every result · no gate",
+    },
+    "evagent": {
+        "steps": [("request", "input"), ("LLM decides a tool call", "llm"), ("solver executes it", "solver"),
+                  ("gate E1-E6", "gate")],
+        "loop": (2, "up to 3 rounds"),
+        "branch": ("report", "escalate"),
+    },
+}
 
 CASE_ID = "evagent"
 CASE_TITLE = "EVAgent"
@@ -369,6 +406,24 @@ def tab_methods() -> str:
             E(r["isolates"]),
         ])
     body = [
+        card(
+            "Six ways to answer the same request",
+            "<div class='grid g6'>"
+            + "".join(
+                diagram_card(
+                    r["label"],
+                    ("no LLM" if r["llm"] == "no" else ("LLM only, no tools" if r["tools"] == "none" else "LLM + solver")),
+                    diagram(
+                        DIAGRAMS[r["name"]]["steps"],
+                        loop=DIAGRAMS[r["name"]].get("loop"),
+                        branch=DIAGRAMS[r["name"]].get("branch"),
+                        footnote=DIAGRAMS[r["name"]].get("footnote", ""),
+                    ),
+                )
+                for r in ROWS
+            )
+            + "</div>",
+        ),
         card(
             "Six methods, one factor apart",
             "<p>One conventional workflow with no language model, and five ways of using one. Reading down the "

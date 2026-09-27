@@ -47,6 +47,75 @@ GROUPS: Tuple[Tuple[str, Tuple[Tuple[str, str], ...]], ...] = (
 )
 
 
+def _rules(css: str) -> List[Tuple[str, str, bool]]:
+    """Split a stylesheet into (selector, declarations, is_at_rule) triples.
+
+    Written by hand because the alternative is a dependency, and the input is
+    one generated stylesheet rather than arbitrary CSS.
+    """
+    out: List[Tuple[str, str, bool]] = []
+    sel: List[str] = []
+    i, n = 0, len(css)
+    while i < n:
+        ch = css[i]
+        if ch == "{":
+            depth, j = 1, i + 1
+            while j < n and depth:
+                if css[j] == "{":
+                    depth += 1
+                elif css[j] == "}":
+                    depth -= 1
+                j += 1
+            selector = "".join(sel).strip()
+            out.append((selector, css[i + 1 : j - 1], selector.startswith("@")))
+            sel, i = [], j
+            continue
+        sel.append(ch)
+        i += 1
+    return out
+
+
+def _own_selectors(css: str) -> set:
+    """Every selector a stylesheet defines, one per comma-separated part."""
+    owned = set()
+    for selector, _body, at_rule in _rules(css):
+        if at_rule:
+            continue
+        for part in selector.split(","):
+            owned.add(part.strip())
+    return owned
+
+
+# Chrome the shared shell owns under different names. The standalone page put
+# its navigation in a sticky ``header`` with a ``.tabs`` button bar; the shared
+# page has a top strip and a sidebar instead, so these rules describe elements
+# that no longer exist and can only interfere.
+CHROME = ("header", "header h1", ".tabs", ".tabs button", ".tabs button.on", "body.embed header")
+
+
+def _strip_shared(css: str, owned: set) -> str:
+    """Keep only the rules the shared shell does not already define.
+
+    The adapter injects this case study's own stylesheet after the shell's, so
+    anything it redefines wins. Its ``body``, ``main`` and ``:root`` rules were
+    written for a standalone page and break the shared layout when they land on
+    top of it. Dropping every selector the shell owns leaves exactly the
+    components that are this case study's own, and leaves one look.
+    """
+    kept: List[str] = []
+    for selector, body, at_rule in _rules(css):
+        if at_rule:
+            continue  # the shell owns the responsive rules
+        parts = [
+            p.strip()
+            for p in selector.split(",")
+            if p.strip() and p.strip() not in owned and p.strip() not in CHROME
+        ]
+        if parts:
+            kept.append(",".join(parts) + "{" + body.strip() + "}")
+    return "\n".join(kept)
+
+
 def _inner(html: str, open_tag: str, close_tag: str) -> str:
     """The text between the first ``open_tag`` and the last ``close_tag``."""
     i = html.find(open_tag)
@@ -80,7 +149,9 @@ def payload() -> Dict[str, Any]:
 
     html = design_page.build().read_text(encoding="utf-8")
 
-    css = _inner(html, "<style>", "</style>")
+    from visuals import shell
+
+    css = _strip_shared(_inner(html, "<style>", "</style>"), _own_selectors(shell.CSS))
     # The page's driver is its last script block. Taking from the first
     # ``<script>`` instead would swallow every script the content embeds, and
     # with them the megabytes of page between the first and the last.
