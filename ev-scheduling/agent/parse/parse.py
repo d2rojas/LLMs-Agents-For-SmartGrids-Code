@@ -5,8 +5,14 @@ user's raw text to the LLM with a structured extraction prompt and returns
 either a complete ParsedProblem (ready for the solver) or a ClarificationResult
 asking the user for the missing information.
 
+The client, the provider, and the token accounting come from ``config/llm.py``,
+the one place that resolves them, so this call is billed, recorded, and traced
+like every other model call in the project. This module used to build an OpenAI
+client straight from ``OPENAI_API_KEY``, a key this project does not have: the
+parse could only ever run against a provider the rest of the pipeline never uses.
+
 Typical flow:
-    result = parse_nl_problem(user_text, api_key=key)
+    result = parse_nl_problem(user_text)
     if result.needs_clarification:
         print(result.clarification_message)
     else:
@@ -15,11 +21,20 @@ Typical flow:
 """
 
 import json
-import os
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
+import methods
+
+from config.llm import (
+    ModelSpec,
+    RunRecorder,
+    RunUsage,
+    build_client,
+    call_chat,
+    parse_model_spec,
+)
 from config.site import SiteConfig, TOUConfig, default_tou_rates
 from data.format.schema import DaySessions, Session
 
@@ -86,6 +101,9 @@ class ParseResult:
         missing_fields: List of field descriptions that are missing (for UI hints).
         used_inference: True if context-aware inference was applied to fill gaps.
         inference_notes: Explanations of what was inferred and why.
+        model: Resolved ``provider:model`` id used for the extraction call.
+        usage: Token accounting of the extraction call and any inference call.
+            None when the caller passed its own recorder and reads it there.
     """
 
     problem: Optional[ParsedProblem]
@@ -95,83 +113,17 @@ class ParseResult:
     missing_fields: List[str] = field(default_factory=list)
     used_inference: bool = False
     inference_notes: List[str] = field(default_factory=list)
+    model: str = ""
+    usage: Optional[RunUsage] = None
 
 
 # ---------------------------------------------------------------------------
 # Extraction prompt
 # ---------------------------------------------------------------------------
 
-_EXTRACTION_SYSTEM = (
-    "You are a data-extraction assistant for a CAMPUS EV charging scheduler (Caltech ACN network). "
-    "This is a workplace/university parking facility, not home charging. "
-    "Extract EV charging session details into a JSON object. Output ONLY valid JSON.\n\n"
-    "Return an object with this exact schema:\n"
-    "{\n"
-    '  "sessions": [\n'
-    "    {\n"
-    '      "session_id": "EV-1",          // label, or empty string\n'
-    '      "arrival_hour": 9.0,           // hour from midnight (0-24), or null if unknown\n'
-    '      "departure_hour": 17.0,        // hour from midnight (0-24), or null if unknown\n'
-    '      "energy_kwh": 15.0,            // kWh requested, or null if unknown\n'
-    '      "max_power_kw": 7.0            // max charging rate kW; default 7.0 (Level 2)\n'
-    "    }\n"
-    "  ],\n"
-    '  "site_cap_kw": 50.0,              // total site power cap kW; default 50.0\n'
-    '  "peak_price": 0.45,               // $/kWh peak TOU rate (4pm-9pm); default 0.45\n'
-    '  "off_peak_price": 0.12            // $/kWh off-peak TOU rate; default 0.12\n'
-    "}\n\n"
-    "Rules:\n"
-    "- Convert time expressions to fractional hours: '6pm' → 18.0, '6:30pm' → 18.5, "
-    "'9am' → 9.0, '5pm' → 17.0, 'noon' → 12.0.\n"
-    "- Campus context: 'morning' → 9.0, 'afternoon' → 14.0, 'evening' → 18.0, "
-    "'end of day' / 'after work' → 17.0.\n"
-    "- If the user gives a range like '20-30 kWh', use the midpoint (25.0).\n"
-    "- Default max_power_kw is 7.0 (Level 2 campus chargers).\n"
-    "- Do NOT invent values the user did not provide — use null for unknown required fields.\n"
-    "- Output ONLY the JSON object. No explanation."
-)
+_EXTRACTION_SYSTEM = methods.read_text("_shared/parse_extraction_system.txt")
 
-
-_INFERENCE_SYSTEM = (
-    "You are an EV charging expert helping to fill in missing session parameters based on context. "
-    "This is a CAMPUS/WORKPLACE charging facility (Caltech ACN network), NOT home charging. "
-    "Users are students, faculty, and staff who park while at work/school.\n\n"
-    "FACILITY CONTEXT:\n"
-    "- Site: University campus parking lot (Caltech, JPL, or similar)\n"
-    "- Chargers: Level 2 stations, max 7.0 kW per charger\n"
-    "- Site power cap: 50 kW total across all chargers\n"
-    "- Peak TOU hours: 4pm-9pm (higher electricity cost)\n"
-    "- Typical sessions: 15-66 EVs per day\n\n"
-    "ARRIVAL/DEPARTURE PATTERNS (campus context):\n"
-    "- Morning arrival (7am-10am): Commuters arriving for work/class\n"
-    "  → Departure typically 5pm-7pm (8-10 hour stay)\n"
-    "- Late morning arrival (10am-12pm): Late arrivals, visitors\n"
-    "  → Departure typically 4pm-6pm (5-7 hour stay)\n"
-    "- Afternoon arrival (12pm-3pm): Afternoon classes/meetings\n"
-    "  → Departure typically 5pm-8pm (3-5 hour stay)\n"
-    "- Evening arrival (4pm-7pm): Evening classes/events\n"
-    "  → Departure typically 9pm-11pm (3-5 hour stay)\n"
-    "- If departure is given, infer arrival by subtracting typical stay duration\n\n"
-    "ENERGY INFERENCE (campus commute patterns):\n"
-    "- Short commute (< 15 miles): 5-10 kWh\n"
-    "- Typical commute (15-30 miles): 10-20 kWh\n"
-    "- Longer commute (30-50 miles): 20-30 kWh\n"
-    "- Default if no context: 15 kWh (average campus commute)\n"
-    "- Max deliverable = stay_hours × 7.0 kW; don't request more than this\n\n"
-    "INFERENCE RULES:\n"
-    "- If arrival known but departure unknown: Add typical stay (8h for morning, 4h for afternoon/evening)\n"
-    "- If departure known but arrival unknown: Subtract typical stay from departure\n"
-    "- If only energy known: Assume morning arrival (9am), calculate departure based on energy/7kW\n"
-    "- Keep inferences conservative; better to underestimate energy than overestimate\n\n"
-    "Output a JSON object with the SAME structure as input, but with null values replaced by "
-    "your inferred values. Include an 'inference_notes' field explaining each inference.\n"
-    "{\n"
-    '  "sessions": [...],\n'
-    '  "inference_notes": ["EV-1: 9am arrival → departure 5pm (8h typical workday stay)", ...]\n'
-    "}"
-)
-
-
+_INFERENCE_SYSTEM = methods.read_text("_shared/parse_inference_system.txt")
 # ---------------------------------------------------------------------------
 # Inference detection
 # ---------------------------------------------------------------------------
@@ -232,27 +184,27 @@ def _count_missing_per_session(sessions: List[ParsedSession]) -> List[int]:
 def _run_inference(
     partial_data: Dict[str, Any],
     user_text: str,
+    *,
+    client: Any,
     model: str,
-    api_key: str,
-) -> tuple[Dict[str, Any], List[str]]:
+    recorder: Optional[RunRecorder] = None,
+) -> Tuple[Dict[str, Any], List[str]]:
     """Use LLM to infer missing values based on available context.
 
     Args:
         partial_data: The extracted data with null values for unknowns.
         user_text: Original user message for context.
-        model: OpenAI model name.
-        api_key: OpenAI API key.
+        client: Client exposing ``chat.completions.create``, already built for
+            the resolved provider.
+        model: Model id as the provider expects it (``spec.model``).
+        recorder: RunRecorder to bill this second call to, so an inference is
+            not a model call that escapes the accounting.
 
     Returns:
-        Tuple of (data_with_inferences, inference_notes).
+        Tuple of (data_with_inferences, inference_notes). The original data and
+        no notes when the model's reply could not be read as JSON, which leaves
+        the missing fields missing and ends in a clarification request.
     """
-    try:
-        from openai import OpenAI
-    except ImportError:
-        return partial_data, []
-
-    client = OpenAI(api_key=api_key)
-
     inference_prompt = (
         f"The user said: \"{user_text}\"\n\n"
         f"I extracted this partial data (null means unknown):\n"
@@ -261,7 +213,9 @@ def _run_inference(
         "Return the complete JSON with nulls replaced by your inferences, plus inference_notes."
     )
 
-    response = client.chat.completions.create(
+    response = call_chat(
+        client,
+        recorder,
         model=model,
         messages=[
             {"role": "system", "content": _INFERENCE_SYSTEM},
@@ -418,9 +372,11 @@ def _session_from_dict(d: Dict[str, Any], index: int) -> ParsedSession:
 def parse_nl_problem(
     user_text: str,
     *,
-    model: str = "gpt-4o",
+    model: Optional[str] = None,
     api_key: Optional[str] = None,
     allow_inference: bool = True,
+    client: Optional[Any] = None,
+    recorder: Optional[RunRecorder] = None,
 ) -> ParseResult:
     """Extract a structured EV charging problem from natural-language text.
 
@@ -437,37 +393,56 @@ def parse_nl_problem(
 
     Args:
         user_text: Free-form user description of the charging problem.
-        model: OpenAI model name.
-        api_key: OpenAI API key (falls back to OPENAI_API_KEY env var).
+        model: Model id as ``provider:model`` (e.g. ``openrouter:openai/gpt-4o``)
+            or a bare id resolved against the default provider. Defaults to
+            EV_LLM_MODEL, else ``openrouter:openai/gpt-4o``.
+        api_key: Key for the resolved provider; falls back to its environment
+            key (OPENROUTER_API_KEY, or OPENAI_API_KEY for an ``openai:`` id).
         allow_inference: If True and user indicates unknowns, infer reasonable
             values from context (e.g., 6pm arrival → 10pm departure).
+        client: Pre-built client exposing ``chat.completions.create``. Used by
+            tests and by callers that already built one; when given, no key is
+            required and none is read.
+        recorder: RunRecorder to bill this call to. Pass the pipeline's recorder
+            so the parse is counted and traced with the run it belongs to; a
+            local one is used when it is None, and its totals come back on
+            ``ParseResult.usage``.
 
     Returns:
         ParseResult with either a populated problem (possibly with inferences),
-        or needs_clarification=True explaining what is missing and why.
+        or needs_clarification=True explaining what is missing and why. Either
+        way it carries the resolved model id and the token accounting.
 
     Raises:
-        ValueError: If OPENAI_API_KEY is not set.
+        ValueError: If no API key is available for the resolved provider. The
+            parse is never skipped quietly: without a key this raises rather
+            than returning a clarification request, which would look like the
+            user's text was at fault.
         ImportError: If the openai package is not installed.
     """
-    key = api_key or os.environ.get("OPENAI_API_KEY", "").strip()
-    if not key:
-        raise ValueError(
-            "OPENAI_API_KEY is not set. Set it in .env or pass api_key to parse_nl_problem."
-        )
+    spec: ModelSpec = parse_model_spec(model)
+    if client is None:
+        client = build_client(spec, api_key=api_key)
 
-    try:
-        from openai import OpenAI  # type: ignore[import]
-    except ImportError as exc:
-        raise ImportError(
-            "The 'openai' package is not installed. "
-            "Install it with 'pip install openai>=1.0.0'."
-        ) from exc
+    own_recorder = recorder is None
+    active: RunRecorder = (
+        RunRecorder(spec=spec, arm="parse", run_id="", request=user_text)
+        if recorder is None
+        else recorder
+    )
 
-    client = OpenAI(api_key=key)
+    def _finish(result: ParseResult) -> ParseResult:
+        """Attach the model id and, for a local recorder, its usage."""
+        result.model = spec.key
+        result.usage = active.usage
+        if own_recorder:
+            active.finish(final_text=result.raw_llm_response)
+        return result
 
-    response = client.chat.completions.create(
-        model=model,
+    response = call_chat(
+        client,
+        active,
+        model=spec.model,
         messages=[
             {"role": "system", "content": _EXTRACTION_SYSTEM},
             {"role": "user", "content": user_text},
@@ -482,7 +457,7 @@ def parse_nl_problem(
         data = _parse_llm_json(raw)
     except ValueError:
         # LLM returned something unparseable — ask for clarification
-        return ParseResult(
+        return _finish(ParseResult(
             problem=None,
             needs_clarification=True,
             clarification_message=(
@@ -491,7 +466,7 @@ def parse_nl_problem(
                 "needed? For example: \"EV 1 arrives at 6 pm, leaves at 10 pm, needs 20 kWh.\""
             ),
             raw_llm_response=raw,
-        )
+        ))
 
     # Build ParsedSession list
     raw_sessions: List[Dict[str, Any]] = data.get("sessions") or []
@@ -512,12 +487,12 @@ def parse_nl_problem(
                 "Please describe each EV: how many EVs, when they arrive and depart, "
                 "and how much energy each one needs."
             )
-        return ParseResult(
+        return _finish(ParseResult(
             problem=None,
             needs_clarification=True,
             clarification_message=msg,
             raw_llm_response=raw,
-        )
+        ))
 
     sessions = [_session_from_dict(s, i) for i, s in enumerate(raw_sessions)]
 
@@ -538,7 +513,9 @@ def parse_nl_problem(
 
         if should_infer and has_partial_context:
             # Run context-aware inference to fill gaps
-            inferred_data, inference_notes = _run_inference(data, user_text, model, key)
+            inferred_data, inference_notes = _run_inference(
+                data, user_text, client=client, model=spec.model, recorder=active
+            )
 
             # Re-parse sessions from inferred data
             inferred_sessions: List[Dict[str, Any]] = inferred_data.get("sessions") or []
@@ -553,7 +530,7 @@ def parse_nl_problem(
         if missing:
             # Still missing fields — ask for clarification or say unable
             # If user already said they don't have info AND no context → unable
-            return ParseResult(
+            return _finish(ParseResult(
                 problem=None,
                 needs_clarification=True,
                 clarification_message=_build_clarification_message(
@@ -563,7 +540,7 @@ def parse_nl_problem(
                 ),
                 raw_llm_response=raw,
                 missing_fields=missing,
-            )
+            ))
 
     # Build ParsedProblem with defaults for optional site/TOU fields only
     # (these are facility-level parameters, not per-session data)
@@ -579,13 +556,13 @@ def parse_nl_problem(
         off_peak_price=_float_default(data.get("off_peak_price"), 0.12),
     )
 
-    return ParseResult(
+    return _finish(ParseResult(
         problem=problem,
         needs_clarification=False,
         raw_llm_response=raw,
         used_inference=used_inference,
         inference_notes=inference_notes,
-    )
+    ))
 
 
 # ---------------------------------------------------------------------------

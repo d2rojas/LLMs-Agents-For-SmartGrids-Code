@@ -14,10 +14,34 @@ import numpy as np
 from config.site import SiteConfig, TOUConfig
 from data.format.schema import DaySessions
 
+# Statuses that mean "there is a solution, but the solver reached it with
+# reduced accuracy". ``success`` is True for these, so the status string is what
+# a verification step has to read to tell them from a clean optimum.
+INACCURATE_STATUSES = (cp.OPTIMAL_INACCURATE,)
+
+# Status recorded when ``prob.solve()`` raised instead of returning a status.
+SOLVER_ERROR_STATUS = "solver_error"
+
 
 @dataclass
 class SolveResult:
-    """Result of optimization: schedule, cost, unmet, peak, and status."""
+    """Result of optimization: schedule, cost, unmet, peak, and status.
+
+    Attributes:
+        schedule: Power schedule of shape (n_sessions, n_steps) in kW.
+        total_cost_usd: Energy cost of the schedule in USD.
+        unmet_energy_kwh: Per-session unmet energy (kWh), the objective's slack.
+        peak_load_kw: Maximum total power over the horizon (kW).
+        success: True when the solve reached an optimal status, ``OPTIMAL`` and
+            ``OPTIMAL_INACCURATE`` alike. Unchanged meaning: callers that only
+            ask "is there a schedule to use" keep reading this.
+        message: Failure text, None on success. Unchanged meaning.
+        status: CVXPY's own status string, kept on every path including the
+            successful ones (``"optimal"``, ``"optimal_inaccurate"``). ``success``
+            collapses those two, so this is the only field that separates a clean
+            optimum from one the solver reached with reduced accuracy;
+            ``SOLVER_ERROR_STATUS`` is used when the solve raised.
+    """
 
     schedule: np.ndarray  # (n_sessions, n_steps) in kW
     total_cost_usd: float
@@ -25,6 +49,17 @@ class SolveResult:
     peak_load_kw: float
     success: bool
     message: Optional[str] = None
+    status: Optional[str] = None
+
+    @property
+    def optimal_exact(self) -> bool:
+        """True only for CVXPY's ``OPTIMAL``, i.e. not for ``OPTIMAL_INACCURATE``."""
+        return self.status == cp.OPTIMAL
+
+    @property
+    def inaccurate(self) -> bool:
+        """True when the solve succeeded but the solver flagged reduced accuracy."""
+        return bool(self.success) and self.status in INACCURATE_STATUSES
 
 
 def solve(
@@ -42,7 +77,9 @@ def solve(
         penalty_unmet: M in objective ($/kWh penalty for slack u_i).
 
     Returns:
-        SolveResult with schedule, cost, unmet, peak, and success flag.
+        SolveResult with schedule, cost, unmet, peak, the success flag, and the
+        solver's own status string. ``success`` is True for both ``optimal`` and
+        ``optimal_inaccurate``; read ``status`` to tell them apart.
     """
     # --- 1. Extract problem dimensions and TOU rates ---
     n_sessions = len(day.sessions)
@@ -59,6 +96,7 @@ def solve(
             peak_load_kw=0.0,
             success=True,
             message=None,
+            status=cp.OPTIMAL,
         )
 
     # --- 3. Define decision variables ---
@@ -106,6 +144,7 @@ def solve(
             peak_load_kw=0.0,
             success=False,
             message=str(e),
+            status=SOLVER_ERROR_STATUS,
         )
 
     # --- 10. Check solver status (optimal or optimal with small inaccuracy) ---
@@ -117,6 +156,7 @@ def solve(
             peak_load_kw=0.0,
             success=False,
             message=prob.status,
+            status=prob.status,
         )
 
     # --- 11. Extract solution and compute reported cost and peak ---
@@ -133,4 +173,5 @@ def solve(
         peak_load_kw=peak_load_kw,
         success=True,
         message=None,
+        status=prob.status,
     )
