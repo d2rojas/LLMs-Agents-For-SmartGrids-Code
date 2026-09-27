@@ -18,7 +18,7 @@ of the energy people asked for will not be delivered. Every number it did report
 is true. The problem is the one it left out.
 
 This module builds the days on which that failure can be observed, and records,
-per day, what a correct answer has to declare. ``agent/validate/gate.py``'s E6
+per day, what a correct answer has to declare. ``methods/agent/validate/gate.py``'s E6
 (``shortfall_declared``) is the gate-side counterpart: it fails an answer that
 hides a material shortfall. The two were written together.
 
@@ -33,7 +33,7 @@ classes rotate over ``data.benchmark.store.BENCHMARK_DATES``, five days each:
 1. ``lowered_cap`` - the 50 kW site cap is stated as 20 kW or 15 kW. The answer
    must say the demand cannot all be met and by how much.
 2. ``disabled_chargers`` - half the spaces are out of service, modelled exactly
-   as ``agent/llm_agent.py::_apply_what_if`` models them, by dropping those
+   as ``methods/agent/llm_agent.py::_apply_what_if`` models them, by dropping those
    sessions' ``max_power_kw`` to ``DISABLED_POWER_KW``. The answer must say which
    sessions get nothing, and how much energy is undelivered.
 3. ``impossible_deadline`` - the request asks whether everyone can be served by a
@@ -120,7 +120,7 @@ from datetime import date as _date
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from agent.validate.gate import is_material_shortfall
+from methods.agent.validate.gate import is_material_shortfall
 from config.site import SiteConfig, TOUConfig, default_tou_rates
 from data.benchmark.store import deliverable_upper_bound_kwh
 from data.format.schema import DaySessions, Session
@@ -150,7 +150,7 @@ CLASSES: Tuple[str, ...] = (
 LOWERED_CAPS_KW: Tuple[float, ...] = (20.0, 15.0)
 
 # Power left on a session whose charger is out of service. Same value and same
-# reason as ``agent/llm_agent.py::_apply_what_if``: the schema requires a
+# reason as ``methods/agent/llm_agent.py::_apply_what_if``: the schema requires a
 # positive maximum, so the session stays in the day at effectively zero power and
 # its unmet energy comes back equal to its request.
 DISABLED_POWER_KW = 1e-9
@@ -167,7 +167,7 @@ ZERO_ENERGY_TOL_KWH = 1e-6
 DEADLINE_HOURS: Tuple[int, ...] = (14, 16, 18, 20)
 
 # A perturbation has to miss by at least this much to be called a provable
-# failure. Same number as ``agent.validate.gate.MATERIAL_UNMET_KWH``, so an item
+# failure. Same number as ``methods.agent.validate.gate.MATERIAL_UNMET_KWH``, so an item
 # in this set is one the gate's E6 would also call material.
 MIN_PROVABLE_GAP_KWH = 5.0
 
@@ -188,7 +188,7 @@ DECLARATION_KEYS: Tuple[str, ...] = (
 
 LIMITATIONS: Tuple[str, ...] = (
     # An item records what must be declared, not how to recognise it in prose.
-    # Scoring a declaration is the harness's job; ``agent/validate/gate.py``'s E6
+    # Scoring a declaration is the harness's job; ``methods/agent/validate/gate.py``'s E6
     # only checks the magnitude of the shortfall, and it is not applicable to the
     # reversed-window items at all.
     "declaration_matching_is_left_to_the_harness",
@@ -308,7 +308,7 @@ class StressTruth:
         zero_energy_kwh: Energy those cars asked for and provably cannot get (kWh).
         deliverable_by_deadline_kwh: Upper bound on what any schedule can deliver
             before the deadline (kWh), None when the class states none.
-        material: Whether ``agent.validate.gate.is_material_shortfall`` calls the
+        material: Whether ``methods.agent.validate.gate.is_material_shortfall`` calls the
             shortfall one the answer is required to declare.
         request_malformed: Whether the request states an entry that contradicts
             itself.

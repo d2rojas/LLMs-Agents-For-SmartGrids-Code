@@ -1,4 +1,4 @@
-"""Tests for baseline.parse: row labels, resampling, and the repair log.
+"""Tests for methods.prompting.parse: row labels, resampling, and the repair log.
 
 The repair tests are the ones that matter for the paper's fairness claim: the
 baseline's output must be scored as written, and anything the parser has to
@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from data.format.schema import DaySessions, Session
-from baseline.parse import (
+from methods.prompting.parse import (
     REPAIR_KINDS,
     ParseResult,
     RepairLog,
@@ -400,7 +400,7 @@ def test_negative_power_is_a_violation_the_checker_sees() -> None:
     that cell and raised no per_charger violation at all.
     """
     from config.site import SiteConfig
-    from constraints.checker import check
+    from solver.checker import check
 
     day = _make_day(n_sessions=1, n_steps=4)
     site = SiteConfig(P_max_kw=50.0, n_steps=4, dt_hours=0.25)

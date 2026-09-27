@@ -1,219 +1,90 @@
-# Agentic EV Charging Schedule Assistant
+# EVAgent: day-ahead EV charging from a request in plain language
 
-This project builds a day-ahead EV charging scheduler for a shared parking facility and compares three approaches: a direct-prompt LLM baseline, a CVXPY optimizer, and a full agentic pipeline (Plan → Optimize → Validate → Refine → Explain). We use real session data from [Caltech ACN-Data](https://ev.caltech.edu), minimize time-of-use energy cost under per-charger and site capacity constraints, and evaluate explanation faithfulness. There's also a FastAPI web GUI for interactive natural-language scheduling.
+A site operator describes a day of charging in plain language: the cars, when each one arrives and
+leaves, how much energy it needs, what its charger can deliver. The task is to turn that into the
+parameters of an optimisation problem, solve it under the site's power cap and its time-of-use
+tariff, and answer what was asked. This case study measures six ways of doing that, from a parser
+with no language model to the solver-grounded agent, on twenty days of real charging sessions from
+the ACN-Data portal, with one scorer for all six.
 
-## Layout
+It follows the layout every case study in this repository follows; see [`../LAYOUT.md`](../LAYOUT.md).
 
-| Path | Purpose |
-|------|---------|
-| `agent/` | Agentic pipeline: Plan → Optimize → Validate → Refine → Explain |
-| `baseline/` | Direct LLM prompting baseline |
-| `config/` | Site constraints, TOU rates, experiment configs |
-| `constraints/` | Constraint checker (availability, per-charger, site cap, energy) |
-| `data/` | ACN-Data loader, standardized session format, frozen benchmark days, synthetic fixtures |
-| `evaluation/` | Metrics, benchmark runner, faithfulness evaluation |
-| `optimization/` | CVXPY cost-minimization formulation and solver |
-| `scripts/` | CLI entry points for all pipelines and benchmarks |
-| `tests/` | Unit and integration tests |
-| `visualization/` | Schedule and load-profile plots |
-| `web/` | FastAPI server and HTML chat UI |
-| `experiments/` | Benchmark outputs (CSV, JSON, plots) — gitignored |
-| `results/` | Pre-computed reference results (the numbers reported in the paper, §VI-B) |
-| `docs/` | Architecture and module reference (`ARCHITECTURE.md`) |
+## Where things are
+
+| path | what |
+|---|---|
+| `run.py` | the one entry point: `list-methods`, `show-prompt`, `run`, `report`, `rescore`, `freeze-days`, `index`, `serve` |
+| `methods/` | one folder per method with its `method.json` and its `.txt` prompts; the code by role under `methods/agent/`, `methods/prompting/`, `methods/deterministic/`. `methods/README.md` is the table |
+| `solver/` | the trusted tool: the CVXPY linear program (`solver.py`) and the constraint checker (`checker.py`) |
+| `evaluation/` | `requests.py` (the scenario generator), `stress.py` (the unanswerable days), `outcome.py` (solved / escalated / wrong-unflagged), `formulation.py`, `traceability.py`, `metrics/`, `runner.py` (the benchmark matrix), `rescore.py`, `report.py`, `page_fragments.py` (this case study's sections of the shared site) |
+| `data/` | the session schema, the loader, and `data/benchmark/` with the twenty frozen days and their manifest of content hashes |
+| `config/` | site constants and tariff (`site.py`), model resolution and the client (`llm.py`) |
+| `results/` | one directory per run set, each with `rows.csv`, `scoreboard.md`, `run_manifest.json`, `traces/` and `REPORT.md`; `INDEX.md` lists them |
+| `tests/` | API-key-free; `test_methods_prompts.py` pins the hash of every prompt text |
+| `ui/` | the FastAPI chat demo |
+| `viz/` | schedule and load-profile plots |
+
+## The six methods
+
+The same six, with the same names and in the same order, as every other case study.
+
+| method | LLM | tools | gate | runs today |
+|---|---|---|---|---|
+| `rule_based` — regular expressions read the request, the LP does the rest | no | yes | none | not yet |
+| `llm_only_structured` — the model writes the kW matrix as text | yes | no | none | yes |
+| `llm_only_cot` — the same plus one reasoning section | yes | no | none | yes |
+| `plan_act_nogate` — one call emits the whole tool plan, then it executes | yes | yes | none | not yet |
+| `react_nogate` — tool call, observation, repeat, inside the round budget | yes | yes | none | not yet |
+| `evagent` — the ReAct loop plus the verification gate E1–E6 | yes | yes | final | yes |
+
+`python run.py list-methods` prints this from `methods/`. Two quantities are computed on every day
+and printed beside the table rather than scored as methods: the CVXPY optimum (the cost gap is
+measured against it) and charge-as-soon-as-possible (the uncontrolled rule).
 
 ## Setup
 
-### 1. Get the code
-
 ```bash
-git clone <this-repo-url>
-cd ev-scheduling
-```
-
-The Caltech `acnportal` library is installed automatically from PyPI by
-`requirements.txt` in the next step — no separate clone is needed.
-
-### 2. Create a virtual environment
-
-```bash
-python -m venv .venv
-source .venv/bin/activate # Windows: .venv\Scripts\activate
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env        # OPENROUTER_API_KEY for runs; ACN_DATA_API_TOKEN only to freeze new days
 ```
 
-(`uv` also works: `uv venv && uv pip install -r requirements.txt`)
+The twenty benchmark days are frozen under `data/benchmark/` and committed, so the benchmark
+reproduces with no token and no network. Each day file carries its fetch timestamp and a sha256 of
+its records; a day edited after freezing fails its hash check when it loads.
 
-### 3. Set up API keys
-
-Copy `.env.example` to `.env` and fill in your keys:
+## Running
 
 ```bash
-cp .env.example .env
+python run.py run --dry-run --days 20 --data-source cache     # the cost estimate; spends nothing
+python run.py run --days 20 --data-source cache               # every method, every frozen day
+python run.py report results/<dir> --pdf                      # REPORT.md next to the rows; no model is called
+python run.py index                                           # results/INDEX.md
 ```
 
-```
-ACN_DATA_API_TOKEN=your_caltech_acn_token # from https://ev.caltech.edu
-OPENAI_API_KEY=your_openai_key
-```
+Every method sees the same days, the same generated requests (one list, hashed, the digest on every
+row), the same seeds and the same completion budget. A run refuses to start if a method it was
+asked for cannot run, writes a day that fails as a row with its error rather than omitting it, and
+refuses to write a synthetic smoke test inside the repository.
 
-`ACN_DATA_API_TOKEN` is needed for any script that fetches live session data. `OPENAI_API_KEY` is needed for the baseline, agent, and web GUI. Neither is committed — `.env` is gitignored.
-
-## Session data
-
-Sessions come from three places, in this order of preference.
-
-| Source | Where it lives | When it is used |
-|--------|----------------|-----------------|
-| Frozen benchmark days | `data/benchmark/<site>_<date>.json` | Always, when the day is committed. No token, no network |
-| ACN-Data API | https://ev.caltech.edu | Only when the day is not frozen and `ACN_DATA_API_TOKEN` is set |
-| Synthetic fixtures | `data/benchmark/fixtures/SYNTHETIC_<site>_<date>.json` | Only when asked for explicitly |
-
-`load_sessions(site_id, day_date, ...)` resolves this automatically. A caller selects the
-source with the `source` argument (`"auto"`, `"cache"`, `"api"`, `"fixture"`) or, for scripts
-that do not pass it, with the `EV_SESSIONS_SOURCE` environment variable:
-
-```bash
-python -m scripts.run_agent --site caltech --date 2019-06-15                     # frozen day, else API
-EV_SESSIONS_SOURCE=fixture python -m scripts.run_agent_vs_baseline               # synthetic days, offline
-EV_SESSIONS_SOURCE=cache python -m scripts.run_agent_vs_baseline                 # frozen days only, never the network
-```
-
-### Freezing the benchmark days
-
-The 20 evaluation days behind the paper's §VI-B table are frozen once and then committed, so
-the benchmark reproduces without a token. With `ACN_DATA_API_TOKEN` in `.env`, from the project
-root:
-
-```bash
-python -m scripts.freeze_benchmark_days --dry-run   # list the days, fetch nothing
-python -m scripts.freeze_benchmark_days             # fetch and write the missing days
-```
-
-Each day file holds the raw API records for that day, the fetch timestamp, the record count,
-and a sha256 of the records. `data/benchmark/manifest.json` collects the same per day. Existing
-files are never overwritten without `--force`, and a day file edited after freezing fails its
-hash check on the next load.
-
-### Synthetic fixtures
-
-`data/benchmark/fixtures/` holds 20 generated days, one standing in for each benchmark date, so
-the optimizer, constraint checker, baseline, agent, and tests can run before a token is
-available. They are **not measurements**: the file name starts with `SYNTHETIC_`, the document
-carries `synthetic: true` and a warning, every session and charger ID starts with `SYNTH-`, and
-every fixture load prints a warning to stderr. Never report a number computed from them. Four of
-the days request more energy than a 50 kW cap can deliver, so they exercise the unmet-energy and
-infeasibility paths. Regenerate them (deterministically) with:
-
-```bash
-python -m data.benchmark.fixtures_gen --force
-```
-
-## LLM model
-
-All LLM calls — the direct-prompt baseline, every agent stage, and the web GUI —
-use OpenAI **`gpt-4o`** with `temperature=0.0` (deterministic decoding). The model
-is set in `scripts/run_agent_vs_baseline.py` (`BASELINE_MODEL`) and as the default
-of each entry point; the reference numbers in [`results/`](results/) (paper §VI-B)
-were generated with this configuration.
+Nothing spends API credit without an explicit go, and every run ends with `report`.
 
 ## Tests
-
-From the project root with the venv active:
 
 ```bash
 pytest
 ```
 
-To run a specific file:
+`tests/test_methods_prompts.py` pins the sha256 of every prompt text under `methods/`. Changing a
+prompt fails that test until the pin is updated on purpose, because a silent wording change would
+make new runs incomparable with the ones already reported.
+
+## The shared site
 
 ```bash
-pytest tests/test_constraints.py
-pytest tests/test_baseline_parse.py
-pytest tests/test_data_loader.py
-pytest tests/test_faithfulness.py
+cd .. && python -m visuals.build && open site/index.html      # or: python run.py serve
 ```
 
-- `test_constraints.py` — constraint checker: feasible schedule and one violation per constraint type
-- `test_baseline_parse.py` — LLM output resampling and schedule parsing
-- `test_data_loader.py` — ACN-Data API loader and session format conversion (skips live fetch if token not set)
-- `test_faithfulness.py` — claim extraction and ground-truth comparison for explanation faithfulness
-
-## Web GUI
-
-Start the server from the project root:
-
-```bash
-uvicorn web.app:app --reload --port 8000
-```
-
-Then open http://localhost:8000.
-
-You can type a natural-language scheduling request like:
-
-> "I have 5 EVs. EV1 arrives at 08:00, leaves at 17:00, and needs 20 kWh. EV2 arrives at 09:00, leaves at 18:00, needs 15 kWh. Site capacity is 50 kW. Schedule for today."
-
-The agent parses the request, solves the optimizer, validates constraints, and returns a plain-English explanation with a schedule table and load-profile chart. Follow-up questions like "what if EV3 arrives two hours later?" work within the same session.
-
-Needs `OPENAI_API_KEY` in `.env`.
-
-## Running the Pipelines
-
-All commands below should be run from the project root with the venv active.
-
-### Phase A — Optimizer only
-
-```bash
-python -m scripts.run_phase_a --site caltech --date 2019-06-15
-```
-
-Pulls sessions from the ACN-Data API, solves the CVXPY schedule, checks constraints, prints metrics (cost, peak load, unmet energy, % fully served, % cost reduction vs uncontrolled), and saves plots to `experiments/`. Needs `ACN_DATA_API_TOKEN`.
-
-### Phase B — LLM Baseline
-
-```bash
-python -m scripts.run_baseline --site caltech --date 2019-06-15
-```
-
-Sends session data as a natural-language prompt and parses the LLM's returned schedule. Checks constraints and prints the same metrics. Needs `OPENAI_API_KEY`.
-
-### Phase C — Agentic Pipeline
-
-```bash
-python -m scripts.run_agent --site caltech --date 2019-06-15
-```
-
-Runs the full Plan → Optimize → Validate → Refine → Explain pipeline, then checks constraints and saves plots. Needs `OPENAI_API_KEY`.
-
-### Full Benchmark (A + B + C)
-
-```bash
-python -m scripts.run_benchmark_abc
-python -m scripts.run_benchmark_abc --sites caltech jpl --ndays 15
-python -m scripts.run_benchmark_abc --sites caltech --dates 2019-06-15 2019-06-16 --skip-c
-```
-
-Runs all three phases across multiple sites and days and writes results to `benchmark_results/metrics_abc.csv` and `metrics_abc.json`. Options: `--sites`, `--ndays`, `--dates`, `--output-dir`, `--skip-b`, `--skip-c`. Needs both keys.
-
-### Agent vs Baseline Comparison
-
-```bash
-python -m scripts.run_agent_vs_baseline
-python -m scripts.run_agent_vs_baseline --ndays 10
-python -m scripts.run_agent_vs_baseline --skip-baseline
-```
-
-Runs the optimizer, baseline, and agent on the same natural-language input for each day and compares results. Outputs per-day plots to `benchmark_results/per_day/`, plus `day_by_day_comparison.md`, `average_results_table.md`, and `average_results_bar.png`. Options: `--ndays`, `--output-dir`, `--skip-optimizer`, `--skip-baseline`, `--skip-agent`, `--dates`. Needs `OPENAI_API_KEY`.
-
-## Pre-computed Results
-
-`results/average_results_table.md` has the averaged benchmark metrics reported in
-the paper (§VI-B): cost, peak load, unmet energy, % served, and constraint
-violations for the optimizer, the LLM-only baseline, and the agent over the
-20-day evaluation window. Re-run `scripts/run_agent_vs_baseline.py` to regenerate
-the full outputs (per-day plots, day-by-day table, bar chart) under
-`benchmark_results/`.
-
-## Architecture
-
-Module-level documentation (data schema, loader, solver formulation, constraint
-checker, metrics) is consolidated in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+`evaluation/page_fragments.py` writes this case study's sections from the method registry, the
+gate's condition table, the scenario generator, the prompt builders and the result files. Nothing on
+the site is typed by hand.

@@ -214,13 +214,13 @@ COLUMNS: Tuple[Dict[str, str], ...] = (
 
 
 def arms() -> Dict[str, Any]:
-    from scripts.run_ev_matrix import ARMS
+    from evaluation.runner import ARMS
 
     return ARMS
 
 
 def gate_module() -> Any:
-    from agent.validate import gate
+    from methods.agent.validate import gate
 
     return gate
 
@@ -602,11 +602,11 @@ BLOCKS: Dict[str, Tuple[str, str, str]] = {
     "sys_infer": ("#0f8f84", "system · inference of missing fields", "methods/_shared/parse_inference_system.txt"),
     "u_role": ("#6d4fc4", "user · role", "methods/_shared/llm_only_role.txt"),
     "u_data": ("#c99a06", "user · system data: time grid, units, labels",
-               "baseline/strategies.py::_context_section"),
+               "methods/prompting/strategies.py::_context_section"),
     "u_task": ("#0f8f84", "user · task: the request, verbatim", "evaluation/requests.py::render_request"),
     "u_reason": ("#c0392b", "user · reasoning instructions", "methods/llm_only_cot/reasoning_section.txt"),
-    "u_out": ("#c99a06", "user · output requirements", "baseline/strategies.py::_output_section"),
-    "tools": ("#0f8f84", "tool schema (function calling)", "agent/llm_agent.py::_SOLVE_TOOL"),
+    "u_out": ("#c99a06", "user · output requirements", "methods/prompting/strategies.py::_output_section"),
+    "tools": ("#0f8f84", "tool schema (function calling)", "methods/agent/llm_agent.py::_SOLVE_TOOL"),
 }
 
 # Which block a ``## Heading`` in the assembled user message belongs to.
@@ -686,7 +686,7 @@ def _block(kind: str, text: str, *, source: str = "", collapse: bool = False) ->
 def tab_prompts() -> str:
     """What each method sends, block by block, for a chosen scenario."""
     import methods
-    from baseline.strategies import build_messages, normalise_strategy
+    from methods.prompting.strategies import build_messages, normalise_strategy
 
     examples = example_requests()
     if not examples:
@@ -764,7 +764,7 @@ def tab_prompts() -> str:
                     "_shared/parse_inference_system.txt": "sys_infer",
                 }.get(rel, "sys_agent")
                 inner.append(_block(kind, methods.read_text(rel), source=f"methods/{rel}"))
-            import agent.llm_agent as LA
+            import methods.agent.llm_agent as LA
 
             inner.append(_block("tools", json.dumps(LA._SOLVE_TOOL, indent=2), collapse=True))
             for variant, req in examples.items():
@@ -785,7 +785,7 @@ def _sha(text: str) -> str:
 
 
 def tab_tools() -> str:
-    import agent.llm_agent as LA
+    import methods.agent.llm_agent as LA
 
     tool = LA._SOLVE_TOOL["function"]
     g = gate_module()
@@ -1041,7 +1041,7 @@ def tab_results() -> str:
 
 
 def tab_analysis() -> str:
-    """The report each run ends with, rendered. Written by scripts/ev_report.py, never by a model."""
+    """The report each run ends with, rendered. Written by evaluation/report.py, never by a model."""
     from visuals.shell import markdown
 
     dirs = [d for d in run_dirs() if (d / "REPORT.md").exists()]
@@ -1049,7 +1049,7 @@ def tab_analysis() -> str:
         return card(
             "Analysis",
             "<p class='muted'>No results directory carries a REPORT.md yet.</p>"
-            "<p>Every run ends with <code>python -m scripts.ev_report &lt;dir&gt;</code>, which writes the "
+            "<p>Every run ends with <code>python -m evaluation.report &lt;dir&gt;</code>, which writes the "
             "report from the rows the run already wrote: what was run, the protocol, every rate with its "
             "denominator, per-method detail, budget and caveats. No model is called to write it.</p>",
         )
@@ -1057,7 +1057,7 @@ def tab_analysis() -> str:
         card(
             "What the reports are",
             "<p>Each results directory ends with a <code>REPORT.md</code> written by "
-            "<code>scripts/ev_report.py</code> from the rows the run produced: what was run, the protocol, "
+            "<code>evaluation/report.py</code> from the rows the run produced: what was run, the protocol, "
             "every rate with the denominator it was computed over, per-method detail, the budget, and what "
             "the numbers do not support. No model is called to write it, and nothing in it is typed by hand.</p>"
             "<p class='muted'>The failure catalogue and the conclusions across runs are written once the "

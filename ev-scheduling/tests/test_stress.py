@@ -26,13 +26,13 @@ from typing import List
 import numpy as np
 import pytest
 
-from agent.validate.gate import MATERIAL_UNMET_KWH, is_material_shortfall
+from methods.agent.validate.gate import MATERIAL_UNMET_KWH, is_material_shortfall
 from config.site import SiteConfig, TOUConfig, default_tou_rates
 from data.benchmark import store
 from data.format.schema import DaySessions, Session
 from data.loader.loader import load_sessions
 from evaluation import stress as st
-from optimization.solver import solve
+from solver.solver import solve
 
 # Four of the smallest real days, one per class. Each has to be a day the class
 # can actually be applied to: ``build_item`` refuses a perturbation that leaves
@@ -464,7 +464,7 @@ def test_a_stressed_day_would_be_reported_as_a_success_without_the_new_condition
     optimal, the schedule still breaks no hard constraint, and E1 to E5 would pass
     on an answer that never mentions the undelivered energy.
     """
-    from constraints.checker import check
+    from solver.checker import check
 
     for item in items:
         if not item.truth.material:

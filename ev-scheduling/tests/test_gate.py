@@ -1,8 +1,8 @@
-"""Unit tests for agent.validate.gate: the five conditions, and the one retry.
+"""Unit tests for methods.agent.validate.gate: the five conditions, and the one retry.
 
 Offline and adversarial. No API key, no LLM and no CVXPY: the solve results are
-hand-written in the shape ``optimization.solver.SolveResult`` returns, and the
-tool outputs are the dicts ``agent/llm_agent.py::_execute_solve`` builds. Each
+hand-written in the shape ``solver.solver.SolveResult`` returns, and the
+tool outputs are the dicts ``methods/agent/llm_agent.py::_execute_solve`` builds. Each
 failure test isolates one condition, so a change that makes a condition stop
 catching its own failure class fails here and not somewhere else.
 
@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pytest
 
-from agent.validate.gate import (
+from methods.agent.validate.gate import (
     ACCEPT,
     CONDITION_DESCRIPTIONS,
     CONDITION_LABELS,
@@ -49,7 +49,7 @@ from evaluation.outcome import classify_outcome
 
 @dataclass
 class FakeSolve:
-    """Same fields as ``optimization.solver.SolveResult``, built without CVXPY."""
+    """Same fields as ``solver.solver.SolveResult``, built without CVXPY."""
 
     schedule: np.ndarray
     total_cost_usd: float = 0.0

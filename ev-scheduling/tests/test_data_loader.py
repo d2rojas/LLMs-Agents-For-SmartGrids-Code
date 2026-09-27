@@ -101,38 +101,24 @@ def _fixture_dates() -> List[date]:
     return [date.fromisoformat(row["date"]) for row in manifest["days"]]
 
 
-def _benchmark_constants_from_runner() -> Tuple[str, List[date]]:
-    """Read SITE_ID and BENCHMARK_DATES out of scripts/run_agent_vs_baseline.py.
+def _runner_reads_benchmark_constants_from_store() -> Tuple[bool, bool]:
+    """Whether evaluation/runner.py takes the site and the dates from data/benchmark/store.py.
 
-    Parsed with ast rather than imported, so the test needs neither openai nor cvxpy.
+    Read as text rather than imported, so the test needs neither openai nor cvxpy.
+    The old cross-check compared two hand-maintained copies of the date list; the
+    runner now has none of its own, so the check is that it reads the one copy.
     """
-    source = (PROJECT_ROOT / "scripts" / "run_agent_vs_baseline.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    site_id = ""
-    dates: List[date] = []
-    for node in tree.body:
-        if isinstance(node, ast.AnnAssign):
-            targets = [node.target]
-        elif isinstance(node, ast.Assign):
-            targets = node.targets
-        else:
-            continue
-        names = [t.id for t in targets if isinstance(t, ast.Name)]
-        if "SITE_ID" in names:
-            site_id = ast.literal_eval(node.value)
-        if "BENCHMARK_DATES" in names:
-            for element in node.value.elts:
-                y, m, d = (ast.literal_eval(a) for a in element.args)
-                dates.append(date(y, m, d))
-    return site_id, dates
+    source = (PROJECT_ROOT / "evaluation" / "runner.py").read_text(encoding="utf-8")
+    return ("store.BENCHMARK_SITE_ID" in source, "store.BENCHMARK_DATES" in source)
 
 
 def test_benchmark_constants_match_the_runner() -> None:
-    """store.BENCHMARK_DATES/SITE_ID mirror the ones the paper's runner uses."""
-    site_id, dates = _benchmark_constants_from_runner()
-    assert site_id == store.BENCHMARK_SITE_ID
-    assert dates == store.BENCHMARK_DATES
-    assert len(dates) == 20
+    """The runner has no date list of its own: it reads store.BENCHMARK_DATES and SITE_ID."""
+    reads_site, reads_dates = _runner_reads_benchmark_constants_from_store()
+    assert reads_site and reads_dates
+    assert len(store.BENCHMARK_DATES) == 20
+    assert store.BENCHMARK_SITE_ID == "caltech"
+
 
 
 def test_every_benchmark_date_has_a_fixture() -> None:
@@ -258,7 +244,7 @@ def test_write_day_file_refuses_to_overwrite(tmp_path) -> None:
 
 def test_freeze_script_keeps_existing_days_without_force(monkeypatch, tmp_path) -> None:
     """freeze_benchmark_days re-fetches nothing that is already frozen, and writes a manifest."""
-    freeze = importlib.import_module("scripts.freeze_benchmark_days")
+    freeze = importlib.import_module("data.benchmark.freeze")
     day_date = date(2019, 5, 1)
     calls: List[date] = []
 
@@ -304,7 +290,7 @@ def test_missing_day_without_token_explains_how_to_fix_it(monkeypatch, tmp_path)
     with pytest.raises(ValueError) as exc:
         load_sessions("caltech", date(2019, 5, 1), benchmark_dir=tmp_path)
     message = str(exc.value)
-    assert "freeze_benchmark_days" in message
+    assert "data.benchmark.freeze" in message
     assert loader.SOURCE_ENV_VAR in message
 
 

@@ -1,7 +1,7 @@
 """Load sessions for one site-day: frozen local copy first, ACN-Data API second.
 
 The 20 evaluation days behind paper §VI-B are committed under data/benchmark/ by
-scripts/freeze_benchmark_days.py, so the benchmark reproduces with no token and no
+data/benchmark/freeze.py, so the benchmark reproduces with no token and no
 network. The API is contacted only for a day that is not frozen yet and only when
 ACN_DATA_API_TOKEN is set.
 
@@ -328,7 +328,7 @@ def load_sessions(
             f"No frozen day file for {site_id} {day_date.isoformat()} at "
             f"{store.day_path(site_id, day_date, benchmark_dir=benchmark_dir)} and "
             "ACN_DATA_API_TOKEN is not set. Freeze the benchmark days with "
-            "'python -m scripts.freeze_benchmark_days' once you have a token, or set "
+            "'python -m data.benchmark.freeze' once you have a token, or set "
             f"{SOURCE_ENV_VAR}=fixture to run the pipeline on synthetic days."
         )
     records = fetch_sessions_from_api(site_id, day_date, api_token=token)

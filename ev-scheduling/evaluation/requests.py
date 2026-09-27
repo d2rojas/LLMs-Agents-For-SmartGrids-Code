@@ -11,7 +11,7 @@ Why the module exists
 ---------------------
 The benchmark used to hand the agent an already-structured ``DaySessions`` *and*
 a session table inside the prompt (``scripts/run_agent_vs_baseline.py`` and
-``baseline/prompt.py::build_prompt_for_agent``), so no formulation step existed
+``methods/prompting/prompt.py::build_prompt_for_agent``), so no formulation step existed
 anywhere on the evaluated path and ``evaluation/formulation.py`` had nothing to
 score. The rigid ``_build_nl_request`` helper in that script emits one HH:MM
 template for every car, which tests a regex, not an extraction. The text here
@@ -107,7 +107,7 @@ from config.site import SiteConfig, TOUConfig, default_tou_rates
 from data.format.schema import DaySessions, Session
 from evaluation.metrics import UNMET_TOL_KWH, peak_load_kw, total_cost, total_unmet_kwh
 from evaluation.outcome import RequestAnswer
-from optimization.solver import solve
+from solver.solver import solve
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -1440,10 +1440,10 @@ def reference_parse(text: str) -> Any:
         text: A request rendered by ``render_request``.
 
     Returns:
-        ``agent.parse.parse.ParsedProblem`` with one ParsedSession per car, in
+        ``methods.agent.parse.parse.ParsedProblem`` with one ParsedSession per car, in
         the order the text enumerates them and labelled "EV-1", "EV-2", ...
     """
-    from agent.parse.parse import ParsedProblem, ParsedSession
+    from methods.agent.parse.parse import ParsedProblem, ParsedSession
 
     sessions: List[Any] = []
     for sentence in _sentences(text):

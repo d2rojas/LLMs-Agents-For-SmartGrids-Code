@@ -4,8 +4,8 @@ One folder per evaluated method. Each folder holds a `method.json` saying what t
 the runner names it and which texts it is built from, plus the `.txt` texts only that method uses.
 Texts several methods share live in `_shared/`.
 
-These files are the **only** copy of every prompt. `baseline/strategies.py`, `agent/llm_agent.py`
-and `agent/parse/parse.py` read them at import time, so editing a `.txt` changes the prompt for the
+These files are the **only** copy of every prompt. `methods/prompting/strategies.py`, `methods/agent/llm_agent.py`
+and `methods/agent/parse/parse.py` read them at import time, so editing a `.txt` changes the prompt for the
 benchmark and for every other caller at once. `tests/test_methods_prompts.py` pins the hash of every
 text to the value the committed runs were produced with. Changing a prompt therefore fails a test
 until the pin is updated on purpose, which is the point: a silent wording change would make new runs

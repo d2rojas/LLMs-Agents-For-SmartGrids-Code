@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pytest
 
-from baseline.run import run_baseline
+from methods.prompting.run import run_baseline
 from config.llm import (
     ModelSpec,
     RunRecorder,
@@ -425,7 +425,7 @@ def test_baseline_skips_the_call_when_there_is_nothing_to_schedule() -> None:
 @requires_cvxpy
 def test_agent_returns_usage_and_writes_a_trace(tiny_problem, tmp_path: Path) -> None:
     """One tool round then a text turn: two model calls, one tool call."""
-    from agent.llm_agent import AgentLLMResult, run_agent_llm
+    from methods.agent.llm_agent import AgentLLMResult, run_agent_llm
 
     day, site, tou = tiny_problem
     client = _FakeClient([
@@ -468,8 +468,8 @@ def test_agent_returns_usage_and_writes_a_trace(tiny_problem, tmp_path: Path) ->
 def test_agent_result_still_unpacks_as_the_legacy_six_tuple(
     tiny_problem, tmp_path: Path
 ) -> None:
-    """agent.run.run_agent unpacks six values; that must keep working."""
-    from agent.llm_agent import run_agent_llm
+    """methods.agent.run.run_agent unpacks six values; that must keep working."""
+    from methods.agent.llm_agent import run_agent_llm
 
     day, site, tou = tiny_problem
     client = _FakeClient([
@@ -504,7 +504,7 @@ def test_agent_without_a_tool_call_reports_zero_tool_calls(
     tiny_problem, tmp_path: Path
 ) -> None:
     """A conceptual question is answered directly and the solver is not run."""
-    from agent.llm_agent import run_agent_llm
+    from methods.agent.llm_agent import run_agent_llm
 
     day, site, tou = tiny_problem
     client = _FakeClient([_text_response("TOU pricing charges more at peak hours.")])
@@ -528,7 +528,7 @@ def test_agent_without_a_tool_call_reports_zero_tool_calls(
 
 @requires_cvxpy
 def test_agent_never_writes_a_trace_when_asked_not_to(tiny_problem, tmp_path: Path) -> None:
-    from agent.llm_agent import run_agent_llm
+    from methods.agent.llm_agent import run_agent_llm
 
     day, site, tou = tiny_problem
     client = _FakeClient([_tool_response(), _text_response("Done.")])

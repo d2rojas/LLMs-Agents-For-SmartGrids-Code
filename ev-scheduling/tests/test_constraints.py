@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from config.site import SiteConfig
-from constraints.checker import (
+from solver.checker import (
     HARD_VIOLATION_KINDS,
     SOFT_VIOLATION_KINDS,
     CheckResult,

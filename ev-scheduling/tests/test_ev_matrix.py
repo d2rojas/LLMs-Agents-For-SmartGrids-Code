@@ -43,8 +43,8 @@ import pytest
 
 from data.benchmark import store
 from evaluation.requests import VARIANTS, build_request, extract_answer, load_benchmark_requests
-from scripts import ev_report
-from scripts import run_ev_matrix as matrix
+from evaluation import report as ev_report
+from evaluation import runner as matrix
 
 SUBSET_DATES = [date(2019, 4, 15), date(2018, 12, 3)]
 
@@ -292,7 +292,7 @@ def test_synthetic_run_refuses_to_write_inside_the_repository(tmp_path):
         matrix.resolve_out_dir(str(inside), synthetic=True, model_slug="m", stamp="s")
     message = str(excinfo.value)
     assert "refusing to write a synthetic smoke test inside the repository" in message
-    assert "freeze_benchmark_days.py" in message
+    assert "data/benchmark/freeze.py" in message
 
 
 def test_synthetic_default_directory_is_outside_the_repository(monkeypatch):

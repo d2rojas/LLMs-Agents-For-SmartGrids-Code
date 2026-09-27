@@ -5,7 +5,7 @@ data/benchmark/fixtures/ and the ground truth is recomputed with the CVXPY
 solver, which is the point of most of these tests: the committed truth has to be
 what the solver actually returns, not what the generator asserts.
 
-``agent.parse.parse`` is imported for its dataclasses only; that module imports
+``methods.agent.parse.parse`` is imported for its dataclasses only; that module imports
 openai lazily inside its functions, the same reason tests/test_formulation.py
 gives.
 """
@@ -15,13 +15,13 @@ from datetime import date
 
 import pytest
 
-from agent.parse.parse import ParsedProblem, ParsedSession
+from methods.agent.parse.parse import ParsedProblem, ParsedSession
 from data.format.schema import DaySessions, Session
 from evaluation import requests as rq
 from evaluation.formulation import formulation_exact
 from evaluation.metrics import total_cost, total_unmet_kwh
 from evaluation.outcome import FAIL, NOT_CHECKABLE, PASS, GateVerdict, check_answer, classify_outcome
-from optimization.solver import solve
+from solver.solver import solve
 
 DT = 0.25
 N_STEPS = 96
