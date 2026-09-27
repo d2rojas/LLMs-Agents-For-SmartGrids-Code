@@ -267,7 +267,7 @@ def landing(built: Dict[str, Dict[str, Any]]) -> str:
         "<h3>Measurements</h3>"
         "<p>Metrics are grouped as task utility, solver-grounded correctness, and cost of operation. The latter "
         "two groups are defined identically in every case study. Task-utility metrics are case-specific, because "
-        "the tasks optimise different objectives.</p>",
+        "the tasks optimize different objectives.</p>",
         "<p class='muted'>Reproducibility: each page is generated from the executable configuration of its case "
         "study, comprising the method registry, the verification conditions, the instance generator, the prompt "
         "builders and the recorded results. No description on these pages is maintained separately from the code "
