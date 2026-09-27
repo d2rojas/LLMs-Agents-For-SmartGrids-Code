@@ -214,13 +214,13 @@ COLUMNS: Tuple[Dict[str, str], ...] = (
 
 
 def arms() -> Dict[str, Any]:
-    from scripts.run_ev_matrix import ARMS
+    from evaluation.runner import ARMS
 
     return ARMS
 
 
 def gate_module() -> Any:
-    from agent.validate import gate
+    from methods.agent.validate import gate
 
     return gate
 
@@ -232,21 +232,36 @@ def frozen_days() -> List[Dict[str, Any]]:
     return list(json.loads(path.read_text(encoding="utf-8")).get("days", []))
 
 
-def run_dirs() -> List[Path]:
+def method_dirs() -> List[Path]:
+    """Every results/<instance>/<date>/<model>/<method>/ folder, newest date first."""
     root = PROJECT_ROOT / "results"
-    return [d for d in sorted(root.iterdir()) if (d / "run_manifest.json").exists()] if root.is_dir() else []
+    dirs = [p.parent for p in root.glob("*/*/*/*/summary.json")] if root.is_dir() else []
+    return sorted(dirs, key=lambda d: (d.parts[-3], d.parts[-4]), reverse=True)
 
 
-def read_rows(d: Path) -> List[Dict[str, str]]:
-    f = d / "rows.csv"
+def latest_run() -> List[Path]:
+    """The method folders of the newest date, the run set the page reports."""
+    dirs = method_dirs()
+    if not dirs:
+        return []
+    newest = dirs[0].parts[-3]
+    return [d for d in dirs if d.parts[-3] == newest]
+
+
+def read_summary(d: Path) -> List[Dict[str, str]]:
+    f = d / "summary.csv"
     if not f.exists():
         return []
     with f.open(encoding="utf-8", newline="") as fh:
         return list(csv.DictReader(fh))
 
 
+def read_header(d: Path) -> Dict[str, Any]:
+    return json.loads((d / "summary.json").read_text(encoding="utf-8"))
+
+
 def sample_request() -> Optional[Dict[str, Any]]:
-    for d in run_dirs():
+    for d in latest_run():
         f = d / "requests.jsonl"
         if f.exists():
             for line in f.read_text(encoding="utf-8").splitlines():
@@ -501,36 +516,65 @@ def tab_scenarios() -> str:
         )
     ]
 
+    examples = example_requests()
+    rows = []
+    for v in R.VARIANTS:
+        r = examples.get(v)
+        if r is None:
+            rows.append([f"<code>{E(v)}</code>", "<span class='muted'>could not be generated on the first days</span>", "", "", ""])
+            continue
+        if r.kind == "state":
+            asks = "<i>the schedule itself</i>. " + E(r.text.strip().splitlines()[-1][-160:])
+            truth = (
+                "the schedule must be runnable (no hard violation) and its cost within tolerance of the "
+                f"optimum, which for this day is ${r.truth.get('cost_usd', 0):,.2f} with "
+                f"{r.truth.get('unmet_kwh', 0):,.2f} kWh undelivered"
+            )
+        else:
+            asks = E(r.question)
+            t = r.truth
+            truth = E(", ".join(t) if isinstance(t, list) else str(t))
+            truth = f"<code>{truth}</code>" + (f" ± {E(r.tolerance)}" if r.tolerance else "")
+        cls = (
+            "state: the schedule is the answer" if v in R.STATE_VARIANTS
+            else "shortfall: the answer must state undelivered energy" if v in R.SHORTFALL_VARIANTS
+            else "question about the day"
+        )
+        rows.append([
+            f"<code>{E(v)}</code><div class='muted'>{E(cls)}</div>",
+            asks,
+            truth,
+            E(r.kind),
+            f"<details><summary>the request, {len(r.text):,} chars</summary><pre>{E(r.text)}</pre></details>",
+        ])
+
     body.append(
         card(
-            "The requests",
-            "<p>One request per day and variant, generated as free text rather than filled into a template: times "
-            "spelled out in words, energies given in Wh or kWh, power in W or kW, and several sentence shapes per "
-            "session. Reading the request is half of the task being measured, so the text has to be worth "
-            "reading.</p>"
-            "<p>The list is generated once, hashed, and the digest is recorded on every result row, so any table "
-            "built from those rows can be shown to have asked every method the same thing.</p>",
+            "The requests: what each variant asks, and what counts as correct",
+            "<p>Every day gets one request. Ten variants share the days in rotation, so the same "
+            "twenty days pose ten different questions. Every variant describes the same thing first, "
+            "the cars and the tariff, in free text: times spelled out, energies in Wh or kWh, power in "
+            "W or kW, several sentence shapes per car. What differs is the last sentence, which is the "
+            "question, and therefore what the answer is scored against.</p>"
+            "<p>The list is generated once, hashed, and the digest is recorded on every result row, so "
+            "a table built from those rows can be shown to have asked every method the same thing.</p>",
             table(
-                ["variant", "what the answer has to be", "note"],
-                [
-                    [
-                        f"<code>{E(v)}</code>",
-                        E(R.ANSWER_KIND_BY_VARIANT.get(v, "")),
-                        "<span class='muted'>"
-                        + E(
-                            "the schedule itself is the answer"
-                            if v in R.STATE_VARIANTS
-                            else "the answer has to state undelivered energy"
-                            if v in R.SHORTFALL_VARIANTS
-                            else ""
-                        )
-                        + "</span>",
-                    ]
-                    for v in R.VARIANTS
-                ],
+                ["variant", "what the request asks", "what counts as correct", "answer kind", "example"],
+                rows,
             ),
-            f"<p class='muted'>Site cap {R.SITE_CAP_KW:g} kW. Time-of-use tariff: ${R.PEAK_PRICE:.2f} per kWh "
-            f"between {R.PEAK_START_HOUR}:00 and {R.PEAK_END_HOUR}:00, ${R.OFF_PEAK_PRICE:.2f} otherwise.</p>",
+            note(
+                "Two variants have no question: the schedule is the answer, and it is scored as a state. "
+                "Three ask about a shortfall, and on a day that cannot be fully served the honest answer "
+                "is a number greater than zero, which is what the gate's condition E6 requires an agent to "
+                "say. The remaining five ask something with a single checkable value, so the answer term "
+                "of Solved applies to them.",
+                "info",
+            ),
+            f"<p class='muted'>Site cap {R.SITE_CAP_KW:g} kW unless the variant lowers it "
+            f"(<code>schedule_under_cap</code> draws from {', '.join(f'{c:g}' for c in R.LOWER_CAPS_KW)} kW). "
+            f"Time-of-use tariff: ${R.PEAK_PRICE:.2f} per kWh between {R.PEAK_START_HOUR}:00 and "
+            f"{R.PEAK_END_HOUR}:00, ${R.OFF_PEAK_PRICE:.2f} otherwise. Examples above are generated on "
+            "the first frozen day that can pose each variant.</p>",
         )
     )
 
@@ -573,11 +617,11 @@ BLOCKS: Dict[str, Tuple[str, str, str]] = {
     "sys_infer": ("#0f8f84", "system · inference of missing fields", "methods/_shared/parse_inference_system.txt"),
     "u_role": ("#6d4fc4", "user · role", "methods/_shared/llm_only_role.txt"),
     "u_data": ("#c99a06", "user · system data: time grid, units, labels",
-               "baseline/strategies.py::_context_section"),
+               "methods/prompting/strategies.py::_context_section"),
     "u_task": ("#0f8f84", "user · task: the request, verbatim", "evaluation/requests.py::render_request"),
     "u_reason": ("#c0392b", "user · reasoning instructions", "methods/llm_only_cot/reasoning_section.txt"),
-    "u_out": ("#c99a06", "user · output requirements", "baseline/strategies.py::_output_section"),
-    "tools": ("#0f8f84", "tool schema (function calling)", "agent/llm_agent.py::_SOLVE_TOOL"),
+    "u_out": ("#c99a06", "user · output requirements", "methods/prompting/strategies.py::_output_section"),
+    "tools": ("#0f8f84", "tool schema (function calling)", "methods/agent/llm_agent.py::_SOLVE_TOOL"),
 }
 
 # Which block a ``## Heading`` in the assembled user message belongs to.
@@ -657,7 +701,7 @@ def _block(kind: str, text: str, *, source: str = "", collapse: bool = False) ->
 def tab_prompts() -> str:
     """What each method sends, block by block, for a chosen scenario."""
     import methods
-    from baseline.strategies import build_messages, normalise_strategy
+    from methods.prompting.strategies import build_messages, normalise_strategy
 
     examples = example_requests()
     if not examples:
@@ -735,7 +779,7 @@ def tab_prompts() -> str:
                     "_shared/parse_inference_system.txt": "sys_infer",
                 }.get(rel, "sys_agent")
                 inner.append(_block(kind, methods.read_text(rel), source=f"methods/{rel}"))
-            import agent.llm_agent as LA
+            import methods.agent.llm_agent as LA
 
             inner.append(_block("tools", json.dumps(LA._SOLVE_TOOL, indent=2), collapse=True))
             for variant, req in examples.items():
@@ -756,7 +800,7 @@ def _sha(text: str) -> str:
 
 
 def tab_tools() -> str:
-    import agent.llm_agent as LA
+    import methods.agent.llm_agent as LA
 
     tool = LA._SOLVE_TOOL["function"]
     g = gate_module()
@@ -906,30 +950,24 @@ def tab_gate() -> str:
 
 
 def tab_results() -> str:
-    dirs = run_dirs()
+    dirs = latest_run()
     if not dirs:
-        return card("No runs yet", "<p>No results directory carries a run manifest.</p>")
-
-    latest = dirs[-1]
-    man = json.loads((latest / "run_manifest.json").read_text(encoding="utf-8"))
-    rows = read_rows(latest)
-    by_arm: Dict[str, List[Dict[str, str]]] = {}
-    for r in rows:
-        by_arm.setdefault(r.get("arm", "?"), []).append(r)
-
+        return card("No runs yet", "<p>No results folder carries a summary.json.</p>")
+    by_method = {read_header(d)["header"]["method"]: (d, read_summary(d), read_header(d)) for d in dirs}
+    date = dirs[0].parts[-3]
     body: List[str] = []
 
     # headline: the gated row against its target
-    ev = by_arm.get("evagent", [])
-    if ev:
-        n = len(ev)
-        solved = sum(1 for r in ev if r.get("outcome") == "solved")
-        esc = sum(1 for r in ev if r.get("outcome") == "escalated")
-        bad = sum(1 for r in ev if r.get("outcome") == "wrong_unflagged")
-        gate_ok = sum(1 for r in ev if str(r.get("gate_passed")).lower() == "true")
-        exact = sum(int(r["n_sessions_exact"] or 0) for r in ev if r.get("n_sessions_exact"))
-        truth = sum(int(r["n_sessions_truth"] or 0) for r in ev if r.get("n_sessions_truth"))
-        fdays = sum(1 for r in ev if r.get("formulation_status") == "pass")
+    if "evagent" in by_method:
+        d, rows, hdr = by_method["evagent"]
+        n = len(rows)
+        solved = sum(1 for r in rows if r.get("outcome") == "solved")
+        esc = sum(1 for r in rows if r.get("outcome") == "escalated")
+        bad = sum(1 for r in rows if r.get("outcome") == "wrong_unflagged")
+        gate_ok = sum(1 for r in rows if str(r.get("gate_pass")).lower() == "true")
+        exact = sum(int(r["n_sessions_exact"] or 0) for r in rows if r.get("n_sessions_exact"))
+        truth = sum(int(r["n_sessions_truth"] or 0) for r in rows if r.get("n_sessions_truth"))
+        fdays = sum(1 for r in rows if str(r.get("formulation_exact")).lower() == "true")
         share = 100.0 * exact / truth if truth else 0.0
         met = bad == 0 and solved + esc == n
         body.append(
@@ -938,7 +976,7 @@ def tab_results() -> str:
                 f"<p style='font-size:15px'>{verdict('solved')} {solved}/{n} &nbsp; {verdict('escalated')} "
                 f"{esc}/{n} &nbsp; {verdict('wrong')} {bad}/{n}</p>",
                 f"<p>Target: solved + escalated = {n}, wrong-unflagged = 0. "
-                + ("<b>Met.</b>" if met else f"<b>Not met.</b>")
+                + ("<b>Met.</b>" if met else "<b>Not met.</b>")
                 + f" The gate accepted <b>{gate_ok} of {n}</b> answers, and the formulation was exact on "
                 f"<b>{exact} of {truth} sessions ({share:.1f} %)</b> but on <b>{fdays} of {n} days</b>, since a day "
                 "counts only when every one of its sessions is right.</p>",
@@ -955,59 +993,83 @@ def tab_results() -> str:
             )
         )
 
-    # outcome split per arm
+    def pct(rows: List[Dict[str, str]], kind: str) -> str:
+        k = sum(1 for r in rows if r.get("outcome") == kind)
+        return f"{100.0 * k / len(rows):.0f} % <span class='muted'>({k}/{len(rows)})</span>"
+
     split = []
     for row in ROWS:
-        rs = by_arm.get(row["arm"], []) if row["arm"] else []
-        if not rs:
+        if row["name"] in by_method:
+            _d, rows, _h = by_method[row["name"]]
+            split.append([f"<b>{E(row['label'])}</b>", str(len(rows)), pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged")])
+        else:
             split.append([f"<b>{E(row['label'])}</b>", "<span class='muted'>not measured yet</span>", "", "", ""])
-            continue
-        n = len(rs)
-        def pct(kind: str) -> str:
-            k = sum(1 for r in rs if r.get("outcome") == kind)
-            return f"{100.0 * k / n:.0f} % <span class='muted'>({k}/{n})</span>"
-        split.append([f"<b>{E(row['label'])}</b>", str(n), pct("solved"), pct("escalated"), pct("wrong_unflagged")])
     for ref in REFERENCES:
-        rs = by_arm.get(ref["arm"], [])
-        if rs:
-            n = len(rs)
-            def pct2(kind: str) -> str:
-                k = sum(1 for r in rs if r.get("outcome") == kind)
-                return f"{100.0 * k / n:.0f} % <span class='muted'>({k}/{n})</span>"
-            split.append([
-                f"<span class='muted'>{E(ref['label'])} (reference)</span>", str(n),
-                pct2("solved"), pct2("escalated"), pct2("wrong_unflagged"),
-            ])
+        if ref["arm"] in by_method:
+            _d, rows, _h = by_method[ref["arm"]]
+            split.append([f"<span class='muted'>{E(ref['label'])} (reference)</span>", str(len(rows)),
+                          pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged")])
 
+    any_d, _r, any_h = next(iter(by_method.values()))
+    cfg = json.loads((any_d / "config.json").read_text(encoding="utf-8")) if (any_d / "config.json").exists() else {}
     body.append(
         card(
             "Every method, on the same days",
-            f"<p class='muted'>Model {E(man.get('model_resolved') or man.get('model_requested'))} · "
-            f"{E(man.get('days'))} days · request digest "
-            f"<code>{E(str(man.get('requests_digest', ''))[:26])}…</code>, identical for every row.</p>",
-            table(["method", "days", verdict("solved"), verdict("escalated"), verdict("wrong")], split),
+            f"<p class='muted'>Run of {E(date)} · model {E(cfg.get('model_resolved') or any_h['header']['model'])} · "
+            f"request digest <code>{E(str(cfg.get('requests_digest', ''))[:26])}…</code>, identical for every row · "
+            f"<code>results/{E(any_d.parts[-4])}/{E(date)}/</code></p>",
+            table(["method", "requests", verdict("solved"), verdict("escalated"), verdict("wrong")], split),
         )
     )
 
-    # per-day detail
     cols = [
-        ("date", "day"), ("variant", "variant"), ("outcome", "outcome"), ("outcome_reason", "why"),
-        ("formulation_status", "form."), ("state_status", "state"), ("traceability_status", "trace"),
-        ("answer_status", "answer"), ("gap_pct", "gap %"), ("cost_usd", "cost $"),
-        ("unmet_kwh", "unmet kWh"), ("peak_kw", "peak kW"), ("total_tokens", "tokens"),
+        ("nn", "nn"), ("request_id", "request"), ("variant", "variant"), ("outcome", "outcome"), ("solved_reason", "why"),
+        ("formulation_exact", "form."), ("no_hard_violation", "runnable"), ("traceable", "trace"),
+        ("answer_ok", "answer"), ("gap_pct", "gap %"), ("cost_usd", "cost $"), ("unmet_kwh", "unmet kWh"),
+        ("gate_pass", "gate"), ("prompt_tokens", "in"), ("completion_tokens", "out"),
     ]
     det = []
-    for arm, rs in by_arm.items():
-        body_rows = [
-            [verdict(r["outcome"]) if k == "outcome" else E(r.get(k, "")) for k, _ in cols]
-            for r in sorted(rs, key=lambda x: str(x.get("date")))
-        ]
+    for name, (d, rows, _h) in by_method.items():
         det.append(
-            f"<details><summary>{E(arm)} — every day</summary>"
-            + table([label for _, label in cols], body_rows)
+            f"<details><summary>{E(name)} — every request · <code>{E(str(d.relative_to(PROJECT_ROOT)))}</code></summary>"
+            + table([label for _k, label in cols],
+                    [[verdict(r["outcome"]) if k == "outcome" else E(r.get(k, "")) for k, _l in cols] for r in rows])
             + "</details>"
         )
-    body.append(card("Day by day", *det))
+    body.append(card("Request by request", *det))
+    return "".join(body)
+
+
+def tab_analysis() -> str:
+    """The report each method folder ends with, rendered. Written from the rows, never by a model."""
+    from visuals.shell import markdown
+
+    dirs = [d for d in latest_run() if (d / "REPORT.md").exists()]
+    if not dirs:
+        return card(
+            "Analysis",
+            "<p class='muted'>No results folder carries a REPORT.md yet.</p>"
+            "<p>Every run ends with one per method, written by <code>evaluation/postprocess.py</code> from "
+            "the rows the run produced. No model is called to write it.</p>",
+        )
+    body = [
+        card(
+            "What the reports are",
+            "<p>Each method folder under <code>results/</code> ends with a <code>REPORT.md</code> written from "
+            "the rows the run produced: the outcome split, formulation and traceability rates, cost, the list of "
+            "requests that ended wrong or escalated, and every request on one line. No model is called to write "
+            "it, and nothing in it is typed by hand. The run set's own report, over every method at once, is in "
+            "each folder's <code>raw/</code>.</p>"
+            "<p class='muted'>The failure catalogue and the conclusions across runs are written once the missing "
+            "methods have run; until then this section is the reports as they stand.</p>",
+        )
+    ]
+    for d in dirs:
+        body.append(
+            f"<div class='card'><h2><code>{E(str(d.relative_to(PROJECT_ROOT / 'results')))}</code></h2>"
+            + markdown((d / "REPORT.md").read_text(encoding="utf-8"))
+            + "</div>"
+        )
     return "".join(body)
 
 
@@ -1023,12 +1085,7 @@ def tab_status() -> str:
         }[st]
         rows.append([f"<b>{E(r['label'])}</b>", f"<code>{E(r['name'])}</code>", word])
     running = sum(1 for r in ROWS if arm_state(r) == "running")
-    dirs = run_dirs()
-    models = sorted({
-        json.loads((d / "run_manifest.json").read_text(encoding="utf-8")).get("model_resolved")
-        or json.loads((d / "run_manifest.json").read_text(encoding="utf-8")).get("model_requested")
-        for d in dirs
-    })
+    models = sorted({d.parts[-2] for d in method_dirs() if d.parts[-2] != "no-llm"})
     return card(
         "Where the implementation stands",
         f"<p>{running} of the {len(ROWS)} methods run today. The rest are specified here and in the registry the "
@@ -1044,27 +1101,29 @@ def tab_status() -> str:
 
 GROUPS: Tuple[Tuple[str, Tuple[Tuple[str, str], ...]], ...] = (
     ("Design", (
-        ("overview", "Home"),
+        ("home", "Home"),
         ("methods", "Methods"),
         ("scenarios", "Scenarios"),
         ("prompts", "Prompts"),
-        ("tools", "Tool"),
+        ("tools", "Tools"),
         ("gate", "Gate & scoring"),
     )),
     ("Results", (
         ("results", "Results"),
+        ("analysis", "Analysis"),
         ("status", "Implementation"),
     )),
 )
 
 BUILDERS = {
-    "overview": tab_overview,
+    "home": tab_overview,
     "methods": tab_methods,
     "scenarios": tab_scenarios,
     "prompts": tab_prompts,
     "tools": tab_tools,
     "gate": tab_gate,
     "results": tab_results,
+    "analysis": tab_analysis,
     "status": tab_status,
 }
 

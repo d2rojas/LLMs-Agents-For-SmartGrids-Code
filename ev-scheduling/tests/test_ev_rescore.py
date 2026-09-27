@@ -26,9 +26,9 @@ from typing import Any, Dict, List
 
 import pytest
 
-from scripts import ev_report
-from scripts import ev_rescore
-from scripts import run_ev_matrix as matrix
+from evaluation import report as ev_report
+from evaluation import rescore as ev_rescore
+from evaluation import runner as matrix
 from tests.test_ev_matrix import MODEL, SUBSET_DATES, StubClient
 
 # Terms that must come back identical when a run is rescored under its own
@@ -89,7 +89,7 @@ def run_dir(tmp_path_factory) -> Path:
         "run_id": "ev_matrix_test_SYNTHETIC_SMOKE",
         "created_at": "2026-09-21T00:00:00+00:00",
         "case_study": "ev_scheduling",
-        "harness": "scripts/run_ev_matrix.py",
+        "harness": "evaluation/runner.py",
         "synthetic": True,
         "smoke_test": True,
         "banner": matrix.SMOKE_BANNER,
@@ -137,8 +137,8 @@ def no_provider_anywhere(monkeypatch):
     def _forbidden(*_args: Any, **_kwargs: Any) -> Any:
         raise AssertionError("a model call was made during a rescore")
 
-    import agent.llm_agent as llm_agent
-    import agent.parse.parse as parse_module
+    import methods.agent.llm_agent as llm_agent
+    import methods.agent.parse.parse as parse_module
 
     for module in (matrix, llm_agent, parse_module):
         for name in ("call_chat", "build_client"):

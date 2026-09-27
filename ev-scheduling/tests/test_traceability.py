@@ -1,6 +1,6 @@
 """Unit tests for evaluation.traceability: do the answer's numbers come from the last solve?
 
-Offline: the tool outputs are the dicts ``agent/llm_agent.py::_execute_solve``
+Offline: the tool outputs are the dicts ``methods/agent/llm_agent.py::_execute_solve``
 returns, written out by hand. Two tests pin the module's documented limits, so a
 later change that silently removes or worsens them fails here.
 """

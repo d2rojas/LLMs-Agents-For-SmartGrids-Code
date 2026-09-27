@@ -15,7 +15,7 @@ Comparison rule
   index off by one is a different problem, so no tolerance is given.
 * ``energy_kwh`` and ``max_power_kw``: 1 % relative tolerance.
 
-Conversion note: ``agent/parse/parse.py::parsed_problem_to_day_site_tou`` applies
+Conversion note: ``methods/agent/parse/parse.py::parsed_problem_to_day_site_tou`` applies
 repairs when it builds the solver input (overnight windows get a one-hour
 fallback, indices are clamped to the horizon, a non-positive energy becomes
 1 kWh). This module does *not* apply them. Those repairs hide extraction errors,

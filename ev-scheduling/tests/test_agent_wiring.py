@@ -26,14 +26,14 @@ import cvxpy as cp
 import numpy as np
 import pytest
 
-from agent.llm_agent import BLOCKED_RETRY_ERROR, run_agent_llm
-from agent.run import AgentResult, ClarificationResult, run_agent, run_agent_from_text
-from agent.validate.gate import verify_answer
+from methods.agent.llm_agent import BLOCKED_RETRY_ERROR, run_agent_llm
+from methods.agent.run import AgentResult, ClarificationResult, run_agent, run_agent_from_text
+from methods.agent.validate.gate import verify_answer
 from config.site import SiteConfig, TOUConfig
-from constraints.checker import check
+from solver.checker import check
 from data.format.schema import DaySessions, Session
 from evaluation.formulation import formulation_exact
-from optimization.solver import SolveResult, solve
+from solver.solver import SolveResult, solve
 
 MODEL = "openrouter:openai/gpt-4o"
 
@@ -702,7 +702,7 @@ def test_the_parser_asks_config_llm_for_its_key_and_says_which_one_is_missing(
     The parser used to build an OpenAI client from OPENAI_API_KEY, which this
     project never sets, so the natural-language path could not run at all.
     """
-    from agent.parse.parse import parse_nl_problem
+    from methods.agent.parse.parse import parse_nl_problem
 
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)

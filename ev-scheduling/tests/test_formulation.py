@@ -1,12 +1,12 @@
 """Unit tests for evaluation.formulation: per-session extraction correctness.
 
 Offline: no API key, no LLM call. ParsedSession / ParsedProblem are used as data
-shapes only; ``agent/parse/parse.py`` imports openai lazily inside its functions.
+shapes only; ``methods/agent/parse/parse.py`` imports openai lazily inside its functions.
 """
 
 import pytest
 
-from agent.parse.parse import ParsedProblem, ParsedSession
+from methods.agent.parse.parse import ParsedProblem, ParsedSession
 from data.format.schema import DaySessions, Session
 from evaluation.formulation import (
     FORMULATION_ERROR_TYPES,

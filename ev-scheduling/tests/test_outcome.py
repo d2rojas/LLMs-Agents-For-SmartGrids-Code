@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from config.site import SiteConfig, TOUConfig
-from constraints.checker import check
+from solver.checker import check
 from data.format.schema import DaySessions, Session
 from evaluation.metrics import compute_metrics, cost_gap
 from evaluation.outcome import (

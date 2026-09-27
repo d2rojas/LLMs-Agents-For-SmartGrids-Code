@@ -191,7 +191,7 @@ class StateCheck:
         status: "pass" when the schedule is runnable and matches the optimum
             within tolerance; "fail" otherwise; "not_checkable" when no optimum
             was supplied and the gap could not be formed.
-        no_hard_violation: From ``constraints.checker``.
+        no_hard_violation: From ``solver.checker``.
         gap_within_tolerance: |gap| <= gap_tol_pct. None when the gap is None.
         gap_comparable: From ``evaluation.metrics.cost_gap``. False when the
             schedule under-delivers relative to the optimum, which is how a

@@ -24,7 +24,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence
 import numpy as np
 
 from config.site import TOUConfig
-from constraints.checker import CheckResult
+from solver.checker import CheckResult
 from data.format.schema import DaySessions
 
 # Under-delivery below this is solver slop, not a real trade of energy for cost.
@@ -50,7 +50,7 @@ class Metrics:
     cost_star_usd: Optional[float] = None
     cost_gap_pct: Optional[float] = None
     gap_comparable: Optional[bool] = None
-    # Hard-violation view of the same day (from constraints.checker).
+    # Hard-violation view of the same day (from solver.checker).
     no_hard_violation: Optional[bool] = None
     hard_violation_count: Optional[int] = None
     max_violation_kw: Optional[float] = None
@@ -280,7 +280,7 @@ def compute_metrics(
             ``cost_gap_pct`` and ``gap_comparable`` are filled; without it they
             stay None, since a gap has no meaning without the optimum.
         unmet_star_kwh: Unmet energy at that optimum (kWh).
-        check_result: ``constraints.checker.check`` output for this schedule,
+        check_result: ``solver.checker.check`` output for this schedule,
             used for the hard-violation fields (FR and max violation).
 
     Returns:

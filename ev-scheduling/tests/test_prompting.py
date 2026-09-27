@@ -1,9 +1,9 @@
-"""Unit tests for baseline.strategies: the two LLM-only prompting rows.
+"""Unit tests for methods.prompting.strategies: the two LLM-only prompting rows.
 
 Offline: no API key, no LLM call, no network. Every "reply" here is written by
 the test in the format the prompt asks for, which is the point of the round-trip
 tests: a prompt is only useful if a reply that obeys it is readable by both
-``baseline.parse.parse_llm_schedule`` (the schedule) and
+``methods.prompting.parse.parse_llm_schedule`` (the schedule) and
 ``evaluation.requests.extract_answer`` (the answer to the question). An
 unextractable answer on a checkable request is scored as wrong, so the format has
 to survive extraction for every variant the benchmark can pose.
@@ -14,8 +14,8 @@ from datetime import date
 import numpy as np
 import pytest
 
-from baseline import strategies as st
-from baseline.parse import parse_llm_schedule
+from methods.prompting import strategies as st
+from methods.prompting.parse import parse_llm_schedule
 from data.format.schema import DaySessions, Session
 from evaluation import requests as rq
 from evaluation.outcome import PASS, check_answer

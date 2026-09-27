@@ -1,7 +1,7 @@
 """Shared LLM client, model selection, and cost instrumentation.
 
-Both entry points that talk to a model (``baseline.run.run_baseline`` and
-``agent.llm_agent.run_agent_llm``) get their client from here, so provider
+Both entry points that talk to a model (``methods.prompting.run.run_baseline`` and
+``methods.agent.llm_agent.run_agent_llm``) get their client from here, so provider
 resolution, token accounting, and trace writing are defined once.
 
 Provider

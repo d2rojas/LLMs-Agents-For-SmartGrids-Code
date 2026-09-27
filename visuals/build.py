@@ -46,15 +46,58 @@ SITE = ROOT / "site"
 # the landing page. The ones with no generator yet are listed all the same: how
 # many case studies there are is part of what the site has to show, and a case
 # that only appears once it is finished makes the set look smaller than it is.
+# The order is the paper's: Section 6.1 wind, 6.2 EV, 6.3 power flow, 6.4
+# contingency diagnosis. A reader moving between the paper and the site should
+# find the case studies in the same sequence in both.
 CASES: Tuple[Dict[str, str], ...] = (
-    {"id": "pfagent", "folder": "power-flow-agent", "title": "PFAgent",
-     "subtitle": "power flow, IEEE systems"},
-    {"id": "evagent", "folder": "ev-scheduling", "title": "EVAgent",
-     "subtitle": "EV charging schedules"},
-    {"id": "griddebug", "folder": "griddebug-agent", "title": "GridDebug",
-     "subtitle": "contingency diagnosis"},
     {"id": "wind", "folder": "wind-forecasting", "title": "Wind",
-     "subtitle": "power forecasting"},
+     "subtitle": "power forecasting (Sec. 6.1)"},
+    {"id": "evagent", "folder": "ev-scheduling", "title": "EVAgent",
+     "subtitle": "EV charging schedules (Sec. 6.2)"},
+    {"id": "pfagent", "folder": "power-flow-agent", "title": "PFAgent",
+     "subtitle": "power flow, IEEE systems (Sec. 6.3)"},
+    {"id": "griddebug", "folder": "griddebug-agent", "title": "GridDebug",
+     "subtitle": "contingency diagnosis (Sec. 6.4)"},
+)
+
+# The sections every case study's page has, in this order. A case study that
+# has not written one still gets the place, saying so, because the point of one
+# site is that the case studies are read against each other: a section that
+# exists on one page and is absent from another cannot be compared, and its
+# absence is easy to mistake for the case study not needing it.
+#
+# The third field is what the section is for. It is shown where a case study
+# has not filled it in, so an empty place still says what belongs there.
+SECTIONS: Tuple[Tuple[str, str, str], ...] = (
+    ("home", "Home",
+     "the task in plain language, the problem stated formally, and what a correct answer has to "
+     "contain"),
+    ("methods", "Methods",
+     "the methods compared, what single factor separates each from the one above it, and a diagram "
+     "of each one's control flow"),
+    ("scenarios", "Scenarios",
+     "the instances every method answers, where they come from, and the stress set that makes some "
+     "of them unanswerable"),
+    ("prompts", "Prompts",
+     "what each method sends to the model, block by block, with the file or function each block "
+     "comes from"),
+    ("tools", "Tools",
+     "the tool schema the grounded methods call, identical for all of them, and the solver behind "
+     "it"),
+    ("gate", "Gate & scoring",
+     "the verification conditions, the three-way outcome, and the definition of every column of "
+     "the table"),
+    ("plan", "Run plan",
+     "what is to be run, on which systems and models, and what it costs"),
+    ("results", "Results",
+     "the numbers as the runs produced them, every method on the same instances"),
+    ("traces", "Traces",
+     "any single run end to end: the messages, the tool calls, the verdicts and the final answer"),
+    ("analysis", "Analysis",
+     "what the results mean: the report each run ends with, the failure catalogue, and the "
+     "conclusions the case study draws, written only from what was measured"),
+    ("status", "Implementation",
+     "which methods run today and which are specified and not written yet"),
 )
 
 # Fallback interpreter, used for a case study that has no environment of its
@@ -109,9 +152,12 @@ def nav_for(current: Optional[str], built: Dict[str, Dict[str, Any]]) -> List[Di
     out: List[Dict[str, Any]] = []
     for case in CASES:
         p = built.get(case["id"])
+        own = {k: t for _g, entries in (p or {}).get("groups", []) for k, t in entries}
         entries: List[Tuple[str, str]] = []
-        if p is not None and case["id"] == current:
-            entries = [tuple(e) for _label, group in p.get("groups", []) for e in group]
+        if case["id"] == current:
+            # Every section, in the shared order, under the case study's own
+            # label when it has one. Same list on every page, always.
+            entries = [(key, own.get(key, label)) for key, label, _purpose in SECTIONS]
         out.append({
             "title": case["title"],
             "subtitle": case["subtitle"],
@@ -123,15 +169,29 @@ def nav_for(current: Optional[str], built: Dict[str, Dict[str, Any]]) -> List[Di
     return out
 
 
+def placeholder(case_title: str, key: str, label: str, purpose: str) -> str:
+    """The standard empty section: the place, and what belongs in it."""
+    return card(
+        label,
+        f"<p class='muted'>{E(case_title)} has not written this section yet.</p>",
+        f"<p>What belongs here: {E(purpose)}.</p>",
+        shell.note(
+            "The section is listed for every case study whether or not it is filled in, so the "
+            "pages can be read against each other. Nothing is shown here that has not been "
+            "measured or written.",
+            "info",
+        ),
+    )
+
+
 def render(payload: Dict[str, Any], built: Dict[str, Dict[str, Any]]) -> str:
-    """One case study's page, with every case study in the sidebar."""
+    """One case study's page. Every section of SECTIONS, filled in or not."""
     tabs = payload.get("tabs", {})
-    first = True
+    labels = {k: t for _g, entries in payload.get("groups", []) for k, t in entries}
     body: List[str] = []
-    for _label, entries in payload.get("groups", []):
-        for key, _text in entries:
-            body.append(shell.tab(key, tabs.get(key, ""), on=first))
-            first = False
+    for n, (key, label, purpose) in enumerate(SECTIONS):
+        content = tabs.get(key) or placeholder(payload["title"], key, labels.get(key, label), purpose)
+        body.append(shell.tab(key, content, on=(n == 0)))
     extra = payload.get("script", "")
     return shell.page(
         title=f"{payload['title']} · Evaluation",
@@ -149,16 +209,13 @@ def landing(built: Dict[str, Dict[str, Any]]) -> str:
     for case in CASES:
         p = built.get(case["id"])
         if p is None:
-            if has_generator(case["folder"]):
-                cards.append(
-                    f"<a class='stg' href='{E(case['id'])}.html'><h3>{E(case['title'])}</h3>"
-                    f"<p>{E(case['subtitle'])}</p><div class='st'>Open →</div></a>"
-                )
-            else:
-                cards.append(
-                    f"<div class='stg off'><h3>{E(case['title'])}</h3>"
-                    f"<p>{E(case['subtitle'])}</p><div class='st'>not yet</div></div>"
-                )
+            # The page exists and has every section, all of them empty. Saying
+            # "not yet" and refusing to open it would hide the skeleton, which
+            # is the thing that makes the case studies comparable.
+            cards.append(
+                f"<a class='stg off' href='{E(case['id'])}.html'><h3>{E(case['title'])}</h3>"
+                f"<p>{E(case['subtitle'])}</p><div class='st'>the sections, still empty →</div></a>"
+            )
             continue
         cards.append(
             f"<a class='stg' href='{E(p['id'])}.html'><h3>{E(p['title'])}</h3>"
@@ -248,11 +305,21 @@ def build(only: Optional[str] = None, python: str = PYTHON) -> List[Path]:
     if not built:
         raise SystemExit("no case study produced a fragment")
 
+    # A case study with no generator still gets a page: the same sections, all
+    # of them empty and saying so. The skeleton is the standard; filling it in
+    # is each case study's work.
+    pages = dict(built)
+    for case in CASES:
+        pages.setdefault(case["id"], {
+            "id": case["id"], "title": case["title"], "brand": f"{case['title']} · {case['subtitle']}",
+            "note": "", "blurb": case["subtitle"], "summary": [], "groups": [], "tabs": {},
+        })
+
     SITE.mkdir(parents=True, exist_ok=True)
     written: List[Path] = []
-    for case_id, p in built.items():
+    for case_id, p in pages.items():
         out = SITE / f"{case_id}.html"
-        out.write_text(render(p, built), encoding="utf-8")
+        out.write_text(render(p, pages), encoding="utf-8")
         written.append(out)
     index = SITE / "index.html"
     index.write_text(landing(built), encoding="utf-8")
