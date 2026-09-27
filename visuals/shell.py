@@ -418,12 +418,16 @@ def page(
         head = (
             f"<span class='n'>{n}</span>"
             f"<span class='t'>{E(case['title'])}"
-            f"<small>{E(case.get('subtitle', '') if available else 'not yet')}</small></span>"
+            f"<small>{E(case.get('subtitle', ''))}</small></span>"
         )
-        if available and not current:
-            side.append(f"<a class='{cls}' href='{E(case['href'])}'>{head}</a>")
-        else:
+        # Every case study is reachable, filled in or not: its page carries the
+        # same sections, saying which are still empty. One that has written
+        # nothing yet is dimmed, so the list does not read as four finished
+        # case studies.
+        if current:
             side.append(f"<div class='{cls}'>{head}</div>")
+        else:
+            side.append(f"<a class='{cls}' href='{E(case['href'])}'>{head}</a>")
         if current:
             for key, text in case.get("entries", ()):
                 first = first or key

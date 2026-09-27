@@ -1044,11 +1044,11 @@ def tab_status() -> str:
 
 GROUPS: Tuple[Tuple[str, Tuple[Tuple[str, str], ...]], ...] = (
     ("Design", (
-        ("overview", "Home"),
+        ("home", "Home"),
         ("methods", "Methods"),
         ("scenarios", "Scenarios"),
         ("prompts", "Prompts"),
-        ("tools", "Tool"),
+        ("tools", "Tools"),
         ("gate", "Gate & scoring"),
     )),
     ("Results", (
@@ -1058,7 +1058,7 @@ GROUPS: Tuple[Tuple[str, Tuple[Tuple[str, str], ...]], ...] = (
 )
 
 BUILDERS = {
-    "overview": tab_overview,
+    "home": tab_overview,
     "methods": tab_methods,
     "scenarios": tab_scenarios,
     "prompts": tab_prompts,
