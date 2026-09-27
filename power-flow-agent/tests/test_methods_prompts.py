@@ -1,0 +1,164 @@
+"""Pin every prompt text in methods/ to the hash stamped on the runs behind the paper tables.
+
+If a test here fails, a prompt changed. That is allowed, but it makes new runs incomparable
+with the committed ones, so update the pinned value here on purpose, in the same commit, and
+say so in the commit message.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import methods  # noqa: E402
+from methods import prompt_hash, read_text, system_prompt_for, planner_prompt_for  # noqa: E402
+
+# Hashes of the raw texts, recorded from the module constants on 2026-09-23 before the
+# constants were moved to methods/*.txt.
+PINNED_TEXTS = {
+    "_shared/agent_system_prompt.txt": "2efb17dd2582",
+    "_shared/agent_system_prompt_zh_ui.txt": "96e8ca25a690",
+    "_shared/llm_only_system_prompt.txt": "a898139a82c8",
+    "_shared/llm_only_user_template.txt": "27694cb49698",
+    "_shared/llm_only_bus_id_note.txt": "2fe74c2cfcd8",
+    "_shared/cot_system_suffix.txt": "1847f5d898fb",
+    "_shared/final_answer_instruction.txt": "65a0377de7f4",
+    "llm_only_cot/reasoning_section.txt": "bad7f5c07dde",
+    "llm_only_nr/reasoning_section.txt": "36a6acb2c5d7",
+    "llm_only_forced_structured/escape_clause_removed.txt": "728177f8847a",
+    "llm_only_forced_structured/forced_replacement.txt": "124f3cf9adf4",
+    "single_call_structured/task_statement.txt": "251986811430",
+    "single_call_structured/output_section.txt": "2304fa83ea46",
+    "single_call_cot/reasoning_section.txt": "e0bd7a11b9d9",
+    "plan_act_nogate/plan_system_prompt_structured.txt": "5e9fee34a0db",
+    "plan_act_nogate/plan_system_prompt_prefix.txt": "6519a84e612a",
+    "_shared/common_rules.txt": "95a47a1faefe",
+    "_shared/output_contract.txt": "729cd991d4a6",
+    "_shared/operations_section.txt": "d66817c9b4d3",
+    "_shared/formulation_probe_system_prompt.txt": "4f70e94323e1",
+    "_shared/formulation_probe_section.txt": "537f737bee76",
+    "_shared/formulation_probe_output_section.txt": "7781da365dcd",
+}
+
+# v2 (2026-09-25): one shared rules block and one output contract for every method; the
+# 2026-09-21 runs were stamped 7da5e2a37ec4 (agents), 23e5d9b407f9 (single_call), 1b4712c641b5 / 063482ad676f (llm_only).
+PINNED_SYSTEM_PROMPTS = {
+    "react": "2efb17dd2582",
+    "react_nogate": "2efb17dd2582",
+    "plan_act": "2efb17dd2582",
+    "plan_act_nogate": "2efb17dd2582",
+    "pfagent": "2efb17dd2582",
+    "single_call:structured": "f1d16f4e43bf",
+    "llm_only:structured": "183abd966fbd",
+    "llm_only:cot": "be09b0a3b7d2",
+    "llm_only_forced:structured": "16554a4d37ce",
+    "llm_only_forced:cot": "caab80817184",
+    # 2026-09-23: Formulation for the prompting rows comes from this companion probe (no numbers asked)
+    "formulation_probe:structured": "4f70e94323e1",
+    "formulation_probe:cot": "324529448686",
+}
+
+# 2026-09-23: planner prompt carries the enum values and the indexing rule (matched information with ReAct);
+# the runs behind the 2026-09-21 tables used 6dfbc78e5795 / a82318af7571.
+PINNED_PLANNER_PROMPTS = {"v1": "64a026212fdb", "load_split": "4e2f69255f6b"}
+
+
+@pytest.mark.parametrize("rel,expected", sorted(PINNED_TEXTS.items()))
+def test_prompt_text_unchanged(rel: str, expected: str) -> None:
+    assert prompt_hash(read_text(rel)) == expected, f"{rel} changed; update the pin on purpose"
+
+
+@pytest.mark.parametrize("name,expected", sorted(PINNED_SYSTEM_PROMPTS.items()))
+def test_assembled_system_prompt_matches_paper_runs(name: str, expected: str) -> None:
+    assert prompt_hash(system_prompt_for(name)) == expected
+
+
+@pytest.mark.parametrize("variant,expected", sorted(PINNED_PLANNER_PROMPTS.items()))
+def test_planner_prompt_matches_engine(variant: str, expected: str) -> None:
+    from methods.agent import engine
+
+    text = planner_prompt_for("plan_act", tool_variant=variant)
+    assert text == engine._plan_system_prompt(variant)
+    assert prompt_hash(text) == expected
+
+
+def test_modules_import_from_methods() -> None:
+    """The modules must read the same bytes as methods/ (no second copy of a prompt)."""
+    from methods.prompting import prompts_baseline as pb
+    from methods.agent import engine, prompts
+    from methods.prompting import prompt_variants as pv
+
+    assert prompts.SYSTEM_PROMPT_EN == read_text("_shared/agent_system_prompt.txt")
+    assert pb.BASELINE_SYSTEM_PROMPT == read_text("_shared/llm_only_system_prompt.txt")
+    assert pb.BASELINE_PROMPT_TEMPLATE == read_text("_shared/llm_only_user_template.txt")
+    assert pv.SINGLE_CALL_TASK_STATEMENT == read_text("single_call_structured/task_statement.txt")
+    assert pv.COT_SYSTEM_SUFFIX == read_text("_shared/cot_system_suffix.txt")
+    assert engine.FINAL_ANSWER_INSTRUCTION == read_text("_shared/final_answer_instruction.txt")
+
+
+def test_every_method_folder_is_registered_and_runnable() -> None:
+    from evaluation.runner import parse_method
+
+    # method folders carry a method.json; methods/agent, methods/prompting and methods/deterministic are code
+    folders = {p.name for p in methods.METHODS_DIR.iterdir() if p.is_dir() and not p.name.startswith("_") and (p / "method.json").is_file()}
+    assert {"agent", "prompting", "deterministic"} <= {p.name for p in methods.METHODS_DIR.iterdir() if p.is_dir()}
+    registered = {m.folder for m in methods.list_methods(include_archived=False)}
+    assert folders == registered
+    archived = {p.name for p in (methods.METHODS_DIR / "_archive").iterdir() if p.is_dir()}
+    assert archived == {m.folder for m in methods.list_methods() if m.archived}
+    for m in methods.list_methods():
+        parse_method(m.runner_name)  # raises on an unknown runner name
+        for rel in m.prompt_files:
+            assert (methods.METHODS_DIR / rel).is_file() or (methods.METHODS_DIR / "_archive" / rel).is_file(), rel
+
+
+# --------------------------------------------------------------------------- declared formulation (2026-09-23)
+
+
+def test_answer_prompts_unchanged_and_probe_asks_only_for_formulation() -> None:
+    from evaluation.runner import perturbed_case
+    from methods.prompting.prompt_variants import build_messages
+
+    net = perturbed_case("case14", seed=0, k=1)
+    req = "Load case14 and disconnect the line between bus 10 and bus 11."
+    for strategy in ("structured", "cot"):
+        answer = build_messages(strategy, "llm_only", req, net, "case14")
+        assert "formulation" not in answer[0]["content"].lower() and "## Formulation" not in answer[1]["content"]
+        probe = build_messages(strategy, "llm_only", req, net, "case14", probe=True)
+        user = probe[1]["content"]
+        assert user.count("## Formulation") == 1 and "## Output Requirements" in user and "bus_voltages" not in user
+        assert "- set_active_load(bus_id: integer*, p_mw: number*)" in user  # load_split catalogue by default
+        assert "criteria: string in {" in user  # the probe sees the enum values, like the tool schema does
+        assert "do not compute anything" in probe[0]["content"]
+    v1 = build_messages("structured", "llm_only", req, net, "case14", probe=True, tool_variant="v1")[1]["content"]
+    assert "- modify_load(" in v1 and "set_active_load" not in v1
+
+
+def test_declared_formulation_is_scored_like_executed_calls() -> None:
+    from evaluation.runner import declared_formulation, declared_formulation_check
+
+    intended = [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "disconnect_line", "args": {"from_bus": 10, "to_bus": 11}}]
+    exact = '{"formulation": [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "disconnect_line", "args": {"from_bus": 10, "to_bus": 11}}], "converged": true, "bus_voltages": [], "line_flows": [], "total_generation_mw": 0, "total_load_mw": 0, "total_loss_mw": 0}'
+    fm, decl = declared_formulation_check(exact, intended, "case14")
+    assert fm["formulation_exact"] is True and len(decl) == 2
+
+    # load_case may be omitted: the case tables are in the prompt
+    no_load = '{"formulation": [{"tool": "disconnect_line", "args": {"from_bus": 11, "to_bus": 10}}], "converged": false}'
+    fm, _ = declared_formulation_check(no_load, intended, "case14")
+    assert fm["formulation_exact"] is True  # endpoints in either order
+
+    wrong = '{"formulation": [{"tool": "disconnect_line", "args": {"from_bus": 1, "to_bus": 5}}], "converged": false}'
+    fm, _ = declared_formulation_check(wrong, intended, "case14")
+    assert fm["formulation_exact"] is False and fm["formulation_error_type"] == "wrong_id"
+
+    missing = '{"converged": false, "bus_voltages": []}'
+    fm, decl = declared_formulation_check(missing, intended, "case14")
+    assert decl is None and fm["formulation_exact"] is False and fm["formulation_error_type"] == "unparsed"
+    assert fm["detail"].startswith("no formulation field")
+
+    # tolerant shapes: OpenAI-style name/arguments, and bare strings
+    assert declared_formulation('{"formulation": [{"name": "run_powerflow", "arguments": "{}"}, "get_status"]}') == [{"tool": "run_powerflow", "args": {}}, {"tool": "get_status", "args": {}}]

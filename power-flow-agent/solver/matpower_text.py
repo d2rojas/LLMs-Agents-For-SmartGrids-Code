@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 SUPPORTED_CASES = {"case14", "case30", "case57", "case118", "case300"}
-FETCH_CMD = "python scripts/fetch_matpower_cases.py --ref master --date 2017-01-01"
+FETCH_CMD = "python data/fetch_matpower_cases.py --ref master --date 2017-01-01"
 
 
 def _normalize_case_key(case_key: str) -> str:

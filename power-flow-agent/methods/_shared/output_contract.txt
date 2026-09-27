@@ -1,0 +1,23 @@
+## Output Requirements
+Reply with exactly one JSON object and nothing else (no prose before or after, no Markdown fences), with these fields, all present:
+
+{
+  "formulation": [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_powerflow", "args": {}}],
+  "converged": true,
+  "summary": "one sentence on what was done and the state of the network",
+  "answer": "the specific thing the request asked for, with its numbers (e.g. 'Worst outage: line 1-5, 9 voltage violations' or 'Lowest voltage: bus 14 at 1.0357 p.u.')",
+  "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0}],
+  "line_flows": [{"line_id": 0, "from_bus": 1, "to_bus": 2, "p_from_mw": 156.9, "loading_percent": 44.8}],
+  "total_generation_mw": 0.0,
+  "total_load_mw": 0.0,
+  "total_loss_mw": 0.0,
+  "violations": {"voltage": [{"bus_id": 1, "vm_pu": 1.06}], "thermal": [{"line_id": 0, "loading_percent": 101.2}]},
+  "next_step": "one suggested next action for the operator",
+  "cannot_answer": null
+}
+
+- `formulation` is the ordered list of solver operations the request needs, using only the operation names and argument names of the operations catalogue: with tools, the operations you actually ran; without tools, the operations a solver-based assistant would run. Copy identifiers and values from the request; do not add arguments the request does not give.
+- `bus_voltages` covers every bus of the network state you are reporting, one entry per bus, `bus_id` in MATPOWER 1-based numbering; `line_flows` covers every branch, `line_id` as the branch index (transformers: 100000 + transformer index), with `from_bus` and `to_bus`.
+- Voltage limits are 0.95 to 1.05 p.u.; a line is overloaded above 100 % loading. List the violations of the reported state.
+- All numbers are finite (no NaN or Infinity). Copy them from the solver outputs when you have tools; otherwise they are your own computation on the data above.
+- If you could not complete the request: `converged` false, empty arrays, zeros in the totals, and the reason in `cannot_answer` (a string); otherwise `cannot_answer` is null.

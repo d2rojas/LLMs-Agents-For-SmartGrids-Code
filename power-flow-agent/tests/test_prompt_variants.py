@@ -1,4 +1,4 @@
-"""Tests for llm/prompt_variants.py (no network, no API keys)."""
+"""Tests for methods/prompting/prompt_variants.py (no network, no API keys)."""
 
 import re
 import sys
@@ -9,8 +9,8 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from baselines.llm_only import parse_llm_baseline_json
-from llm.prompt_variants import (
+from methods.prompting.llm_only import parse_llm_baseline_json
+from methods.prompting.prompt_variants import (
     EXAMPLE_HEADING_PREFIX,
     EXAMPLES_HEADING,
     LLM_ONLY_OUTPUT_SECTION,
@@ -23,7 +23,7 @@ from llm.prompt_variants import (
     few_shot_tool_calls,
     retrieve_context,
 )
-from llm.tools import TOOLS
+from methods.agent.tools import TOOLS
 from solver import case_loader
 
 REQUEST = "Set the load at bus 9 to 40 MW and check whether any line between bus 4 and bus 9 is overloaded."
@@ -57,7 +57,7 @@ def test_output_format_identical_within_mode(net, mode):
     expected = LLM_ONLY_OUTPUT_SECTION if mode == "llm_only" else SINGLE_CALL_OUTPUT_SECTION
     for strategy in STRATEGIES:
         user = _user(build_messages(strategy, mode, REQUEST, net, "case14"))
-        assert user.rstrip().endswith(expected), (strategy, mode)
+        assert user.rstrip().endswith(expected.rstrip()), (strategy, mode)
         assert user.count("## Output Requirements") == 1
 
 

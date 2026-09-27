@@ -1,0 +1,60 @@
+<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>PFAgent · Results</title>
+<style>
+:root{--bg:#f3f5f8;--panel:#fff;--line:#e3e7ee;--text:#0f172a;--muted:#64748b;--acc:#2f5fd0;--ok:#1f9d55;--esc:#e0891a;--bad:#d53f3f}
+*{box-sizing:border-box}body{margin:0;font:14px/1.5 Inter,-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:var(--text);background:var(--bg)}
+header{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line);padding:10px 22px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}header h1{font-size:17px;margin:0}
+main{padding:18px 22px;max-width:1500px;margin:0 auto}.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 2px rgba(15,23,42,.06)}
+.card h2{font-size:16px;margin:0 0 8px}.muted{color:var(--muted);font-size:12.5px}label{margin-right:12px}select{font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:#fff}
+table{border-collapse:collapse;width:100%;font-size:13px;background:#fff}th,td{border:1px solid var(--line);padding:6px 8px;text-align:right;vertical-align:top}th{background:#f6f8fb;font-weight:600}td:first-child,th:first-child{text-align:left}
+th.g{text-align:center;background:#eef2fb}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;color:#fff;font-size:11px;font-weight:600}.pill.solved{background:var(--ok)}.pill.escalated{background:var(--esc)}.pill.wrong_unflagged{background:var(--bad)}.pill.na{background:#94a3b8}
+.sc td{vertical-align:top;text-align:left;font-size:12.5px}.sc a{color:var(--acc);text-decoration:none}.sc a:hover{text-decoration:underline}.sc .why{color:var(--muted);font-size:11.5px}
+.kpi{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 10px}.kpi div{background:#fafbfd;border:1px solid var(--line);border-radius:10px;padding:6px 12px;font-size:12.5px}.kpi b{display:block;font-size:16px}
+</style></head><body>
+<header><h1>PFAgent · Results</h1><label>Run set <select id='set'></select></label><label>System <select id='sys'></select></label><label>Model <select id='model'></select></label><span class='muted' id='status'></span></header>
+<main>
+<div class='card'><h2>The table, as the paper prints it</h2><p class='muted'>One row per method, computed from the per-request lines (summary.csv) of the selected runs. Task utility, solver-grounded correctness, cost and time. Percentages are over the n requests of the run set; V_MAE in p.u., B_mean in MW; tokens and time are means per request.</p><div id='table'></div></div>
+<div class='card'><h2>Every request, under each method</h2><p class='muted'>The verdict of each run, its formulation check, and a link to the real trace in the viewer. Click a request to open it.</p><div id='scen'></div></div>
+</main>
+<script>
+const METHODS=[['rule_based','Deterministic parser'],['llm_only_structured','Structured prompting'],['llm_only_cot','Chain-of-thought prompting'],['plan_act_nogate','Plan-and-Act'],['react_nogate','ReAct'],['pfagent','PFAgent']];
+const SYS={ieee14:'IEEE 14-bus',ieee30:'IEEE 30-bus',ieee57:'IEEE 57-bus',ieee118:'IEEE 118-bus',ieee300:'IEEE 300-bus'};
+const $=s=>document.querySelector(s);let INDEX=null,ROWS={};
+function parseCSV(t){const out=[];let row=[],f='',q=false;for(let i=0;i<t.length;i++){const c=t[i];if(q){if(c=='"'){if(t[i+1]=='"'){f+='"';i++;}else q=false;}else f+=c;}else{if(c=='"')q=true;else if(c==','){row.push(f);f='';}else if(c=='\n'){row.push(f);out.push(row);row=[];f='';}else if(c!='\r')f+=c;}}if(f||row.length){row.push(f);out.push(row);}const h=out.shift();return out.filter(r=>r.length>1).map(r=>Object.fromEntries(h.map((k,i)=>[k,r[i]])));}
+const num=v=>{const x=parseFloat(v);return isNaN(x)?null:x;};const T=v=>v==='True';
+const mean=a=>a.length?a.reduce((s,x)=>s+x,0)/a.length:null;
+function fmtE(x){if(x==null)return '–';if(x===0)return '0';return x<1e-2?x.toExponential(2):x.toFixed(3);}
+function fmtP(x){return x==null?'–':x.toFixed(1);}
+function tagOf(r){const m=r.dir.match(/__([A-Za-z0-9-]+)$/);return m?m[1]:'';}
+function setOptions(sel,opts,keep){const v=sel.value;sel.innerHTML=opts.map(([k,l])=>`<option value="${k}">${l}</option>`).join('');if(keep&&opts.some(o=>o[0]===v))sel.value=v;}
+function runsOf(){const set=$('#set').value,sys=$('#sys').value,model=$('#model').value;return INDEX.runs.filter(r=>r.kind==='run'&&`${tagOf(r)||'main'}·${r.date}`===set&&r.case===sys&&(model==='all'||r.model===model||r.model==='no-llm'));}
+async function rowsFor(r){if(!ROWS[r.path]){ROWS[r.path]=parseCSV(await (await fetch('../'+r.path+'/summary.csv')).text());}return ROWS[r.path];}
+function outcome(x){return x.outcome||(T(x.solved)?'solved':T(x.escalated)?'escalated':'wrong_unflagged');}
+async function render(){const runs=runsOf();const byM={};for(const r of runs){byM[r.method]=r;}
+ let h="<table><tr><th></th><th class='g' colspan='5'>Task utility</th><th class='g' colspan='4'>Solver-grounded correctness</th><th class='g' colspan='2'>Cost and time</th><th></th></tr><tr><th>Method</th><th>Formulation %</th><th>V_MAE solved</th><th>V_MAE all</th><th>B_mean solved</th><th>B_mean all</th><th>Solved %</th><th>Escalated %</th><th>Wrong unflagged %</th><th>Traceable %</th><th>Tokens</th><th>Time (s)</th><th>n</th></tr>";
+ const scen={};
+ for(const [key,label] of METHODS){const r=byM[key];if(!r){h+=`<tr><td>${label}</td><td colspan='12' class='muted' style='text-align:left'>no run in this set</td></tr>`;continue;}
+  const rows=await rowsFor(r);const n=rows.length;const solved=rows.filter(x=>outcome(x)==='solved');
+  const pct=k=>100*rows.filter(x=>outcome(x)===k).length/n;
+  const form=100*rows.filter(x=>T(x.formulation_exact)).length/n;
+  const vAll=mean(rows.map(x=>num(x.voltage_mae_pu)).filter(x=>x!=null)),vSol=mean(solved.map(x=>num(x.voltage_mae_pu)).filter(x=>x!=null));
+  const bAll=mean(rows.map(x=>num(x.kcl_mismatch_mw)).filter(x=>x!=null)),bSol=mean(solved.map(x=>num(x.kcl_mismatch_mw)).filter(x=>x!=null));
+  const trRows=rows.filter(x=>x.faithful_answers!==''&&x.faithful_answers!=null);const tr=r.model==='no-llm'||trRows.length?100*trRows.filter(x=>T(x.faithful_answers)).length/(trRows.length||1):null;
+  const tok=r.model==='no-llm'?null:mean(rows.map(x=>(num(x.prompt_tokens)||0)+(num(x.completion_tokens)||0)));const tm=mean(rows.map(x=>num(x.wall_time_s)).filter(x=>x!=null));
+  h+=`<tr><td><b>${label}</b><br><span class='muted'>${r.model} · ${r.dir}</span></td><td>${fmtP(form)}</td><td>${fmtE(vSol)}</td><td>${fmtE(vAll)}</td><td>${fmtE(bSol)}</td><td>${fmtE(bAll)}</td><td>${fmtP(pct('solved'))}</td><td>${fmtP(pct('escalated'))}</td><td>${fmtP(pct('wrong_unflagged'))}</td><td>${r.model==='no-llm'?'100.0':fmtP(tr)}</td><td>${tok==null?'–':Math.round(tok)}</td><td>${tm==null?'–':tm.toFixed(1)}</td><td>${n}</td></tr>`;
+  rows.forEach(x=>{(scen[x.request_id]=scen[x.request_id]||{text:x.request_text,difficulty:x.difficulty,cells:{}}).cells[key]={run:r,row:x};});}
+ h+="</table>";$('#table').innerHTML=h;
+ let s="<table class='sc'><tr><th style='text-align:left'>request</th>"+METHODS.map(m=>`<th style='text-align:left'>${m[1]}</th>`).join('')+"</tr>";
+ for(const [rid,sc] of Object.entries(scen)){s+=`<tr><td><b>${sc.difficulty}</b><br>${sc.text}<br><span class='why'>${rid}</span></td>`;
+  for(const [key] of METHODS){const c=sc.cells[key];if(!c){s+="<td><span class='pill na'>no run</span></td>";continue;}const x=c.row;const st=`${String(x.nn).padStart(2,'0')}_${rid.replace(/[^A-Za-z0-9_.-]+/g,'_')}`;
+   s+=`<td><a href='viewer.html#run=${encodeURIComponent(c.run.path)}&req=${encodeURIComponent(rid)}'><span class='pill ${outcome(x)}'>${outcome(x).replace('_',' ')}</span></a><br><span class='why'>formulation ${T(x.formulation_exact)?'exact':'not exact ('+x.formulation_error_type+')'}${x.solved_reason?' · '+x.solved_reason:''}${x.verification_outcome?' · gate '+x.verification_outcome:''}</span><br><a class='why' href='../${c.run.path}/traces/${st}.transcript.txt'>transcript</a> · <a class='why' href='../${c.run.path}/traces/${st}.narrative.txt'>narrative</a></td>`;}
+  s+="</tr>";}
+ s+="</table>";$('#scen').innerHTML=s;
+ $('#status').textContent=`${runs.length} runs · index ${INDEX.generated}`;}
+async function init(){INDEX=await (await fetch('../INDEX.json')).json();
+ const sets=[...new Set(INDEX.runs.filter(r=>r.kind==='run').map(r=>`${tagOf(r)||'main'}·${r.date}`))].sort((a,b)=>b.split('·')[1].localeCompare(a.split('·')[1])||a.localeCompare(b));
+ setOptions($('#set'),sets.map(k=>[k,k.replace('·',' · ')]));const smoke=sets.find(k=>k.startsWith('smoke·'));if(smoke)$('#set').value=smoke;
+ function refill(){const rs=INDEX.runs.filter(r=>r.kind==='run'&&`${tagOf(r)||'main'}·${r.date}`===$('#set').value);const cases=[...new Set(rs.map(r=>r.case))].sort((a,b)=>parseInt(a.slice(4))-parseInt(b.slice(4)));setOptions($('#sys'),cases.map(c=>[c,SYS[c]||c]),true);const models=[...new Set(rs.map(r=>r.model).filter(m=>m!=='no-llm'))];setOptions($('#model'),[['all','all models'],...models.map(m=>[m,m])],true);if(models.length===1)$('#model').value=models[0];}
+ refill();$('#set').onchange=()=>{refill();render();};$('#sys').onchange=render;$('#model').onchange=render;render();}
+init();
+</script></body></html>

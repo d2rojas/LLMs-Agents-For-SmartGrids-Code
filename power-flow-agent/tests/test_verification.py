@@ -1,4 +1,4 @@
-"""Unit tests for llm/engine.py::verify_final_answer (V(x,c,z,y)) with synthetic traces.
+"""Unit tests for methods/agent/engine.py::verify_final_answer (V(x,c,z,y)) with synthetic traces.
 
 No LLM, no solver: every trace is a hand-built dict shaped like ``LLMEngine.run_with_trace``'s
 output. One test per failing condition, plus the all-pass case and the abstention/retry
@@ -12,14 +12,14 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from llm.engine import (  # noqa: E402
+from methods.agent.engine import (  # noqa: E402
     EngineConfig,
     LLMEngine,
     verify_final_answer,
     _verification_abstention_text,
     _verification_retry_message,
 )
-from benchmarks import scoring as bs  # noqa: E402
+from evaluation import scoring as bs  # noqa: E402
 
 
 def _pf_json(*, converged=True, gen=100.0, load=95.0, loss=5.0, bus_voltages=None, line_flows=None):
@@ -88,22 +88,22 @@ def test_isolated_bus_fails():
     assert iso["passed"] is False and iso["residual"] == 1
 
 
-def test_faithfulness_fails_on_invented_number():
+def test_traceability_fails_on_invented_number():
     pf = _pf_json()
     trace = _trace(_round(_tool("run_powerflow", pf)))
     # 0.873 pu appears nowhere in the tool output or the request.
     verdict = verify_final_answer(trace, "The lowest voltage is 0.873 pu.", request_text="Report the lowest voltage.")
     assert verdict["passed"] is False
-    faith = verdict["conditions"]["faithfulness"]
+    faith = verdict["conditions"]["traceability"]
     assert faith["passed"] is False and faith["residual"] == 1.0
 
 
-def test_faithfulness_treats_request_echo_as_traceable():
+def test_traceability_treats_request_echo_as_traceable():
     pf = _pf_json()
     trace = _trace(_round(_tool("run_powerflow", pf)))
     text = "Set the load at bus 9 to 40 MW as requested; bus 1 is at 1.06 pu."
     verdict = verify_final_answer(trace, text, request_text="Set the active load at bus 9 to 40 MW.")
-    assert verdict["conditions"]["faithfulness"]["passed"] is True
+    assert verdict["conditions"]["traceability"]["passed"] is True
 
 
 def test_currency_fails_when_mutation_never_resolved():
@@ -138,9 +138,9 @@ def test_currency_passes_with_no_mutation_in_effect():
 
 
 def test_abstention_text_is_recognized_as_a_declared_failure_by_scoring():
-    """The forced-abstention wording must trip benchmarks.scoring.failure_reporting's
+    """The forced-abstention wording must trip evaluation.scoring.failure_reporting's
     text-based safe_failure detection, or SFR would undercount pfagent by construction."""
-    from benchmarks import scoring
+    from evaluation import scoring
 
     pf = _pf_json(converged=False, gen=0.0, load=0.0, loss=0.0)
     trace = _trace(_round(_tool("run_powerflow", pf)))
@@ -151,7 +151,7 @@ def test_abstention_text_is_recognized_as_a_declared_failure_by_scoring():
     assert result["safe_failure"] is True
     assert result["claimed_success_on_failure"] is False
     # No unit-bearing numbers were silently reported alongside the abstention.
-    from benchmarks import metrics as bm
+    from evaluation import metrics as bm
 
     assert not any(n["kind"] != "unknown" for n in bm.numbers_in_text(text))
 
@@ -240,13 +240,13 @@ class _FakeDispatcher:
 
 
 def test_final_gate_retries_once_then_abstains_on_repeated_failure():
-    from models.schemas import SessionState
+    from solver.schemas import SessionState
 
     bad_pf = _pf_json(converged=False, gen=0.0, load=0.0, loss=0.0)
     # Two LLM turns, neither ever calls a tool: both final answers fail verification
     # (no run_powerflow output exists in the trace at all).
     client = _ScriptedClient(["First answer with a number: 1.05 pu.", "Second answer, still bad: 1.05 pu."])
-    engine = LLMEngine(client=client, dispatcher=_FakeDispatcher(bad_pf), config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True))
+    engine = LLMEngine(client=client, dispatcher=_FakeDispatcher(bad_pf), config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True, final_answer_instruction=False))
     text, trace = engine.run_with_trace("Run the power flow.", SessionState())
     assert trace["verification_outcome"] == "abstained"
     assert trace["verification_attempts"] == 2
@@ -286,7 +286,7 @@ def test_mutating_tool_during_retry_is_blocked_not_executed():
     """Structural counterpart to the message-wording fix: even if the model tries to call
     reconnect_line during a retry (e.g. ignoring the instruction not to), the dispatcher must
     never see that call -- it is blocked and treated as a verification failure in itself."""
-    from models.schemas import SessionState
+    from solver.schemas import SessionState
 
     isolated_pf = _pf_json(bus_voltages=[{"bus_id": 7, "vm_pu": 1.06, "va_deg": 0.0}, {"bus_id": 8, "vm_pu": None, "va_deg": None}])
     reconnected_pf = _pf_json()  # would "pass" if it were ever allowed to run
@@ -304,7 +304,7 @@ def test_mutating_tool_during_retry_is_blocked_not_executed():
             (None, reconnect_call),  # attempts to undo the disconnection instead of reporting it
         ]
     )
-    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True))
+    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True, final_answer_instruction=False))
     text, trace = engine.run_with_trace("Disconnect the branch between bus 7 and bus 8.", SessionState())
 
     assert "reconnect_line" not in dispatcher.calls  # never executed
@@ -322,7 +322,7 @@ def test_split_tool_load_mutations_are_blocked_during_retry_too():
     models), but the list itself was wrong regardless of whether anything used it.
     Structural counterpart to test_mutating_tool_during_retry_is_blocked_not_executed,
     same scenario under the split tool set."""
-    from models.schemas import SessionState
+    from solver.schemas import SessionState
 
     isolated_pf = _pf_json(bus_voltages=[{"bus_id": 7, "vm_pu": 1.06, "va_deg": 0.0}, {"bus_id": 8, "vm_pu": None, "va_deg": None}])
     reconnected_pf = _pf_json()
@@ -342,7 +342,7 @@ def test_split_tool_load_mutations_are_blocked_during_retry_too():
     )
     engine = LLMEngine(
         client=client, dispatcher=dispatcher,
-        config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True, tool_variant="load_split"),
+        config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True, tool_variant="load_split", final_answer_instruction=False),
     )
     text, trace = engine.run_with_trace("Disconnect the branch between bus 7 and bus 8.", SessionState())
 
@@ -356,7 +356,7 @@ def test_split_tool_load_mutations_are_blocked_during_retry_too():
 
 
 def test_verify_final_answer_checks_v6_v7_only_when_enforced():
-    """enforce_v6v7 defaults False: evaluate_llms.py/rescore.py's offline v_pass measurement
+    """enforce_v6v7 defaults False: runner.py/rescore.py's offline v_pass measurement
     (computed for every method, not just PFAgent) must stay exactly as it read before this
     condition existed. Only a caller that opts in sees an invented argument as a failure."""
     pf = _pf_json()
@@ -385,7 +385,7 @@ def test_pfagent_live_gate_abstains_on_a_v6_argument_grounding_failure():
     live gate is supposed to catch. The retry cannot fix it (modify_load is blocked once
     retry_active is set, so the invented q_mvar stays in the trace); the second attempt fails
     the same way and the run abstains rather than silently reporting the tainted answer."""
-    from models.schemas import SessionState
+    from solver.schemas import SessionState
 
     pf = _pf_json()  # converged, balanced, no isolated buses, gen=100/load=95/loss=5
     dispatcher = _FakeDispatcher(pf)
@@ -401,7 +401,7 @@ def test_pfagent_live_gate_abstains_on_a_v6_argument_grounding_failure():
             ("Bus 1 is now at 100.0 MW; generation 100.0 MW, load 95.0 MW, losses 5.0 MW.", []),  # retry: same tainted call, nothing to fix
         ]
     )
-    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True))
+    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True, final_answer_instruction=False))
     text, trace = engine.run_with_trace("Load case14 and set the active load at bus 1 to 100 MW.", SessionState())
 
     assert trace["verification_outcome"] == "abstained"
@@ -417,7 +417,7 @@ def test_pfagent_live_gate_v7_self_corrects_a_wrong_claim_on_retry():
     bus was worst. On retry it does not need to call any tool again -- read-only tools stay
     allowed during retry -- it only needs to restate its own already-computed result
     correctly, and the run passes on the second attempt instead of abstaining."""
-    from models.schemas import SessionState
+    from solver.schemas import SessionState
 
     pf = _pf_json(bus_voltages=[{"bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0}, {"bus_id": 3, "vm_pu": 0.94, "va_deg": 0.0}])
     dispatcher = _FakeDispatcher(pf)
@@ -433,7 +433,7 @@ def test_pfagent_live_gate_v7_self_corrects_a_wrong_claim_on_retry():
             ("On review, the bus with the lowest voltage magnitude is bus 3.", []),  # self-corrected, no new tool call
         ]
     )
-    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True))
+    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True, final_answer_instruction=False))
     text, trace = engine.run_with_trace("Load case14 and report the bus with the lowest voltage magnitude.", SessionState())
 
     assert trace["verification_outcome"] == "pass_retry"
@@ -460,7 +460,7 @@ def test_live_v7_verdict_matches_an_independent_offline_recomputation():
     a first-attempt answer that is genuinely correct passes live, and calling
     claims_from_tools_check directly on the same pre-answer trace and text (the
     reconstruction rescore.py/an auditor would do from a saved report) must also pass."""
-    from models.schemas import SessionState
+    from solver.schemas import SessionState
 
     pf = {
         "case_name": "case14",
@@ -478,7 +478,7 @@ def test_live_v7_verdict_matches_an_independent_offline_recomputation():
         return {"id": id_, "type": "function", "function": {"name": name, "arguments": args_json}}
 
     client = _ScriptedToolClient([(None, [_call("1", "run_powerflow", "{}")]), (answer_text, [])])
-    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True))
+    engine = LLMEngine(client=client, dispatcher=dispatcher, config=EngineConfig(model="fake", architecture="react", gate=False, final_gate=True, final_answer_instruction=False))
     text, trace = engine.run_with_trace(request_text, SessionState())
 
     assert trace["verification_outcome"] == "pass_first"

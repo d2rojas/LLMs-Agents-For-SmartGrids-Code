@@ -12,7 +12,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from benchmarks.metrics import (
+from evaluation.metrics import (
     FORMULATION_ERROR_TYPES,
     TOOL_SCHEMA,
     argument_grounding_check,
@@ -100,7 +100,7 @@ def test_formulation_exact_with_normalization_and_benign_run_powerflow():
 
 
 def test_set_active_load_and_set_load_are_formulation_equivalent_to_modify_load():
-    """tool_variant="load_split" (llm.tools.TOOLS_LOAD_SPLIT) replaces modify_load with
+    """tool_variant="load_split" (methods.agent.tools.TOOLS_LOAD_SPLIT) replaces modify_load with
     set_active_load/set_load, but intended_calls always says "modify_load" -- the
     ground-truth generator predates the split and never emits the new names. Without this
     alias, a load-split run whose arguments are otherwise identical to the reference would
@@ -132,7 +132,7 @@ def test_set_active_load_alias_holds_on_the_real_multistep_shape_that_needed_it(
     formulation_check on that file's own stored intended/executed calls, which already
     gives the rescored answer: the gap is not a live-path bug the way the truth_answer/
     KCL-gating/N1-repeat ones are, since formulation_check is one shared function
-    evaluate_llms.py and rescore.py both call -- that report.json is simply older than
+    runner.py and rescore.py both call -- that report.json is simply older than
     the alias existing at all, which rescoring is exactly for. This test pins the real
     shape (set_active_load standing in for modify_load inside a longer disconnect/
     reconnect/re-solve sequence, not the isolated single-call case above) so the alias
@@ -249,7 +249,7 @@ N1_PINNED = [LOAD30, _c("run_n1_contingency", top_k=3, criteria="min_voltage")] 
 
 
 def test_tool_schema_mirrors_llm_tools():
-    from llm.tools import TOOLS
+    from methods.agent.tools import TOOLS
 
     assert {t["name"] for t in TOOLS} == set(TOOL_SCHEMA)
     for t in TOOLS:
@@ -268,10 +268,13 @@ def test_rule_unpinned_optional_accepts_any_schema_valid_value():
         out = formulation_check(N1_FREE, [LOAD30, _c("run_n1_contingency", top_k=k)])
         assert out["formulation_exact"] is True and out["formulation_error_type"] == "ok", (k, out)
         assert out["formulation_exact_strict"] is False
-    # a named criterion or a candidate cap that the request did not pin is also free
-    out = formulation_check(N1_FREE, [LOAD30, _c("run_n1_contingency", criteria="min_voltage", max_candidates=10)])
+    # a named criterion, or a candidate cap that still covers every branch, is also free
+    out = formulation_check(N1_FREE, [LOAD30, _c("run_n1_contingency", criteria="min_voltage", max_candidates=100)])
     assert out["formulation_exact"] is True
-    assert any("max_candidates=10" in n for n in out["benign_notes"])
+    assert any("max_candidates=100" in n for n in out["benign_notes"])
+    # a cap below the branch count narrows the scan and changes the ranking (2026-09-24 rule)
+    out = formulation_check(N1_FREE, [LOAD30, _c("run_n1_contingency", criteria="min_voltage", max_candidates=10)])
+    assert out["formulation_exact"] is False and out["formulation_error_type"] == "extra_arg_changes_result"
 
 
 def test_rule_pinned_optional_must_match_after_normalization():
@@ -291,7 +294,7 @@ def test_rule_pinned_optional_must_match_after_normalization():
 
 
 def test_rule_extra_optional_argument_is_not_an_error_by_itself():
-    executed = [LOAD30, _c("run_n1_contingency", top_k=3, criteria="min_voltage", max_candidates=10)]
+    executed = [LOAD30, _c("run_n1_contingency", top_k=3, criteria="min_voltage", max_candidates=100)]
     out = formulation_check(N1_PINNED, executed)
     assert out["formulation_exact"] is True and out["formulation_exact_strict"] is False
     # argument names the dispatcher never reads are ignored too

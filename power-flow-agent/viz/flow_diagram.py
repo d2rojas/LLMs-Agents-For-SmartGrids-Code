@@ -8,7 +8,7 @@ import math
 import pandas as pd
 import plotly.graph_objects as go
 
-from models.schemas import LineFlow, PowerFlowResult
+from solver.schemas import LineFlow, PowerFlowResult
 from viz.network_plot import Theme, bus_display_id, build_graph, classify_bus_sets, compute_layout
 
 

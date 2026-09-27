@@ -11,7 +11,7 @@ import pandapower.networks as ppn
 import importlib
 import numpy as np
 
-from models.schemas import NetworkInfo
+from solver.schemas import NetworkInfo
 
 
 @dataclass(frozen=True)
@@ -171,5 +171,8 @@ def load(case_name: str):
     except Exception:
         pass
 
+    from solver.ratings import assign_branch_ratings
+
+    assign_branch_ratings(net)  # every system gets ratings by the same rule (solver/ratings.py)
     info = _calc_network_info(net, canonical)
     return net, info

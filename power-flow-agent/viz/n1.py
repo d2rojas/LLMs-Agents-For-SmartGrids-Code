@@ -6,7 +6,7 @@ from typing import Literal
 
 import plotly.graph_objects as go
 
-from models.schemas import N1Report
+from solver.schemas import N1Report
 
 
 Lang = Literal["zh", "en"]

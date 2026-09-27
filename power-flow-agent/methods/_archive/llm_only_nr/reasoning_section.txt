@@ -1,0 +1,8 @@
+## Reasoning Instructions
+Solve this with the Newton-Raphson power-flow procedure, worked by hand in the reasoning text before the final JSON:
+1. Build the bus admittance matrix Ybus (per unit, on the stated system base) from the r_pu/x_pu/b_pu of every line and transformer (series admittance 1/(r_pu+j*x_pu), plus the shunt charging b_pu split half to each end bus).
+2. Classify each bus as slack (ext_grid), PV (gen) or PQ (load only); PV/slack voltage magnitudes are the given setpoints, not unknowns.
+3. Flat-start the unknowns: angle 0 at every non-slack bus, magnitude 1.0 p.u. at every PQ bus.
+4. At each iteration: compute the power mismatch (Delta P at every non-slack bus, Delta Q at every PQ bus) from the current voltage estimate, form the Jacobian, solve for the angle/magnitude correction, and update the voltage estimate. Show the mismatch vector and the updated voltages at each iteration explicitly.
+5. Repeat until the largest mismatch is below 1e-3 p.u. (report the iteration count), or state explicitly that you are not iterating further and why.
+Do not skip straight to a final answer without showing at least one iteration's mismatch and update; a plausible-looking answer with no shown iteration is not an acceptable substitute.

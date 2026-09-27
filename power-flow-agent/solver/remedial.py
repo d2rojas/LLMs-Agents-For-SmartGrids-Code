@@ -9,7 +9,7 @@ import re
 
 import pandapower as pp
 
-from models.schemas import RemedialAction, RemedialPlan, ViolationType
+from solver.schemas import RemedialAction, RemedialPlan, ViolationType
 from solver.power_flow import SolverConfig, run_power_flow
 
 

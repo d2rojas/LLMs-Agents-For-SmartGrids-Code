@@ -6,7 +6,7 @@ from typing import Any, Literal, Optional
 
 import plotly.graph_objects as go
 
-from models.schemas import PowerFlowResult
+from solver.schemas import PowerFlowResult
 from viz.flow_diagram import resolve_flow_positions
 from viz.network_plot import STYLE, Theme, bus_display_id, make_base_network_figure
 

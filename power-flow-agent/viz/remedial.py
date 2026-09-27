@@ -7,7 +7,7 @@ import re
 
 import plotly.graph_objects as go
 
-from models.schemas import RemedialPlan
+from solver.schemas import RemedialPlan
 
 
 Lang = Literal["zh", "en"]
