@@ -442,3 +442,12 @@ def test_gate_balance_tolerance_is_relative_for_large_systems():
     bad = dict(base, total_generation_mw=4242.0 + 132.684 + 42.0)
     assert gate_verdict(_json.dumps(ok))["passed"] is True
     assert gate_verdict(_json.dumps(bad))["passed"] is False
+
+
+def test_react_accepts_a_reply_that_already_is_the_answer_object():
+    tools = ScriptedTools()
+    answer = '{"formulation": [{"tool": "run_powerflow", "args": {}}], "converged": true, "bus_voltages": [], "line_flows": [], "cannot_answer": null}'
+    client = ScriptedClient([_resp(tool_calls=[_tool_call("c1", "run_powerflow", {})]), _resp(content=answer)])
+    engine = LLMEngine(client=client, dispatcher=tools.dispatcher(), config=EngineConfig(model="fake"))
+    text, trace = engine.run_with_trace("run it", SessionState())
+    assert text == answer and trace["n_llm_calls"] == 2  # no third call for the final-answer instruction

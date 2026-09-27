@@ -65,8 +65,7 @@ from methods.agent.tools import TOOLS, TOOLS_LOAD_SPLIT, ToolDispatcher, get_ope
 ARCHITECTURES = ("react", "single_call", "plan_act")
 
 # Same tolerance as solver/validators.py::ValidationConfig.balance_tol_mw
-GATE_BALANCE_TOL_MW = 0.01          # absolute floor, MW
-GATE_BALANCE_REL_TOL = 1e-4         # relative to total load: 0.01 percent (case118 base case sits at 0.004 percent)
+from solver.validators import BALANCE_REL_TOL as GATE_BALANCE_REL_TOL, BALANCE_TOL_MW as GATE_BALANCE_TOL_MW  # one balance rule: validator and gate
 
 # Paper/notes labels for verify_final_answer's five conditions -- same order as V(x,c,z,y)
 # is described there: V1 the last power flow converged, V2 active-power balance, V3 no
@@ -1185,7 +1184,10 @@ class LLMEngine:
                 continue
 
             final_text = (msg.get("content") or "").strip()
-            if self.config.final_answer_instruction:
+            already = _answer_object(final_text)
+            if self.config.final_answer_instruction and not (already is not None and isinstance(already.get("formulation"), list) and ("bus_voltages" in already or already.get("cannot_answer"))):
+                # The reply is not yet the answer object: ask for it once. (A reply that already is the
+                # object is accepted as is; on a 118-bus system it costs 13k output tokens to write.)
                 # Same closing step as Plan-and-Act: the answer object is written in reply to the
                 # final-answer instruction, from the tool outputs above, without tools.
                 final_rec: Dict[str, Any] = {"round": tool_round + 1, "final": True}
