@@ -13,7 +13,7 @@ th.g{text-align:center;background:#eef2fb}
 </style></head><body>
 <header><h1>PFAgent · Results</h1><label>Run set <select id='set'></select></label><label>System <select id='sys'></select></label><label>Model <select id='model'></select></label><span class='muted' id='status'></span></header>
 <main>
-<div class='card'><h2>The table, as the paper prints it</h2><p class='muted'>One row per method, computed from the per-request lines (summary.csv) of the selected runs. Task utility, solver-grounded correctness, cost and time. Percentages are over the n requests of the run set; V_MAE in p.u., B_mean in MW; tokens and time are means per request.</p><div id='table'></div></div>
+<div class='card'><h2>The table, as the paper prints it</h2><p class='muted'>One row per method, computed from the per-request lines (summary.csv) of the selected runs. Task utility, solver-grounded correctness, cost and time. Percentages are over the n requests of the run set; V_MAE (p.u.) and B_mean (MW) are shown as solved / all: the mean over the solved requests, then over every request that reported a state; tokens and time are means per request.</p><div id='table'></div></div>
 <div class='card'><h2>Every request, under each method</h2><p class='muted'>The verdict of each run, its formulation check, and a link to the real trace in the viewer. Click a request to open it.</p><div id='scen'></div></div>
 </main>
 <script>
@@ -31,9 +31,9 @@ function runsOf(){const set=$('#set').value,sys=$('#sys').value,model=$('#model'
 async function rowsFor(r){if(!ROWS[r.path]){ROWS[r.path]=parseCSV(await (await fetch('../'+r.path+'/summary.csv')).text());}return ROWS[r.path];}
 function outcome(x){if(x.error&&x.error!=='')return 'run_error';return x.outcome||(T(x.solved)?'solved':T(x.escalated)?'escalated':'wrong_unflagged');}
 async function render(){const runs=runsOf();const byM={};for(const r of runs){byM[r.method]=r;}
- let h="<table><tr><th></th><th class='g' colspan='5'>Task utility</th><th class='g' colspan='4'>Solver-grounded correctness</th><th class='g' colspan='2'>Cost and time</th><th></th></tr><tr><th>Method</th><th>Formulation %</th><th>V_MAE solved</th><th>V_MAE all</th><th>B_mean solved</th><th>B_mean all</th><th>Solved %</th><th>Escalated %</th><th>Wrong unflagged %</th><th>Traceable %</th><th>Tokens</th><th>Time (s)</th><th>n answered</th></tr>";
+ let h="<table><tr><th></th><th class='g' colspan='3'>Task utility</th><th class='g' colspan='4'>Solver-grounded correctness</th><th class='g' colspan='2'>Cost and time</th><th></th></tr><tr><th>Method</th><th>Formulation %</th><th>V_MAE<br><span class='muted'>solved / all</span></th><th>B_mean<br><span class='muted'>solved / all</span></th><th>Solved %</th><th>Escalated %</th><th>Wrong unflagged %</th><th>Traceable %</th><th>Tokens</th><th>Time (s)</th><th>n answered</th></tr>";
  const scen={};
- for(const [key,label] of METHODS){const r=byM[key];if(!r){h+=`<tr><td>${label}</td><td colspan='12' class='muted' style='text-align:left'>no run in this set</td></tr>`;continue;}
+ for(const [key,label] of METHODS){const r=byM[key];if(!r){h+=`<tr><td>${label}</td><td colspan='10' class='muted' style='text-align:left'>no run in this set</td></tr>`;continue;}
   const all=await rowsFor(r);const errs=all.filter(x=>outcome(x)==='run_error');const rows=all.filter(x=>outcome(x)!=='run_error');const n=rows.length||1;const solved=rows.filter(x=>outcome(x)==='solved');
   const pct=k=>100*rows.filter(x=>outcome(x)===k).length/n;
   const form=100*rows.filter(x=>T(x.formulation_exact)).length/n;
@@ -41,7 +41,7 @@ async function render(){const runs=runsOf();const byM={};for(const r of runs){by
   const bAll=mean(rows.map(x=>num(x.kcl_mismatch_mw)).filter(x=>x!=null)),bSol=mean(solved.map(x=>num(x.kcl_mismatch_mw)).filter(x=>x!=null));
   const trRows=rows.filter(x=>x.faithful_answers!==''&&x.faithful_answers!=null);const tr=r.model==='no-llm'||trRows.length?100*trRows.filter(x=>T(x.faithful_answers)).length/(trRows.length||1):null;
   const tok=r.model==='no-llm'?null:mean(rows.map(x=>(num(x.prompt_tokens)||0)+(num(x.completion_tokens)||0)));const tm=mean(rows.map(x=>num(x.wall_time_s)).filter(x=>x!=null));
-  h+=`<tr><td><b>${label}</b><br><span class='muted'>${r.model} · ${r.dir}</span></td><td>${fmtP(form)}</td><td>${fmtE(vSol)}</td><td>${fmtE(vAll)}</td><td>${fmtE(bSol)}</td><td>${fmtE(bAll)}</td><td>${fmtP(pct('solved'))}</td><td>${fmtP(pct('escalated'))}</td><td>${fmtP(pct('wrong_unflagged'))}</td><td>${r.model==='no-llm'?'100.0':fmtP(tr)}</td><td>${tok==null?'–':Math.round(tok)}</td><td>${tm==null?'–':tm.toFixed(1)}</td><td>${rows.length}${errs.length?`<br><span class='pill run_error'>${errs.length} run error${errs.length>1?'s':''}</span>`:''}</td></tr>`;
+  h+=`<tr><td><b>${label}</b><br><span class='muted'>${r.model} · ${r.dir}</span></td><td>${fmtP(form)}</td><td>${fmtE(vSol)} / ${fmtE(vAll)}</td><td>${fmtE(bSol)} / ${fmtE(bAll)}</td><td>${fmtP(pct('solved'))}</td><td>${fmtP(pct('escalated'))}</td><td>${fmtP(pct('wrong_unflagged'))}</td><td>${r.model==='no-llm'?'100.0':fmtP(tr)}</td><td>${tok==null?'–':Math.round(tok)}</td><td>${tm==null?'–':tm.toFixed(1)}</td><td>${rows.length}${errs.length?`<br><span class='pill run_error'>${errs.length} run error${errs.length>1?'s':''}</span>`:''}</td></tr>`;
   all.forEach(x=>{(scen[x.request_id]=scen[x.request_id]||{text:x.request_text,difficulty:x.difficulty,cells:{}}).cells[key]={run:r,row:x};});}
  h+="</table>";$('#table').innerHTML=h;
  let s="<table class='sc'><tr><th style='text-align:left'>request</th>"+METHODS.map(m=>`<th style='text-align:left'>${m[1]}</th>`).join('')+"</tr>";

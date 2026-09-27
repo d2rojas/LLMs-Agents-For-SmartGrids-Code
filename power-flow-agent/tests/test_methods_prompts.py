@@ -20,7 +20,7 @@ from methods import prompt_hash, read_text, system_prompt_for, planner_prompt_fo
 # Hashes of the raw texts, recorded from the module constants on 2026-09-23 before the
 # constants were moved to methods/*.txt.
 PINNED_TEXTS = {
-    "_shared/agent_system_prompt.txt": "2efb17dd2582",
+    "_shared/agent_system_prompt.txt": "de3bfa18e09e",
     "_shared/agent_system_prompt_zh_ui.txt": "96e8ca25a690",
     "_shared/llm_only_system_prompt.txt": "a898139a82c8",
     "_shared/llm_only_user_template.txt": "27694cb49698",
@@ -35,7 +35,7 @@ PINNED_TEXTS = {
     "single_call_structured/output_section.txt": "2304fa83ea46",
     "single_call_cot/reasoning_section.txt": "e0bd7a11b9d9",
     "plan_act_nogate/plan_system_prompt_structured.txt": "5e9fee34a0db",
-    "plan_act_nogate/plan_system_prompt_prefix.txt": "6519a84e612a",
+    "plan_act_nogate/plan_system_prompt_prefix.txt": "bbe2507b8263",
     "_shared/common_rules.txt": "95a47a1faefe",
     "_shared/output_contract.txt": "729cd991d4a6",
     "_shared/operations_section.txt": "d66817c9b4d3",
@@ -47,12 +47,12 @@ PINNED_TEXTS = {
 # v2 (2026-09-25): one shared rules block and one output contract for every method; the
 # 2026-09-21 runs were stamped 7da5e2a37ec4 (agents), 23e5d9b407f9 (single_call), 1b4712c641b5 / 063482ad676f (llm_only).
 PINNED_SYSTEM_PROMPTS = {
-    "react": "2efb17dd2582",
-    "react_nogate": "2efb17dd2582",
-    "plan_act": "2efb17dd2582",
-    "plan_act_nogate": "2efb17dd2582",
-    "pfagent": "2efb17dd2582",
-    "single_call:structured": "f1d16f4e43bf",
+    "react": "de3bfa18e09e",
+    "react_nogate": "de3bfa18e09e",
+    "plan_act": "de3bfa18e09e",
+    "plan_act_nogate": "de3bfa18e09e",
+    "pfagent": "de3bfa18e09e",
+    "single_call:structured": "fc8906df9627",
     "llm_only:structured": "183abd966fbd",
     "llm_only:cot": "be09b0a3b7d2",
     "llm_only_forced:structured": "16554a4d37ce",
@@ -64,7 +64,7 @@ PINNED_SYSTEM_PROMPTS = {
 
 # 2026-09-23: planner prompt carries the enum values and the indexing rule (matched information with ReAct);
 # the runs behind the 2026-09-21 tables used 6dfbc78e5795 / a82318af7571.
-PINNED_PLANNER_PROMPTS = {"v1": "64a026212fdb", "load_split": "4e2f69255f6b"}
+PINNED_PLANNER_PROMPTS = {"v1": "fb8ea9983f69", "load_split": "e246542de033"}
 
 
 @pytest.mark.parametrize("rel,expected", sorted(PINNED_TEXTS.items()))

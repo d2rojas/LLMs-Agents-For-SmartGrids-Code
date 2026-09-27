@@ -1114,7 +1114,7 @@ def _find_pf_payload(obj: Any) -> Optional[Dict[str, Any]]:
     """PowerFlowResult-shaped dict: top level, or nested under ``result`` (apply_remedial_action)."""
     if not isinstance(obj, dict):
         return None
-    if "converged" in obj and any(k in obj for k in _PF_TOTAL_KEYS + _PF_NUMERIC_KEYS):
+    if "converged" in obj and any(k in obj for k in _PF_NUMERIC_KEYS):  # the compact confirmation of a change has totals but no state
         return obj
     nested = obj.get("result")
     if isinstance(nested, dict) and "converged" in nested:

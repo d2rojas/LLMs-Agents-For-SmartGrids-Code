@@ -174,9 +174,10 @@ def score_common(
     out["common_solved"] = bool(solved)
     out["common_reason"] = reason
     out["common_outcome"] = "escalated" if out["common_escalated"] else ("solved" if solved else "wrong_unflagged")
-    if run_error:
+    if run_error and "LLM request failed" in str(run_error):
         # An API failure (timeout, connection, context length) is not an answer: the method never
-        # got to reply. Reported apart, never as a wrong answer; the request is rerun.
+        # got to reply. Reported apart, never as a wrong answer; the request is rerun. Any other
+        # error (an answer that is not the JSON object, a tool the method misused) is the method's.
         out["common_outcome"] = "run_error"
         out["common_solved"] = False
         out["common_escalated"] = False

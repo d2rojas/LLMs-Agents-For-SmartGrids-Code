@@ -1,0 +1,23 @@
+RUN 01  |  case30-ambiguous-002-s0  |  llm_only:cot  |  gpt-4o-mini  |  IEEE 30-bus  |  seed 0  |  difficulty ambiguous
+Request: Load the IEEE 30-bus system and disconnect the line between bus 10 and bus 20 (1-based).
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): 1. The request refers to the following buses: - Buses: 1 (slack bus), 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30. - Slack bus: Bus 1. - ...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 4256 in / 1396 out tokens, $0.0015, 11.2 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case30") -> disconnect_line(from_bus=10, to_bus=20)
+  declared: load_case(case_name="case30") -> disconnect_line(from_bus=10, to_bus=20) -> run_powerflow()   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 66, untraceable: 66 -> traceable answer: no
+  untraceable values: ['155.1 MW', '155.1 MW', '0.0 MW', '0.0', '1.01', '-1.5', '1.02', '-2.0', '1.01', '-1.0', '0.0', '0.0', '0.0', '0.0', '0.0', '0.0', '0.0', '0.0', '0.0', '0.0']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: voltage_error
+  against the reference: voltage MAE 0.0233 p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case30-ambiguous-002-s0_run0.json
