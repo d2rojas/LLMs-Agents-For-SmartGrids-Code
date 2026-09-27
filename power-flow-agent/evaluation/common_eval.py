@@ -106,6 +106,16 @@ def score_common(
     fm = bm.formulation_check(list(intended_calls or []), declared, preloaded_case=preloaded_case)
     exact = bool(fm.get("formulation_exact"))
     etype, detail = fm.get("formulation_error_type"), ("declared: " + str(fm.get("detail") or "")) if declared is not None else "no formulation field in the answer"
+    if declared is not None and etype == "missed_step":
+        # say it in words: the operations are in the answer's formulation field, not in what ran
+        import re as _re
+        m = _re.search(r"missing tools: \[(.*?)\]", str(fm.get("detail") or ""))
+        missing = [x.strip(" '\"") for x in m.group(1).split(",")] if m else []
+        alias = {"modify_load": "set_active_load / modify_load"}
+        ran = {str(c.get("tool")) for c in (executed_calls or [])}
+        names = [alias.get(x, x) for x in missing]
+        also_ran = any(x in ran or ("set_active_load" in ran and x == "modify_load") or ("set_load" in ran and x == "modify_load") for x in missing)
+        detail = f"the formulation declared in the answer omits {', '.join(names)}, which the request needs" + (" and which the trace shows the method did run" if also_ran else "")
     if exact and has_tools:
         ran = bm.formulation_check(bm.without_read_only(executed_calls), bm.without_read_only(declared), preloaded_case=preloaded_case)
         if not ran.get("formulation_exact"):

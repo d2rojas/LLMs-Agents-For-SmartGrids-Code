@@ -1,6 +1,6 @@
 # react_nogate on IEEE 14-bus with gpt-4o-mini
 
-Generated 2026-09-26 22:10 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-27 16:20 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -82,8 +82,8 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 ## Wrong and unflagged (9)
 
-- `case14-ambiguous-003-s0` formulation missed_step; declared: missing tools: ['disconnect_line']  ([narrative](traces/01_case14-ambiguous-003-s0.narrative.txt), [transcript](traces/01_case14-ambiguous-003-s0.transcript.txt))
-- `case14-ambiguous-011-s0` formulation missed_step; declared: missing tools: ['modify_load']  ([narrative](traces/03_case14-ambiguous-011-s0.narrative.txt), [transcript](traces/03_case14-ambiguous-011-s0.transcript.txt))
+- `case14-ambiguous-003-s0` formulation missed_step; the formulation declared in the answer omits disconnect_line, which the request needs and which the trace shows the method did run  ([narrative](traces/01_case14-ambiguous-003-s0.narrative.txt), [transcript](traces/01_case14-ambiguous-003-s0.transcript.txt))
+- `case14-ambiguous-011-s0` formulation missed_step; the formulation declared in the answer omits set_active_load / modify_load, which the request needs and which the trace shows the method did run  ([narrative](traces/03_case14-ambiguous-011-s0.narrative.txt), [transcript](traces/03_case14-ambiguous-011-s0.transcript.txt))
 - `case14-multistep-018-s0` formulation exact; declared:  ([narrative](traces/10_case14-multistep-018-s0.narrative.txt), [transcript](traces/10_case14-multistep-018-s0.transcript.txt))
 - `case14-parameterized-001-s0` formulation exact; declared:  ([narrative](traces/11_case14-parameterized-001-s0.narrative.txt), [transcript](traces/11_case14-parameterized-001-s0.transcript.txt))
 - `case14-parameterized-009-s0` formulation exact; declared:  ([narrative](traces/13_case14-parameterized-009-s0.narrative.txt), [transcript](traces/13_case14-parameterized-009-s0.transcript.txt))
@@ -94,8 +94,8 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 ## Formulation not exact (2)
 
-- `case14-ambiguous-003-s0` missed_step: declared: missing tools: ['disconnect_line']  ([narrative](traces/01_case14-ambiguous-003-s0.narrative.txt), [transcript](traces/01_case14-ambiguous-003-s0.transcript.txt))
-- `case14-ambiguous-011-s0` missed_step: declared: missing tools: ['modify_load']  ([narrative](traces/03_case14-ambiguous-011-s0.narrative.txt), [transcript](traces/03_case14-ambiguous-011-s0.transcript.txt))
+- `case14-ambiguous-003-s0` missed_step: the formulation declared in the answer omits disconnect_line, which the request needs and which the trace shows the method did run  ([narrative](traces/01_case14-ambiguous-003-s0.narrative.txt), [transcript](traces/01_case14-ambiguous-003-s0.transcript.txt))
+- `case14-ambiguous-011-s0` missed_step: the formulation declared in the answer omits set_active_load / modify_load, which the request needs and which the trace shows the method did run  ([narrative](traces/03_case14-ambiguous-011-s0.narrative.txt), [transcript](traces/03_case14-ambiguous-011-s0.transcript.txt))
 
 ## Untraceable numbers in the answer (1)
 
