@@ -121,20 +121,54 @@ def landing(every: Sequence[Dict[str, Any]]) -> str:
             + "<div class='st'>Open →</div></a>"
         )
     intro = card(
-        "One protocol, every case study",
-        "<p>Each case study asks the same question of a different grid task: can a language model do the work "
-        "an engineer does today with a trusted tool, and can anyone tell when it has not. The answer is organised "
-        "the same way everywhere, and that is the point of collecting the case studies on one site.</p>",
-        "<p>The same six rows, with the same names: a deterministic parser with no language model, two "
-        "prompting strategies with no tools, two multi-step agents with tools and no verification, and the "
-        "solver-grounded agent, which differs from the agent above it by the verification gate alone. The same "
-        "three-way outcome: a request is <span class='vd solved'>solved</span>, "
-        "<span class='vd escalated'>escalated</span> to a person, or answered "
-        "<span class='vd wrong'>wrong</span> with nothing flagging it. The same three metric groups: task "
-        "utility, solver-grounded correctness, cost and operation.</p>",
-        "<p class='muted'>Every page is generated from the code that would run: the method registry, the "
-        "verification conditions, the scenario generator, the prompt builders and the result files. Nothing on "
-        "them is written by hand, so no page can describe a design that is not the one that runs.</p>",
+        "Evaluation protocol",
+        "<p>Each case study poses a grid task in natural language and evaluates whether a language model can "
+        "produce the answer an engineer currently obtains with a trusted numerical tool. The reference solution "
+        "for every instance is computed by that tool, so correctness is decided against a known quantity rather "
+        "than against a judgement.</p>",
+        "<h3>Factorial design</h3>"
+        "<p>Six methods answer identical instances and are scored by identical code. Tool access is itself one of "
+        "the factors under study, so it varies by design; among the methods that have tools it is the same tool "
+        "under the same interaction budget. Consecutive methods differ in exactly one factor, which is what "
+        "allows an observed difference to be attributed to that factor.</p>"
+        + table(
+            ["method", "factor it adds"],
+            [
+                ["Deterministic parser", "none. No language model at any stage"],
+                ["Structured prompting", "a language model, with no access to the solver"],
+                ["Chain-of-thought prompting", "an explicit reasoning step in the prompt"],
+                ["Plan-and-Act", "solver access, with the call sequence fixed in advance"],
+                ["ReAct", "iteration. Each tool output is observed before the next call"],
+                ["Solver-grounded agent", "verification of the answer before it is surfaced"],
+            ],
+        )
+        + "<p class='muted'>The last contrast is the one the design turns on. The final two methods share the "
+        "tool, the budget and the instances, so the difference between them measures verification and nothing "
+        "else.</p>",
+        "<h3>Response variable</h3>"
+        "<p>Each instance terminates in one of three mutually exclusive states, which are exhaustive and "
+        "therefore sum to the instance count.</p>"
+        + table(
+            ["state", "definition"],
+            [
+                [shell.verdict("solved"),
+                 "the answer is correct against the reference and its numbers are traceable to the tool output"],
+                [shell.verdict("escalated"),
+                 "the method declared it could not answer, and produced no numbers"],
+                [shell.verdict("wrong"),
+                 "the answer is incorrect and nothing in the output indicates it"],
+            ],
+        )
+        + "<p class='muted'>The third state is the quantity a solver-grounded design exists to eliminate. The "
+        "second is the cost of eliminating it, since an escalated instance is one a person has to handle.</p>",
+        "<h3>Measurements</h3>"
+        "<p>Metrics are grouped as task utility, solver-grounded correctness, and cost of operation. The latter "
+        "two groups are defined identically in every case study. Task-utility metrics are case-specific, because "
+        "the tasks optimise different objectives.</p>",
+        "<p class='muted'>Reproducibility: each page is generated from the executable configuration of its case "
+        "study, comprising the method registry, the verification conditions, the instance generator, the prompt "
+        "builders and the recorded results. No description on these pages is maintained separately from the code "
+        "it describes.</p>",
     )
     return shell.page(
         title="Case studies · Evaluation",
