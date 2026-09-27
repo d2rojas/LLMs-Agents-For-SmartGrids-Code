@@ -309,9 +309,6 @@ def tab_overview() -> str:
             ),
             "<p class='muted' style='text-align:center'>Fig. 1. The pipeline every method is measured on. "
             "Only the solver-grounded method has the Verify stage; the others go from Compute to Report.</p>",
-            "<p class='muted'>Six methods answer the identical requests, on identical days, under an identical "
-            "budget, and are scored by identical code. One of them uses no language model at all; the other five "
-            "differ from each other by exactly one factor at a time.</p>",
         )
     ]
 
@@ -338,20 +335,6 @@ def tab_overview() -> str:
             "<span>\\(i\\)</span> at step <span>\\(t\\)</span> in kW, and <span>\\(u_i\\)</span>, the energy not "
             "delivered to session <span>\\(i\\)</span> in kWh. (1) the car is not plugged in; (2) the charger's limit; "
             "(3) the site's cap; (4) deliver the energy, or account for what is missing.</p>"
-            "<details><summary>LaTeX source, for the manuscript</summary><pre>"
-            + E(r"""\begin{equation}
-\begin{aligned}
-\min_{p,\,u}\quad & \sum_{t=0}^{T-1} c(t)\,\Big(\sum_{i=1}^{N} p_i(t)\Big)\,\Delta \;+\; M \sum_{i=1}^{N} u_i \\
-\text{s.t.}\quad
-& p_i(t) = 0, && t \notin [a_i, d_i) \\
-& 0 \le p_i(t) \le \bar p_i, && t \in [a_i, d_i) \\
-& \sum_{i=1}^{N} p_i(t) \le P_{\max}(t), && \forall t \\
-& \Delta \sum_{t=0}^{T-1} p_i(t) + u_i = E_i, && \forall i \\
-& p_i(t) \ge 0,\; u_i \ge 0,
-\end{aligned}
-\label{eq:ev-lp}
-\end{equation}""")
-            + "</pre></details>",
             "<p>Constraints (1) to (3) are <b>hard</b>: a schedule that breaks one of them cannot be run, and the "
             "site would trip or the car would draw power it cannot take. Constraint (4) is <b>soft</b>, through the "
             "slack <em>u<sub>i</sub></em> priced at <em>M</em> = 10<sup>6</sup> $/kWh. That is a deliberate "
