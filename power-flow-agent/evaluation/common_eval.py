@@ -107,7 +107,7 @@ def score_common(
     exact = bool(fm.get("formulation_exact"))
     etype, detail = fm.get("formulation_error_type"), ("declared: " + str(fm.get("detail") or "")) if declared is not None else "no formulation field in the answer"
     if exact and has_tools:
-        ran = bm.formulation_check(list(executed_calls or []), declared, preloaded_case=preloaded_case)
+        ran = bm.formulation_check(bm.without_read_only(executed_calls), bm.without_read_only(declared), preloaded_case=preloaded_case)
         if not ran.get("formulation_exact"):
             exact, etype, detail = False, "declared_differs_from_executed", "the answer declares operations that differ from the ones the trace shows: " + str(ran.get("detail") or "")
     out["common_formulation_exact"] = exact

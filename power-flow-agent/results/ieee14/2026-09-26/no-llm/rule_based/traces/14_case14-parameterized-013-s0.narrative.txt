@@ -1,0 +1,28 @@
+RUN 14  |  case14-parameterized-013-s0  |  rule_based  |  no-llm  |  IEEE 14-bus  |  seed 0  |  difficulty parameterized
+Request: Load the 14-bus test case (case14) and disconnect the line between bus 13 and bus 14.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 2-step plan: load_case(case_name="case14") -> disconnect_line(from_bus=13, to_bus=14)
+  2. parser called load_case(case_name="case14")
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=269.313
+  3. parser called disconnect_line(from_bus=13, to_bus=14)
+       tool disconnect_line -> converged=true, total_load_mw=269.313, total_generation_mw=284.106, total_loss_mw=14.793  [gate pass]
+  4. parser called run_powerflow()
+       tool run_powerflow -> case_name="case14", converged=true, total_load_mw=269.313, total_generation_mw=284.106, total_loss_mw=14.793, bus_voltages[14], line_flows[20], voltage_violations[8], thermal_violations[2]  [gate pass]
+  Totals: 0 LLM calls, 3 tool calls, 1 tool rounds, 0 in / 0 out tokens, $0.0000, 0.4 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> disconnect_line(from_bus=13, to_bus=14)
+  executed: load_case(case_name="case14") -> disconnect_line(from_bus=13, to_bus=14) -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 90, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1, 2] after disconnect_line at call 1)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 1.32e-07 p.u., flow MAE 2.23e-04 MW, KCL mismatch 1.51e-04 MW, power-balance error n/a
+  raw trace: case14-parameterized-013-s0_run0.json

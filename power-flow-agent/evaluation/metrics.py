@@ -96,6 +96,13 @@ FORMULATION_ERROR_TYPES: Tuple[str, ...] = (
 RECOMPUTING_TOOLS: frozenset[str] = frozenset({"modify_load", "disconnect_line", "reconnect_line", "run_powerflow"})
 # Read-only tools that never change the network state; extra calls are benign.
 BENIGN_EXTRA_TOOLS: frozenset[str] = frozenset({"run_powerflow", "get_status", "get_most_loaded_branch", "generate_plot"})
+
+
+def without_read_only(calls: Any) -> List[Dict[str, Any]]:
+    """The calls that shape the answer: read-only calls (a solve, a status read, a plot) dropped.
+    Used when a declared formulation is compared with what the trace shows ran, on both sides: an
+    extra solve is never a difference in what was done to the network or asked of it."""
+    return [c for c in (calls or []) if isinstance(c, dict) and str(c.get("tool") or c.get("name") or "") not in BENIGN_EXTRA_TOOLS]
 # Read-only analysis tools that, unlike BENIGN_EXTRA_TOOLS, are only forgiven as a
 # REPEAT of a call the request already intended -- a first-time, wholly unrequested
 # occurrence is still a real extra_step (it has no backstop rule the way run_powerflow's

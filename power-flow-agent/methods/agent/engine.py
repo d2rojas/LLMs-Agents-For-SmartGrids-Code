@@ -214,7 +214,7 @@ def _formulation_matches_trace_check(final_answer_text: str, trace: Dict[str, An
     if not isinstance(declared, list):
         return {"passed": False, "applicable": True, "detail": "the answer has no formulation list"}
     executed = bm.executed_calls_from_trace(trace)
-    fm = bm.formulation_check(list(executed), [c for c in declared if isinstance(c, dict)], preloaded_case=False)
+    fm = bm.formulation_check(bm.without_read_only(executed), bm.without_read_only(declared), preloaded_case=False)
     ok = bool(fm.get("formulation_exact"))
     return {"passed": ok, "applicable": True, "detail": "the declared operations are the ones the trace shows" if ok else f"the declared operations differ from the ones run ({fm.get('formulation_error_type')}: {fm.get('detail')})"}
 
