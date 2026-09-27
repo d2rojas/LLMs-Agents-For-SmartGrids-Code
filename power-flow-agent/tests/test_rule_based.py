@@ -140,5 +140,26 @@ def test_run_executes_end_to_end_on_case14():
 
     out3 = run("disconnect line 4-5 then run N-1 with top 2", ctx)
     assert out3["ok"] is True
-    assert [o["tool"] for o in out3["outputs"]] == ["disconnect_line", "run_n1_contingency"]
+    assert [o["tool"] for o in out3["outputs"]] == ["disconnect_line", "run_n1_contingency", "run_powerflow"]  # the parser ends with the state it reports
     assert len(out3["outputs"][1]["output"]["n1_report"]["results"]) <= 2
+
+
+def test_parser_reads_the_n1_report_clauses_of_the_generator():
+    from methods.deterministic.rule_based import parse
+    assert parse("Load case14 and run an N-1 contingency analysis and report the worst single outage.") == [
+        {"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_n1_contingency", "args": {"top_k": 1}}]
+    assert parse("Load the IEEE 14-bus system and run an N-1 contingency analysis ranked by min voltage and report the 3 worst outages.") == [
+        {"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_n1_contingency", "args": {"top_k": 3, "criteria": "min_voltage"}}]
+    assert parse("Load case14 and run an N-1 contingency analysis ranked by max violations and report the 8 worst outages.")[-1]["args"] == {"top_k": 8, "criteria": "max_violations"}
+
+
+def test_parser_reports_a_state_even_for_a_bare_load_or_a_scan():
+    from methods.agent.tools import SessionState, ToolContext, build_default_dispatcher
+    from methods.deterministic.rule_based import run
+    from solver.power_flow import SolverConfig
+    import json
+    for text in ["Load the 14-bus test case (case14).", "Load case14 and run an N-1 contingency analysis and report the worst single outage."]:
+        ctx = ToolContext(session=SessionState(), solver_config=SolverConfig())
+        out = run(text, ctx, build_default_dispatcher(ctx))
+        assert out["ok"] and out["outputs"][-1]["tool"] == "run_powerflow"
+        assert len(json.loads(out["answer"])["bus_voltages"]) == 14

@@ -65,8 +65,7 @@ from methods.agent.tools import TOOLS, TOOLS_LOAD_SPLIT, ToolDispatcher, get_ope
 ARCHITECTURES = ("react", "single_call", "plan_act")
 
 # Same tolerance as solver/validators.py::ValidationConfig.balance_tol_mw
-GATE_BALANCE_TOL_MW = 0.01          # absolute floor, MW
-GATE_BALANCE_REL_TOL = 1e-4         # relative to total load: 0.01 percent (case118 base case sits at 0.004 percent)
+from solver.validators import BALANCE_REL_TOL as GATE_BALANCE_REL_TOL, BALANCE_TOL_MW as GATE_BALANCE_TOL_MW  # one balance rule: validator and gate
 
 # Paper/notes labels for verify_final_answer's five conditions -- same order as V(x,c,z,y)
 # is described there: V1 the last power flow converged, V2 active-power balance, V3 no
@@ -172,9 +171,11 @@ def _complete_state_check(final_answer_text: str, pf: Optional[Dict[str, Any]]) 
     every branch of ``line_flows``. A state with buses missing, reported as the state, is not a
     result an operator can use; the gate sends it back. An answer that declares it cannot complete
     the request (``cannot_answer`` filled, or converged false with empty arrays) is not judged here."""
-    if not pf:
-        return {"passed": True, "applicable": False, "detail": "no solved state"}
     ans = _answer_object(final_answer_text)
+    if not pf:
+        if ans is not None and (ans.get("cannot_answer") or (ans.get("converged") is False and not ans.get("bus_voltages"))):
+            return {"passed": True, "applicable": False, "detail": "the answer declares it cannot complete the request"}
+        return {"passed": False, "applicable": True, "detail": "no run_powerflow output in the trace to report the state from (call run_powerflow: after the last change, or on the base case for a contingency scan)"}
     if ans is None:
         return {"passed": False, "applicable": True, "detail": "the answer is not the JSON answer object, so it carries no state"}
     if ans.get("cannot_answer") or (ans.get("converged") is False and not ans.get("bus_voltages")):
@@ -213,7 +214,7 @@ def _formulation_matches_trace_check(final_answer_text: str, trace: Dict[str, An
     if not isinstance(declared, list):
         return {"passed": False, "applicable": True, "detail": "the answer has no formulation list"}
     executed = bm.executed_calls_from_trace(trace)
-    fm = bm.formulation_check(list(executed), [c for c in declared if isinstance(c, dict)], preloaded_case=False)
+    fm = bm.formulation_check(bm.without_read_only(executed), bm.without_read_only(declared), preloaded_case=False)
     ok = bool(fm.get("formulation_exact"))
     return {"passed": ok, "applicable": True, "detail": "the declared operations are the ones the trace shows" if ok else f"the declared operations differ from the ones run ({fm.get('formulation_error_type')}: {fm.get('detail')})"}
 
@@ -1185,7 +1186,10 @@ class LLMEngine:
                 continue
 
             final_text = (msg.get("content") or "").strip()
-            if self.config.final_answer_instruction:
+            already = _answer_object(final_text)
+            if self.config.final_answer_instruction and not (already is not None and isinstance(already.get("formulation"), list) and ("bus_voltages" in already or already.get("cannot_answer"))):
+                # The reply is not yet the answer object: ask for it once. (A reply that already is the
+                # object is accepted as is; on a 118-bus system it costs 13k output tokens to write.)
                 # Same closing step as Plan-and-Act: the answer object is written in reply to the
                 # final-answer instruction, from the tool outputs above, without tools.
                 final_rec: Dict[str, Any] = {"round": tool_round + 1, "final": True}

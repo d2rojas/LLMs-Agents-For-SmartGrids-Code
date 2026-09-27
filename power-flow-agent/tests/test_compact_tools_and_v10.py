@@ -91,3 +91,27 @@ def test_bus_angle_is_optional_in_the_reported_state():
     no_vm = {"formulation": [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_powerflow", "args": {}}], "converged": True, "bus_voltages": [{"bus_id": b["bus_id"]} for b in pf["bus_voltages"]], "line_flows": pf["line_flows"], "cannot_answer": None}
     v = verify_final_answer(trace, json.dumps(no_vm), enforce_v6v7=True)
     assert v["conditions"]["complete_state"]["passed"] is False  # ids without magnitudes are not a state
+
+
+def test_v10_fails_when_there_is_no_solve_to_report_from():
+    d = build_default_dispatcher(ToolContext(session=SessionState(), solver_config=SolverConfig()))
+    lc = d.dispatch("load_case", {"case_name": "case14"}); n1 = d.dispatch("run_n1_contingency", {"top_k": 1, "criteria": "max_violations"})
+    trace = {"rounds": [{"round": 1, "tools": [{"name": "load_case", "arguments": {"case_name": "case14"}, "output": lc}, {"name": "run_n1_contingency", "arguments": {"top_k": 1}, "output": n1}]}]}
+    claims = {"formulation": [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_n1_contingency", "args": {"top_k": 1}}], "converged": True, "answer": "worst outage 5-6", "bus_voltages": [], "line_flows": [], "cannot_answer": None}
+    v = verify_final_answer(trace, json.dumps(claims), enforce_v6v7=True)
+    c = v["conditions"]["complete_state"]
+    assert c["passed"] is False and "run_powerflow" in c["detail"]
+
+
+def test_an_extra_solve_is_not_a_formulation_difference():
+    from evaluation.metrics import without_read_only
+    declared = [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_n1_contingency", "args": {"top_k": 1}}]
+    executed = declared + [{"tool": "run_powerflow", "args": {}}]
+    assert without_read_only(executed) == without_read_only(declared) == declared
+    d = build_default_dispatcher(ToolContext(session=SessionState(), solver_config=SolverConfig()))
+    lc = d.dispatch("load_case", {"case_name": "case14"}); n1 = d.dispatch("run_n1_contingency", {"top_k": 1, "criteria": "max_violations"}); pf = d.dispatch("run_powerflow", {})
+    trace = {"rounds": [{"round": 1, "tools": [{"name": "load_case", "arguments": {"case_name": "case14"}, "output": lc}, {"name": "run_n1_contingency", "arguments": {"top_k": 1, "criteria": "max_violations"}, "output": n1}, {"name": "run_powerflow", "arguments": {}, "output": pf}]}]}
+    state = json.loads(pf)
+    ans = {"formulation": [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_n1_contingency", "args": {"top_k": 1, "criteria": "max_violations"}}], "converged": True, "bus_voltages": state["bus_voltages"], "line_flows": state["line_flows"], "cannot_answer": None}
+    v = verify_final_answer(trace, json.dumps(ans), enforce_v6v7=True)
+    assert v["conditions"]["formulation_matches_trace"]["passed"] is True

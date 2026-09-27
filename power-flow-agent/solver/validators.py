@@ -29,6 +29,10 @@ class ValidationConfig:
     balance_tol_mw: float = 0.01
 
 
+BALANCE_TOL_MW = 0.01  # absolute floor, MW
+BALANCE_REL_TOL = 1e-4  # relative to the total load (0.01 %)
+
+
 def _annotate_voltage_violations(
     bus_voltages: list[BusVoltage], v_min: float, v_max: float
 ) -> tuple[list[BusVoltage], list[BusVoltage]]:
@@ -107,15 +111,15 @@ def validate_result(
         }
     )
 
-    # 功率平衡检查（不抛异常，避免 UI 白屏）
+    # Power-balance check (never raises). Same rule as the verification gate (V2): an absolute floor
+    # or a share of the load, whichever is larger, so large systems are not flagged for rounding.
     mismatch = abs(updated.total_generation_mw - (updated.total_load_mw + updated.total_loss_mw))
-    if mismatch > balance_tol_mw:
-        # 注意：不输出 mismatch 数值，避免“看起来像编造”。
+    if mismatch > max(balance_tol_mw, BALANCE_REL_TOL * abs(updated.total_load_mw)):
         hint = (
-            "\n\n[校验提示] 功率平衡误差超过阈值（发电 ≈ 负荷 + 损耗）。"
-            "请检查网络是否出现孤岛、未建模元件或求解器设置。"
+            "\n\n[Check] The active-power balance does not close (generation should equal load plus losses). "
+            "Look for islanded buses, unmodelled elements or solver settings before trusting these numbers."
         )
-        if hint not in updated.summary_text:
+        if hint not in (updated.summary_text or ""):
             updated.summary_text = (updated.summary_text or "") + hint
 
     return updated

@@ -1,0 +1,28 @@
+RUN 05  |  case14-ambiguous-019-s0  |  react_nogate  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty ambiguous
+Request: Load the 14-bus test case (case14) and disconnect the line between bus 9 and bus 14 (1-based).
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case14"); disconnect_line(from_bus=9, to_bus=14)   (1076 in / 52 out tokens, 1.2 s)
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=265.226
+       tool disconnect_line -> converged=true, total_load_mw=265.226, total_generation_mw=279.781, total_loss_mw=14.555  [gate pass]
+  2. LLM called run_powerflow()   (1325 in / 11 out tokens, 0.9 s)
+       tool run_powerflow -> case_name="case14", converged=true, total_load_mw=265.226, total_generation_mw=279.781, total_loss_mw=14.555, bus_voltages[14], line_flows[20], voltage_violations[8], thermal_violations[3]  [gate pass]
+  3. LLM replied without tool calls: { "converged": true, "bus_voltages": [ { "bus_id": 1, "vm_pu": 1.06, "va_deg": 0.0, "is_violation": true, "violation_type": "overvoltage" }, { "bus_id": 2, "vm_   (3750 in / 2622 out tokens, 17.7 s)
+  4. LLM wrote the final answer   (6438 in / 2656 out tokens, 18.5 s)
+  Totals: 4 LLM calls, 3 tool calls, 2 tool rounds, 12589 in / 5341 out tokens, $0.0051, 38.5 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> disconnect_line(from_bus=9, to_bus=14)
+  executed: load_case(case_name="case14") -> disconnect_line(from_bus=9, to_bus=14) -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 104, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1, 2] after disconnect_line at call 1)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 1.63e-07 p.u., flow MAE 2.09e-04 MW, KCL mismatch 3.83e-04 MW, power-balance error n/a
+  raw trace: case14-ambiguous-019-s0_run0.json
