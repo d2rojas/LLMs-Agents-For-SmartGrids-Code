@@ -560,131 +560,199 @@ def tab_scenarios() -> str:
     return "".join(body)
 
 
+# One colour and one label per kind of block, so the same kind of text is the
+# same colour in every method and a reader learns the key once. The third field
+# is where the block comes from: a file under methods/, or the code that
+# renders it from the request.
+BLOCKS: Dict[str, Tuple[str, str, str]] = {
+    "sys_llm": ("#2f5fd0", "system · role and rules", "methods/_shared/llm_only_system_prompt.txt"),
+    "sys_suffix": ("#6d4fc4", "system · output-mode suffix", "methods/<method>/system_suffix.txt"),
+    "sys_agent": ("#2f5fd0", "system · agent role, tool-use rules, what-if guidance",
+                  "methods/_shared/agent_system_prompt.txt"),
+    "sys_parse": ("#0f8f84", "system · session extraction", "methods/_shared/parse_extraction_system.txt"),
+    "sys_infer": ("#0f8f84", "system · inference of missing fields", "methods/_shared/parse_inference_system.txt"),
+    "u_role": ("#6d4fc4", "user · role", "methods/_shared/llm_only_role.txt"),
+    "u_data": ("#c99a06", "user · system data: time grid, units, labels",
+               "baseline/strategies.py::_context_section"),
+    "u_task": ("#0f8f84", "user · task: the request, verbatim", "evaluation/requests.py::render_request"),
+    "u_reason": ("#c0392b", "user · reasoning instructions", "methods/llm_only_cot/reasoning_section.txt"),
+    "u_out": ("#c99a06", "user · output requirements", "baseline/strategies.py::_output_section"),
+    "tools": ("#0f8f84", "tool schema (function calling)", "agent/llm_agent.py::_SOLVE_TOOL"),
+}
+
+# Which block a ``## Heading`` in the assembled user message belongs to.
+HEADING_BLOCK = {
+    "## Role": "u_role",
+    "## System Data": "u_data",
+    "## Task": "u_task",
+    "## Reasoning Instructions": "u_reason",
+    "## Output Requirements": "u_out",
+}
+
+
+def example_requests() -> "Dict[str, Any]":
+    """One real request per variant, generated the way the benchmark generates them.
+
+    The committed run set holds one request per day, so only the four variants
+    that happened to fall on those days appear in it. The page has to show every
+    variant, so each one is generated here on a frozen day by forcing the
+    rotation to that variant alone. Same generator, same seed, same days: these
+    are the requests a run would send, not illustrations of them.
+    """
+    import datetime as _dt
+
+    from data.loader.loader import load_sessions
+    from evaluation.requests import VARIANTS, generate_requests
+
+    days = frozen_days()
+    loaded: List[Any] = []
+    for d in days[:6]:
+        try:
+            date = _dt.date.fromisoformat(str(d["date"]))
+            loaded.append((date, load_sessions("caltech", date, source="cache")))
+        except Exception:
+            continue
+    out: Dict[str, Any] = {}
+    for variant in VARIANTS:
+        for pair in loaded:
+            try:
+                reqs = generate_requests([pair], variants=[variant])
+            except Exception:
+                continue
+            if reqs and reqs[0].variant == variant:
+                out[variant] = reqs[0]
+                break
+    return out
+
+
+def _split_user_message(text: str) -> "List[Tuple[str, str]]":
+    """The assembled user message as (block id, text), in the order it is sent."""
+    parts: List[Tuple[str, str]] = []
+    current, buf = None, []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped in HEADING_BLOCK:
+            if current is not None:
+                parts.append((current, "\n".join(buf).strip("\n")))
+            current, buf = HEADING_BLOCK[stripped], [line]
+        else:
+            buf.append(line)
+    if current is not None:
+        parts.append((current, "\n".join(buf).strip("\n")))
+    return parts
+
+
+def _block(kind: str, text: str, *, source: str = "", collapse: bool = False) -> str:
+    colour, label, default_source = BLOCKS[kind]
+    src = source or default_source
+    if collapse and len(text) > 1500:
+        inner = (
+            f"<details><summary>show the {len(text):,} characters</summary>"
+            f"<pre>{E(text)}</pre></details>"
+        )
+        return prompt_block(label, inner, colour=colour, source=src, pre=False)
+    return prompt_block(label, text, colour=colour, source=src)
+
+
 def tab_prompts() -> str:
-    """Every method's prompt, read from methods/ rather than from the code."""
+    """What each method sends, block by block, for a chosen scenario."""
     import methods
-    from baseline.strategies import STRATEGIES, build_messages
+    from baseline.strategies import build_messages, normalise_strategy
 
-    # One colour per role a text plays, so the same kind of text is the same
-    # colour in every method and a reader learns the key once.
-    COLOUR = {
-        "system": "#334155",
-        "role": "#6d4fc4",
-        "suffix": "#2f5fd0",
-        "reasoning": "#c0392b",
-        "parse": "#0f8f84",
-        "agent": "#2f5fd0",
-    }
+    examples = example_requests()
+    if not examples:
+        return card("Prompts", "<p class='muted'>No frozen day could be loaded to render a request on.</p>")
 
-    def role_of(rel: str) -> str:
-        name = rel.rsplit("/", 1)[-1]
-        if "reasoning" in name:
-            return "reasoning"
-        if "suffix" in name:
-            return "suffix"
-        if "role" in name:
-            return "role"
-        if "parse" in name:
-            return "parse"
-        if "agent" in name:
-            return "agent"
-        return "system"
+    legend = " ".join(
+        f"<span class='chip' style=\"background:{c};color:#fff\">{E(label)}</span>"
+        for c, label, _src in BLOCKS.values()
+    )
+    scn_options = "".join(
+        f"<option value='{E(v)}'>{E(v)} · {E(r.text.split(chr(10))[0][:70])}…</option>"
+        for v, r in examples.items()
+    )
+    # Opens on the first method that has a prompt: landing on the parser, whose
+    # panel is one sentence saying it has none, reads as an empty page.
+    default = next((c["folder"] for c in methods.cards() if c.get("prompt_files")), "")
+    mth_options = "".join(
+        f"<option value='{E(c['folder'])}'{' selected' if c['folder'] == default else ''}>"
+        f"{E(c['folder'])}</option>"
+        for c in methods.cards()
+    )
 
     body: List[str] = [
         card(
-            "Where the prompts are",
-            "<p>Every fixed sentence of every prompt is a file under <code>methods/</code>, and the "
-            "code reads those files rather than carrying the text. A text several methods share sits "
-            "in <code>methods/_shared/</code>; a text belonging to one method sits in that method's "
-            "folder. Nothing below is a copy kept in step by hand.</p>"
-            "<p>The hash of every text is pinned by a test. Changing a prompt fails that test until "
-            "the pin is updated deliberately, because a silent wording change would make new runs "
-            "incomparable with the ones already reported and the scores would move with nothing to "
-            "say why.</p>",
-            table(
-                ["method", "texts it is built from", "built at run time"],
-                [
-                    [
-                        f"<b>{E(c['folder'])}</b><div class='muted'>{E(c['runner_name'])}</div>",
-                        "".join(
-                            f"<div><span class='sw' style='background:{COLOUR[role_of(r)]}'></span> "
-                            f"<code>{E(r)}</code>"
-                            + (" <span class='chip'>shared</span>" if r.startswith("_shared/") else "")
-                            + "</div>"
-                            for r in c.get("prompt_files", [])
-                        )
-                        or "<span class='muted'>none. This method has no prompt.</span>",
-                        "<ul style='margin:0;padding-left:16px'>"
-                        + "".join(f"<li>{E(d)}</li>" for d in c.get("dynamic_parts", []))
-                        + "</ul>"
-                        if c.get("dynamic_parts")
-                        else "<span class='muted'>nothing</span>",
-                    ]
-                    for c in methods.cards()
-                ],
-            ),
+            "What the model receives, block by block",
+            "<p>Pick a scenario and a method. The prompt is shown as the blocks it is assembled from: "
+            "the colour says what kind of block it is and the grey label says which file under "
+            "<code>methods/</code> or which function produces it. Every fixed sentence is a file; the "
+            "three blocks built at run time are marked as such.</p>"
+            "<p>The deterministic parser is in the list and has no prompt: it reads the request with "
+            "rules and sends nothing to a model.</p>"
+            f"<div style='margin:8px 0'>{legend}</div>"
+            f"<div style='display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:10px'>"
+            f"<label>Scenario <select id='scn'>{scn_options}</select></label>"
+            f"<label>Method <select id='mth'>{mth_options}</select></label></div>",
         )
     ]
 
-    # the texts themselves, per method
     for c in methods.cards():
-        files = c.get("prompt_files", [])
-        if not files:
-            body.append(
-                card(
-                    f"{c['folder']}",
-                    f"<p class='muted'>{E(c['description'])}</p>"
-                    "<p>No language model and therefore no prompt. What this method reads the request "
-                    "with is code, not text: see the Methods section.</p>",
-                )
-            )
-            continue
-        blocks = [
-            prompt_block(rel.rsplit("/", 1)[-1].replace(".txt", "").replace("_", " "), text,
-                         colour=COLOUR[role_of(rel)], source=f"methods/{rel}")
-            for rel, text in methods.texts(c["folder"])
+        name = c["folder"]
+        inner: List[str] = [
+            f"<h2>{E(name)} <span class='muted'>runner: {E(c['runner_name'])}</span></h2>",
+            f"<p class='muted'>{E(c['description'])}</p>",
         ]
-        body.append(
-            card(
-                f"{c['folder']}",
-                f"<p class='muted'>{E(c['description'])}</p>",
-                *blocks,
+        if not c.get("prompt_files"):
+            inner.append(
+                "<p>No language model, so no prompt. The request is read by rules and the solver is "
+                "called directly.</p>"
             )
-        )
-
-    # the two prompting methods, fully assembled on a real request
-    req = sample_request()
-    if req is None:
-        return "".join(body)
-    try:
-        from evaluation.requests import request_from_dict
-
-        obj = request_from_dict(req)
-    except Exception:
-        return "".join(body)
-
-    body.append(
-        card(
-            "Assembled, on a real request",
-            "<p>The two no-tools methods rendered by calling the same builders the benchmark calls, "
-            "on one request of the set. The sections the code builds are visible here in place, "
-            "between the fixed texts above.</p>"
-            f"<p class='muted'>variant <code>{E(req.get('variant'))}</code> · day {E(req.get('date'))} "
-            f"· {E(len(req.get('day', {}).get('sessions', [])))} sessions</p>",
-            *[
-                "<details><summary>" + E(s) + "</summary>"
-                + "".join(
-                    prompt_block(m["role"], m["content"][:14000],
-                                 colour=COLOUR["system"] if m["role"] == "system" else "#2f5fd0",
-                                 source="baseline/strategies.py::build_messages")
-                    for m in build_messages(s, obj)
+        elif c["kind"] == "llm_only":
+            strategy = normalise_strategy(c["strategy"])
+            suffix_file = f"methods/{name}/system_suffix.txt"
+            for variant, req in examples.items():
+                msgs = build_messages(strategy, req)
+                system, user = msgs[0]["content"], msgs[1]["content"]
+                base = methods.read_text("_shared/llm_only_system_prompt.txt")
+                blocks = [
+                    f"<h3>System prompt <span class='muted'>sha {E(_sha(system))}</span></h3>",
+                    _block("sys_llm", base),
+                    _block("sys_suffix", system[len(base):], source=suffix_file),
+                    "<h3>User message</h3>",
+                ]
+                blocks += [
+                    _block(kind, text, collapse=(kind == "u_task"))
+                    for kind, text in _split_user_message(user)
+                ]
+                inner.append(
+                    f"<div class='um' data-scn='{E(variant)}'>" + "".join(blocks) + "</div>"
                 )
-                + "</details>"
-                for s in STRATEGIES
-            ],
-        )
-    )
+        else:
+            for rel in c["prompt_files"]:
+                kind = {
+                    "_shared/agent_system_prompt.txt": "sys_agent",
+                    "_shared/parse_extraction_system.txt": "sys_parse",
+                    "_shared/parse_inference_system.txt": "sys_infer",
+                }.get(rel, "sys_agent")
+                inner.append(_block(kind, methods.read_text(rel), source=f"methods/{rel}"))
+            import agent.llm_agent as LA
+
+            inner.append(_block("tools", json.dumps(LA._SOLVE_TOOL, indent=2), collapse=True))
+            for variant, req in examples.items():
+                inner.append(
+                    f"<div class='um' data-scn='{E(variant)}'>"
+                    + _block("u_task", req.text, collapse=True)
+                    + "</div>"
+                )
+        body.append(f"<div class='card pm' data-mth='{E(name)}'>" + "".join(inner) + "</div>")
+
     return "".join(body)
+
+
+def _sha(text: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
 
 
 def tab_tools() -> str:
@@ -1001,6 +1069,23 @@ BUILDERS = {
 }
 
 
+# Drives the two selectors of the Prompts section: one method panel visible at
+# a time, and inside it the blocks of the chosen scenario.
+SCRIPT = """
+(function(){
+  var scn=document.getElementById('scn'), mth=document.getElementById('mth');
+  if(!scn||!mth) return;
+  function apply(){
+    document.querySelectorAll('.pm').forEach(function(p){
+      p.style.display = p.dataset.mth===mth.value ? '' : 'none';});
+    document.querySelectorAll('.um').forEach(function(u){
+      u.style.display = u.dataset.scn===scn.value ? '' : 'none';});
+  }
+  scn.onchange=apply; mth.onchange=apply; apply();
+})();
+"""
+
+
 def payload() -> Dict[str, Any]:
     days = frozen_days()
     return {
@@ -1017,6 +1102,7 @@ def payload() -> Dict[str, Any]:
         ],
         "groups": [[label, [list(e) for e in entries]] for label, entries in GROUPS],
         "tabs": {key: BUILDERS[key]() for _l, entries in GROUPS for key, _t in entries},
+        "script": SCRIPT,
     }
 
 
