@@ -6,6 +6,7 @@
     python run.py run --days 20 --data-source cache  every method on the frozen days
     python run.py report <results_dir> [--pdf]       REPORT.md from the rows, no model called
     python run.py rescore <results_dir>              re-score rows after a scoring change
+    python run.py postprocess <run_set_dir>          lay a run set out as results/<instance>/<date>/<model>/<method>/
     python run.py freeze-days [--dry-run]            fetch and freeze the benchmark days (needs a token)
     python run.py index                              rebuild results/INDEX.md
     python run.py serve                              the shared evaluation site, on a local server
@@ -63,9 +64,27 @@ def cmd_show_prompt(args: argparse.Namespace) -> int:
 
 
 def cmd_run(argv: List[str]) -> int:
-    from evaluation import runner
+    """Run the matrix, then lay the new run set out as method folders and reindex.
 
-    return int(runner.main(argv) or 0)
+    The runner writes results/ev_matrix_<model>/; a run is not finished until that
+    run set is laid out in the shared layout and INDEX.md knows about it, so both
+    happen here rather than being left for someone to remember. A dry run writes
+    nothing and gets neither.
+    """
+    from evaluation import postprocess, runner
+
+    root = PROJECT_ROOT / "results"
+    before = {d for d in root.glob("ev_matrix_*") if d.is_dir()} if root.is_dir() else set()
+    code = int(runner.main(argv) or 0)
+    if "--dry-run" in argv:
+        return code
+    new = sorted({d for d in root.glob("ev_matrix_*") if d.is_dir()} - before, key=lambda d: d.stat().st_mtime)
+    for d in new:
+        print(f"laying out {d.name}:")
+        postprocess.postprocess(d)
+    if new:
+        cmd_index(argparse.Namespace())
+    return code
 
 
 def cmd_report(argv: List[str]) -> int:
@@ -88,34 +107,45 @@ def cmd_freeze_days(argv: List[str]) -> int:
 
 
 def cmd_index(_args: argparse.Namespace) -> int:
-    """One line per results directory, newest first, from each run manifest."""
+    """results/INDEX.md and INDEX.json: one line per method folder, newest first.
+
+    Same row shape as every other case study, so the shared site reads them all
+    the same way: instance, date, model, method, n, solved, escalated, wrong,
+    form, trace, tokens, cost, kind, path.
+    """
     root = PROJECT_ROOT / "results"
     rows = []
-    for d in sorted(root.iterdir()) if root.is_dir() else []:
-        man = d / "run_manifest.json"
-        if not man.exists():
-            continue
-        m = json.loads(man.read_text(encoding="utf-8"))
+    for sj in sorted(root.glob("*/*/*/*/summary.json")):
+        d = json.loads(sj.read_text(encoding="utf-8"))
+        h, a = d.get("header", {}), d.get("aggregate", {})
+        cfg = sj.parent / "config.json"
+        kind = json.loads(cfg.read_text(encoding="utf-8")).get("kind", "run") if cfg.exists() else "run"
+        rel = sj.parent.relative_to(root)
         rows.append({
-            "path": d.name,
-            "model": m.get("model_resolved") or m.get("model_requested"),
-            "days": len(m["days"]) if isinstance(m.get("days"), list) else m.get("days") or m.get("n_days"),
-            "arms": m.get("arms", []),
-            "spent_usd": m.get("spent_usd"),
-            "synthetic": bool(m.get("synthetic")),
-            "report": (d / "REPORT.md").exists(),
+            "case": h.get("instance"), "date": h.get("date"), "model": h.get("model"),
+            "dir": sj.parent.name, "method": h.get("method"), "condition": "normal",
+            "n": a.get("n"), "solved": a.get("solved"), "escalated": a.get("escalated"), "wrong": a.get("wrong"),
+            "form": a.get("form"), "trace": a.get("trace"), "tokens": a.get("tokens"), "cost": a.get("cost"),
+            "kind": kind, "path": str(rel),
         })
-    rows.sort(key=lambda r: r["path"], reverse=True)
+    rows.sort(key=lambda r: (str(r["date"]), str(r["case"]), str(r["model"]), str(r["method"])), reverse=True)
     (root / "INDEX.json").write_text(json.dumps({"runs": rows}, indent=1), encoding="utf-8")
-    lines = ["# results/", "", "| directory | model | days | methods | spent | REPORT.md |", "|---|---|---|---|---|---|"]
+    lines = ["# results/", "", "One line per method folder, newest first. `python run.py index` rebuilds this.", "",
+             "| instance | date | model | method | n | solved | escalated | wrong | form % | trace % | tokens | cost $ | path |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    fmt = lambda v: "-" if v is None else (f"{v:.1f}" if isinstance(v, float) else str(v))
     for r in rows:
-        lines.append(
-            f"| `{r['path']}` | {r['model']} | {r['days']} | {', '.join(r['arms'])} | "
-            f"${r['spent_usd']} | {'yes' if r['report'] else 'no'} |"
-        )
+        lines.append(f"| {r['case']} | {r['date']} | {r['model']} | {r['method']} | {r['n']} | {r['solved']} | {r['escalated']} | "
+                     f"{r['wrong']} | {fmt(r['form'])} | {fmt(r['trace'])} | {r['tokens']} | {fmt(r['cost'])} | `{r['path']}` |")
     (root / "INDEX.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"indexed {len(rows)} run directories")
+    print(f"indexed {len(rows)} method folders")
     return 0
+
+
+def cmd_postprocess(argv: List[str]) -> int:
+    from evaluation import postprocess
+
+    return int(postprocess.main(argv) or 0)
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
@@ -138,7 +168,8 @@ def cmd_serve(args: argparse.Namespace) -> int:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     # verbs that own their own argument parsers get the rest of the line untouched
-    passthrough = {"run": cmd_run, "report": cmd_report, "rescore": cmd_rescore, "freeze-days": cmd_freeze_days}
+    passthrough = {"run": cmd_run, "report": cmd_report, "rescore": cmd_rescore, "freeze-days": cmd_freeze_days,
+                   "postprocess": cmd_postprocess}
     if argv and argv[0] in passthrough:
         return passthrough[argv[0]](argv[1:])
 

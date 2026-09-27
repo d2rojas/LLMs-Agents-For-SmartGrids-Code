@@ -1,0 +1,346 @@
+==============================================================================
+TRANSCRIPT  llm_only_cot  |  gpt-4o-mini  |  caltech  |  caltech-2018-11-12-feasible_yesno-s0
+==============================================================================
+date: 2026-09-21   variant: feasible_yesno   seed: 0   repeat: 0
+
+[system]
+You are an EV charging scheduler. You answer from the request text alone: you have no tools and no solver. Follow the output format exactly. Every power value you write must be a finite, non-negative decimal number; never write NaN, Infinity, a negative power, or a placeholder such as '...' in place of numbers. You MAY write short plain-text reasoning before the schedule. The schedule rows and the answer line must be the LAST part of the response, in that order, with nothing after them. Do not state a conclusion in the reasoning: the answer line is the only place the answer is given.
+
+[user]
+## Role
+You are an EV charging scheduler for a workplace charging site. You have no tools, no solver, and no internet access. Work out the schedule yourself, from the request below.
+
+## System Data
+- The day is divided into 96 time steps of 0.2500 h each. Step 0 starts at midnight, so step k covers hour k x 0.2500 to (k+1) x 0.2500, and step 95 is the last one.
+- Power is in kW, energy in kWh, prices in dollars per kWh. Energy delivered to a car over one step is its power at that step times 0.2500 h.
+- The cars are named EV 1 to EV 51 in the request. Report them under those same names.
+- Every number you need about the cars, the site limit and the prices is in the request text below. There is no other data source.
+
+## Task
+The caltech campus lot has 51 EVs parked on 2018-11-12.
+
+- EV 1 needs 12.98 kWh and is parked from 4 pm until 24:00 on a 7 kilowatts charger.
+- EV 2 plugs in at quarter past nine at night and unplugs at eleven o'clock at night, and it needs 6481 Wh through a 7000 W connector.
+- The driver of EV 3 arrives at half past nine in the morning, has to leave by 12:30 pm, and wants 6.2 kWh at up to 7 kW.
+- The driver of EV 4 arrives at 4:30 pm, has to leave by 24:00, and wants 3631 watt-hours at up to 7 kilowatts.
+- EV 5 needs 19343 watt-hours and is parked from 5:30 pm until 10:45 pm on a 7 kW charger.
+- EV 6 is there from eleven o'clock at night to 24:00; give it 0.97 kWh, and its plug tops out at 7 kW.
+- The driver of EV 7 arrives at 14:45, has to leave by a quarter to midnight, and wants 8.34 kWh at up to 7 kilowatts.
+- EV 8 plugs in at half past four in the afternoon and unplugs at midnight at the end of the day, and it needs 1.59 kilowatt-hours through a 7000 W connector.
+- From 21:15 to midnight at the end of the day, EV 9 occupies a 7 kW charger and requires 3.61 kWh.
+- The driver of EV 10 arrives at a quarter to midnight, has to leave by 24:00, and wants 8.68 kilowatt-hours at up to 7 kilowatts.
+- The driver of EV 11 arrives at five o'clock in the evening, has to leave by a quarter to six in the evening, and wants 782 Wh at up to 7 kilowatts.
+- The driver of EV 12 arrives at 4:45 pm, has to leave by midnight at the end of the day, and wants 13395 Wh at up to 7 kW.
+- EV 13 plugs in at 4:15 pm and unplugs at 24:00, and it needs 13.48 kWh through a 7 kilowatts connector.
+- EV 14 sits on a 7 kilowatts station between 03:00 and midnight at the end of the day and asks for 10.92 kWh.
+- EV 15 plugs in at a quarter to four in the afternoon and unplugs at 24:00, and it needs 22.65 kWh through a 7000 W connector.
+- EV 16 is there from half past six in the evening to 24:00; give it 11218 watt-hours, and its plug tops out at 7000 watts.
+- EV 17 sits on a 7000 W station between half past eight in the evening and midnight at the end of the day and asks for 1.51 kWh.
+- EV 18 is there from half past ten at night to 24:00; give it 0.88 kWh, and its plug tops out at 7 kilowatts.
+- The driver of EV 19 arrives at 16:15, has to leave by midnight at the end of the day, and wants 39360 watt-hours at up to 7000 watts.
+- From 17:45 to midnight at the end of the day, EV 20 occupies a 7 kW charger and requires 15874 watt-hours.
+- The driver of EV 21 arrives at quarter past four in the afternoon, has to leave by 24:00, and wants 13747 watt-hours at up to 7 kW.
+- EV 22 sits on a 7 kW station between 6:15 am and 6:45 am and asks for 805 watt-hours.
+- EV 23 is there from eleven o'clock at night to 24:00; give it 3.22 kilowatt-hours, and its plug tops out at 7 kW.
+- EV 24 is there from 3 pm to 11:45 pm; give it 19.73 kilowatt-hours, and its plug tops out at 7 kilowatts.
+- EV 25 needs 11.64 kWh and is parked from 4:15 pm until 24:00 on a 7000 watts charger.
+- EV 26 is there from 01:30 to half four in the morning; give it 21.03 kilowatt-hours, and its plug tops out at 7 kilowatts.
+- EV 27 is there from 16:45 to 22:45; give it 11.21 kilowatt-hours, and its plug tops out at 7000 watts.
+- EV 28 plugs in at half three in the afternoon and unplugs at midnight at the end of the day, and it needs 28.96 kWh through a 7000 W connector.
+- EV 29 plugs in at 17:30 and unplugs at 24:00, and it needs 930 watt-hours through a 7000 watts connector.
+- EV 30 sits on a 7000 W station between 5:30 pm and midnight at the end of the day and asks for 3.44 kWh.
+- The driver of EV 31 arrives at six o'clock in the evening, has to leave by 24:00, and wants 2.85 kWh at up to 7 kW.
+- EV 32 needs 5.97 kWh and is parked from 02:00 until 04:00 on a 7 kW charger.
+- EV 33 plugs in at 17:45 and unplugs at 24:00, and it needs 5368 watt-hours through a 7000 watts connector.
+- EV 34 needs 13265 watt-hours and is parked from 01:45 until 06:15 on a 7000 watts charger.
+- From 21:30 to 24:00, EV 35 occupies a 7 kW charger and requires 2091 watt-hours.
+- EV 36 needs 18.5 kWh and is parked from 6:30 pm until midnight at the end of the day on a 7000 W charger.
+- EV 37 sits on a 7 kilowatts station between quarter past four in the afternoon and midnight at the end of the day and asks for 3.63 kWh.
+- From 17:45 to 24:00, EV 38 occupies a 7000 W charger and requires 892 Wh.
+- EV 39 plugs in at 4:45 pm and unplugs at a quarter to eight in the evening, and it needs 4218 Wh through a 7000 watts connector.
+- EV 40 plugs in at 2:45 pm and unplugs at 7:45 pm, and it needs 8.82 kWh through a 7000 watts connector.
+- EV 41: arrives 17:15, leaves midnight at the end of the day, 5.65 kilowatt-hours, 7 kW maximum.
+- EV 42 is there from 14:15 to 3:15 pm; give it 3.41 kWh, and its plug tops out at 7 kW.
+- EV 43 sits on a 7 kW station between 5 pm and midnight at the end of the day and asks for 5.18 kilowatt-hours.
+- From half four in the afternoon to 24:00, EV 44 occupies a 7 kilowatts charger and requires 6158 watt-hours.
+- From 20:45 to 24:00, EV 45 occupies a 7000 W charger and requires 6.74 kWh.
+- EV 46 sits on a 7 kW station between 22:45 and 24:00 and asks for 969 Wh.
+- EV 47 plugs in at half four in the afternoon and unplugs at midnight at the end of the day, and it needs 44.88 kilowatt-hours through a 7 kilowatts connector.
+- EV 48 is there from half past four in the afternoon to midnight at the end of the day; give it 11668 Wh, and its plug tops out at 7 kW.
+- EV 49 is there from five o'clock in the evening to 10 pm; give it 3.42 kWh, and its plug tops out at 7000 watts.
+- EV 50: arrives 22:45, leaves 24:00, 3872 Wh, 7 kilowatts maximum.
+- EV 51 needs 4980 watt-hours and is parked from 11 pm until 24:00 on a 7 kilowatts charger.
+
+The transformer serving the lot is limited to 50 kilowatts. The tariff is $0.12/kWh off-peak and $0.45/kWh from 16:00 to 21:00.
+
+Plan the charging to minimise what we pay for the energy. Is it possible to serve every car in full before it leaves? Start your answer with yes or no.
+
+## Reasoning Instructions
+Reason through the allocation before you commit to a schedule. Work in this order and write the steps out in plain text:
+1. Read each car out of the text: its arrival step, its departure step, the energy it asks for, and its connector limit in kW. Convert each time expression to a step index.
+2. For each car, the steps it may charge in are arrival step up to but not including departure step, and the power it needs on average over that window to get its energy.
+3. Find the steps where the cars together would exceed the site limit, and decide how to share those steps out.
+4. Decide where in each car's window to put its energy, given that some steps cost more than others.
+5. Check the plan against the limits: per-car connector limit, the site limit at every step, no power outside a car's window, and no car over the energy it asked for.
+Then write the schedule rows and the answer line. Do not state the answer before then.
+
+## Output Requirements
+Write exactly 51 schedule rows, EV 1 first and EV 51 last, one per line, in this form:
+
+EV 1: v0 v1 v2 ... v95
+
+Each row is the label, a colon, then exactly 96 space-separated decimal numbers: the charging power in kW of that car at step 0, step 1, ..., step 95. Use 4 decimal places (for example 0.0000 0.0000 0.0000). Do not write units, commas, brackets or any other text inside a row.
+
+Check before you finish: 51 rows, each with exactly 96 numbers. A row of the wrong length is counted as a formatting failure, so count them.
+
+After the last row, write one final line that starts with 'Answer:' and answers the question asked in the request. Phrase it in the words the question uses, and give the number with its unit, or the name of the car as 'EV 3', or 'yes' or 'no', whichever the question asks for. Examples of the shape, not of the values: 'Answer: $12.34', 'Answer: 4.50 kWh', 'Answer: 87.5 percent of the cars are fully served', 'Answer: yes', 'Answer: EV 3 needs the most energy', 'Answer: EV 2 and EV 5 cannot be fully served'.
+
+Write the schedule rows first and the answer line last. Nothing after it.
+
+[assistant]
+1. Read each car out of the text:
+   - EV 1: Arrival step 16 (4 PM), Departure step 96 (midnight), Energy 12.98 kWh, Connector limit 7 kW.
+   - EV 2: Arrival step 87 (9:15 PM), Departure step 91 (11 PM), Energy 6.481 kWh, Connector limit 7 kW.
+   - EV 3: Arrival step 38 (9:30 AM), Departure step 50 (12:30 PM), Energy 6.2 kWh, Connector limit 7 kW.
+   - EV 4: Arrival step 18 (4:30 PM), Departure step 96 (midnight), Energy 3.631 kWh, Connector limit 7 kW.
+   - EV 5: Arrival step 22 (5:30 PM), Departure step 43 (10:45 PM), Energy 19.343 kWh, Connector limit 7 kW.
+   - EV 6: Arrival step 91 (11 PM), Departure step 96 (midnight), Energy 0.97 kWh, Connector limit 7 kW.
+   - EV 7: Arrival step 59 (2:45 PM), Departure step 95 (midnight), Energy 8.34 kWh, Connector limit 7 kW.
+   - EV 8: Arrival step 18 (4:30 PM), Departure step 96 (midnight), Energy 1.59 kWh, Connector limit 7 kW.
+   - EV 9: Arrival step 87 (9:15 PM), Departure step 96 (midnight), Energy 3.61 kWh, Connector limit 7 kW.
+   - EV 10: Arrival step 95 (11:45 PM), Departure step 96 (midnight), Energy 8.68 kWh, Connector limit 7 kW.
+   - EV 11: Arrival step 20 (5 PM), Departure step 23 (5:45 PM), Energy 0.782 kWh, Connector limit 7 kW.
+   - EV 12: Arrival step 18 (4:45 PM), Departure step 96 (midnight), Energy 13.395 kWh, Connector limit 7 kW.
+   - EV 13: Arrival step 17 (4:15 PM), Departure step 96 (midnight), Energy 13.48 kWh, Connector limit 7 kW.
+   - EV 14: Arrival step 12 (3 AM), Departure step 96 (midnight), Energy 10.92 kWh, Connector limit 7 kW.
+   - EV 15: Arrival step 15 (3:45 PM), Departure step 96 (midnight), Energy 22.65 kWh, Connector limit 7 kW.
+   - EV 16: Arrival step 27 (6:30 PM), Departure step 96 (midnight), Energy 11.218 kWh, Connector limit 7 kW.
+   - EV 17: Arrival step 87 (8:30 PM), Departure step 96 (midnight), Energy 1.51 kWh, Connector limit 7 kW.
+   - EV 18: Arrival step 91 (10:30 PM), Departure step 96 (midnight), Energy 0.88 kWh, Connector limit 7 kW.
+   - EV 19: Arrival step 65 (4:15 PM), Departure step 96 (midnight), Energy 39.36 kWh, Connector limit 7 kW.
+   - EV 20: Arrival step 71 (5:45 PM), Departure step 96 (midnight), Energy 15.874 kWh, Connector limit 7 kW.
+   - EV 21: Arrival step 18 (4:15 PM), Departure step 96 (midnight), Energy 13.747 kWh, Connector limit 7 kW.
+   - EV 22: Arrival step 25 (6:15 AM), Departure step 26 (6:45 AM), Energy 0.805 kWh, Connector limit 7 kW.
+   - EV 23: Arrival step 91 (11 PM), Departure step 96 (midnight), Energy 3.22 kWh, Connector limit 7 kW.
+   - EV 24: Arrival step 12 (3 PM), Departure step 94 (11:45 PM), Energy 19.73 kWh, Connector limit 7 kW.
+   - EV 25: Arrival step 17 (4:15 PM), Departure step 96 (midnight), Energy 11.64 kWh, Connector limit 7 kW.
+   - EV 26: Arrival step 6 (1:30 AM), Departure step 18 (4:30 AM), Energy 21.03 kWh, Connector limit 7 kW.
+   - EV 27: Arrival step 59 (4:45 PM), Departure step 91 (10:45 PM), Energy 11.21 kWh, Connector limit 7 kW.
+   - EV 28: Arrival step 15 (3:30 PM), Departure step 96 (midnight), Energy 28.96 kWh, Connector limit 7 kW.
+   - EV 29: Arrival step 22 (5:30 PM), Departure step 96 (midnight), Energy 0.93 kWh, Connector limit 7 kW.
+   - EV 30: Arrival step 22 (5:30 PM), Departure step 96 (midnight), Energy 3.44 kWh, Connector limit 7 kW.
+   - EV 31: Arrival step 27 (6 PM), Departure step 96 (midnight), Energy 2.85 kWh, Connector limit 7 kW.
+   - EV 32: Arrival step 8 (2 AM), Departure step 16 (4 AM), Energy 5.97 kWh, Connector limit 7 kW.
+   - EV 33: Arrival step 22 (5:45 PM), Departure step 96 (midnight), Energy 5.368 kWh, Connector limit 7 kW.
+   - EV 34: Arrival step 6 (1:45 AM), Departure step 25 (6:15 AM), Energy 13.265 kWh, Connector limit 7 kW.
+   - EV 35: Arrival step 87 (9:30 PM), Departure step 96 (midnight), Energy 2.091 kWh, Connector limit 7 kW.
+   - EV 36: Arrival step 27 (6:30 PM), Departure step 96 (midnight), Energy 18.5 kWh, Connector limit 7 kW.
+   - EV 37: Arrival step 18 (4:15 PM), Departure step 96 (midnight), Energy 3.63 kWh, Connector limit 7 kW.
+   - EV 38: Arrival step 71 (5:45 PM), Departure step 96 (midnight), Energy 0.892 kWh, Connector limit 7 kW.
+   - EV 39: Arrival step 20 (4:45 PM), Departure step 23 (7:45 PM), Energy 4.218 kWh, Connector limit 7 kW.
+   - EV 40: Arrival step 11 (2:45 PM), Departure step 31 (7:45 PM), Energy 8.82 kWh, Connector limit 7 kW.
+   - EV 41: Arrival step 27 (5:15 PM), Departure step 96 (midnight), Energy 5.65 kWh, Connector limit 7 kW.
+   - EV 42: Arrival step 10 (2:15 PM), Departure step 14 (3:15 PM), Energy 3.41 kWh, Connector limit 7 kW.
+   - EV 43: Arrival step 20 (5 PM), Departure step 96 (midnight), Energy 5.18 kWh, Connector limit 7 kW.
+   - EV 44: Arrival step 18 (4:30 PM), Departure step 96 (midnight), Energy 6.158 kWh, Connector limit 7 kW.
+   - EV 45: Arrival step 87 (8:45 PM), Departure step 96 (midnight), Energy 6.74 kWh, Connector limit 7 kW.
+   - EV 46: Arrival step 91 (10:45 PM), Departure step 96 (midnight), Energy 0.969 kWh, Connector limit 7 kW.
+   - EV 47: Arrival step 18 (4:30 PM), Departure step 96 (midnight), Energy 44.88 kWh, Connector limit 7 kW.
+   - EV 48: Arrival step 18 (4:30 PM), Departure step 96 (midnight), Energy 11.668 kWh, Connector limit 7 kW.
+   - EV 49: Arrival step 27 (5 PM), Departure step 31 (10 PM), Energy 3.42 kWh, Connector limit 7 kW.
+   - EV 50: Arrival step 91 (10:45 PM), Departure step 96 (midnight), Energy 3.872 kWh, Connector limit 7 kW.
+   - EV 51: Arrival step 91 (11 PM), Departure step 96 (midnight), Energy 4.98 kWh, Connector limit 7 kW.
+
+2. Calculate the average power needed for each car:
+   - EV 1: 12.98 kWh / 8 h = 1.6225 kW
+   - EV 2: 6.481 kWh / 1.75 h = 3.7091 kW
+   - EV 3: 6.2 kWh / 3 h = 2.0667 kW
+   - EV 4: 3.631 kWh / 8.5 h = 0.4272 kW
+   - EV 5: 19.343 kWh / 5.25 h = 3.6848 kW
+   - EV 6: 0.97 kWh / 0.25 h = 3.88 kW
+   - EV 7: 8.34 kWh / 10.25 h = 0.8132 kW
+   - EV 8: 1.59 kWh / 7.5 h = 0.2120 kW
+   - EV 9: 3.61 kWh / 2.25 h = 1.6044 kW
+   - EV 10: 8.68 kWh / 0.25 h = 34.72 kW
+   - EV 11: 0.782 kWh / 0.125 h = 6.256 kW
+   - EV 12: 13.395 kWh / 7.25 h = 1.8444 kW
+   - EV 13: 13.48 kWh / 8.75 h = 1.54 kW
+   - EV 14: 10.92 kWh / 21 h = 0.5200 kW
+   - EV 15: 22.65 kWh / 8.75 h = 2.5857 kW
+   - EV 16: 11.218 kWh / 7.5 h = 1.4963 kW
+   - EV 17: 1.51 kWh / 3.25 h = 0.4646 kW
+   - EV 18: 0.88 kWh / 2.25 h = 0.3911 kW
+   - EV 19: 39.36 kWh / 8.75 h = 4.4943 kW
+   - EV 20: 15.874 kWh / 6.25 h = 2.5398 kW
+   - EV 21: 13.747 kWh / 8.75 h = 1.5703 kW
+   - EV 22: 0.805 kWh / 0.5 h = 1.61 kW
+   - EV 23: 3.22 kWh / 0.25 h = 12.88 kW
+   - EV 24: 19.73 kWh / 8.75 h = 2.2531 kW
+   - EV 25: 11.64 kWh / 8.75 h = 1.3291 kW
+   - EV 26: 21.03 kWh / 2.5 h = 8.4120 kW
+   - EV 27: 11.21 kWh / 6 h = 1.8683 kW
+   - EV 28: 28.96 kWh / 8.75 h = 3.3040 kW
+   - EV 29: 0.93 kWh / 6.5 h = 0.1423 kW
+   - EV 30: 3.44 kWh / 6.5 h = 0.5292 kW
+   - EV 31: 2.85 kWh / 6 h = 0.4750 kW
+   - EV 32: 5.97 kWh / 2 h = 2.9850 kW
+   - EV 33: 5.368 kWh / 7.25 h = 0.7394 kW
+   - EV 34: 13.265 kWh / 3.5 h = 3.7900 kW
+   - EV 35: 2.091 kWh / 2.5 h = 0.8364 kW
+   - EV 36: 18.5 kWh / 6.5 h = 2.8462 kW
+   - EV 37: 3.63 kWh / 8.75 h = 0.4143 kW
+   - EV 38: 0.892 kWh / 6.25 h = 0.1427 kW
+   - EV 39: 4.218 kWh / 0.125 h = 33.744 kW
+   - EV 40: 8.82 kWh / 5 h = 1.7640 kW
+   - EV 41: 5.65 kWh / 7 h = 0.8071 kW
+   - EV 42: 3.41 kWh / 1 h = 3.41 kW
+   - EV 43: 5.18 kWh / 7 h = 0.7400 kW
+   - EV 44: 6.158 kWh / 7.5 h = 0.8211 kW
+   - EV 45: 6.74 kWh / 3.75 h = 1.7947 kW
+   - EV 46: 0.969 kWh / 0.25 h = 3.876 kW
+   - EV 47: 44.88 kWh / 8.75 h = 5.1343 kW
+   - EV 48: 11.668 kWh / 7.5 h = 1.5557 kW
+   - EV 49: 3.42 kWh / 4 h = 0.8550 kW
+   - EV 50: 3.872 kWh / 0.25 h = 15.488 kW
+   - EV 51: 4.98 kWh / 0.25 h = 19.92 kW
+
+3. Identify the steps where the cars together would exceed the site limit of 50 kW:
+   - Steps 16 to 18, 22 to 23, 27 to 31, 38 to 43, 59 to 61, 87 to 91, and 91 to 96 have potential overlaps.
+
+4. Allocate charging power to minimize costs:
+   - Prioritize charging during off-peak hours (before 4 PM and after 9 PM).
+   - Distribute power evenly among cars while respecting their limits and the site limit.
+
+5. Check the plan against the limits:
+   - Ensure no car exceeds its connector limit.
+   - Ensure the site limit is not exceeded at any step.
+   - Ensure all cars receive the energy they requested before their departure.
+
+Now, I will write the schedule rows.
+
+EV 1: 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225
+
+[final answer]
+1. Read each car out of the text:
+   - EV 1: Arrival step 16 (4 PM), Departure step 96 (midnight), Energy 12.98 kWh, Connector limit 7 kW.
+   - EV 2: Arrival step 87 (9:15 PM), Departure step 91 (11 PM), Energy 6.481 kWh, Connector limit 7 kW.
+   - EV 3: Arrival step 38 (9:30 AM), Departure step 50 (12:30 PM), Energy 6.2 kWh, Connector limit 7 kW.
+   - EV 4: Arrival step 18 (4:30 PM), Departure step 96 (midnight), Energy 3.631 kWh, Connector limit 7 kW.
+   - EV 5: Arrival step 22 (5:30 PM), Departure step 43 (10:45 PM), Energy 19.343 kWh, Connector limit 7 kW.
+   - EV 6: Arrival step 91 (11 PM), Departure step 96 (midnight), Energy 0.97 kWh, Connector limit 7 kW.
+   - EV 7: Arrival step 59 (2:45 PM), Departure step 95 (midnight), Energy 8.34 kWh, Connector limit 7 kW.
+   - EV 8: Arrival step 18 (4:30 PM), Departure step 96 (midnight), Energy 1.59 kWh, Connector limit 7 kW.
+   - EV 9: Arrival step 87 (9:15 PM), Departure step 96 (midnight), Energy 3.61 kWh, Connector limit 7 kW.
+   - EV 10: Arrival step 95 (11:45 PM), Departure step 96 (midnight), Energy 8.68 kWh, Connector limit 7 kW.
+   - EV 11: Arrival step 20 (5 PM), Departure step 23 (5:45 PM), Energy 0.782 kWh, Connector limit 7 kW.
+   - EV 12: Arrival step 18 (4:45 PM), Departure step 96 (midnight), Energy 13.395 kWh, Connector limit 7 kW.
+   - EV 13: Arrival step 17 (4:15 PM), Departure step 96 (midnight), Energy 13.48 kWh, Connector limit 7 kW.
+   - EV 14: Arrival step 12 (3 AM), Departure step 96 (midnight), Energy 10.92 kWh, Connector limit 7 kW.
+   - EV 15: Arrival step 15 (3:45 PM), Departure step 96 (midnight), Energy 22.65 kWh, Connector limit 7 kW.
+   - EV 16: Arrival step 27 (6:30 PM), Departure step 96 (midnight), Energy 11.218 kWh, Connector limit 7 kW.
+   - EV 17: Arrival step 87 (8:30 PM), Departure step 96 (midnight), Energy 1.51 kWh, Connector limit 7 kW.
+   - EV 18: Arrival step 91 (10:30 PM), Departure step 96 (midnight), Energy 0.88 kWh, Connector limit 7 kW.
+   - EV 19: Arrival step 65 (4:15 PM), Departure step 96 (midnight), Energy 39.36 kWh, Connector limit 7 kW.
+   - EV 20: Arrival step 71 (5:45 PM), Departure step 96 (midnight), Energy 15.874 kWh, Connector limit 7 kW.
+   - EV 21: Arrival step 18 (4:15 PM), Departure step 96 (midnight), Energy 13.747 kWh, Connector limit 7 kW.
+   - EV 22: Arrival step 25 (6:15 AM), Departure step 26 (6:45 AM), Energy 0.805 kWh, Connector limit 7 kW.
+   - EV 23: Arrival step 91 (11 PM), Departure step 96 (midnight), Energy 3.22 kWh, Connector limit 7 kW.
+   - EV 24: Arrival step 12 (3 PM), Departure step 94 (11:45 PM), Energy 19.73 kWh, Connector limit 7 kW.
+   - EV 25: Arrival step 17 (4:15 PM), Departure step 96 (midnight), Energy 11.64 kWh, Connector limit 7 kW.
+   - EV 26: Arrival step 6 (1:30 AM), Departure step 18 (4:30 AM), Energy 21.03 kWh, Connector limit 7 kW.
+   - EV 27: Arrival step 59 (4:45 PM), Departure step 91 (10:45 PM), Energy 11.21 kWh, Connector limit 7 kW.
+   - EV 28: Arrival step 15 (3:30 PM), Departure step 96 (midnight), Energy 28.96 kWh, Connector limit 7 kW.
+   - EV 29: Arrival step 22 (5:30 PM), Departure step 96 (midnight), Energy 0.93 kWh, Connector limit 7 kW.
+   - EV 30: Arrival step 22 (5:30 PM), Departure step 96 (midnight), Energy 3.44 kWh, Connector limit 7 kW.
+   - EV 31: Arrival step 27 (6 PM), Departure step 96 (midnight), Energy 2.85 kWh, Connector limit 7 kW.
+   - EV 32: Arrival step 8 (2 AM), Departure step 16 (4 AM), Energy 5.97 kWh, Connector limit 7 kW.
+   - EV 33: Arrival step 22 (5:45 PM), Departure step 96 (midnight), Energy 5.368 kWh, Connector limit 7 kW.
+   - EV 34: Arrival step 6 (1:45 AM), Departure step 25 (6:15 AM), Energy 13.265 kWh, Connector limit 7 kW.
+   - EV 35: Arrival step 87 (9:30 PM), Departure step 96 (midnight), Energy 2.091 kWh, Connector limit 7 kW.
+   - EV 36: Arrival step 27 (6:30 PM), Departure step 96 (midnight), Energy 18.5 kWh, Connector limit 7 kW.
+   - EV 37: Arrival step 18 (4:15 PM), Departure step 96 (midnight), Energy 3.63 kWh, Connector limit 7 kW.
+   - EV 38: Arrival step 71 (5:45 PM), Departure step 96 (midnight), Energy 0.892 kWh, Connector limit 7 kW.
+   - EV 39: Arrival step 20 (4:45 PM), Departure step 23 (7:45 PM), Energy 4.218 kWh, Connector limit 7 kW.
+   - EV 40: Arrival step 11 (2:45 PM), Departure step 31 (7:45 PM), Energy 8.82 kWh, Connector limit 7 kW.
+   - EV 41: Arrival step 27 (5:15 PM), Departure step 96 (midnight), Energy 5.65 kWh, Connector limit 7 kW.
+   - EV 42: Arrival step 10 (2:15 PM), Departure step 14 (3:15 PM), Energy 3.41 kWh, Connector limit 7 kW.
+   - EV 43: Arrival step 20 (5 PM), Departure step 96 (midnight), Energy 5.18 kWh, Connector limit 7 kW.
+   - EV 44: Arrival step 18 (4:30 PM), Departure step 96 (midnight), Energy 6.158 kWh, Connector limit 7 kW.
+   - EV 45: Arrival step 87 (8:45 PM), Departure step 96 (midnight), Energy 6.74 kWh, Connector limit 7 kW.
+   - EV 46: Arrival step 91 (10:45 PM), Departure step 96 (midnight), Energy 0.969 kWh, Connector limit 7 kW.
+   - EV 47: Arrival step 18 (4:30 PM), Departure step 96 (midnight), Energy 44.88 kWh, Connector limit 7 kW.
+   - EV 48: Arrival step 18 (4:30 PM), Departure step 96 (midnight), Energy 11.668 kWh, Connector limit 7 kW.
+   - EV 49: Arrival step 27 (5 PM), Departure step 31 (10 PM), Energy 3.42 kWh, Connector limit 7 kW.
+   - EV 50: Arrival step 91 (10:45 PM), Departure step 96 (midnight), Energy 3.872 kWh, Connector limit 7 kW.
+   - EV 51: Arrival step 91 (11 PM), Departure step 96 (midnight), Energy 4.98 kWh, Connector limit 7 kW.
+
+2. Calculate the average power needed for each car:
+   - EV 1: 12.98 kWh / 8 h = 1.6225 kW
+   - EV 2: 6.481 kWh / 1.75 h = 3.7091 kW
+   - EV 3: 6.2 kWh / 3 h = 2.0667 kW
+   - EV 4: 3.631 kWh / 8.5 h = 0.4272 kW
+   - EV 5: 19.343 kWh / 5.25 h = 3.6848 kW
+   - EV 6: 0.97 kWh / 0.25 h = 3.88 kW
+   - EV 7: 8.34 kWh / 10.25 h = 0.8132 kW
+   - EV 8: 1.59 kWh / 7.5 h = 0.2120 kW
+   - EV 9: 3.61 kWh / 2.25 h = 1.6044 kW
+   - EV 10: 8.68 kWh / 0.25 h = 34.72 kW
+   - EV 11: 0.782 kWh / 0.125 h = 6.256 kW
+   - EV 12: 13.395 kWh / 7.25 h = 1.8444 kW
+   - EV 13: 13.48 kWh / 8.75 h = 1.54 kW
+   - EV 14: 10.92 kWh / 21 h = 0.5200 kW
+   - EV 15: 22.65 kWh / 8.75 h = 2.5857 kW
+   - EV 16: 11.218 kWh / 7.5 h = 1.4963 kW
+   - EV 17: 1.51 kWh / 3.25 h = 0.4646 kW
+   - EV 18: 0.88 kWh / 2.25 h = 0.3911 kW
+   - EV 19: 39.36 kWh / 8.75 h = 4.4943 kW
+   - EV 20: 15.874 kWh / 6.25 h = 2.5398 kW
+   - EV 21: 13.747 kWh / 8.75 h = 1.5703 kW
+   - EV 22: 0.805 kWh / 0.5 h = 1.61 kW
+   - EV 23: 3.22 kWh / 0.25 h = 12.88 kW
+   - EV 24: 19.73 kWh / 8.75 h = 2.2531 kW
+   - EV 25: 11.64 kWh / 8.75 h = 1.3291 kW
+   - EV 26: 21.03 kWh / 2.5 h = 8.4120 kW
+   - EV 27: 11.21 kWh / 6 h = 1.8683 kW
+   - EV 28: 28.96 kWh / 8.75 h = 3.3040 kW
+   - EV 29: 0.93 kWh / 6.5 h = 0.1423 kW
+   - EV 30: 3.44 kWh / 6.5 h = 0.5292 kW
+   - EV 31: 2.85 kWh / 6 h = 0.4750 kW
+   - EV 32: 5.97 kWh / 2 h = 2.9850 kW
+   - EV 33: 5.368 kWh / 7.25 h = 0.7394 kW
+   - EV 34: 13.265 kWh / 3.5 h = 3.7900 kW
+   - EV 35: 2.091 kWh / 2.5 h = 0.8364 kW
+   - EV 36: 18.5 kWh / 6.5 h = 2.8462 kW
+   - EV 37: 3.63 kWh / 8.75 h = 0.4143 kW
+   - EV 38: 0.892 kWh / 6.25 h = 0.1427 kW
+   - EV 39: 4.218 kWh / 0.125 h = 33.744 kW
+   - EV 40: 8.82 kWh / 5 h = 1.7640 kW
+   - EV 41: 5.65 kWh / 7 h = 0.8071 kW
+   - EV 42: 3.41 kWh / 1 h = 3.41 kW
+   - EV 43: 5.18 kWh / 7 h = 0.7400 kW
+   - EV 44: 6.158 kWh / 7.5 h = 0.8211 kW
+   - EV 45: 6.74 kWh / 3.75 h = 1.7947 kW
+   - EV 46: 0.969 kWh / 0.25 h = 3.876 kW
+   - EV 47: 44.88 kWh / 8.75 h = 5.1343 kW
+   - EV 48: 11.668 kWh / 7.5 h = 1.5557 kW
+   - EV 49: 3.42 kWh / 4 h = 0.8550 kW
+   - EV 50: 3.872 kWh / 0.25 h = 15.488 kW
+   - EV 51: 4.98 kWh / 0.25 h = 19.92 kW
+
+3. Identify the steps where the cars together would exceed the site limit of 50 kW:
+   - Steps 16 to 18, 22 to 23, 27 to 31, 38 to 43, 59 to 61, 87 to 91, and 91 to 96 have potential overlaps.
+
+4. Allocate charging power to minimize costs:
+   - Prioritize charging during off-peak hours (before 4 PM and after 9 PM).
+   - Distribute power evenly among cars while respecting their limits and the site limit.
+
+5. Check the plan against the limits:
+   - Ensure no car exceeds its connector limit.
+   - Ensure the site limit is not exceeded at any step.
+   - Ensure all cars receive the energy they requested before their departure.
+
+Now, I will write the schedule rows.
+
+EV 1: 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225 1.6225
+
+usage: 1 LLM calls, 0 tool calls, 2835 in / 16384 out tokens, 166.3968 s

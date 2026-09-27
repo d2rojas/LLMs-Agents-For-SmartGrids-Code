@@ -232,21 +232,36 @@ def frozen_days() -> List[Dict[str, Any]]:
     return list(json.loads(path.read_text(encoding="utf-8")).get("days", []))
 
 
-def run_dirs() -> List[Path]:
+def method_dirs() -> List[Path]:
+    """Every results/<instance>/<date>/<model>/<method>/ folder, newest date first."""
     root = PROJECT_ROOT / "results"
-    return [d for d in sorted(root.iterdir()) if (d / "run_manifest.json").exists()] if root.is_dir() else []
+    dirs = [p.parent for p in root.glob("*/*/*/*/summary.json")] if root.is_dir() else []
+    return sorted(dirs, key=lambda d: (d.parts[-3], d.parts[-4]), reverse=True)
 
 
-def read_rows(d: Path) -> List[Dict[str, str]]:
-    f = d / "rows.csv"
+def latest_run() -> List[Path]:
+    """The method folders of the newest date, the run set the page reports."""
+    dirs = method_dirs()
+    if not dirs:
+        return []
+    newest = dirs[0].parts[-3]
+    return [d for d in dirs if d.parts[-3] == newest]
+
+
+def read_summary(d: Path) -> List[Dict[str, str]]:
+    f = d / "summary.csv"
     if not f.exists():
         return []
     with f.open(encoding="utf-8", newline="") as fh:
         return list(csv.DictReader(fh))
 
 
+def read_header(d: Path) -> Dict[str, Any]:
+    return json.loads((d / "summary.json").read_text(encoding="utf-8"))
+
+
 def sample_request() -> Optional[Dict[str, Any]]:
-    for d in run_dirs():
+    for d in latest_run():
         f = d / "requests.jsonl"
         if f.exists():
             for line in f.read_text(encoding="utf-8").splitlines():
@@ -935,30 +950,24 @@ def tab_gate() -> str:
 
 
 def tab_results() -> str:
-    dirs = run_dirs()
+    dirs = latest_run()
     if not dirs:
-        return card("No runs yet", "<p>No results directory carries a run manifest.</p>")
-
-    latest = dirs[-1]
-    man = json.loads((latest / "run_manifest.json").read_text(encoding="utf-8"))
-    rows = read_rows(latest)
-    by_arm: Dict[str, List[Dict[str, str]]] = {}
-    for r in rows:
-        by_arm.setdefault(r.get("arm", "?"), []).append(r)
-
+        return card("No runs yet", "<p>No results folder carries a summary.json.</p>")
+    by_method = {read_header(d)["header"]["method"]: (d, read_summary(d), read_header(d)) for d in dirs}
+    date = dirs[0].parts[-3]
     body: List[str] = []
 
     # headline: the gated row against its target
-    ev = by_arm.get("evagent", [])
-    if ev:
-        n = len(ev)
-        solved = sum(1 for r in ev if r.get("outcome") == "solved")
-        esc = sum(1 for r in ev if r.get("outcome") == "escalated")
-        bad = sum(1 for r in ev if r.get("outcome") == "wrong_unflagged")
-        gate_ok = sum(1 for r in ev if str(r.get("gate_passed")).lower() == "true")
-        exact = sum(int(r["n_sessions_exact"] or 0) for r in ev if r.get("n_sessions_exact"))
-        truth = sum(int(r["n_sessions_truth"] or 0) for r in ev if r.get("n_sessions_truth"))
-        fdays = sum(1 for r in ev if r.get("formulation_status") == "pass")
+    if "evagent" in by_method:
+        d, rows, hdr = by_method["evagent"]
+        n = len(rows)
+        solved = sum(1 for r in rows if r.get("outcome") == "solved")
+        esc = sum(1 for r in rows if r.get("outcome") == "escalated")
+        bad = sum(1 for r in rows if r.get("outcome") == "wrong_unflagged")
+        gate_ok = sum(1 for r in rows if str(r.get("gate_pass")).lower() == "true")
+        exact = sum(int(r["n_sessions_exact"] or 0) for r in rows if r.get("n_sessions_exact"))
+        truth = sum(int(r["n_sessions_truth"] or 0) for r in rows if r.get("n_sessions_truth"))
+        fdays = sum(1 for r in rows if str(r.get("formulation_exact")).lower() == "true")
         share = 100.0 * exact / truth if truth else 0.0
         met = bad == 0 and solved + esc == n
         body.append(
@@ -967,7 +976,7 @@ def tab_results() -> str:
                 f"<p style='font-size:15px'>{verdict('solved')} {solved}/{n} &nbsp; {verdict('escalated')} "
                 f"{esc}/{n} &nbsp; {verdict('wrong')} {bad}/{n}</p>",
                 f"<p>Target: solved + escalated = {n}, wrong-unflagged = 0. "
-                + ("<b>Met.</b>" if met else f"<b>Not met.</b>")
+                + ("<b>Met.</b>" if met else "<b>Not met.</b>")
                 + f" The gate accepted <b>{gate_ok} of {n}</b> answers, and the formulation was exact on "
                 f"<b>{exact} of {truth} sessions ({share:.1f} %)</b> but on <b>{fdays} of {n} days</b>, since a day "
                 "counts only when every one of its sessions is right.</p>",
@@ -984,89 +993,80 @@ def tab_results() -> str:
             )
         )
 
-    # outcome split per arm
+    def pct(rows: List[Dict[str, str]], kind: str) -> str:
+        k = sum(1 for r in rows if r.get("outcome") == kind)
+        return f"{100.0 * k / len(rows):.0f} % <span class='muted'>({k}/{len(rows)})</span>"
+
     split = []
     for row in ROWS:
-        rs = by_arm.get(row["arm"], []) if row["arm"] else []
-        if not rs:
+        if row["name"] in by_method:
+            _d, rows, _h = by_method[row["name"]]
+            split.append([f"<b>{E(row['label'])}</b>", str(len(rows)), pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged")])
+        else:
             split.append([f"<b>{E(row['label'])}</b>", "<span class='muted'>not measured yet</span>", "", "", ""])
-            continue
-        n = len(rs)
-        def pct(kind: str) -> str:
-            k = sum(1 for r in rs if r.get("outcome") == kind)
-            return f"{100.0 * k / n:.0f} % <span class='muted'>({k}/{n})</span>"
-        split.append([f"<b>{E(row['label'])}</b>", str(n), pct("solved"), pct("escalated"), pct("wrong_unflagged")])
     for ref in REFERENCES:
-        rs = by_arm.get(ref["arm"], [])
-        if rs:
-            n = len(rs)
-            def pct2(kind: str) -> str:
-                k = sum(1 for r in rs if r.get("outcome") == kind)
-                return f"{100.0 * k / n:.0f} % <span class='muted'>({k}/{n})</span>"
-            split.append([
-                f"<span class='muted'>{E(ref['label'])} (reference)</span>", str(n),
-                pct2("solved"), pct2("escalated"), pct2("wrong_unflagged"),
-            ])
+        if ref["arm"] in by_method:
+            _d, rows, _h = by_method[ref["arm"]]
+            split.append([f"<span class='muted'>{E(ref['label'])} (reference)</span>", str(len(rows)),
+                          pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged")])
 
+    any_d, _r, any_h = next(iter(by_method.values()))
+    cfg = json.loads((any_d / "config.json").read_text(encoding="utf-8")) if (any_d / "config.json").exists() else {}
     body.append(
         card(
             "Every method, on the same days",
-            f"<p class='muted'>Model {E(man.get('model_resolved') or man.get('model_requested'))} · "
-            f"{E(man.get('days'))} days · request digest "
-            f"<code>{E(str(man.get('requests_digest', ''))[:26])}…</code>, identical for every row.</p>",
-            table(["method", "days", verdict("solved"), verdict("escalated"), verdict("wrong")], split),
+            f"<p class='muted'>Run of {E(date)} · model {E(cfg.get('model_resolved') or any_h['header']['model'])} · "
+            f"request digest <code>{E(str(cfg.get('requests_digest', ''))[:26])}…</code>, identical for every row · "
+            f"<code>results/{E(any_d.parts[-4])}/{E(date)}/</code></p>",
+            table(["method", "requests", verdict("solved"), verdict("escalated"), verdict("wrong")], split),
         )
     )
 
-    # per-day detail
     cols = [
-        ("date", "day"), ("variant", "variant"), ("outcome", "outcome"), ("outcome_reason", "why"),
-        ("formulation_status", "form."), ("state_status", "state"), ("traceability_status", "trace"),
-        ("answer_status", "answer"), ("gap_pct", "gap %"), ("cost_usd", "cost $"),
-        ("unmet_kwh", "unmet kWh"), ("peak_kw", "peak kW"), ("total_tokens", "tokens"),
+        ("nn", "nn"), ("request_id", "request"), ("variant", "variant"), ("outcome", "outcome"), ("solved_reason", "why"),
+        ("formulation_exact", "form."), ("no_hard_violation", "runnable"), ("traceable", "trace"),
+        ("answer_ok", "answer"), ("gap_pct", "gap %"), ("cost_usd", "cost $"), ("unmet_kwh", "unmet kWh"),
+        ("gate_pass", "gate"), ("prompt_tokens", "in"), ("completion_tokens", "out"),
     ]
     det = []
-    for arm, rs in by_arm.items():
-        body_rows = [
-            [verdict(r["outcome"]) if k == "outcome" else E(r.get(k, "")) for k, _ in cols]
-            for r in sorted(rs, key=lambda x: str(x.get("date")))
-        ]
+    for name, (d, rows, _h) in by_method.items():
         det.append(
-            f"<details><summary>{E(arm)} — every day</summary>"
-            + table([label for _, label in cols], body_rows)
+            f"<details><summary>{E(name)} — every request · <code>{E(str(d.relative_to(PROJECT_ROOT)))}</code></summary>"
+            + table([label for _k, label in cols],
+                    [[verdict(r["outcome"]) if k == "outcome" else E(r.get(k, "")) for k, _l in cols] for r in rows])
             + "</details>"
         )
-    body.append(card("Day by day", *det))
+    body.append(card("Request by request", *det))
     return "".join(body)
 
 
 def tab_analysis() -> str:
-    """The report each run ends with, rendered. Written by evaluation/report.py, never by a model."""
+    """The report each method folder ends with, rendered. Written from the rows, never by a model."""
     from visuals.shell import markdown
 
-    dirs = [d for d in run_dirs() if (d / "REPORT.md").exists()]
+    dirs = [d for d in latest_run() if (d / "REPORT.md").exists()]
     if not dirs:
         return card(
             "Analysis",
-            "<p class='muted'>No results directory carries a REPORT.md yet.</p>"
-            "<p>Every run ends with <code>python -m evaluation.report &lt;dir&gt;</code>, which writes the "
-            "report from the rows the run already wrote: what was run, the protocol, every rate with its "
-            "denominator, per-method detail, budget and caveats. No model is called to write it.</p>",
+            "<p class='muted'>No results folder carries a REPORT.md yet.</p>"
+            "<p>Every run ends with one per method, written by <code>evaluation/postprocess.py</code> from "
+            "the rows the run produced. No model is called to write it.</p>",
         )
     body = [
         card(
             "What the reports are",
-            "<p>Each results directory ends with a <code>REPORT.md</code> written by "
-            "<code>evaluation/report.py</code> from the rows the run produced: what was run, the protocol, "
-            "every rate with the denominator it was computed over, per-method detail, the budget, and what "
-            "the numbers do not support. No model is called to write it, and nothing in it is typed by hand.</p>"
-            "<p class='muted'>The failure catalogue and the conclusions across runs are written once the "
-            "missing methods have run; until then this section is the reports as they stand.</p>",
+            "<p>Each method folder under <code>results/</code> ends with a <code>REPORT.md</code> written from "
+            "the rows the run produced: the outcome split, formulation and traceability rates, cost, the list of "
+            "requests that ended wrong or escalated, and every request on one line. No model is called to write "
+            "it, and nothing in it is typed by hand. The run set's own report, over every method at once, is in "
+            "each folder's <code>raw/</code>.</p>"
+            "<p class='muted'>The failure catalogue and the conclusions across runs are written once the missing "
+            "methods have run; until then this section is the reports as they stand.</p>",
         )
     ]
-    for d in reversed(dirs):
+    for d in dirs:
         body.append(
-            f"<div class='card'><h2><code>{E(d.name)}</code></h2>"
+            f"<div class='card'><h2><code>{E(str(d.relative_to(PROJECT_ROOT / 'results')))}</code></h2>"
             + markdown((d / "REPORT.md").read_text(encoding="utf-8"))
             + "</div>"
         )
@@ -1085,12 +1085,7 @@ def tab_status() -> str:
         }[st]
         rows.append([f"<b>{E(r['label'])}</b>", f"<code>{E(r['name'])}</code>", word])
     running = sum(1 for r in ROWS if arm_state(r) == "running")
-    dirs = run_dirs()
-    models = sorted({
-        json.loads((d / "run_manifest.json").read_text(encoding="utf-8")).get("model_resolved")
-        or json.loads((d / "run_manifest.json").read_text(encoding="utf-8")).get("model_requested")
-        for d in dirs
-    })
+    models = sorted({d.parts[-2] for d in method_dirs() if d.parts[-2] != "no-llm"})
     return card(
         "Where the implementation stands",
         f"<p>{running} of the {len(ROWS)} methods run today. The rest are specified here and in the registry the "
