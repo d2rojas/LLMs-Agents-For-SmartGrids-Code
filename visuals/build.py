@@ -42,11 +42,19 @@ from visuals.shell import E, card, chip, table
 ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / "site"
 
-# Case study id -> the directory its generator runs in. Order is the order of
-# the case selector and of the landing page.
-CASES: Tuple[Tuple[str, str], ...] = (
-    ("pfagent", "power-flow-agent"),
-    ("evagent", "ev-scheduling"),
+# Every case study of the paper, in the order they appear in the sidebar and on
+# the landing page. The ones with no generator yet are listed all the same: how
+# many case studies there are is part of what the site has to show, and a case
+# that only appears once it is finished makes the set look smaller than it is.
+CASES: Tuple[Dict[str, str], ...] = (
+    {"id": "pfagent", "folder": "power-flow-agent", "title": "PFAgent",
+     "subtitle": "power flow, IEEE systems"},
+    {"id": "evagent", "folder": "ev-scheduling", "title": "EVAgent",
+     "subtitle": "EV charging schedules"},
+    {"id": "griddebug", "folder": "griddebug-agent", "title": "GridDebug",
+     "subtitle": "contingency diagnosis"},
+    {"id": "wind", "folder": "wind-forecasting", "title": "Wind",
+     "subtitle": "power forecasting"},
 )
 
 # Fallback interpreter, used for a case study that has no environment of its
@@ -55,6 +63,16 @@ CASES: Tuple[Tuple[str, str], ...] = (
 # developer's machine reliably has all of them, which is the other reason the
 # generators run as subprocesses.
 PYTHON = sys.executable
+
+
+def has_generator(folder: str) -> bool:
+    """Whether a case study can produce a page at all.
+
+    Availability is a property of the repository, not of what this run
+    happened to rebuild. Deriving it from the run would make ``--case`` mark
+    every other case study as missing on the page it rewrites.
+    """
+    return (ROOT / folder / "evaluation" / "page_fragments.py").exists()
 
 
 def interpreter(folder: str, fallback: str) -> str:
@@ -86,38 +104,66 @@ def collect(case_id: str, folder: str, python: str = PYTHON) -> Optional[Dict[st
     return payload
 
 
-def render(payload: Dict[str, Any], every: Sequence[Dict[str, Any]]) -> str:
-    """One case study's page, with the selector listing all of them."""
+def nav_for(current: Optional[str], built: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The sidebar: every case study, the current one expanded into its sections."""
+    out: List[Dict[str, Any]] = []
+    for case in CASES:
+        p = built.get(case["id"])
+        entries: List[Tuple[str, str]] = []
+        if p is not None and case["id"] == current:
+            entries = [tuple(e) for _label, group in p.get("groups", []) for e in group]
+        out.append({
+            "title": case["title"],
+            "subtitle": case["subtitle"],
+            "href": f"{case['id']}.html",
+            "current": case["id"] == current,
+            "available": has_generator(case["folder"]),
+            "entries": entries,
+        })
+    return out
+
+
+def render(payload: Dict[str, Any], built: Dict[str, Dict[str, Any]]) -> str:
+    """One case study's page, with every case study in the sidebar."""
     tabs = payload.get("tabs", {})
-    groups = [(label, [tuple(e) for e in entries]) for label, entries in payload.get("groups", [])]
     first = True
     body: List[str] = []
-    for _label, entries in groups:
+    for _label, entries in payload.get("groups", []):
         for key, _text in entries:
             body.append(shell.tab(key, tabs.get(key, ""), on=first))
             first = False
-    cases = [(p["title"], f"{p['id']}.html", p["id"] == payload["id"]) for p in every]
     extra = payload.get("script", "")
     return shell.page(
         title=f"{payload['title']} · Evaluation",
         brand=payload.get("brand", payload["title"]),
         note_text=payload.get("note", ""),
-        groups=groups,
+        nav=nav_for(payload["id"], built),
         tabs_html="".join(body),
-        cases=cases,
         extra_css=payload.get("css", ""),
     ).replace("</body></html>", f"<script>{extra}</script></body></html>" if extra else "</body></html>")
 
 
-def landing(every: Sequence[Dict[str, Any]]) -> str:
-    """The front door: what the evaluation is, and one card per case study."""
+def landing(built: Dict[str, Dict[str, Any]]) -> str:
+    """The front door: the protocol, and one card per case study."""
     cards: List[str] = []
-    for p in every:
-        rows = p.get("summary", [])
+    for case in CASES:
+        p = built.get(case["id"])
+        if p is None:
+            if has_generator(case["folder"]):
+                cards.append(
+                    f"<a class='stg' href='{E(case['id'])}.html'><h3>{E(case['title'])}</h3>"
+                    f"<p>{E(case['subtitle'])}</p><div class='st'>Open →</div></a>"
+                )
+            else:
+                cards.append(
+                    f"<div class='stg off'><h3>{E(case['title'])}</h3>"
+                    f"<p>{E(case['subtitle'])}</p><div class='st'>not yet</div></div>"
+                )
+            continue
         cards.append(
             f"<a class='stg' href='{E(p['id'])}.html'><h3>{E(p['title'])}</h3>"
             f"<p>{E(p.get('blurb', ''))}</p>"
-            + "".join(chip(f"{k}: {v}") for k, v in rows)
+            + "".join(chip(f"{k}: {v}") for k, v in p.get("summary", []))
             + "<div class='st'>Open →</div></a>"
         )
     intro = card(
@@ -173,41 +219,43 @@ def landing(every: Sequence[Dict[str, Any]]) -> str:
     return shell.page(
         title="Case studies · Evaluation",
         brand="Solver-grounded LLM agents · case studies",
-        note_text="",
-        groups=[("", [("home", "Overview")])],
-        tabs_html=shell.tab("home", intro + "<div class='grid g3'>" + "".join(cards) + "</div>", on=True),
-        cases=[(p["title"], f"{p['id']}.html", False) for p in every],
+        note_text=f"{sum(1 for c in CASES if has_generator(c['folder']))} of {len(CASES)} case studies",
+        nav=nav_for(None, built),
+        tabs_html=shell.tab("home", intro + "<div class='grid g4'>" + "".join(cards) + "</div>", on=True),
         extra_css=(
             ".stg{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;"
             "padding:18px 20px;text-decoration:none;color:var(--text);box-shadow:var(--shadow)}"
             ".stg:hover{border-color:var(--acc)}.stg h3{margin:0 0 6px;font-size:16px}"
             ".stg p{margin:0 0 8px;color:var(--muted);font-size:13.5px}"
             ".stg .st{margin-top:10px;font-size:12px;font-weight:600;color:var(--acc)}"
+            ".stg.off{opacity:.5}.stg.off .st{color:var(--muted)}"
         ),
     )
 
 
 def build(only: Optional[str] = None, python: str = PYTHON) -> List[Path]:
     """Collect every case study and write the site. Returns the files written."""
-    payloads: List[Dict[str, Any]] = []
-    for case_id, folder in CASES:
-        if only and case_id != only:
+    built: Dict[str, Dict[str, Any]] = {}
+    for case in CASES:
+        if only and case["id"] != only:
             continue
-        print(f"collecting {case_id} …")
-        p = collect(case_id, folder, python)
+        if not has_generator(case["folder"]):
+            continue
+        print(f"collecting {case['id']} …")
+        p = collect(case["id"], case["folder"], python)
         if p is not None:
-            payloads.append(p)
-    if not payloads:
+            built[case["id"]] = p
+    if not built:
         raise SystemExit("no case study produced a fragment")
 
     SITE.mkdir(parents=True, exist_ok=True)
     written: List[Path] = []
-    for p in payloads:
-        out = SITE / f"{p['id']}.html"
-        out.write_text(render(p, payloads), encoding="utf-8")
+    for case_id, p in built.items():
+        out = SITE / f"{case_id}.html"
+        out.write_text(render(p, built), encoding="utf-8")
         written.append(out)
     index = SITE / "index.html"
-    index.write_text(landing(payloads), encoding="utf-8")
+    index.write_text(landing(built), encoding="utf-8")
     written.append(index)
     return written
 

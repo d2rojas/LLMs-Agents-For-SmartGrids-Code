@@ -63,15 +63,23 @@ background:var(--side2);color:#fff}
 .wrap{flex:1;display:flex;min-height:0}
 aside{width:236px;flex:none;background:var(--side2);color:var(--sidetext);overflow:auto;padding:12px 0;
 border-right:1px solid #22314a}
-aside .grp{padding:10px 18px 6px;font-size:11px;letter-spacing:.9px;text-transform:uppercase;color:#8290a5;
-display:flex;align-items:center;gap:8px}
-aside .grp .n{width:20px;height:20px;border-radius:50%;background:#2a3b57;color:#fff;font-size:11px;
-display:inline-flex;align-items:center;justify-content:center;font-weight:700}
-aside a{display:block;padding:8px 18px 8px 44px;color:var(--sidetext);text-decoration:none;font-size:13.5px;
-border-left:3px solid transparent;cursor:pointer}
-aside a:hover{background:#1e2f49;color:#fff}
-aside a.on{background:#243a5c;color:#fff;border-left-color:#7aa2ff;font-weight:600}
-aside .off{display:block;padding:8px 18px 8px 44px;font-size:13px;color:#6f7d93}
+/* one row per case study, always all of them */
+aside .cs{display:flex;align-items:flex-start;gap:10px;padding:11px 14px;color:var(--sidetext);
+text-decoration:none;border-left:3px solid transparent;border-top:1px solid #22314a}
+aside .cs:first-child{border-top:0}
+aside a.cs:hover{background:#1e2f49;color:#fff}
+aside .cs .n{width:21px;height:21px;flex:none;border-radius:50%;background:#2a3b57;color:#fff;font-size:11px;
+display:inline-flex;align-items:center;justify-content:center;font-weight:700;margin-top:1px}
+aside .cs .t{font-size:13.5px;font-weight:600;line-height:1.3}
+aside .cs .t small{display:block;font-weight:400;font-size:11.5px;color:#8290a5;margin-top:1px}
+aside .cs.on{background:#243a5c;color:#fff;border-left-color:#7aa2ff}
+aside .cs.on .n{background:#7aa2ff;color:#0f1b2d}
+aside .cs.off{opacity:.45}
+/* the sections of the case study being read */
+aside a.sub{display:block;padding:7px 18px 7px 45px;color:var(--sidetext);text-decoration:none;font-size:13px;
+border-left:3px solid transparent;cursor:pointer;background:#1a2b44}
+aside a.sub:hover{background:#1e2f49;color:#fff}
+aside a.sub.on{color:#fff;border-left-color:#7aa2ff;font-weight:600;background:#1e3151}
 aside hr{border:0;border-top:1px solid #22314a;margin:10px 18px}
 
 main{flex:1;min-width:0;overflow:auto;padding:18px 22px}
@@ -324,20 +332,18 @@ def tab(key: str, body: str, *, on: bool = False) -> str:
 
 _SCRIPT = """
 function show(k){
-  document.querySelectorAll('aside a').forEach(a=>a.classList.toggle('on',a.dataset.t===k));
+  document.querySelectorAll('aside a.sub').forEach(a=>a.classList.toggle('on',a.dataset.t===k));
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.id==='tab-'+k));
   var m=document.querySelector('main'); if(m) m.scrollTop=0;
   document.getElementById('side').classList.remove('open');
 }
-document.querySelectorAll('aside a').forEach(a=>a.onclick=e=>{
+document.querySelectorAll('aside a.sub').forEach(a=>a.onclick=e=>{
   e.preventDefault();show(a.dataset.t);history.replaceState(null,'','#'+a.dataset.t);});
 function fromHash(){var k=(location.hash||'').slice(1);
   if(k&&document.getElementById('tab-'+k)){show(k);}else{show(FIRST);}}
 window.addEventListener('hashchange',fromHash);
 var b=document.getElementById('burger');
 if(b) b.onclick=()=>document.getElementById('side').classList.toggle('open');
-var sel=document.getElementById('casesel');
-if(sel) sel.onchange=()=>{location.href=sel.value;};
 fromHash();
 """
 
@@ -347,21 +353,26 @@ def page(
     title: str,
     brand: str,
     note_text: str = "",
-    groups: Sequence[Tuple[str, Sequence[Tuple[str, str]]]],
+    nav: Sequence[Dict[str, Any]],
     tabs_html: str,
-    cases: Sequence[Tuple[str, str, bool]] = (),
     extra_css: str = "",
 ) -> str:
     """Assemble a complete page.
+
+    The sidebar lists every case study, always, so how many there are and what
+    each one is are visible without opening anything. The one being read is
+    expanded into its sections; the others are one click away. The top bar does
+    not change between them.
 
     Args:
         title: Browser title.
         brand: Name in the top bar.
         note_text: Small right-aligned text in the top bar.
-        groups: Sidebar, as (group label, [(tab key, tab label), ...]). A group
-            label of "" renders the entries with no heading above them.
-        tabs_html: The concatenated output of ``tab()`` for every entry.
-        cases: The case selector, as (label, href, is_current).
+        nav: One entry per case study, in order, each a dict with ``title``,
+            ``subtitle``, ``href``, ``current`` (bool), ``available`` (bool)
+            and ``entries`` as [(tab key, tab label), ...]. Entries are
+            rendered only for the current one.
+        tabs_html: The concatenated output of ``tab()`` for the current entry.
         extra_css: Page-specific rules appended to the shared stylesheet.
 
     Returns:
@@ -369,21 +380,23 @@ def page(
     """
     first = ""
     side: List[str] = []
-    for n, (label, entries) in enumerate(groups, start=1):
-        if label:
-            side.append(f"<div class='grp'><span class='n'>{n}</span>{E(label)}</div>")
-        for key, text in entries:
-            first = first or key
-            side.append(f"<a data-t='{E(key)}' href='#{E(key)}'>{E(text)}</a>")
-        side.append("<hr>")
-
-    selector = ""
-    if cases:
-        opts = "".join(
-            f"<option value='{E(href)}'{' selected' if cur else ''}>{E(label)}</option>"
-            for label, href, cur in cases
+    for n, case in enumerate(nav, start=1):
+        current = bool(case.get("current"))
+        available = bool(case.get("available", True))
+        cls = "cs" + (" on" if current else "") + ("" if available else " off")
+        head = (
+            f"<span class='n'>{n}</span>"
+            f"<span class='t'>{E(case['title'])}"
+            f"<small>{E(case.get('subtitle', '') if available else 'not yet')}</small></span>"
         )
-        selector = f"<select id='casesel' title='case study'>{opts}</select>"
+        if available and not current:
+            side.append(f"<a class='{cls}' href='{E(case['href'])}'>{head}</a>")
+        else:
+            side.append(f"<div class='{cls}'>{head}</div>")
+        if current:
+            for key, text in case.get("entries", ()):
+                first = first or key
+                side.append(f"<a class='sub' data-t='{E(key)}' href='#{E(key)}'>{E(text)}</a>")
 
     return (
         "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
@@ -393,7 +406,7 @@ def page(
         "&family=JetBrains+Mono:wght@400;500&display=swap' rel='stylesheet'>"
         f"<style>{CSS}{extra_css}</style></head><body>"
         f"<div class='top'><button class='burger' id='burger'>☰</button>"
-        f"<span class='brand'>{E(brand)}</span>{selector}"
+        f"<span class='brand'>{E(brand)}</span>"
         f"<span class='sp'></span><span class='note'>{E(note_text)}</span></div>"
         f"<div class='wrap'><aside id='side'>{''.join(side)}</aside>"
         f"<main><div class='inner'>{tabs_html}</div></main></div>"
