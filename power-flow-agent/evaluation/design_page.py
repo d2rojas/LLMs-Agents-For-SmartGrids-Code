@@ -459,22 +459,12 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
 .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:13px}.kv b{color:var(--muted);font-weight:500}
 """
     H: List[str] = [f"<!doctype html><html lang='en'><head><meta charset='utf-8'><title>PFAgent · Evaluation design</title><link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap' rel='stylesheet'><style>{css}</style></head><body>"]
-    tabs = [("overview", "Overview"), ("methods", "Methods"), ("scenarios", "Scenarios"), ("prompts", "Prompts"), ("tools", "Tools"), ("gate", "Gate & scoring"), ("plan", "Run plan")]
-    H.append("<header><h1>PFAgent · Evaluation design</h1><nav class='tabs'>" + "".join(f"<button data-tab='{k}' class='{'on' if k == 'overview' else ''}'>{v}</button>" for k, v in tabs) + "</nav></header><main>")
+    tabs = [("methods", "Methods"), ("scenarios", "Scenarios"), ("prompts", "Prompts"), ("tools", "Tools"), ("gate", "Gate & scoring"), ("plan", "Run plan")]
+    H.append("<header><h1>PFAgent · Evaluation design</h1><nav class='tabs'>" + "".join(f"<button data-tab='{k}' class='{'on' if k == 'methods' else ''}'>{v}</button>" for k, v in tabs) + "</nav></header><main>")
 
     # ---------------- overview
-    H.append("<div class='tab on' id='tab-overview'>")
-    H.append("<div class='card'><h2>One question, six ways to answer it</h2><p>Every method receives the same requests: 20 per system, 100 in all, on five perturbed IEEE test systems (14, 30, 57, 118 and 300 buses). Each method answers with the same JSON object and is scored by the same evaluator. What changes between methods is only <b>who formulates</b> the solver operations, <b>who computes</b> the numbers, whether the method <b>sees the solver's outputs</b> before answering, and whether a <b>gate</b> checks the answer before it is reported.</p>")
-    H.append("<div class='flow'><div class='box'><b>Request</b><span>one of 20 scenarios per system</span></div><span class='arr'>→</span><div class='box'><b>Formulate</b><span>which solver operations, with which arguments</span></div><span class='arr'>→</span><div class='box'><b>Compute</b><span>PandaPower, or the LLM by hand</span></div><span class='arr'>→</span><div class='box'><b>Report</b><span>the answer for the operator</span></div><span class='arr'>→</span><div class='box'><b>Verdict</b><span>solved · escalated · wrong</span></div></div></div>")
-    H.append("<div class='grid g3'>")
-    for r in ROWS:
-        H.append(f"<div class='card'><h2>{E(r['label'])} <span class='chip'>{E(r['sub'])}</span></h2><div class='kv'><b>formulates</b><span>{E(r['formulates'])}</span><b>computes</b><span>{E(r['computes'])}</span><b>sees outputs</b><span>{E(r['sees'])}</span><b>gate</b><span>{E(r['gate'])}</span></div><p class='muted'>{E(r['story'])}</p></div>")
-    H.append("</div>")
+    H.append("<div class='tab on' id='tab-methods'>")
     H.append(f"<div class='card'><h2>Common to every method</h2><span class='chip'>IEEE 14 · 30 · 57 · 118 · 300-bus</span><span class='chip'>N = {N} requests per system</span><span class='chip'>perturbation seed {SEED}, k = {K}</span><span class='chip'>≤ {ROUNDS} tool rounds</span><span class='chip'>temperature 0</span><span class='chip'>tool set {TOOLS}</span><span class='chip'>models: gpt-4o-mini · gpt-5.6-sol</span><span class='chip'>same output JSON for every method</span><span class='chip'>one evaluator for every method</span><span class='chip'>every message sent is stored in the trace</span></div>")
-    H.append("</div>")
-
-    # ---------------- methods
-    H.append("<div class='tab' id='tab-methods'>")
     cols = ["case tables in the prompt", "tool schema (function calling)", "allowed values of each argument", "1-based / (0-based) indexing rule", "sees the solver outputs", "may abstain (converged=false)", "gate"]
     matrix: List[Tuple[str, Dict[str, str]]] = []
     for r in ROWS:
@@ -643,7 +633,7 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
     H.append("""</main><script>
 const tabs=document.querySelectorAll('.tabs button');function show(k){tabs.forEach(b=>b.classList.toggle('on',b.dataset.tab===k));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.id==='tab-'+k));window.scrollTo(0,0);}
 tabs.forEach(b=>b.onclick=()=>{show(b.dataset.tab);history.replaceState(null,'','#'+b.dataset.tab);});
-function fromHash(){const k=(location.hash||'#overview').slice(1);if(document.getElementById('tab-'+k)){show(k);}}
+function fromHash(){const k=(location.hash||'#methods').slice(1);if(document.getElementById('tab-'+k)){show(k);}}
 window.addEventListener('hashchange',fromHash);
 if(window.self!==window.top){document.body.classList.add('embed');}
 const _show=show;show=function(k){_show(k);if(window.self!==window.top){window.parent.postMessage({page:'design',tab:k},'*');}};
