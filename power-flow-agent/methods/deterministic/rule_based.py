@@ -104,6 +104,8 @@ _LOAD_CASE_CTX_RE = re.compile(r"\b(load|open|use|switch\s+to|select)\b|\bcase\b
 _RUN_PF_RE = re.compile(r"\b(?:power\s*flow|load\s*flow|ac\s*pf|\bpf\b|newton[\s-]*raphson)\b", flags=re.IGNORECASE)
 _N1_RE = re.compile(r"\bn\s*-\s*1\b|\bn1\b|\bcontingenc(?:y|ies)\b", flags=re.IGNORECASE)
 _TOP_K_RE = re.compile(rf"\btop[\s-]*{_BUS_TOKEN}\b", flags=re.IGNORECASE)
+_N1_REPORT_RE = re.compile(rf"\b(?:report|list|show|give)\b.*?\bthe\s+(?:(?P<k>{_BUS_TOKEN})\s+worst\s+outages?|worst\s+(?:single\s+)?outages?)", flags=re.IGNORECASE)
+_N1_CRITERIA_RE = re.compile(r"\branked\s+by\s+(min(?:imum)?\s+voltage|max(?:imum)?\s+violations?)", flags=re.IGNORECASE)
 
 _SET_LOAD_RE = re.compile(
     rf"\b(?:set|change|modify|update|adjust|make)\b.*?\b(?:load|demand)\b.*?\b(?:at|on|of)\s+bus\s+{_BUS_TOKEN}\b.*?\b(?:to|=|at)\s*{_NUM}\s*(mw|mva|megawatts?)\b"
@@ -185,7 +187,15 @@ def _parse_clause(clause: str, warnings: List[str]) -> List[Dict[str, Any]]:
         mk = _TOP_K_RE.search(c)
         if mk:
             args["top_k"] = words_to_int(mk.group(1))
+        mc = _N1_CRITERIA_RE.search(c)
+        if mc:
+            args["criteria"] = "min_voltage" if mc.group(1).lower().startswith("min") else "max_violations"
         return [{"tool": "run_n1_contingency", "args": args}]
+    # "... and report the worst single outage" / "report the 3 worst outages": the report clause of the
+    # N-1 scan just before it; it sets top_k on that scan and adds no call of its own.
+    mr = _N1_REPORT_RE.search(c)
+    if mr:
+        return [{"tool": "run_n1_contingency", "args": {"top_k": words_to_int(mr.group("k")) if mr.group("k") else 1}, "merge_into_previous_n1": True}]
 
     # --- derived reports (need a solved state; re-running PF is idempotent) -------
     if _WORST_V_RE.search(c):
@@ -220,6 +230,12 @@ def parse_detailed(request_text: str) -> Dict[str, Any]:
         if not steps:
             raise CannotParse(clause, request_text)
         for step in steps:
+            if step.pop("merge_into_previous_n1", False):
+                prev = next((p for p in reversed(plan) if p["tool"] == "run_n1_contingency"), None)
+                if prev is None:
+                    raise CannotParse(clause, request_text)
+                prev["args"]["top_k"] = step["args"]["top_k"]
+                continue
             # Collapse consecutive plain run_powerflow steps ("run PF, then report worst voltage").
             if (
                 plan
@@ -390,7 +406,7 @@ def run(request_text: str, ctx: ToolContext, dispatcher: Optional[ToolDispatcher
     # The tools that change the network return a compact confirmation, not the state; the answer
     # needs the state of the final network, so solve once more when the plan ended in a change
     # (an extra read-only call the formulation comparator ignores).
-    if ok and outputs and outputs[-1]["tool"] in ("set_active_load", "set_load", "modify_load", "disconnect_line", "reconnect_line", "apply_remedial_action"):
+    if ok and outputs and not any("bus_voltages" in (o["output"] or {}) for o in outputs[-1:]):  # no state yet: after a change, a scan, or a bare load_case
         raw = dispatcher.dispatch("run_powerflow", {})
         try:
             out = json.loads(raw)

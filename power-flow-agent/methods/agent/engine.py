@@ -171,9 +171,11 @@ def _complete_state_check(final_answer_text: str, pf: Optional[Dict[str, Any]]) 
     every branch of ``line_flows``. A state with buses missing, reported as the state, is not a
     result an operator can use; the gate sends it back. An answer that declares it cannot complete
     the request (``cannot_answer`` filled, or converged false with empty arrays) is not judged here."""
-    if not pf:
-        return {"passed": True, "applicable": False, "detail": "no solved state"}
     ans = _answer_object(final_answer_text)
+    if not pf:
+        if ans is not None and (ans.get("cannot_answer") or (ans.get("converged") is False and not ans.get("bus_voltages"))):
+            return {"passed": True, "applicable": False, "detail": "the answer declares it cannot complete the request"}
+        return {"passed": False, "applicable": True, "detail": "no run_powerflow output in the trace to report the state from (call run_powerflow: after the last change, or on the base case for a contingency scan)"}
     if ans is None:
         return {"passed": False, "applicable": True, "detail": "the answer is not the JSON answer object, so it carries no state"}
     if ans.get("cannot_answer") or (ans.get("converged") is False and not ans.get("bus_voltages")):

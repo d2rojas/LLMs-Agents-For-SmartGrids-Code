@@ -28,7 +28,7 @@ def _row(rid: str, *, method="pfagent", model="openai:gpt-4o-mini", solved=True,
         "faithful_answers": True, "faithful_numbers": 1.0, "n_numbers": 4, "n_untraceable_numbers": 0, "untraceable_numbers": [], "stale_state": False, "safe_failure": None,
         "metrics": {"voltage_mae": 0.0, "flow_mae": 0.0, "kcl_mean_mismatch_mw": 0.0, "power_balance_error": 1e-9},
         "n_llm_calls": 3, "n_tool_calls": 2, "n_tool_rounds": 2, "prompt_tokens": 5000, "completion_tokens": 300, "cost_usd": 0.001, "wall_time_s": 6.5,
-        "system_prompt_hash": "de3bfa18e09e", "error": None, "raw_response": None,
+        "system_prompt_hash": "43ef7eaadb12", "error": None, "raw_response": None,
         "trace": {},
     }
 
@@ -111,7 +111,7 @@ def test_postprocess_writes_every_artifact_and_filters_by_method(run_dir: Path) 
 def test_transcript_has_prompt_rounds_and_elided_figures(run_dir: Path) -> None:
     postprocess(run_dir, quiet=True)
     t = (run_dir / "traces" / "02_case14-plain-001-s0.transcript.txt").read_text(encoding="utf-8")
-    assert "[system]   (hash de3bfa18e09e" in t
+    assert "[system]   (hash 43ef7eaadb12" in t
     assert "You are a power system power-flow analysis assistant." in t
     assert "tool_call  load_case(case_name=\"case14\")" in t
     assert "[tool run_powerflow]   (gate: pass)" in t
