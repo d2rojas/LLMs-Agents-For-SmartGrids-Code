@@ -35,6 +35,7 @@ from visuals.shell import (  # noqa: E402
     diagram,
     diagram_row,
     flow,
+    pipeline,
     kv,
     note,
     prompt_block,
@@ -174,7 +175,7 @@ REFERENCES: Tuple[Dict[str, str], ...] = (
         "label": "Charge as soon as possible",
         "arm": "charge_asap",
         "note": "Full power from arrival until the requested energy is delivered, ignoring price. The uncontrolled "
-        "operation any optimisation has to beat, and the denominator of the cost reduction.",
+        "operation any optimization has to beat, and the denominator of the cost reduction.",
     },
 )
 
@@ -292,17 +293,22 @@ def tab_overview() -> str:
             "The task",
             "<p>A site operator describes a day of charging in plain language: the cars, when each one arrives and "
             "leaves, how much energy it needs, what its charger can deliver. Somebody has to turn that into the "
-            "parameters of an optimisation problem, solve it under the site's power cap and its time-of-use tariff, "
+            "parameters of an optimization problem, solve it under the site's power cap and its time-of-use tariff, "
             "and answer what was actually asked, whether that is the schedule itself or a question about it. Today "
             "that somebody is an engineer with a convex solver. This case study asks what happens when it is a "
             "language model.</p>",
-            flow([
-                ("Request", "free text, one per day and variant"),
-                ("Formulate", "four parameters per session"),
-                ("Compute", "the LP, or the model writing kW by hand"),
-                ("Report", "the schedule, or the answer asked for"),
-                ("Verdict", "solved · escalated · wrong"),
-            ]),
+            pipeline(
+                [
+                    ("Request", "free text: the cars, the tariff, the question"),
+                    ("Formulate", "aᵢ, dᵢ, Eᵢ, p̄ᵢ for every session"),
+                    ("Compute", "the LP, or the model writing kW by hand"),
+                    ("Verify", "six conditions on the answer (gated method only)"),
+                    ("Report", "the schedule, or the answer asked for"),
+                ],
+                loop=(3, 1, "one retry, then escalate"),
+            ),
+            "<p class='muted' style='text-align:center'>Fig. 1. The pipeline every method is measured on. "
+            "Only the solver-grounded method has the Verify stage; the others go from Compute to Report.</p>",
             "<p class='muted'>Six methods answer the identical requests, on identical days, under an identical "
             "budget, and are scored by identical code. One of them uses no language model at all; the other five "
             "differ from each other by exactly one factor at a time.</p>",
@@ -312,50 +318,57 @@ def tab_overview() -> str:
     body.append(
         card(
             "The problem, formally",
-            "<p>The day is discretised into <em>T</em> steps of Δ hours. Session <em>i</em> occupies a charger "
+            "<p>The day is discretized into <em>T</em> steps of Δ hours. Session <em>i</em> occupies a charger "
             "from step <em>a<sub>i</sub></em> to step <em>d<sub>i</sub></em>, asks for <em>E<sub>i</sub></em> kWh, "
             "and its charger delivers at most <em>p̄<sub>i</sub></em> kW. The site cannot draw more than "
             "<em>P<sub>max</sub></em>(<em>t</em>) at any step, and energy at step <em>t</em> costs "
             "<em>c</em>(<em>t</em>) per kWh.</p>",
-            "<div class='math'>"
-            "<span class='lbl'>decision variables</span>"
-            "<span class='eq'><em>p<sub>i</sub></em>(<em>t</em>) ≥ 0 &nbsp; power to session <em>i</em> at step "
-            "<em>t</em>, in kW &nbsp;&nbsp;·&nbsp;&nbsp; <em>u<sub>i</sub></em> ≥ 0 &nbsp; energy not delivered to "
-            "session <em>i</em>, in kWh</span>"
-            "<span class='lbl'>objective</span>"
-            "<span class='eq'>min &nbsp; Σ<sub><em>t</em></sub> <em>c</em>(<em>t</em>) · "
-            "( Σ<sub><em>i</em></sub> <em>p<sub>i</sub></em>(<em>t</em>) ) · Δ &nbsp; + &nbsp; "
-            "<em>M</em> · Σ<sub><em>i</em></sub> <em>u<sub>i</sub></em></span>"
-            "<span class='lbl'>subject to</span>"
-            "<span class='eq'>(1) &nbsp; <em>p<sub>i</sub></em>(<em>t</em>) = 0 &nbsp;&nbsp; for <em>t</em> ∉ "
-            "[<em>a<sub>i</sub></em>, <em>d<sub>i</sub></em>) &nbsp;&nbsp;&nbsp; <span class='lbl' "
-            "style='display:inline'>the car is not plugged in</span></span>"
-            "<span class='eq'>(2) &nbsp; 0 ≤ <em>p<sub>i</sub></em>(<em>t</em>) ≤ <em>p̄<sub>i</sub></em> "
-            "&nbsp;&nbsp;&nbsp; <span class='lbl' style='display:inline'>the charger's limit</span></span>"
-            "<span class='eq'>(3) &nbsp; Σ<sub><em>i</em></sub> <em>p<sub>i</sub></em>(<em>t</em>) ≤ "
-            "<em>P<sub>max</sub></em>(<em>t</em>) &nbsp;&nbsp; for every <em>t</em> &nbsp;&nbsp;&nbsp; "
-            "<span class='lbl' style='display:inline'>the site's cap</span></span>"
-            "<span class='eq'>(4) &nbsp; Δ · Σ<sub><em>t</em></sub> <em>p<sub>i</sub></em>(<em>t</em>) + "
-            "<em>u<sub>i</sub></em> = <em>E<sub>i</sub></em> &nbsp;&nbsp;&nbsp; <span class='lbl' "
-            "style='display:inline'>deliver the energy, or account for what is missing</span></span>"
-            "</div>",
+            r"""\[
+\begin{aligned}
+\min_{p,\,u}\quad & \sum_{t=0}^{T-1} c(t)\,\Big(\sum_{i=1}^{N} p_i(t)\Big)\,\Delta \;+\; M \sum_{i=1}^{N} u_i \\[4pt]
+\text{s.t.}\quad
+& p_i(t) = 0, && t \notin [a_i, d_i) && \text{(1)} \\
+& 0 \le p_i(t) \le \bar p_i, && t \in [a_i, d_i) && \text{(2)} \\
+& \sum_{i=1}^{N} p_i(t) \le P_{\max}(t), && \forall t && \text{(3)} \\
+& \Delta \sum_{t=0}^{T-1} p_i(t) + u_i = E_i, && \forall i && \text{(4)} \\
+& p_i(t) \ge 0,\; u_i \ge 0.
+\end{aligned}
+\]"""
+            "<p class='muted'>Decision variables: <span>\\(p_i(t)\\)</span>, the power delivered to session "
+            "<span>\\(i\\)</span> at step <span>\\(t\\)</span> in kW, and <span>\\(u_i\\)</span>, the energy not "
+            "delivered to session <span>\\(i\\)</span> in kWh. (1) the car is not plugged in; (2) the charger's limit; "
+            "(3) the site's cap; (4) deliver the energy, or account for what is missing.</p>"
+            "<details><summary>LaTeX source, for the manuscript</summary><pre>"
+            + E(r"""\begin{equation}
+\begin{aligned}
+\min_{p,\,u}\quad & \sum_{t=0}^{T-1} c(t)\,\Big(\sum_{i=1}^{N} p_i(t)\Big)\,\Delta \;+\; M \sum_{i=1}^{N} u_i \\
+\text{s.t.}\quad
+& p_i(t) = 0, && t \notin [a_i, d_i) \\
+& 0 \le p_i(t) \le \bar p_i, && t \in [a_i, d_i) \\
+& \sum_{i=1}^{N} p_i(t) \le P_{\max}(t), && \forall t \\
+& \Delta \sum_{t=0}^{T-1} p_i(t) + u_i = E_i, && \forall i \\
+& p_i(t) \ge 0,\; u_i \ge 0,
+\end{aligned}
+\label{eq:ev-lp}
+\end{equation}""")
+            + "</pre></details>",
             "<p>Constraints (1) to (3) are <b>hard</b>: a schedule that breaks one of them cannot be run, and the "
             "site would trip or the car would draw power it cannot take. Constraint (4) is <b>soft</b>, through the "
             "slack <em>u<sub>i</sub></em> priced at <em>M</em> = 10<sup>6</sup> $/kWh. That is a deliberate "
-            "modelling choice with a consequence the evaluation has to handle: the problem is <b>always feasible</b>, "
+            "modeling choice with a consequence the evaluation has to handle: the problem is <b>always feasible</b>, "
             "because undelivered energy is expensive rather than forbidden. A day the site genuinely cannot serve "
             "does not produce an infeasible solve; it produces an optimal one with a large "
             "Σ<em>u<sub>i</sub></em>, which somebody has to notice and say out loud.</p>",
             "<h3>What is reported from a solution</h3>"
-            "<div class='math'>"
-            "<span class='eq'>cost &nbsp; = &nbsp; Σ<sub><em>t</em></sub> <em>c</em>(<em>t</em>) · "
-            "( Σ<sub><em>i</em></sub> <em>p<sub>i</sub></em>(<em>t</em>) ) · Δ</span>"
-            "<span class='eq'>peak &nbsp; = &nbsp; max<sub><em>t</em></sub> Σ<sub><em>i</em></sub> "
-            "<em>p<sub>i</sub></em>(<em>t</em>)</span>"
-            "<span class='eq'>unmet &nbsp; = &nbsp; Σ<sub><em>i</em></sub> <em>u<sub>i</sub></em></span>"
-            "<span class='eq'>gap &nbsp; = &nbsp; ( cost − cost* ) / cost*, &nbsp; with cost* the optimum of the "
-            "same day</span>"
-            "</div>"
+            r"""\[
+\begin{aligned}
+\text{cost} &= \sum_{t} c(t)\Big(\sum_i p_i(t)\Big)\Delta, &
+\text{peak} &= \max_t \sum_i p_i(t), \\
+\text{unmet} &= \sum_i u_i, &
+\text{gap} &= \frac{\text{cost} - \text{cost}^\star}{\text{cost}^\star},
+\end{aligned}
+\]"""
+            "<p class='muted'>with <span>\\(\\text{cost}^\\star\\)</span> the optimum of the same day.</p>"
             "<p class='muted'>The solver is CVXPY with its default backend. Its feasibility tolerance is around "
             "10<sup>−8</sup>; the constraint checker that scores a schedule uses 10<sup>−5</sup>, so numerical "
             "slop is never reported as a violation.</p>",
@@ -470,17 +483,19 @@ def tab_methods() -> str:
     body.append(
         card(
             "Why these six and not others",
-            "<p>The set is fixed across the case studies, so the tables can be read side by side. Three methods a "
-            "reader might expect are deliberately outside it:</p>"
+            "<p>The set is the same in every case study of the paper, so the tables can be read side by side. "
+            "Three methods a reader might expect are outside it, and none of them is run here:</p>"
             "<ul>"
             "<li><b>A human with the solver.</b> The workload everything here is trying to remove. It is measured "
-            "by timing, not by running code, and it belongs next to the table rather than inside it.</li>"
-            "<li><b>Few-shot and retrieval-augmented prompting.</b> Covered in full in the prompting appendix, "
-            "which compares prompting strategies among themselves. The body compares architectures, and two "
-            "prompting rows are enough to show what a prompt alone can and cannot do.</li>"
-            "<li><b>A single tool call with no iteration.</b> Plan-and-Act already isolates solver access without "
-            "feedback: its plan is emitted before any result is seen. A separate row would differ from it by "
-            "almost nothing.</li>"
+            "by timing a person, not by running code, and belongs beside the table rather than inside it.</li>"
+            "<li><b>Few-shot and retrieval-augmented prompting.</b> Not in the six, and not run for this case study. "
+            "The two prompting rows that are run differ by one prompt section, which is what makes their contrast "
+            "interpretable; adding more prompting variants would add rows to the table without adding a factor to "
+            "the ladder.</li>"
+            "<li><b>A single tool call with no iteration.</b> Not in the six, and not run. It is not the same as "
+            "Plan-and-Act, which plans a whole sequence of calls; it would sit between the prompting rows and "
+            "Plan-and-Act as the smallest possible use of the solver. Leaving it out is a choice made for the "
+            "whole set of case studies, so that the six rows are the same everywhere.</li>"
             "</ul>",
         )
     )
@@ -515,6 +530,49 @@ def tab_scenarios() -> str:
             ),
         )
     ]
+
+    # how large the scenario set is, in numbers a reader can multiply
+    dirs = latest_run()
+    seen: Dict[str, int] = {}
+    for d in dirs:
+        hdr = read_header(d)["header"]
+        if hdr["method"] == "evagent" or (not seen and d == dirs[-1]):
+            for r in read_summary(d):
+                seen[r["variant"]] = seen.get(r["variant"], 0) + 1
+    n_days = len(frozen_days())
+    body.append(
+        card(
+            "How many scenarios",
+            f"<p><b>One request per day.</b> A run poses {n_days} requests, one on each frozen day, and every "
+            f"method answers the same {n_days}. The ten variants are not crossed with the days: they are "
+            "assigned to the days in rotation, so each day carries one variant and the variants are spread over "
+            f"the {n_days} days. A run is therefore {n_days} requests per method, not {n_days} × 10.</p>"
+            "<p><b>The rule that assigns variants.</b> A day whose demand cannot be served in full under the cap "
+            "takes the next of the three shortfall variants (<code>unmet_question</code>, "
+            "<code>feasible_yesno</code>, <code>served_share</code>), because those are the questions with a "
+            "non-trivial answer there. Any other day takes the next variant of the full rotation of ten. A variant "
+            "that cannot be posed on its day falls through to the next one that can.</p>"
+            + (
+                "<p><b>What that produced on the run of "
+                + E(dirs[0].parts[-3]) + ":</b> "
+                + ", ".join(f"<code>{E(v)}</code> × {n}" for v, n in sorted(seen.items(), key=lambda kv: -kv[1]))
+                + f". {sum(seen.values())} requests, {len(seen)} of the ten variants. Nineteen of the twenty days "
+                "exceed the 50 kW cap, so nineteen requests drew a shortfall variant and only one day could take "
+                "a variant from the full rotation.</p>"
+                + note(
+                    "Six of the ten variants have not been posed to any method yet, because the assignment rule "
+                    "gives congested days a shortfall question and almost every frozen day is congested. Either "
+                    "the cap for the non-shortfall variants is raised so they can be asked, or the rotation is "
+                    "changed, or the table reports the four variants that actually occur. That is a design "
+                    "decision, not a scoring detail.",
+                    "warn",
+                )
+                if seen else ""
+            )
+            + "<p><b>The stress set</b> adds one more request per day, built to be unanswerable, described below. "
+            "It is implemented and has not been run.</p>",
+        )
+    )
 
     examples = example_requests()
     rows = []
@@ -604,8 +662,8 @@ def tab_scenarios() -> str:
     return "".join(body)
 
 
-# One colour and one label per kind of block, so the same kind of text is the
-# same colour in every method and a reader learns the key once. The third field
+# One color and one label per kind of block, so the same kind of text is the
+# same color in every method and a reader learns the key once. The third field
 # is where the block comes from: a file under methods/, or the code that
 # renders it from the request.
 BLOCKS: Dict[str, Tuple[str, str, str]] = {
@@ -687,15 +745,15 @@ def _split_user_message(text: str) -> "List[Tuple[str, str]]":
 
 
 def _block(kind: str, text: str, *, source: str = "", collapse: bool = False) -> str:
-    colour, label, default_source = BLOCKS[kind]
+    color, label, default_source = BLOCKS[kind]
     src = source or default_source
     if collapse and len(text) > 1500:
         inner = (
             f"<details><summary>show the {len(text):,} characters</summary>"
             f"<pre>{E(text)}</pre></details>"
         )
-        return prompt_block(label, inner, colour=colour, source=src, pre=False)
-    return prompt_block(label, text, colour=colour, source=src)
+        return prompt_block(label, inner, color=color, source=src, pre=False)
+    return prompt_block(label, text, color=color, source=src)
 
 
 def tab_prompts() -> str:
@@ -728,7 +786,7 @@ def tab_prompts() -> str:
         card(
             "What the model receives, block by block",
             "<p>Pick a scenario and a method. The prompt is shown as the blocks it is assembled from: "
-            "the colour says what kind of block it is and the grey label says which file under "
+            "the color says what kind of block it is and the grey label says which file under "
             "<code>methods/</code> or which function produces it. Every fixed sentence is a file; the "
             "three blocks built at run time are marked as such.</p>"
             "<p>The deterministic parser is in the list and has no prompt: it reads the request with "
@@ -807,7 +865,7 @@ def tab_tools() -> str:
     body = [
         card(
             "One tool, identical for every method that has tools",
-            f"<p><code>{E(tool['name'])}</code> runs the convex optimiser of the Overview on the problem described "
+            f"<p><code>{E(tool['name'])}</code> runs the convex optimizer of the Overview on the problem described "
             "in the conversation. Every method with tools receives this exact schema, the same arguments and the "
             "same round budget, so tool access is never a difference between them. The prompting methods receive "
             "no tool at all, which is the whole content of those rows.</p>"
@@ -815,7 +873,7 @@ def tab_tools() -> str:
             f"<pre>{E(json.dumps(tool.get('parameters', {}), indent=2))}</pre>",
             "<p><b>What comes back:</b> whether the solve succeeded, the total cost, the peak load, the total "
             "unmet energy and the share of sessions fully served. The kilowatt matrix itself stays with the "
-            "harness and is never passed back through the model, so the answer and the artefact that will be run "
+            "harness and is never passed back through the model, so the answer and the artifact that will be run "
             "can come apart. One verification condition exists for precisely that.</p>",
             note(
                 "The what-if arguments change the problem being posed. After a failed verification the model may "
@@ -836,7 +894,7 @@ def tab_gate() -> str:
         "no_hard_violation": "the schedule can be run",
         "traceable": "the numbers have an origin",
         "currency": "the numbers are the current ones",
-        "schedule_consistency": "the words and the artefact agree",
+        "schedule_consistency": "the words and the artifact agree",
         "shortfall_declared": "what is missing is stated",
     }
     body = [
@@ -870,7 +928,7 @@ def tab_gate() -> str:
             "What the gate is allowed to look at",
             "<p>Only the agent's own evidence: the schedule it produced, the outputs of the tools it called, and "
             "the text it wrote. No reference solution and no optimum. That restriction is what makes the gate a "
-            "deployable component rather than an evaluation artefact — at a real site there is no ground truth to "
+            "deployable component rather than an evaluation artifact — at a real site there is no ground truth to "
             "consult — and it fixes what the gate can and cannot catch.</p>"
             "<div class='grid g2'>"
             "<div><h3>It catches</h3><ul>"
@@ -883,7 +941,7 @@ def tab_gate() -> str:
             "<div><h3>It cannot catch</h3><ul>"
             "<li>a request that was misread. If the parameters are wrong, the LP is still solved optimally, every "
             "number still comes from that solve, and nothing in the agent's own evidence reveals that the day it "
-            "optimised is not the day it was given.</li>"
+            "optimized is not the day it was given.</li>"
             "</ul></div></div>",
             note(
                 "That gap is a property of the design, not an oversight, and it is why the formulation column is "
@@ -982,7 +1040,7 @@ def tab_results() -> str:
                 "counts only when every one of its sessions is right.</p>",
                 note(
                     "Those numbers are one finding, not three. The model read the right number of cars every time "
-                    "and misread a field on a handful of them; it then optimised the day it had parsed. For that "
+                    "and misread a field on a handful of them; it then optimized the day it had parsed. For that "
                     "day the solution is optimal and every reported number comes from it, so the gate accepted it, "
                     "exactly as the section on what the gate can look at predicts. Measured against the real day, "
                     "the same schedules exceed the true sessions' limits. This is the case study's central "
@@ -1063,7 +1121,7 @@ def tab_analysis() -> str:
             "requests that ended wrong or escalated, and every request on one line. No model is called to write "
             "it, and nothing in it is typed by hand. The run set's own report, over every method at once, is in "
             "each folder's <code>raw/</code>.</p>"
-            "<p class='muted'>The failure catalogue and the conclusions across runs are written once the missing "
+            "<p class='muted'>The failure catalog and the conclusions across runs are written once the missing "
             "methods have run; until then this section is the reports as they stand.</p>",
         )
     ]

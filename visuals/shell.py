@@ -28,6 +28,7 @@ __all__ = [
     "table",
     "kv",
     "flow",
+    "pipeline",
     "note",
     "prompt_block",
     "diagram",
@@ -169,7 +170,7 @@ def chip(text: str, kind: str = "") -> str:
 
 
 def verdict(name: str) -> str:
-    """The coloured outcome pill: solved, escalated or wrong."""
+    """The colored outcome pill: solved, escalated or wrong."""
     cls = {"solved": "solved", "escalated": "escalated", "wrong": "wrong", "wrong_unflagged": "wrong"}
     return f"<span class='vd {cls.get(name, '')}'>{E(name.replace('_', ', '))}</span>"
 
@@ -206,23 +207,70 @@ def flow(steps: Sequence[Tuple[str, str]]) -> str:
     return "<div class='flow'>" + "<span class='arr'>→</span>".join(boxes) + "</div>"
 
 
-def prompt_block(label: str, body: str, *, colour: str = "#2f5fd0", source: str = "", pre: bool = True) -> str:
-    """One coloured section of a prompt, with the file or function it comes from.
+def pipeline(steps: Sequence[Tuple[str, str]], *, loop: Optional[Tuple[int, int, str]] = None) -> str:
+    """A block diagram of a pipeline, drawn the way a figure in a paper is drawn.
 
-    The colours and the source line are the point: a reader has to be able to
+    Boxes in a row, one line title and a caption under it, arrows between them,
+    no color and no shading. ``loop`` = (from index, to index, label) draws a
+    return arc above the row, for a stage that can send the request back.
+    """
+    n = len(steps)
+    bw, bh, gap, top = 150, 58, 34, 38 if loop else 10
+    W = n * bw + (n - 1) * gap + 20
+    H = top + bh + 44
+    d = [f"<svg viewBox='0 0 {W} {H}' width='100%' style='max-width:{W}px;display:block;margin:6px auto' "
+         "xmlns='http://www.w3.org/2000/svg'><defs><marker id='pa' markerWidth='9' markerHeight='9' refX='8' refY='4.5' "
+         "orient='auto'><path d='M0,0 L9,4.5 L0,9 z' fill='#0f172a'/></marker></defs>"]
+    xs = []
+    for i, (title, caption) in enumerate(steps):
+        x = 10 + i * (bw + gap)
+        xs.append(x)
+        d.append(f"<rect x='{x}' y='{top}' width='{bw}' height='{bh}' fill='#fff' stroke='#0f172a' stroke-width='1.2'/>")
+        d.append(f"<text x='{x + bw / 2}' y='{top + 24}' text-anchor='middle' font-size='13' font-weight='600' "
+                 f"font-family='Inter,Helvetica,Arial' fill='#0f172a'>{E(title)}</text>")
+        # caption, wrapped by hand at ~22 characters
+        words, lines, cur = caption.split(), [], ""
+        for w in words:
+            if len(cur) + len(w) + 1 > 24 and cur:
+                lines.append(cur); cur = w
+            else:
+                cur = (cur + " " + w).strip()
+        if cur:
+            lines.append(cur)
+        for k, ln in enumerate(lines[:2]):
+            d.append(f"<text x='{x + bw / 2}' y='{top + bh + 16 + 13 * k}' text-anchor='middle' font-size='10.5' "
+                     f"font-family='Inter,Helvetica,Arial' fill='#475569'>{E(ln)}</text>")
+        if i:
+            d.append(f"<line x1='{x - gap + 2}' y1='{top + bh / 2}' x2='{x - 3}' y2='{top + bh / 2}' "
+                     "stroke='#0f172a' stroke-width='1.2' marker-end='url(#pa)'/>")
+    if loop:
+        a, b, label = loop
+        x1, x2 = xs[a] + bw / 2, xs[b] + bw / 2
+        d.append(f"<path d='M{x1},{top} C{x1},18 {x2},18 {x2},{top - 3}' fill='none' stroke='#0f172a' stroke-width='1.2' "
+                 "stroke-dasharray='4 3' marker-end='url(#pa)'/>")
+        d.append(f"<text x='{(x1 + x2) / 2}' y='11' text-anchor='middle' font-size='10.5' "
+                 f"font-family='Inter,Helvetica,Arial' fill='#475569'>{E(label)}</text>")
+    d.append("</svg>")
+    return "".join(d)
+
+
+def prompt_block(label: str, body: str, *, color: str = "#2f5fd0", source: str = "", pre: bool = True) -> str:
+    """One colored section of a prompt, with the file or function it comes from.
+
+    The colors and the source line are the point: a reader has to be able to
     see which part of a prompt is shared, which is the one thing that differs
     between two methods, and where to go and change it.
     """
     src = f"<span class='src'>{E(source)}</span>" if source else ""
     inner = f"<pre>{E(body)}</pre>" if pre else body
     return (
-        f"<div class='blk' style='border-left-color:{E(colour)}'>"
-        f"<div class='blk-h'><span class='sw' style='background:{E(colour)}'></span>"
+        f"<div class='blk' style='border-left-color:{E(color)}'>"
+        f"<div class='blk-h'><span class='sw' style='background:{E(color)}'></span>"
         f"<b>{E(label)}</b>{src}</div>{inner}</div>"
     )
 
 
-# The palette of a method diagram. One meaning per colour, the same in every
+# The palette of a method diagram. One meaning per color, the same in every
 # case study, so a reader learns it once: who is the language model, who is the
 # trusted tool, where verification happens, and where a request can leave.
 STEP_STYLE: Dict[str, Tuple[str, str]] = {
@@ -535,6 +583,13 @@ def page(
         f"<title>{E(title)}</title>"
         "<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700"
         "&family=JetBrains+Mono:wght@400;500&display=swap' rel='stylesheet'>"
+        # KaTeX renders the \[ ... \] blocks a case study writes in LaTeX. Offline, the
+        # LaTeX source shows as typed, which is still readable and still correct.
+        "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css'>"
+        "<script defer src='https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js'></script>"
+        "<script defer src='https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js' "
+        "onload=\"renderMathInElement(document.body,{delimiters:[{left:'\\\\[',right:'\\\\]',display:true},"
+        "{left:'\\\\(',right:'\\\\)',display:false}],throwOnError:false})\"></script>"
         f"<style>{CSS}{extra_css}</style></head><body>"
         f"<div class='top'><button class='burger' id='burger'>☰</button>"
         f"<span class='brand'>{E(brand)}</span>"
