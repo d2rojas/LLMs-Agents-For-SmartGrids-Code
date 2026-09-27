@@ -92,93 +92,97 @@ def sample_request() -> Optional[Dict[str, Any]]:
 
 # ------------------------------------------------------- the design, declared
 #
-# The nine rows of the target table (notes repo, tabla_objetivo_ev.md, 18-09),
-# each tied to the arm that implements it, or to nothing. ``isolates`` is the
-# single factor that row adds over the row above it: that ladder is what
-# R3.2, R4.3 and R4.5 asked for, and it is the reason the row exists.
+# Six rows, the same six as the power-flow case study, with the same names and
+# in the same order (``power-flow-agent/methods/README.md``). That is a
+# requirement, not a convenience: the two tables are read side by side, and a
+# row name that exists in one case and not the other reads as a result.
+#
+# ``standard`` is the shared folder name both cases use. ``arm`` is what the EV
+# harness calls it today; where the two differ, the reorganisation renames the
+# arm, never the standard. ``isolates`` is the single factor the row adds over
+# the row above it, which is the ladder R3.2, R4.3 and R4.5 asked for.
 
 ROWS: Tuple[Dict[str, str], ...] = (
     {
         "block": "Conventional workflow",
-        "label": "Human with solver",
+        "standard": "rule_based",
+        "label": "Deterministic parser + solver",
         "arm": "",
-        "paper": "Figure 1, panel (a)",
-        "isolates": "the workload the other rows are trying to remove. Timed, not programmed.",
-        "reviewer": "R4.5",
-    },
-    {
-        "block": "Conventional workflow",
-        "label": "Deterministic parser + CVXPY",
-        "arm": "",
+        "pf": "rule_based",
         "paper": "non-LLM baseline asked for by R4.5",
         "isolates": "no LLM anywhere. Regex reads the request text, the LP does the rest. "
         "What automation without a language model already buys.",
         "reviewer": "R4.5",
     },
     {
-        "block": "Conventional workflow",
-        "label": "Charge as soon as possible",
-        "arm": "charge_asap",
-        "paper": "fixed operating rule, no optimisation",
-        "isolates": "no optimisation and no text. The uncontrolled rule the cost gap is measured against.",
-        "reviewer": "R4.5",
-    },
-    {
-        "block": "Prompting, Section 3",
+        "block": "LLM-only prompting, Section 3",
+        "standard": "llm_only_structured",
         "label": "Structured prompting",
         "arm": "llm_only:structured",
+        "pf": "llm_only_structured",
         "paper": "Section 3.1",
         "isolates": "the language model alone. No tools: it writes the kW matrix as text.",
         "reviewer": "R4.2",
     },
     {
-        "block": "Prompting, Section 3",
+        "block": "LLM-only prompting, Section 3",
+        "standard": "llm_only_cot",
         "label": "Chain-of-thought prompting",
         "arm": "llm_only:chain_of_thought",
+        "pf": "llm_only_cot",
         "paper": "Section 3.3",
         "isolates": "a reasoning section, and nothing else. Same input, same budget as the row above.",
         "reviewer": "R4.2",
     },
     {
-        "block": "Architectures, Section 4",
-        "label": "Single-call function calling",
-        "arm": "",
-        "paper": "Section 4.2",
-        "isolates": "solver access, and nothing else. One tool call, no iteration, no memory, no gate.",
+        "block": "Multi-step agents, Section 4",
+        "standard": "plan_act_nogate",
+        "label": "Plan-and-Act, no gate",
+        "arm": "plan_act",
+        "pf": "plan_act_nogate",
+        "paper": "Section 4.3",
+        "isolates": "solver access through a plan. One planning call emits the whole tool plan, then it executes.",
         "reviewer": "R4.3, R4.5",
     },
     {
-        "block": "Architectures, Section 4",
-        "label": "ReAct",
+        "block": "Multi-step agents, Section 4",
+        "standard": "react_nogate",
+        "label": "ReAct, no gate",
         "arm": "react",
+        "pf": "react_nogate",
         "paper": "Section 4.3",
-        "isolates": "iteration. The model sees each tool output and may call again.",
+        "isolates": "iteration. The model sees each tool output and may call again, within the same round budget.",
         "reviewer": "R4.3",
     },
     {
-        "block": "Architectures, Section 4",
-        "label": "Plan-and-Act",
-        "arm": "plan_act",
-        "paper": "Section 4.3",
-        "isolates": "planning. The whole tool plan is emitted once, then executed.",
-        "reviewer": "R4.3",
-    },
-    {
-        "block": "Architectures, Section 4",
+        "block": "Multi-step agents, Section 4",
+        "standard": "evagent",
         "label": "EVAgent, solver-grounded",
         "arm": "evagent",
+        "pf": "pfagent",
         "paper": "Section 2",
-        "isolates": "the verification gate, and nothing else. Same tools and same budget as ReAct.",
+        "isolates": "the verification gate, and nothing else. Same tools, same round budget as ReAct.",
         "reviewer": "R3.2, R4.3",
     },
 )
 
-REFERENCE_ROW = {
-    "label": "CVXPY optimum",
-    "arm": "optimum",
-    "note": "The LP solved on the structured ground-truth day. It never reads the request text, so it is the "
-    "reference the cost gap is measured against, not a method competing with the others.",
-}
+# Not rows. Both are computed on every day and neither answers the request text,
+# so neither belongs in a table whose subject is how a request gets answered.
+REFERENCES: Tuple[Dict[str, str], ...] = (
+    {
+        "label": "CVXPY optimum",
+        "arm": "optimum",
+        "note": "The LP solved directly on the structured ground-truth day. The cost gap of every row is measured "
+        "against it, and it is zero here by construction.",
+    },
+    {
+        "label": "Charge as soon as possible",
+        "arm": "charge_asap",
+        "note": "The uncontrolled rule: full power from arrival until the energy is met. The denominator the paper "
+        "has always used for cost reduction. It reads no request text either, so it is context for the day, not a "
+        "method being compared.",
+    },
+)
 
 # The three metric groups of the framework, with the column each one carries.
 # ``scoreboard`` names the column the harness emits today, or "" when the target
@@ -251,23 +255,36 @@ def methods_section() -> str:
     H: List[str] = ["<div class='tab' id='tab-methods'>"]
 
     H.append(
-        "<div class='card'><h2>The ladder</h2><p>Each row adds one factor to the row above it. That is the whole "
-        "design: if two rows differ by two things, no result of this case study can say which of the two mattered. "
-        "The reviewers asked for exactly this (R3.2, R4.3, R4.5) and the ladder is how the answer is organised.</p>"
+        f"<div class='card'><h2>The ladder: the same {len(ROWS)} rows as the power-flow case</h2>"
+        "<p>Same six rows, same names, same order as <code>power-flow-agent/methods/README.md</code>. That is a "
+        "requirement rather than a convenience: the two tables are read side by side, and a row name that appears in "
+        "one case and not the other reads as a result about the case rather than about the design.</p>"
+        "<p>Each row adds one factor to the row above it. If two rows differed by two things, no result could say "
+        "which of the two mattered. The reviewers asked for exactly this (R3.2, R4.3, R4.5), and the step that "
+        "carries the paper's own claim is <b>react_nogate → evagent</b>: same tool, same round budget, same days, "
+        "differing only by the verification gate.</p>"
     )
-    H.append("<table><tr><th>Block</th><th>Row</th><th>What it adds over the row above</th><th>Paper</th><th>Reviewer</th><th>In code</th></tr>")
+    H.append(
+        "<table><tr><th>Block</th><th>Row</th><th>Standard name</th><th>Power flow</th>"
+        "<th>What it adds over the row above</th><th>Paper</th><th>Reviewer</th><th>In code today</th></tr>"
+    )
     for r in ROWS:
         arm = A.get(r["arm"]) if r["arm"] else None
-        if arm is None and r["arm"]:
-            status = "<span class='chip bad'>not in the registry</span>"
-        elif arm is None:
-            status = "<span class='chip bad'>missing</span>"
+        if arm is None:
+            status = "<span class='chip bad'>does not exist</span>"
         elif not arm.implemented:
-            status = f"<span class='chip warn'>registered, not implemented</span><div class='muted'>{E(arm.pending_reason)}</div>"
+            status = f"<span class='chip warn'>registered as <code>{E(r['arm'])}</code>, not implemented</span>"
+        elif r["arm"] != r["standard"]:
+            status = (
+                f"<span class='chip ok'>{E(r['arm'])}</span>"
+                f"<div class='muted'>renamed to <code>{E(r['standard'])}</code> by the reorganisation</div>"
+            )
         else:
             status = f"<span class='chip ok'>{E(r['arm'])}</span>"
         H.append(
-            f"<tr><td class='muted'>{E(r['block'])}</td><td><b>{E(r['label'])}</b></td><td>{E(r['isolates'])}</td>"
+            f"<tr><td class='muted'>{E(r['block'])}</td><td><b>{E(r['label'])}</b></td>"
+            f"<td><code>{E(r['standard'])}</code></td><td class='muted'><code>{E(r['pf'])}</code></td>"
+            f"<td>{E(r['isolates'])}</td>"
             f"<td class='muted'>{E(r['paper'])}</td><td class='muted'>{E(r['reviewer'])}</td><td>{status}</td></tr>"
         )
     H.append("</table>")
@@ -279,8 +296,15 @@ def methods_section() -> str:
     )
 
     H.append(
-        f"<div class='card'><h2>Reference row</h2><p><b>{E(REFERENCE_ROW['label'])}</b> "
-        f"<span class='chip ok'>{E(REFERENCE_ROW['arm'])}</span></p><p>{E(REFERENCE_ROW['note'])}</p></div>"
+        "<div class='card'><h2>Computed on every day, and not rows</h2>"
+        "<p>Neither of these reads the request text, so neither answers the question the table asks. They are "
+        "context for the day, printed next to the table rather than inside it. The power-flow table has no "
+        "equivalent row either, which is the point.</p>"
+        + "".join(
+            f"<p><b>{E(x['label'])}</b> <span class='chip ok'>{E(x['arm'])}</span><br>{E(x['note'])}</p>"
+            for x in REFERENCES
+        )
+        + "</div>"
     )
 
     # what the registry actually declares, field by field
@@ -304,6 +328,20 @@ def methods_section() -> str:
             f"<td>×{E(getattr(c, 'context_resend_factor', 0))}</td><td class='muted'>{E(getattr(c, 'basis', '') or 'no LLM')}</td></tr>"
         )
     H.append("</table></div>")
+
+    H.append(
+        "<div class='card'><h2>What the target-table note had and this does not</h2>"
+        "<p><code>notes/tabla_objetivo_ev.md</code> (18-09) specified nine rows. Three of them are gone, because the "
+        "standard across the case studies is the power-flow six and a row that exists in one case only cannot be "
+        "compared:</p><ul>"
+        "<li><b>Human with solver.</b> Timed, never programmed, and absent from the power-flow six. If the table "
+        "carries an hours column it comes back, in both cases at once.</li>"
+        "<li><b>Charge as soon as possible.</b> Keeps being computed, printed beside the table as the uncontrolled "
+        "denominator, not scored as a method. It reads no request text, so there is nothing to score it on.</li>"
+        "<li><b>Single-call function calling.</b> Dropped to match the power-flow six, which does not have it either. "
+        "R4.5 asks for it by name, so if it comes back it comes back in both cases. Flagged rather than silently "
+        "left out.</li></ul></div>"
+    )
 
     H.append(
         "<div class='card'><h2>A trap in the missing parser row</h2>"
@@ -621,13 +659,16 @@ def review_section() -> str:
         "metric groups and the same row names; only task-utility metrics may differ. Anything red here is a difference "
         "a reader will read as an inconsistency to explain.</p><table>"
         "<tr><th>Aspect</th><th>Power flow</th><th>EV charging</th><th></th></tr>"
-        "<tr><td>Rows without an LLM</td><td><code>rule_based</code>: regex reads the request text, calls the solver</td>"
-        "<td><code>charge_asap</code> and <code>optimum</code>, <b>neither reads the request text</b></td>"
+        "<tr><td>Number and names of rows</td><td>six: rule_based, llm_only_structured, llm_only_cot, "
+        "plan_act_nogate, react_nogate, pfagent</td><td>the same six, evagent in place of pfagent</td>"
+        "<td>" + state_chip("done") + "</td></tr>"
+        "<tr><td>Row without an LLM</td><td><code>rule_based</code>: regex reads the request text, calls the solver</td>"
+        "<td><code>rule_based</code> defined, <b>not written yet</b></td>"
         "<td>" + state_chip("missing") + "</td></tr>"
         "<tr><td>Prompting rows</td><td>structured, chain-of-thought</td><td>structured, chain-of-thought</td>"
         "<td>" + state_chip("done") + "</td></tr>"
         "<tr><td>Agent rows without a gate</td><td><code>react_nogate</code>, <code>plan_act_nogate</code></td>"
-        "<td>registered, not implemented</td><td>" + state_chip("missing") + "</td></tr>"
+        "<td>both registered, neither implemented</td><td>" + state_chip("missing") + "</td></tr>"
         "<tr><td>Gated row</td><td><code>pfagent</code>, gate V1–V7</td><td><code>evagent</code>, gate E1–E6</td>"
         "<td>" + state_chip("done") + "</td></tr>"
         "<tr><td>Outcome split</td><td>solved / escalated / wrong-unflagged, exclusive, sum 100</td>"
@@ -799,6 +840,145 @@ fromHash();
 """
 
 
+INDEX_CSS = """
+.top{height:48px;background:var(--side);color:#fff;display:flex;align-items:center;gap:14px;padding:0 20px}
+.top .brand{font-weight:700;letter-spacing:.2px}.top .note{font-size:12px;color:#c7d0dd;margin-left:auto}
+main.home{padding:34px 24px;max-width:1080px;margin:0 auto}
+h1{margin:0 0 6px;font-size:24px}.lead{color:var(--muted);margin:0 0 24px;font-size:15px;max-width:800px}
+.req{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:12.5px;background:#0f1b2d;color:#e2e8f0;border-radius:8px;padding:10px 12px;margin:8px 0 4px}
+h2.sec{font-size:13px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin:22px 0 10px}
+.stages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media(max-width:820px){.stages{grid-template-columns:1fr}main.home{padding:20px 14px}}
+.stg{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;text-decoration:none;color:var(--text);box-shadow:var(--shadow)}
+.stg:hover{border-color:var(--acc)}
+.stg .n{display:inline-flex;width:26px;height:26px;border-radius:50%;background:var(--side);color:#fff;align-items:center;justify-content:center;font-weight:700;font-size:12px;margin-bottom:10px}
+.stg h3{margin:0 0 6px;font-size:16px}.stg p{margin:0;color:var(--muted);font-size:13.5px}
+.stg .st{margin-top:12px;font-size:12px;font-weight:600;color:var(--acc)}
+.stg.off{opacity:.55;cursor:default}.stg.off:hover{border-color:var(--line)}.stg.off .st{color:var(--muted)}
+.why{margin-top:22px;background:#eef2fb;border:1px solid #d6e0f7;border-radius:12px;padding:14px 18px;font-size:13.5px;max-width:940px}
+:root{--side:#0f1b2d}
+"""
+
+
+def build_index() -> Path:
+    """The home page: the problem, the six rows by name, and the three stages.
+
+    Generated rather than hand-written for one reason: the list of rows is
+    ``ROWS``, the same list the design and results pages use, so the front page
+    cannot promise a comparison the design does not make. Whether a row runs is
+    read from the arm registry here too.
+    """
+    A = arms()
+    days = frozen_days()
+    import evaluation.requests as R
+
+    ran = sum(1 for r in ROWS if r["arm"] and r["arm"] in A and A[r["arm"]].implemented)
+
+    def status(r: Dict[str, str]) -> str:
+        if not r["arm"]:
+            return "<span class='chip bad'>does not exist</span>"
+        a = A.get(r["arm"])
+        if a is None or not a.implemented:
+            return "<span class='chip warn'>registered, not implemented</span>"
+        return f"<span class='chip ok'>{E(r['arm'])}</span>"
+
+    rows_html: List[str] = []
+    last = ""
+    for i, r in enumerate(ROWS, start=1):
+        block = "" if r["block"] == last else E(r["block"])
+        last = r["block"]
+        rows_html.append(
+            f"<tr><td class='muted'>{i}</td><td class='muted'><b>{block}</b></td><td><b>{E(r['label'])}</b></td>"
+            f"<td>{E(r['isolates'])}</td><td>{status(r)}</td></tr>"
+        )
+
+    H = [
+        "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<title>EVAgent · Evaluation</title>"
+        "<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap' rel='stylesheet'>"
+        f"<style>{CSS}{INDEX_CSS}</style></head><body>"
+        "<div class='top'><span class='brand'>EVAgent · Evaluation</span>"
+        "<span class='note'>EV charging case study, Caltech ACN days</span></div><main class='home'>"
+        "<h1>EVAgent · day-ahead charging at a shared site</h1>"
+        f"<p class='lead'>Can a language model act as a charging operator a site can trust? The design asks that of "
+        f"the {len(ROWS)} ways of answering the same requests listed below, from a deterministic parser to the "
+        f"solver-grounded agent, on the same {len(days)} days of real Caltech sessions, with the same scoring. They "
+        f"are the same {len(ROWS)} rows as the power-flow case study, with the same names, so the two tables can be "
+        f"read side by side. <b>{ran} of the {len(ROWS)} run today</b>; the rest are what the revision still has to "
+        f"build.</p>"
+    ]
+    H.append(
+        "<div class='card'><h2>The problem</h2>"
+        "<p>A site operator describes a day of charging in plain English: the cars, when each one arrives and leaves, "
+        "how much energy it needs, what its charger can deliver. Somebody has to turn that sentence into the "
+        f"parameters of an optimisation problem, solve it under a {R.SITE_CAP_KW:g} kW site cap and a time-of-use "
+        "tariff, and answer what was actually asked. Today that somebody is an engineer with CVXPY. The question is "
+        "what happens when it is a language model.</p>"
+        "<div class='req'>\"44 cars are charging at the Caltech campus lot on 2019-05-01, and here is what each one "
+        "needs. EV 1: arrives quarter past nine at night, leaves midnight at the end of the day, 1.46 kilowatt-hours, "
+        "7000 watts maximum. EV 2 needs 51850 Wh and is parked from 15:45 until half eleven at night on a 7 kilowatts "
+        "charger. […] How much of the requested energy cannot be delivered?\"</div>"
+        f"<p class='muted'>One of {len(R.VARIANTS)} request variants per day. Times are spelled in words, energies "
+        "come in Wh or kWh, power in W or kW, and the sentence shapes vary, because reading the request is half of "
+        "the task being measured.</p>"
+        "<div class='grid g3' style='margin-top:14px'>"
+        "<div class='card' style='margin:0'><h3>What a correct answer needs</h3><ul>"
+        "<li><b>Formulation:</b> every session's arrival, departure, energy and max power, read from the text.</li>"
+        "<li><b>A runnable schedule:</b> inside every window, under every charger limit, under the site cap at every "
+        "step.</li>"
+        "<li><b>The operator's answer:</b> the cost, the undelivered energy, the share served, the car — and it must "
+        "describe the schedule that was actually produced.</li></ul></div>"
+        "<div class='card' style='margin:0'><h3>What can go wrong</h3><ul>"
+        "<li>A schedule that looks fine and breaks the site cap: <b>wrong, presented as right</b>.</li>"
+        "<li>A cheap schedule that is cheap because it never charges the cars.</li>"
+        "<li>An answer quoting one solve while the schedule on the table is another.</li>"
+        "<li>A shortfall the operator is never told about.</li></ul></div>"
+        "<div class='card' style='margin:0'><h3>What is expected of EVAgent</h3><p>Every reported number comes from "
+        "the CVXPY solve and passes six verification conditions before it reaches the operator. When they cannot "
+        "pass, the day is <b>escalated</b> to a person rather than answered. The target for the solver-grounded row: "
+        "<span class='vd solved'>solved</span> + <span class='vd escalated'>escalated</span> = 100 %, "
+        "<span class='vd wrong'>wrong, unflagged</span> = 0.</p></div></div></div>"
+    )
+    H.append(
+        "<div class='card'><h2>The rows of the table</h2>"
+        "<p>Three blocks, and each row adds exactly one factor to the row above it. That is the whole design: if two "
+        "rows differed by two things, no result could say which of the two mattered. The step that carries the "
+        "paper's claim is ReAct to EVAgent, which differ only by the verification gate.</p>"
+        "<table><tr><th>#</th><th>Block</th><th>Row</th><th>What it adds over the row above</th><th>In code</th></tr>"
+        + "".join(rows_html)
+        + "</table>"
+        "<p class='muted'>Apart from these sit two quantities computed on every day and printed next to the table, "
+        + E(", ".join(f"{x['label']} ({x['arm']})" for x in REFERENCES))
+        + ". Neither reads the request text, so neither is a method being compared: one is the optimum the cost gap "
+        "is measured against, the other the uncontrolled rule the cost reduction is measured from.</p></div>"
+    )
+    H.append(
+        "<h2 class='sec'>Three stages</h2><div class='stages'>"
+        "<a class='stg' href='design.html'><span class='n'>1</span><h3>Design</h3><p>The rows and what each one "
+        "isolates, the days and request variants, every prompt as the run would send it, the tool, the gate and the "
+        "scoring, and the mapping to each reviewer's comment. Read from the code, not written by hand.</p>"
+        "<div class='st'>Open the design →</div></a>"
+        "<a class='stg' href='results.html'><span class='n'>2</span><h3>Results</h3><p>What has actually been "
+        "measured, every day and every verdict, shown against the rows the design says should be there.</p>"
+        "<div class='st'>Open the results →</div></a>"
+        "<span class='stg off'><span class='n'>3</span><h3>Analysis</h3><p>Comparisons, failure catalogue and "
+        "conclusions, written only once the missing rows exist.</p><div class='st'>After the runs</div></span></div>"
+    )
+    H.append(
+        "<div class='why'><b>How to use this.</b> All three pages are built by "
+        "<code>python -m evaluation.design_page</code> and <code>python -m evaluation.results_page</code>, straight "
+        "from the code and the run files. Nothing on them is typed by hand, so none can describe a design that is not "
+        "the one that would run. Red marks something missing, amber a decision still open.</div>"
+    )
+    H.append("</main></body></html>")
+
+    out = PROJECT_ROOT / "results" / "visuals" / "index.html"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("".join(H), encoding="utf-8")
+    return out
+
+
 def build() -> Path:
     """Render the design page and return the path it was written to."""
     H: List[str] = [
@@ -830,5 +1010,5 @@ def build() -> Path:
 
 
 if __name__ == "__main__":
-    p = build()
-    print(f"wrote {p} ({p.stat().st_size // 1024} KB)")
+    for path in (build_index(), build()):
+        print(f"wrote {path} ({path.stat().st_size // 1024} KB)")
