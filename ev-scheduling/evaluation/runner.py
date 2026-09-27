@@ -45,8 +45,9 @@ Arms
 ``optimum`` and ``charge_asap`` are the non-LLM reference rows; ``llm_only`` is
 the no-tools arm in two prompting strategies from ``methods/prompting/strategies.py``;
 ``evagent`` is the solver-grounded arm through ``methods/agent/run.py::run_agent_from_text``.
-``react`` and ``plan_act`` are registered as pending: naming one is an error that
-says the scope decision is open, rather than a silently missing row.
+``react`` is ``evagent`` with the gate switched off, the same code path with one
+flag, so the two rows differ by the gate alone. ``plan_act`` is registered as
+pending: naming it is an error rather than a silently missing row.
 
 Usage (from ev-scheduling/):
     python -m evaluation.runner --dry-run --days 3
@@ -354,18 +355,25 @@ register_arm(
 register_arm(
     Arm(
         name="react",
-        label="ReAct (pending)",
+        label="ReAct, no gate",
         uses_llm=True,
         has_gate=False,
         scores_formulation=True,
         grounded=True,
-        implemented=False,
-        pending_reason=(
-            "the ReAct row is waiting on a scope decision that is not the harness's to take "
-            "(notes repo, diseno_comparacion_pfagent.md section 8). Registered here so naming it "
-            "is an error rather than a silently absent row."
+        cost=CostModel(
+            n_calls=3,
+            completion_tokens_per_call=700,
+            context_resend_factor=2.0,
+            basis=(
+                "parse call, one tool-calling round and one explanation turn; no gate retry. "
+                "Same prompt and tool as evagent, so the same per-call prompt size"
+            ),
         ),
-        description="Registered, not implemented.",
+        description=(
+            "methods/agent/run.py::run_agent_from_text with gate=False: the same parse, the same "
+            "CVXPY tool and the same round budget as evagent, and the first answer surfaced as "
+            "written. The row that differs from the solver-grounded one by the gate alone."
+        ),
     )
 )
 
@@ -391,6 +399,7 @@ DEFAULT_ARMS: Tuple[str, ...] = (
     "charge_asap",
     "llm_only:structured",
     "llm_only:chain_of_thought",
+    "react",
     "evagent",
 )
 
@@ -991,7 +1000,17 @@ def run_llm_only(ctx: RunContext) -> ArmOutput:
 
 
 def run_evagent(ctx: RunContext) -> ArmOutput:
-    """The solver-grounded arm, through ``methods/agent/run.py::run_agent_from_text``.
+    """The solver-grounded arm, through ``methods/agent/run.py::run_agent_from_text``."""
+    return _run_agent_arm(ctx, gate=True)
+
+
+def run_react_nogate(ctx: RunContext) -> ArmOutput:
+    """The ReAct row: the same pipeline as evagent with the gate switched off."""
+    return _run_agent_arm(ctx, gate=False)
+
+
+def _run_agent_arm(ctx: RunContext, *, gate: bool) -> ArmOutput:
+    """One code path for the two agent rows, so they differ by ``gate`` alone.
 
     Raises:
         HarnessError: When the parse asks for clarification. That is a real
@@ -1008,6 +1027,7 @@ def run_evagent(ctx: RunContext) -> ArmOutput:
         run_id=ctx.run_id,
         trace_dir=ctx.trace_dir,
         write_trace=ctx.write_trace,
+        gate=gate,
     )
     client = ctx.client
     resolved = client.resolved_model(ctx.spec.key) if client is not None else ctx.spec.key
@@ -1048,6 +1068,7 @@ RUNNERS: Dict[str, Callable[[RunContext], ArmOutput]] = {
     "llm_only:structured": run_llm_only,
     "llm_only:chain_of_thought": run_llm_only,
     "evagent": run_evagent,
+    "react": run_react_nogate,
 }
 
 

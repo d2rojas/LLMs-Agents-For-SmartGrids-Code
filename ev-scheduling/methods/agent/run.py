@@ -246,8 +246,12 @@ def run_agent_from_text(
     run_id: Optional[str] = None,
     trace_dir: Optional[Path] = None,
     write_trace: bool = True,
+    gate: bool = True,
 ) -> Union[AgentResult, ClarificationResult]:
     """Run the full agent pipeline from a natural-language problem description.
+
+    ``gate=False`` runs the same pipeline without the verification gate, which
+    is the ReAct row; see ``run_agent_llm``.
 
     This is the entry point for free-form user input, and the only one that
     exercises the extraction step the results table's formulation column scores.
@@ -337,6 +341,7 @@ def run_agent_from_text(
         run_id=run_id,
         trace_dir=trace_dir,
         write_trace=write_trace,
+        gate=gate,
     )
 
     result = AgentResult.from_llm_result(

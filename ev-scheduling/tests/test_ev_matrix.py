@@ -258,7 +258,7 @@ def test_default_arms_are_all_runnable():
         assert arm.name in matrix.RUNNERS
 
 
-@pytest.mark.parametrize("name", ["react", "plan_act"])
+@pytest.mark.parametrize("name", ["plan_act"])
 def test_pending_arms_refuse_rather_than_vanish(name):
     """A pending arm is registered, so naming it is an error with a reason."""
     assert name in matrix.ARMS
@@ -278,8 +278,17 @@ def test_unknown_arm_refuses_and_lists_the_known_ones():
 
 def test_pending_arms_are_not_in_the_default_set():
     """A scope decision that is open must not quietly add a row to the table."""
-    assert "react" not in matrix.DEFAULT_ARMS
     assert "plan_act" not in matrix.DEFAULT_ARMS
+
+
+def test_react_is_evagent_with_the_gate_off():
+    """The two agent rows share one code path and differ by the gate flag alone."""
+    react, evagent = matrix.ARMS["react"], matrix.ARMS["evagent"]
+    assert react.implemented and "react" in matrix.DEFAULT_ARMS
+    assert (react.has_gate, evagent.has_gate) == (False, True)
+    assert react.uses_llm == evagent.uses_llm and react.grounded == evagent.grounded
+    assert react.scores_formulation == evagent.scores_formulation
+    assert matrix.RUNNERS["react"].__name__ == "run_react_nogate"
 
 
 # --------------------------------------------------------------------------- where output goes
