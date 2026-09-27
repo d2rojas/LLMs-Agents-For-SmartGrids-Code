@@ -32,19 +32,13 @@ sys.path.insert(0, str(PROJECT_ROOT.parent))  # so `visuals` is importable
 CASE_ID = "pfagent"
 CASE_TITLE = "PFAgent"
 
-# The sidebar, in the order the design page defines its tabs. Labels are the
-# ones a reader sees; keys must match the ``id='tab-<key>'`` the page emits.
-GROUPS: Tuple[Tuple[str, Tuple[Tuple[str, str], ...]], ...] = (
-    ("Design", (
-        ("overview", "Home"),
-        ("methods", "Methods"),
-        ("scenarios", "Scenarios"),
-        ("prompts", "Prompts"),
-        ("tools", "Tools"),
-        ("gate", "Gate & scoring"),
-        ("plan", "Run plan"),
-    )),
-)
+# Where the standalone pages this adapter reads are written.
+DESIGN = PROJECT_ROOT / "results" / "visuals" / "design.html"
+HOME = PROJECT_ROOT / "results" / "visuals" / "index.html"
+
+# Nothing about the section list is hard-coded here. The sections are whichever
+# ones the design page emits, in its order and under its own labels, so this
+# case study can add, drop or rename one without anybody editing this file.
 
 
 def _rules(css: str) -> List[Tuple[str, str, bool]]:
@@ -144,14 +138,32 @@ def _split_tabs(body: str) -> Dict[str, str]:
     return out
 
 
+def _home() -> Tuple[str, str]:
+    """This case study's home section and the styles it needs, from its own page.
+
+    The standalone site keeps the home in ``index.html`` and the sections in
+    ``design.html``. The shared site wants the home as the first section, so it
+    is lifted from there rather than written a second time here.
+    """
+    if not HOME.exists():
+        return "", ""
+    html = HOME.read_text(encoding="utf-8")
+    i = html.find("<section id='home'")
+    if i < 0:
+        return "", ""
+    i = html.find(">", i) + 1
+    j = html.find("</section>", i)
+    return html[i:j], _inner(html, "<style>", "</style>")
+
+
 def payload() -> Dict[str, Any]:
     from evaluation import design_page
-
-    html = design_page.build().read_text(encoding="utf-8")
-
     from visuals import shell
 
-    css = _strip_shared(_inner(html, "<style>", "</style>"), _own_selectors(shell.CSS))
+    html = design_page.build().read_text(encoding="utf-8")
+    owned = _own_selectors(shell.CSS)
+
+    css = _strip_shared(_inner(html, "<style>", "</style>"), owned)
     # The page's driver is its last script block. Taking from the first
     # ``<script>`` instead would swallow every script the content embeds, and
     # with them the megabytes of page between the first and the last.
@@ -159,14 +171,21 @@ def payload() -> Dict[str, Any]:
     script = _inner(tail, "<script>", "</script>")
     tabs = _split_tabs(_inner(html, "<main>", "</main>"))
 
-    wanted = [k for _label, entries in GROUPS for k, _t in entries]
-    missing = [k for k in wanted if k not in tabs]
-    if missing:
-        raise SystemExit(f"design_page did not emit these tabs: {', '.join(missing)}")
+    # Section labels come from the page's own tab bar, so a rename there needs
+    # no change here. A section with no button falls back to its key.
+    labels = dict(re.findall(r"<button data-tab='([a-z0-9_-]+)'[^>]*>([^<]*)</button>", html))
+    entries: List[Tuple[str, str]] = []
+
+    home, home_css = _home()
+    if home:
+        tabs["home"] = home
+        css = _strip_shared(home_css, owned) + css
+        entries.append(("home", "Home"))
+    entries += [(k, labels.get(k, k.replace("_", " ").capitalize())) for k in tabs if k != "home"]
 
     # The design page drives its own tab bar; the shared shell drives the
     # sidebar instead, so that part of its script has to go or the two fight
-    # over which tab is visible.
+    # over which section is visible.
     script = re.sub(r"const tabs=document\.querySelectorAll\('\.tabs button'\);.*?fromHash\(\);", "", script, flags=re.S)
 
     return {
@@ -181,8 +200,8 @@ def payload() -> Dict[str, Any]:
             ("solver", "PandaPower Newton-Raphson"),
             ("data", "IEEE 14, 30, 57, 118, 300"),
         ],
-        "groups": [[label, [list(e) for e in entries]] for label, entries in GROUPS],
-        "tabs": {k: tabs[k] for k in wanted},
+        "groups": [["", [list(e) for e in entries]]],
+        "tabs": tabs,
         "css": css,
         "script": script,
     }
