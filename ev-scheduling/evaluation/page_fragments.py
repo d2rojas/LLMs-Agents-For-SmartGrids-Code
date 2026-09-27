@@ -943,7 +943,7 @@ def tab_status() -> str:
 
 GROUPS: Tuple[Tuple[str, Tuple[Tuple[str, str], ...]], ...] = (
     ("Design", (
-        ("overview", "The task"),
+        ("overview", "Home"),
         ("methods", "Methods"),
         ("scenarios", "Scenarios"),
         ("prompts", "Prompts"),

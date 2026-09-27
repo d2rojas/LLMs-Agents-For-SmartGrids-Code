@@ -36,7 +36,7 @@ CASE_TITLE = "PFAgent"
 # ones a reader sees; keys must match the ``id='tab-<key>'`` the page emits.
 GROUPS: Tuple[Tuple[str, Tuple[Tuple[str, str], ...]], ...] = (
     ("Design", (
-        ("overview", "The task"),
+        ("overview", "Home"),
         ("methods", "Methods"),
         ("scenarios", "Scenarios"),
         ("prompts", "Prompts"),
