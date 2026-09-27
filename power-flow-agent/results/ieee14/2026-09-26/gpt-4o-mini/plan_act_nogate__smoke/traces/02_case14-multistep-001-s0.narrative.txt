@@ -3,8 +3,8 @@ Request: Load the IEEE 14-bus system, set the active load at bus 12 to 4.9 MW, d
 Expected outcome: converged   (reference solvable: yes, reference converged: yes)
 
 WHAT THE METHOD DID
-  1. planner emitted a 5-step plan: load_case(case_name="case14") -> set_active_load(bus_id=12, p_mw=4.9) -> disconnect_line(from_bus=1, to_bus=5) -> run_powerflow() -> get_most_loaded_branch()
-  2. LLM replied without tool calls: {"plan":[{"tool":"load_case","args":{"case_name":"case14"}},{"tool":"set_active_load","args":{"bus_id":12,"p_mw":4.9}},{"tool":"disconnect_line","args":{"from_b   (673 in / 81 out tokens, 3.1 s)
+  1. planner emitted a 5-step plan: load_case(case_name="case14") -> set_active_load(bus_id=12, p_mw=4.9) -> disconnect_line(from_bus=1, to_bus=5) -> run_powerflow() -> get_status()
+  2. LLM replied without tool calls: {"plan":[{"tool":"load_case","args":{"case_name":"case14"}},{"tool":"set_active_load","args":{"bus_id":12,"p_mw":4.9}},{"tool":"disconnect_line","args":{"from_b   (712 in / 78 out tokens, 2.7 s)
   3. parser called load_case(case_name="case14")
        tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=270.136
   4. parser called set_active_load(bus_id=12, p_mw=4.9)
@@ -13,22 +13,22 @@ WHAT THE METHOD DID
        tool disconnect_line -> converged=true, total_load_mw=268.958, total_generation_mw=291.788, total_loss_mw=22.83  [gate pass]
   6. parser called run_powerflow()
        tool run_powerflow -> case_name="case14", converged=true, total_load_mw=268.958, total_generation_mw=291.788, total_loss_mw=22.83, bus_voltages[14], line_flows[20], voltage_violations[7], thermal_violations[4]  [gate pass]
-  7. parser called get_most_loaded_branch()
-       tool get_most_loaded_branch -> {"branch_id": 4, "branch_type": "line", "from_bus": 2, "to_bus": 5, "loading_percent": 155.62}
-  8. LLM wrote the final answer   (4094 in / 1065 out tokens, 11.0 s)
-  Totals: 2 LLM calls, 5 tool calls, 1 tool rounds, 4767 in / 1146 out tokens, $0.0014, 14.4 s
+  7. parser called get_status()
+       tool get_status -> {"active_case": "case14", "network_info": {"case_name": "case14", "n_buses": 14, "n_generators": 5, "n_lines": 20, "n_loads": 11, "total_load_mw": 268.958, "total_gen_capacity_mw": 772.4}, "has_last_result": true, "last_...
+  8. LLM wrote the final answer   (4247 in / 1688 out tokens, 15.2 s)
+  Totals: 2 LLM calls, 5 tool calls, 1 tool rounds, 4959 in / 1766 out tokens, $0.0018, 18.3 s
 
 FORMULATION  (did the executed tool calls match the request?)
   intended: load_case(case_name="case14") -> modify_load(bus_id=12, p_mw=4.9) -> disconnect_line(from_bus=1, to_bus=5) -> run_powerflow()
-  executed: load_case(case_name="case14") -> set_active_load(bus_id=12, p_mw=4.9) -> disconnect_line(from_bus=1, to_bus=5) -> run_powerflow() -> get_most_loaded_branch()
+  executed: load_case(case_name="case14") -> set_active_load(bus_id=12, p_mw=4.9) -> disconnect_line(from_bus=1, to_bus=5) -> run_powerflow() -> get_status()
   verdict:  EXACT
 
 REPORTING
-  numbers in the answer: 54, untraceable: 0 -> traceable answer: yes
+  numbers in the answer: 84, untraceable: 0 -> traceable answer: yes
   stale state quoted: no (re-solved at [2, 3] after disconnect_line at call 2)
   V-pass (all five conditions, checked offline for every method): yes
 
 OUTCOME: SOLVED AUTONOMOUSLY
   computation correct (solved): yes   reason: state_and_answer_ok
-  against the reference: voltage MAE 1.73e-07 p.u., flow MAE 2.39e-04 MW, KCL mismatch 1.12e-04 MW, power-balance error n/a
+  against the reference: voltage MAE 1.73e-07 p.u., flow MAE 2.25e-04 MW, KCL mismatch 1.54e-04 MW, power-balance error n/a
   raw trace: case14-multistep-001-s0_run0.json

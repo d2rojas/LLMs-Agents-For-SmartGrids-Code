@@ -1,6 +1,6 @@
 # react_nogate on IEEE 30-bus with gpt-4o-mini
 
-Generated 2026-09-26 19:59 by evaluation/postprocess.py from `report.rescored.json`. Runs: 3. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-26 21:24 by evaluation/postprocess.py from `report.rescored.json`. Runs: 3. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -18,7 +18,7 @@ Generated 2026-09-26 19:59 by evaluation/postprocess.py from `report.rescored.js
 | tool_variant | load_split |
 | plan_variant | text |
 | temperature | 0.0 |
-| system_prompt_hash | 2efb17dd2582 |
+| system_prompt_hash | de3bfa18e09e |
 | description | ReAct loop with no gate at all. The plain multi-step agent baseline. |
 | prompt files | _shared/agent_system_prompt.txt, _shared/final_answer_instruction.txt |
 
@@ -52,10 +52,10 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 | Reporting | Traceable answers | 3/3 (100.0%) |
 | Reporting | Traceable numbers, mean share | 1 |
 | Reporting | Stale state quoted | 0/3 |
-| Cost and time | LLM calls / tool calls, mean | 4.67 / 3.33 |
-| Cost and time | Prompt / completion tokens, mean | 16991 / 5833 |
+| Cost and time | LLM calls / tool calls, mean | 4.33 / 3.33 |
+| Cost and time | Prompt / completion tokens, mean | 16733 / 5896 |
 | Cost and time | Cost, total | $0.0181 |
-| Cost and time | Wall time, mean | 45.7 s |
+| Cost and time | Wall time, mean | 41.6 s |
 
 ### Cross-check against the runner's own scoreboard
 

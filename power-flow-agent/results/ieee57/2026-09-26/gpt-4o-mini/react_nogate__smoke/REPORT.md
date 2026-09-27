@@ -1,6 +1,6 @@
 # react_nogate on IEEE 57-bus with gpt-4o-mini
 
-Generated 2026-09-26 20:01 by evaluation/postprocess.py from `report.json`. Runs: 3. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-26 21:25 by evaluation/postprocess.py from `report.rescored.json`. Runs: 3. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -18,7 +18,7 @@ Generated 2026-09-26 20:01 by evaluation/postprocess.py from `report.json`. Runs
 | tool_variant | load_split |
 | plan_variant | text |
 | temperature | 0.0 |
-| system_prompt_hash | 2efb17dd2582 |
+| system_prompt_hash | de3bfa18e09e |
 | description | ReAct loop with no gate at all. The plain multi-step agent baseline. |
 | prompt files | _shared/agent_system_prompt.txt, _shared/final_answer_instruction.txt |
 
@@ -32,9 +32,9 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 
 | outcome | count | share |
 |---|---:|---:|
-| Solved autonomously | 1 | 33.3% |
+| Solved autonomously | 3 | 100.0% |
 | Escalated to a person | 0 | 0.0% |
-| Wrong, unflagged | 2 | 66.7% |
+| Wrong, unflagged | 0 | 0.0% |
 | **Total** | **3** | 100% |
 
 ## Metrics
@@ -42,20 +42,20 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 | group | metric | value |
 |---|---|---|
 | Task utility | Formulation exact | 3/3 (100.0%) |
-| Task utility | Voltage MAE, all runs | 2.28e-07 p.u. |
-| Task utility | Voltage MAE, formulation-exact runs | 2.28e-07 p.u. |
-| Task utility | Flow MAE, all runs | 0.0527 MW |
-| Task utility | Flow MAE, formulation-exact runs | 0.0527 MW |
-| Task utility | KCL mismatch, mean | 1.05e-04 MW |
-| Solver-grounded correctness | Solved (computation right, any path) | 1/3 (33.3%) |
+| Task utility | Voltage MAE, all runs | 2.23e-07 p.u. |
+| Task utility | Voltage MAE, formulation-exact runs | 2.23e-07 p.u. |
+| Task utility | Flow MAE, all runs | 0.0515 MW |
+| Task utility | Flow MAE, formulation-exact runs | 0.0515 MW |
+| Task utility | KCL mismatch, mean | 1.33e-04 MW |
+| Solver-grounded correctness | Solved (computation right, any path) | 3/3 (100.0%) |
 | Solver-grounded correctness | V-pass (all conditions, offline) | 3/3 (100.0%) |
 | Reporting | Traceable answers | 3/3 (100.0%) |
 | Reporting | Traceable numbers, mean share | 1 |
 | Reporting | Stale state quoted | 0/3 |
-| Cost and time | LLM calls / tool calls, mean | 4 / 3 |
-| Cost and time | Prompt / completion tokens, mean | 21683 / 6316 |
-| Cost and time | Cost, total | $0.0211 |
-| Cost and time | Wall time, mean | 51.2 s |
+| Cost and time | LLM calls / tool calls, mean | 4.33 / 3.33 |
+| Cost and time | Prompt / completion tokens, mean | 31422 / 11477 |
+| Cost and time | Cost, total | $0.0348 |
+| Cost and time | Wall time, mean | 78.7 s |
 
 ### Cross-check against the runner's own scoreboard
 
@@ -63,9 +63,9 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 | metric | runner scoreboard | this report |
 |---|---:|---:|
-| common_solved_count | 1 | 1 |
+| common_solved_count | 3 | 3 |
 | common_escalated_count | 0 | 0 |
-| common_wrong_count | 2 | 2 |
+| common_wrong_count | 0 | 0 |
 | common_formulation_count | 3 | 3 |
 | common_traceable_count | 3 | 3 |
 | common_n | 3 | 3 |
@@ -74,14 +74,9 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 | difficulty | n | solved | escalated | wrong unflagged | formulation exact |
 |---|---:|---:|---:|---:|---:|
-| ambiguous | 1 | 0 | 0 | 1 | 1 |
-| multistep | 1 | 0 | 0 | 1 | 1 |
+| ambiguous | 1 | 1 | 0 | 0 | 1 |
+| multistep | 1 | 1 | 0 | 0 | 1 |
 | parameterized | 1 | 1 | 0 | 0 | 1 |
-
-## Wrong and unflagged (2)
-
-- `case57-ambiguous-002-s0` formulation exact; declared:  ([narrative](traces/01_case57-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case57-ambiguous-002-s0.transcript.txt))
-- `case57-multistep-001-s0` formulation exact; declared:  ([narrative](traces/02_case57-multistep-001-s0.narrative.txt), [transcript](traces/02_case57-multistep-001-s0.transcript.txt))
 
 ## Files
 

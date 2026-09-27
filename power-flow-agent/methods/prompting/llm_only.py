@@ -398,15 +398,22 @@ class BaselineParsed:
         bus_vm: Dict[int, float] = {}
         bus_va: Dict[int, float] = {}
         for item in bus_items:
+            # a bus entry is its id and its voltage magnitude; the angle is optional (only the
+            # angle metrics use it), so an answer that omits va_deg still reports the state
             try:
                 bid = int(item.get("bus_id"))
                 vm = float(item.get("vm_pu"))
-                va = float(item.get("va_deg"))
-                if _finite(vm) and _finite(va):
-                    bus_vm[bid] = vm
-                    bus_va[bid] = va
             except Exception:
                 continue
+            if not _finite(vm):
+                continue
+            bus_vm[bid] = vm
+            try:
+                va = float(item.get("va_deg"))
+                if _finite(va):
+                    bus_va[bid] = va
+            except Exception:
+                pass
 
         line_items = obj.get("line_flows")
         if not isinstance(line_items, list):

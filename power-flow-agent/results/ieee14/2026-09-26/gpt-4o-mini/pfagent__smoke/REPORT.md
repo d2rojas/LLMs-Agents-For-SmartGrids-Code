@@ -1,6 +1,6 @@
 # pfagent on IEEE 14-bus with gpt-4o-mini
 
-Generated 2026-09-26 19:59 by evaluation/postprocess.py from `report.rescored.json`. Runs: 3. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-26 21:23 by evaluation/postprocess.py from `report.rescored.json`. Runs: 3. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -18,7 +18,7 @@ Generated 2026-09-26 19:59 by evaluation/postprocess.py from `report.rescored.js
 | tool_variant | load_split |
 | plan_variant | text |
 | temperature | 0.0 |
-| system_prompt_hash | 2efb17dd2582 |
+| system_prompt_hash | de3bfa18e09e |
 | description | PFAgent: ReAct loop with no in-loop gate plus the task-level verification gate V1-V7 on the final answer (methods/agent/engine.py verify_final_answer). The solver-grounded row. |
 | prompt files | _shared/agent_system_prompt.txt, _shared/final_answer_instruction.txt |
 
@@ -32,32 +32,30 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 
 | outcome | count | share |
 |---|---:|---:|
-| Solved autonomously | 1 | 33.3% |
+| Solved autonomously | 3 | 100.0% |
 | Escalated to a person | 0 | 0.0% |
-| Wrong, unflagged | 1 | 33.3% |
-| Run error / other | 1 | 33.3% |
+| Wrong, unflagged | 0 | 0.0% |
 | **Total** | **3** | 100% |
 
 ## Metrics
 
 | group | metric | value |
 |---|---|---|
-| Task utility | Formulation exact | 1/3 (33.3%) |
-| Task utility | Formulation error types | unparsed: 1, missed_step: 1 |
+| Task utility | Formulation exact | 3/3 (100.0%) |
 | Task utility | Voltage MAE, all runs | 1.92e-07 p.u. |
-| Task utility | Voltage MAE, formulation-exact runs | 1.73e-07 p.u. |
-| Task utility | Flow MAE, all runs | 2.04e-04 MW |
-| Task utility | Flow MAE, formulation-exact runs | 2.25e-04 MW |
-| Task utility | KCL mismatch, mean | 1.95e-04 MW |
-| Solver-grounded correctness | Solved (computation right, any path) | 1/3 (33.3%) |
+| Task utility | Voltage MAE, formulation-exact runs | 1.92e-07 p.u. |
+| Task utility | Flow MAE, all runs | 2.14e-04 MW |
+| Task utility | Flow MAE, formulation-exact runs | 2.14e-04 MW |
+| Task utility | KCL mismatch, mean | 2.33e-04 MW |
+| Solver-grounded correctness | Solved (computation right, any path) | 3/3 (100.0%) |
 | Solver-grounded correctness | V-pass (all conditions, offline) | 3/3 (100.0%) |
 | Reporting | Traceable answers | 3/3 (100.0%) |
 | Reporting | Traceable numbers, mean share | 1 |
 | Reporting | Stale state quoted | 0/3 |
-| Cost and time | LLM calls / tool calls, mean | 3.33 / 2.33 |
-| Cost and time | Prompt / completion tokens, mean | 12562 / 3604 |
-| Cost and time | Cost, total | $0.0081 |
-| Cost and time | Wall time, mean | 39.4 s |
+| Cost and time | LLM calls / tool calls, mean | 6.33 / 4 |
+| Cost and time | Prompt / completion tokens, mean | 32546 / 6654 |
+| Cost and time | Cost, total | $0.0266 |
+| Cost and time | Wall time, mean | 54.3 s |
 
 ### Cross-check against the runner's own scoreboard
 
@@ -65,33 +63,20 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 | metric | runner scoreboard | this report |
 |---|---:|---:|
-| common_solved_count | 1 | 1 |
+| common_solved_count | 3 | 3 |
 | common_escalated_count | 0 | 0 |
-| common_wrong_count | 1 | 1 |
-| common_formulation_count | 1 | 1 |
-| common_traceable_count | 2 | 3  <-- differs |
-| common_n | 2 | 3  <-- differs |
+| common_wrong_count | 0 | 0 |
+| common_formulation_count | 3 | 3 |
+| common_traceable_count | 3 | 3 |
+| common_n | 3 | 3 |
 
 ## By request difficulty
 
 | difficulty | n | solved | escalated | wrong unflagged | formulation exact |
 |---|---:|---:|---:|---:|---:|
-| ambiguous | 1 | 0 | 0 | 0 | 0 |
+| ambiguous | 1 | 1 | 0 | 0 | 1 |
 | multistep | 1 | 1 | 0 | 0 | 1 |
-| parameterized | 1 | 0 | 0 | 1 | 0 |
-
-## Wrong and unflagged (1)
-
-- `case14-parameterized-000-s0` formulation missed_step; declared: missing tools: ['disconnect_line']  ([narrative](traces/03_case14-parameterized-000-s0.narrative.txt), [transcript](traces/03_case14-parameterized-000-s0.transcript.txt))
-
-## Formulation not exact (2)
-
-- `case14-ambiguous-002-s0` unparsed: no formulation field in the answer  ([narrative](traces/01_case14-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case14-ambiguous-002-s0.transcript.txt))
-- `case14-parameterized-000-s0` missed_step: declared: missing tools: ['disconnect_line']  ([narrative](traces/03_case14-parameterized-000-s0.narrative.txt), [transcript](traces/03_case14-parameterized-000-s0.transcript.txt))
-
-## Run errors (1)
-
-- `case14-ambiguous-002-s0` KeyError: 'voltage_violations'  ([narrative](traces/01_case14-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case14-ambiguous-002-s0.transcript.txt))
+| parameterized | 1 | 1 | 0 | 0 | 1 |
 
 ## Files
 

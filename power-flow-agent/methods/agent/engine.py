@@ -180,7 +180,7 @@ def _complete_state_check(final_answer_text: str, pf: Optional[Dict[str, Any]]) 
     if ans.get("cannot_answer") or (ans.get("converged") is False and not ans.get("bus_voltages")):
         return {"passed": True, "applicable": False, "detail": "the answer declares it cannot complete the request"}
     want_b = {int(b.get("bus_id")) for b in (pf.get("bus_voltages") or []) if isinstance(b, dict) and b.get("bus_id") is not None}
-    got_b = {int(b.get("bus_id")) for b in (ans.get("bus_voltages") or []) if isinstance(b, dict) and isinstance(b.get("bus_id"), (int, float, str)) and str(b.get("bus_id")).lstrip("-").isdigit()}
+    got_b = {int(b.get("bus_id")) for b in (ans.get("bus_voltages") or []) if isinstance(b, dict) and isinstance(b.get("bus_id"), (int, float, str)) and str(b.get("bus_id")).lstrip("-").isdigit() and isinstance(b.get("vm_pu"), (int, float))}  # a bus counts with its voltage magnitude
     want_l = {frozenset((int(f.get("from_bus")), int(f.get("to_bus")))) for f in (pf.get("line_flows") or []) if isinstance(f, dict) and f.get("from_bus") is not None and f.get("to_bus") is not None}
     got_l = set()
     for f in ans.get("line_flows") or []:

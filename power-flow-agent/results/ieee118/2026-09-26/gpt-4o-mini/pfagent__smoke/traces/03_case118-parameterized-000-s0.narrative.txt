@@ -1,0 +1,52 @@
+RUN 03  |  case118-parameterized-000-s0  |  pfagent  |  gpt-4o-mini  |  IEEE 118-bus  |  seed 0  |  difficulty parameterized
+Request: Load case118 and disconnect the line between bus 49 and bus 66.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case118"); disconnect_line(from_bus=49, to_bus=66)   (1039 in / 52 out tokens, 1.8 s)
+       tool load_case -> case_name="case118", n_buses=118, n_lines=184, total_load_mw=4199.38
+       tool disconnect_line -> converged=true, total_load_mw=4199.38, total_generation_mw=4341.319, total_loss_mw=141.76  [gate pass]
+  2. LLM called run_powerflow()   (1292 in / 11 out tokens, 1.6 s)
+       tool run_powerflow -> 
+
+[校验提示] 功率平衡误差超过阈值（发电 ≈ 负荷 + 损耗）。请检查网络是否出现孤岛、未建模元件或求解器设置。  [gate pass]
+  3. LLM replied without tool calls: { "converged": true, "bus_voltages": [ {"bus_id": 1, "vm_pu": 0.955, "va_deg": 10.654, "is_violation": false, "violation_type": null}, {"bus_id": 2, "vm_pu": 0.   (17655 in / 16090 out tokens, 107.1 s)
+  4. LLM wrote the final answer   (33811 in / 12935 out tokens, 102.1 s)
+  5. LLM called run_powerflow()   (47505 in / 11 out tokens, 5.1 s)
+       tool run_powerflow -> 
+
+[校验提示] 功率平衡误差超过阈值（发电 ≈ 负荷 + 损耗）。请检查网络是否出现孤岛、未建模元件或求解器设置。  [gate pass]
+  6. LLM replied without tool calls: { "formulation": [ {"tool": "load_case", "args": {"case_name": "case118"}}, {"tool": "disconnect_line", "args": {"from_bus": 49, "to_bus": 66}}, {"tool": "run_p   (63868 in / 15825 out tokens, 780.2 s)
+  7. LLM wrote the final answer   (79759 in / 12956 out tokens, 96.6 s)
+  Totals: 7 LLM calls, 4 tool calls, 3 tool rounds, 244929 in / 57880 out tokens, $0.0715, 1095.1 s
+  Status: verification_failed
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case118") -> disconnect_line(from_bus=49, to_bus=66)
+  executed: load_case(case_name="case118") -> disconnect_line(from_bus=49, to_bus=66) -> run_powerflow() -> run_powerflow()
+  verdict:  NOT EXACT (unparsed): no formulation field in the answer
+
+VERIFICATION GATE  (task-level, on the final answer)
+  V1  converged              pass  residual 0
+  V2  balance                pass  residual 0.179
+  V3  no_isolated_buses      pass  residual 0
+  V4  traceability           pass  residual 0
+  V5  currency               pass  residual 0
+  V6  argument_grounding     pass  every mutating-tool argument traces to the request or a prior tool output
+  V7  claims_from_tools      pass  answer matches the agent's own last solved state
+  V8  request_applied        FAIL  branch 49-66 still carries flow in the final state although it was disconnected
+  V10 complete_state         FAIL  9 of 177 branches are missing from line_flows
+  V11 formulation_matches_trace pass  the declared operations are the ones the trace shows
+  V9  plausible_state        pass  voltages within 0.8 to 1.2 p.u., losses below 10 % of the load
+  outcome: abstained after 2 attempt(s)
+
+REPORTING
+  numbers in the answer: 0, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1, 2, 3] after disconnect_line at call 1)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: ESCALATED TO A PERSON
+  computation correct (solved): no   reason: formulation
+  escalation detected via: gate_abstained
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case118-parameterized-000-s0_run0.json

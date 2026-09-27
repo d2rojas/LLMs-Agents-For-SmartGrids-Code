@@ -3,14 +3,14 @@ Request: Load case30 and disconnect the line between bus 10 and bus 20.
 Expected outcome: converged   (reference solvable: yes, reference converged: yes)
 
 WHAT THE METHOD DID
-  1. LLM called load_case(case_name="case30"); disconnect_line(from_bus=10, to_bus=20)   (1000 in / 52 out tokens, 4.9 s)
+  1. LLM called load_case(case_name="case30"); disconnect_line(from_bus=10, to_bus=20)   (1039 in / 52 out tokens, 1.6 s)
        tool load_case -> case_name="case30", n_buses=30, n_lines=41, total_load_mw=189.292
        tool disconnect_line -> converged=true, total_load_mw=189.292, total_generation_mw=191.953, total_loss_mw=2.661  [gate pass]
-  2. LLM called run_powerflow()   (1249 in / 11 out tokens, 1.6 s)
+  2. LLM called run_powerflow()   (1288 in / 11 out tokens, 0.9 s)
        tool run_powerflow -> case_name="case30", converged=true, total_load_mw=189.292, total_generation_mw=191.953, total_loss_mw=2.661, bus_voltages[30], line_flows[41], voltage_violations[3], thermal_violations[5]  [gate pass]
-  3. LLM replied without tool calls: ```json { "converged": true, "bus_voltages": [ {"bus_id": 1, "vm_pu": 1.0, "va_deg": 0.0, "is_violation": false, "violation_type": null}, {"bus_id": 2, "vm_pu":   (5449 in / 4249 out tokens, 29.6 s)
-  4. LLM wrote the final answer   (9764 in / 2952 out tokens, 20.6 s)
-  Totals: 4 LLM calls, 3 tool calls, 2 tool rounds, 17462 in / 7264 out tokens, $0.0070, 56.9 s
+  3. LLM replied without tool calls: { "converged": true, "bus_voltages": [ {"bus_id": 1, "vm_pu": 1.0, "va_deg": 0.0, "is_violation": false, "violation_type": null}, {"bus_id": 2, "vm_pu": 1.0, "v   (5488 in / 4245 out tokens, 27.1 s)
+  4. LLM wrote the final answer   (9799 in / 3402 out tokens, 21.3 s)
+  Totals: 4 LLM calls, 3 tool calls, 2 tool rounds, 17614 in / 7710 out tokens, $0.0073, 51.1 s
 
 FORMULATION  (did the executed tool calls match the request?)
   intended: load_case(case_name="case30") -> disconnect_line(from_bus=10, to_bus=20)
@@ -18,7 +18,7 @@ FORMULATION  (did the executed tool calls match the request?)
   verdict:  EXACT
 
 REPORTING
-  numbers in the answer: 156, untraceable: 0 -> traceable answer: yes
+  numbers in the answer: 197, untraceable: 0 -> traceable answer: yes
   stale state quoted: no (re-solved at [1, 2] after disconnect_line at call 1)
   V-pass (all five conditions, checked offline for every method): yes
 

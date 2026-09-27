@@ -1,6 +1,6 @@
 # pfagent on IEEE 300-bus with gpt-4o-mini
 
-Generated 2026-09-26 20:16 by evaluation/postprocess.py from `report.rescored.json`. Runs: 3. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-26 21:24 by evaluation/postprocess.py from `report.rescored.json`. Runs: 3. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -18,7 +18,7 @@ Generated 2026-09-26 20:16 by evaluation/postprocess.py from `report.rescored.js
 | tool_variant | load_split |
 | plan_variant | text |
 | temperature | 0.0 |
-| system_prompt_hash | 2efb17dd2582 |
+| system_prompt_hash | de3bfa18e09e |
 | description | PFAgent: ReAct loop with no in-loop gate plus the task-level verification gate V1-V7 on the final answer (methods/agent/engine.py verify_final_answer). The solver-grounded row. |
 | prompt files | _shared/agent_system_prompt.txt, _shared/final_answer_instruction.txt |
 
@@ -50,14 +50,14 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 | Task utility | Flow MAE, formulation-exact runs | n/a MW |
 | Task utility | KCL mismatch, mean | n/a MW |
 | Solver-grounded correctness | Solved (computation right, any path) | 0/3 (0.0%) |
-| Solver-grounded correctness | V-pass (all conditions, offline) | 2/3 (66.7%) |
+| Solver-grounded correctness | V-pass (all conditions, offline) | 0/3 (0.0%) |
 | Reporting | Traceable answers | 3/3 (100.0%) |
 | Reporting | Traceable numbers, mean share | 1 |
 | Reporting | Stale state quoted | 0/3 |
-| Cost and time | LLM calls / tool calls, mean | 2.67 / 1.67 |
-| Cost and time | Prompt / completion tokens, mean | 3.17e+05 / 37211 |
-| Cost and time | Cost, total | $0.0699 |
-| Cost and time | Wall time, mean | 311.5 s |
+| Cost and time | LLM calls / tool calls, mean | 7.67 / 4.67 |
+| Cost and time | Prompt / completion tokens, mean | 3.12e+05 / 41858 |
+| Cost and time | Cost, total | $0.2156 |
+| Cost and time | Wall time, mean | 537.2 s |
 
 ### Cross-check against the runner's own scoreboard
 
@@ -92,8 +92,8 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 ## Run errors (2)
 
-- `case300-ambiguous-002-s0` KeyError: 'voltage_violations'  ([narrative](traces/01_case300-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case300-ambiguous-002-s0.transcript.txt))
-- `case300-parameterized-000-s0` KeyError: 'voltage_violations'  ([narrative](traces/03_case300-parameterized-000-s0.narrative.txt), [transcript](traces/03_case300-parameterized-000-s0.transcript.txt))
+- `case300-ambiguous-002-s0` RuntimeError: LLM request failed: BadRequestError: Error code: 400 - {'error': {'message': 'Provider returned error', 'code': 400, 'metadata': {'raw': '{\n  "error": {\n    "message": "This model\'s m  ([narrative](traces/01_case300-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case300-ambiguous-002-s0.transcript.txt))
+- `case300-parameterized-000-s0` RuntimeError: LLM request failed: BadRequestError: Error code: 400 - {'error': {'message': 'Provider returned error', 'code': 400, 'metadata': {'raw': '{\n  "error": {\n    "message": "This model\'s m  ([narrative](traces/03_case300-parameterized-000-s0.narrative.txt), [transcript](traces/03_case300-parameterized-000-s0.transcript.txt))
 
 ## Files
 

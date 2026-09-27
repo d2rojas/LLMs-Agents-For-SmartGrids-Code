@@ -4,20 +4,21 @@ Expected outcome: converged   (reference solvable: yes, reference converged: yes
 
 WHAT THE METHOD DID
   1. LLM answered directly from the prompt (no tools): { "formulation": [ { "tool": "load_case", "args": { "case_name": "case300" } }, { "tool": "disconnect_line", "args": { "from_bus": 79, "to_bus": 211 } }, { "tool": "run_powerflow", "args": {} } ], "co...
-  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 25501 in / 8328 out tokens, $0.0088, 79.3 s
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 25501 in / 16384 out tokens, $0.0137, 120.2 s
+  Error: ValueError: no_json_object_found
 
 FORMULATION  (did the executed tool calls match the request?)
   intended: load_case(case_name="case300") -> disconnect_line(from_bus=79, to_bus=211)
-  declared: load_case(case_name="case300") -> disconnect_line(from_bus=79, to_bus=211) -> run_powerflow()   [no tools: the model states the operations, nothing is executed]
-  verdict:  EXACT
+  declared: (no formulation field in the answer)   [no tools: the model states the operations, nothing is executed]
+  verdict:  NOT EXACT (unparsed): no formulation field in the answer
 
 REPORTING
-  numbers in the answer: 603, untraceable: 603 -> traceable answer: no
-  untraceable values: ['1.02', '0.0', '1.01', '-1.0', '-2.0', '-3.0', '-4.0', '-5.0', '-6.0', '-7.0', '-8.0', '-9.0', '-10.0', '-11.0', '-12.0', '-13.0', '-14.0', '-15.0', '-16.0', '-17.0']
+  numbers in the answer: 987, untraceable: 987 -> traceable answer: no
+  untraceable values: ['10345.0 MW', '10345.0 MW', '0.0 MW', '1.020', '0.0', '1.015', '-2.0', '1.010', '-4.0', '-6.0', '1.025', '-1.0', '1.030', '-3.0', '1.018', '-2.5', '1.022', '-1.5', '1.015', '-2.0']
   stale state quoted: n/a (no network mutation in effect)
   V-pass (all five conditions, checked offline for every method): no
 
 OUTCOME: WRONG, UNFLAGGED
-  computation correct (solved): no   reason: incomplete_coverage
-  against the reference: voltage MAE 0.0292 p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  computation correct (solved): no   reason: formulation
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
   raw trace: case300-ambiguous-002-s0_run0.json

@@ -2,4 +2,4 @@
 
 | model | task | case_name | success_rate | solved | voltage_mae | flow_mae | loading_rmse | voltage_f1 | thermal_f1 | conv_match | prompt_tokens | completion_tokens | total_tokens | cost_usd_mean | cost_usd_total | formulation_exact | faithful_numbers | safe_failure | claimed_success_on_failure | abstained_on_solvable | stale_state | stale_no_rerun | stale_quoted_old | llm_calls | tool_calls | wall_s |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| openrouter:openai/gpt-4o-mini | llm_only:structured | case118 | 1 | 0.00 (0/3) | 0.02325 | 52.71 | 42.05 | 0 | 0 | 1 | 1.404e+04 | 7969 | 2.201e+04 | 0.006887 | 0.02066 | 1.00 (3/3) | 0.07182 | n/a | n/a | 0.00 (0/3) | n/a | n/a | n/a | 1 | 0 | 79.17 |
+| openrouter:openai/gpt-4o-mini | llm_only:structured | case118 | 1 | 0.00 (0/3) | 0.02662 | 48.09 | 45.34 | 0 | 0 | 1 | 1.404e+04 | 5521 | 1.956e+04 | 0.005419 | 0.01626 | 1.00 (3/3) | 0.02465 | n/a | n/a | 0.00 (0/3) | n/a | n/a | n/a | 1 | 0 | 53.46 |

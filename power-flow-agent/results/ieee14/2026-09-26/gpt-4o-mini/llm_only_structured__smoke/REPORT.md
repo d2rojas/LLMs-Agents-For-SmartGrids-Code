@@ -1,6 +1,6 @@
 # llm_only:structured on IEEE 14-bus with gpt-4o-mini
 
-Generated 2026-09-26 19:55 by evaluation/postprocess.py from `report.rescored.json`. Runs: 3. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-26 21:23 by evaluation/postprocess.py from `report.rescored.json`. Runs: 3. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -34,30 +34,28 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 |---|---:|---:|
 | Solved autonomously | 0 | 0.0% |
 | Escalated to a person | 0 | 0.0% |
-| Wrong, unflagged | 2 | 66.7% |
-| Run error / other | 1 | 33.3% |
+| Wrong, unflagged | 3 | 100.0% |
 | **Total** | **3** | 100% |
 
 ## Metrics
 
 | group | metric | value |
 |---|---|---|
-| Task utility | Formulation exact | 2/3 (66.7%) |
-| Task utility | Formulation error types | unparsed: 1 |
-| Task utility | Voltage MAE, all runs | 0.0297 p.u. |
-| Task utility | Voltage MAE, formulation-exact runs | 0.0297 p.u. |
-| Task utility | Flow MAE, all runs | 18.315 MW |
-| Task utility | Flow MAE, formulation-exact runs | 18.315 MW |
-| Task utility | KCL mismatch, mean | 19.9554 MW |
+| Task utility | Formulation exact | 3/3 (100.0%) |
+| Task utility | Voltage MAE, all runs | 0.0347 p.u. |
+| Task utility | Voltage MAE, formulation-exact runs | 0.0347 p.u. |
+| Task utility | Flow MAE, all runs | 22.8982 MW |
+| Task utility | Flow MAE, formulation-exact runs | 22.8982 MW |
+| Task utility | KCL mismatch, mean | 13.6142 MW |
 | Solver-grounded correctness | Solved (computation right, any path) | 0/3 (0.0%) |
 | Solver-grounded correctness | V-pass (all conditions, offline) | 0/3 (0.0%) |
 | Reporting | Traceable answers | 0/3 (0.0%) |
-| Reporting | Traceable numbers, mean share | 0.106 |
+| Reporting | Traceable numbers, mean share | 0.098 |
 | Reporting | Stale state quoted | 0/3 |
 | Cost and time | LLM calls / tool calls, mean | 1 / 0 |
-| Cost and time | Prompt / completion tokens, mean | 308 / 1263 |
-| Cost and time | Cost, total | $0.0037 |
-| Cost and time | Wall time, mean | 13.3 s |
+| Cost and time | Prompt / completion tokens, mean | 308 / 125 |
+| Cost and time | Cost, total | $0.0036 |
+| Cost and time | Wall time, mean | 11 s |
 
 ### Cross-check against the runner's own scoreboard
 
@@ -67,37 +65,30 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 |---|---:|---:|
 | common_solved_count | 0 | 0 |
 | common_escalated_count | 0 | 0 |
-| common_wrong_count | 2 | 2 |
-| common_formulation_count | 2 | 2 |
+| common_wrong_count | 3 | 3 |
+| common_formulation_count | 3 | 3 |
 | common_traceable_count | 0 | 0 |
-| common_n | 2 | 3  <-- differs |
+| common_n | 3 | 3 |
 
 ## By request difficulty
 
 | difficulty | n | solved | escalated | wrong unflagged | formulation exact |
 |---|---:|---:|---:|---:|---:|
 | ambiguous | 1 | 0 | 0 | 1 | 1 |
-| multistep | 1 | 0 | 0 | 0 | 0 |
+| multistep | 1 | 0 | 0 | 1 | 1 |
 | parameterized | 1 | 0 | 0 | 1 | 1 |
 
-## Wrong and unflagged (2)
+## Wrong and unflagged (3)
 
 - `case14-ambiguous-002-s0` formulation exact; declared:  ([narrative](traces/01_case14-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case14-ambiguous-002-s0.transcript.txt))
+- `case14-multistep-001-s0` formulation exact; declared:  ([narrative](traces/02_case14-multistep-001-s0.narrative.txt), [transcript](traces/02_case14-multistep-001-s0.transcript.txt))
 - `case14-parameterized-000-s0` formulation exact; declared:  ([narrative](traces/03_case14-parameterized-000-s0.narrative.txt), [transcript](traces/03_case14-parameterized-000-s0.transcript.txt))
-
-## Formulation not exact (1)
-
-- `case14-multistep-001-s0` unparsed: no formulation field in the answer  ([narrative](traces/02_case14-multistep-001-s0.narrative.txt), [transcript](traces/02_case14-multistep-001-s0.transcript.txt))
 
 ## Untraceable numbers in the answer (3)
 
-- `case14-ambiguous-002-s0` 64 of 64 numbers; values ['36.68 MW', '100.00 MW', '0.00 MW', '1.06', '0.0', '1.045', '-0.0', '1.01', '-0.0', '-0.0', '-0.0', '1.07', '-0.0', '-0.0', '1.09', '-0.0', '-0.0', '-0.0', '-0.0', '-0.0']  ([narrative](traces/01_case14-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case14-ambiguous-002-s0.transcript.txt))
-- `case14-multistep-001-s0` 74 of 74 numbers; values ['0.9487 p.u.', '1.06', '0.0', '1.045', '0.0', '1.01', '0.0', '0.0', '0.0', '1.07', '0.0', '0.0', '1.09', '0.0', '0.0', '0.0', '0.0', '0.9487', '0.0', '0.0']  ([narrative](traces/02_case14-multistep-001-s0.narrative.txt), [transcript](traces/02_case14-multistep-001-s0.transcript.txt))
-- `case14-parameterized-000-s0` 64 of 64 numbers; values ['51.46 MW', '173.25 MW', '2.79 MW', '1.06', '0.0', '1.045', '-2.5', '1.01', '-5.0', '1.0', '-7.5', '1.0', '-10.0', '1.07', '-12.5', '1.0', '-15.0', '1.09', '-17.5', '1.0']  ([narrative](traces/03_case14-parameterized-000-s0.narrative.txt), [transcript](traces/03_case14-parameterized-000-s0.transcript.txt))
-
-## Run errors (1)
-
-- `case14-multistep-001-s0` ValueError: json_parse_failed  ([narrative](traces/02_case14-multistep-001-s0.narrative.txt), [transcript](traces/02_case14-multistep-001-s0.transcript.txt))
+- `case14-ambiguous-002-s0` 64 of 64 numbers; values ['36.68 MW', '100.00 MW', '0.00 MW', '1.06', '0.0', '1.045', '0.0', '1.010', '0.0', '0.0', '0.0', '1.070', '0.0', '0.0', '1.090', '0.0', '0.0', '0.0', '0.0', '0.0']  ([narrative](traces/01_case14-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case14-ambiguous-002-s0.transcript.txt))
+- `case14-multistep-001-s0` 65 of 65 numbers; values ['0.9345 p.u.', '1.06', '0.0', '1.025', '-4.0', '1.01', '-6.0', '-8.0', '0.99', '-10.0', '1.07', '-2.0', '-1.0', '1.09', '0.0', '0.95', '-12.0', '0.98', '-11.0', '0.97']  ([narrative](traces/02_case14-multistep-001-s0.narrative.txt), [transcript](traces/02_case14-multistep-001-s0.transcript.txt))
+- `case14-parameterized-000-s0` 64 of 64 numbers; values ['37.46 MW', '178.25 MW', '0.0 MW', '1.06', '0.0', '1.045', '-2.0', '1.01', '-5.0', '1.0', '-7.0', '1.0', '-8.0', '1.07', '-10.0', '1.0', '-12.0', '1.09', '-15.0', '1.0']  ([narrative](traces/03_case14-parameterized-000-s0.narrative.txt), [transcript](traces/03_case14-parameterized-000-s0.transcript.txt))
 
 ## Files
 

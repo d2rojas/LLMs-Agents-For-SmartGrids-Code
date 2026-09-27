@@ -1,6 +1,6 @@
 # react_nogate on IEEE 300-bus with gpt-4o-mini
 
-Generated 2026-09-26 20:10 by evaluation/postprocess.py from `report.rescored.json`. Runs: 3. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-26 21:24 by evaluation/postprocess.py from `report.rescored.json`. Runs: 3. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -18,7 +18,7 @@ Generated 2026-09-26 20:10 by evaluation/postprocess.py from `report.rescored.js
 | tool_variant | load_split |
 | plan_variant | text |
 | temperature | 0.0 |
-| system_prompt_hash | 2efb17dd2582 |
+| system_prompt_hash | de3bfa18e09e |
 | description | ReAct loop with no gate at all. The plain multi-step agent baseline. |
 | prompt files | _shared/agent_system_prompt.txt, _shared/final_answer_instruction.txt |
 
@@ -43,20 +43,20 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 |---|---|---|
 | Task utility | Formulation exact | 2/3 (66.7%) |
 | Task utility | Formulation error types | unparsed: 1 |
-| Task utility | Voltage MAE, all runs | 2.09e-07 p.u. |
-| Task utility | Voltage MAE, formulation-exact runs | 2.09e-07 p.u. |
-| Task utility | Flow MAE, all runs | 0.2672 MW |
-| Task utility | Flow MAE, formulation-exact runs | 0.2672 MW |
-| Task utility | KCL mismatch, mean | 7.27e-05 MW |
+| Task utility | Voltage MAE, all runs | 2.08e-07 p.u. |
+| Task utility | Voltage MAE, formulation-exact runs | 2.08e-07 p.u. |
+| Task utility | Flow MAE, all runs | 2.44e-04 MW |
+| Task utility | Flow MAE, formulation-exact runs | 2.44e-04 MW |
+| Task utility | KCL mismatch, mean | 7.62e-05 MW |
 | Solver-grounded correctness | Solved (computation right, any path) | 0/3 (0.0%) |
 | Solver-grounded correctness | V-pass (all conditions, offline) | 0/3 (0.0%) |
 | Reporting | Traceable answers | 3/3 (100.0%) |
 | Reporting | Traceable numbers, mean share | 1 |
 | Reporting | Stale state quoted | 0/3 |
 | Cost and time | LLM calls / tool calls, mean | 4.33 / 3.33 |
-| Cost and time | Prompt / completion tokens, mean | 90945 / 24306 |
-| Cost and time | Cost, total | $0.0847 |
-| Cost and time | Wall time, mean | 188.1 s |
+| Cost and time | Prompt / completion tokens, mean | 91114 / 24618 |
+| Cost and time | Cost, total | $0.0853 |
+| Cost and time | Wall time, mean | 184.6 s |
 
 ### Cross-check against the runner's own scoreboard
 

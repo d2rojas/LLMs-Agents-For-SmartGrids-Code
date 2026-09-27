@@ -3,23 +3,24 @@ Request: Load the IEEE 118-bus system, set the active load at bus 116 to 186 MW,
 Expected outcome: converged   (reference solvable: yes, reference converged: yes)
 
 WHAT THE METHOD DID
-  1. LLM called load_case(case_name="case118")   (1036 in / 16 out tokens, 0.9 s)
+  1. LLM called load_case(case_name="case118")   (1075 in / 16 out tokens, 2.3 s)
        tool load_case -> case_name="case118", n_buses=118, n_lines=184, total_load_mw=4227.421
-  2. LLM called set_active_load(bus_id=116, p_mw=186)   (1124 in / 22 out tokens, 1.7 s)
+  2. LLM called set_active_load(bus_id=116, p_mw=186); disconnect_line(from_bus=8, to_bus=30)   (1163 in / 58 out tokens, 2.2 s)
        tool set_active_load -> converged=true, total_load_mw=4235.034, total_generation_mw=4366.808, total_loss_mw=131.593  [gate pass]
-  3. LLM called disconnect_line(from_bus=8, to_bus=30)   (1311 in / 20 out tokens, 7.1 s)
        tool disconnect_line -> converged=true, total_load_mw=4235.034, total_generation_mw=4368.011, total_loss_mw=132.796  [gate pass]
-  4. LLM called run_powerflow()   (1465 in / 11 out tokens, 0.9 s)
+  3. LLM called run_powerflow()   (1514 in / 11 out tokens, 1.7 s)
        tool run_powerflow -> 
 
 [校验提示] 功率平衡误差超过阈值（发电 ≈ 负荷 + 损耗）。请检查网络是否出现孤岛、未建模元件或求解器设置。  [gate pass]
-  5. LLM replied without tool calls: ```json { "converged": true, "bus_with_lowest_voltage": { "bus_id": 76, "voltage_magnitude": 0.943, "violation_type": "undervoltage" } } ```   (17769 in / 57 out tokens, 1.9 s)
-  6. LLM wrote the final answer   (17892 in / 2512 out tokens, 18.0 s)
-  Totals: 6 LLM calls, 4 tool calls, 4 tool rounds, 40597 in / 2638 out tokens, $0.0077, 30.8 s
+  4. LLM called get_most_loaded_branch()   (17818 in / 13 out tokens, 1.4 s)
+       tool get_most_loaded_branch -> {"branch_id": 15, "branch_type": "line", "from_bus": 12, "to_bus": 14, "loading_percent": 110.98}
+  5. LLM replied without tool calls: ```json { "converged": true, "bus_with_lowest_voltage": { "bus_id": 76, "voltage_magnitude": 0.943 }, "cannot_answer": null } ```   (17879 in / 53 out tokens, 1.4 s)
+  6. LLM wrote the final answer   (17998 in / 2498 out tokens, 17.9 s)
+  Totals: 6 LLM calls, 5 tool calls, 4 tool rounds, 57447 in / 2649 out tokens, $0.0102, 27.1 s
 
 FORMULATION  (did the executed tool calls match the request?)
   intended: load_case(case_name="case118") -> modify_load(bus_id=116, p_mw=186.0) -> disconnect_line(from_bus=8, to_bus=30) -> run_powerflow()
-  executed: load_case(case_name="case118") -> set_active_load(bus_id=116, p_mw=186) -> disconnect_line(from_bus=8, to_bus=30) -> run_powerflow()
+  executed: load_case(case_name="case118") -> set_active_load(bus_id=116, p_mw=186) -> disconnect_line(from_bus=8, to_bus=30) -> run_powerflow() -> get_most_loaded_branch()
   verdict:  EXACT
 
 REPORTING
@@ -27,7 +28,7 @@ REPORTING
   stale state quoted: no (re-solved at [2, 3] after disconnect_line at call 2)
   V-pass (all five conditions, checked offline for every method): yes
 
-OUTCOME: WRONG, UNFLAGGED
-  computation correct (solved): no   reason: incomplete_coverage
-  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 1.37e-07 p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
   raw trace: case118-multistep-001-s0_run0.json

@@ -4,4 +4,4 @@ k=1, seeds=[0], cases=['case14'], max_rounds=8, requests={'source': 'generated',
 
 | model | task | success_rate | solved | voltage_mae | flow_mae | loading_rmse | voltage_f1 | thermal_f1 | conv_match | prompt_tokens | completion_tokens | total_tokens | cost_usd_mean | cost_usd_total | formulation_exact | faithful_numbers | safe_failure | claimed_success_on_failure | abstained_on_solvable | stale_state | stale_no_rerun | stale_quoted_old | llm_calls | tool_calls | wall_s |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| openrouter:openai/gpt-4o-mini | pfagent | 0.6667 | 0.67 (2/3) | 1.922e-07 | 0.0002044 | 0.002643 | 1 | 1 | 1 | 1.256e+04 | 3604 | 1.617e+04 | 0.004046 | 0.008093 | 1.00 (2/2) | 1 | n/a | n/a | 0.00 (0/3) | 0.00 (0/2) | 0.00 (0/2) | 0.00 (0/2) | 3.333 | 2.333 | 39.38 |
+| openrouter:openai/gpt-4o-mini | pfagent | 1 | 1.00 (3/3) | 1.917e-07 | 0.0002136 | 0.002624 | 1 | 1 | 1 | 3.255e+04 | 6654 | 3.92e+04 | 0.008874 | 0.02662 | 1.00 (3/3) | 1 | n/a | n/a | 0.00 (0/3) | 0.00 (0/3) | 0.00 (0/3) | 0.00 (0/3) | 6.333 | 4 | 54.34 |

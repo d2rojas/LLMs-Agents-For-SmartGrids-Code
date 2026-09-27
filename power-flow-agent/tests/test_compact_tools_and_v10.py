@@ -80,3 +80,14 @@ def test_v11_formulation_must_match_the_trace():
     hiding = dict(base, formulation=[{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_powerflow", "args": {}}])  # the disconnect is not declared
     v = verify_final_answer(trace, json.dumps(hiding), enforce_v6v7=True)
     assert v["conditions"]["formulation_matches_trace"]["passed"] is False and v["passed"] is False
+
+
+def test_bus_angle_is_optional_in_the_reported_state():
+    from methods.prompting.llm_only import BaselineParsed
+    parsed, err = BaselineParsed.from_json({"converged": True, "bus_voltages": [{"bus_id": 1, "vm_pu": 1.06}, {"bus_id": 2, "vm_pu": 1.045, "va_deg": -5.0}], "line_flows": [], "total_generation_mw": 1.0, "total_load_mw": 1.0, "total_loss_mw": 0.0})
+    assert err is None and parsed.bus_vm == {1: 1.06, 2: 1.045} and parsed.bus_va == {2: -5.0}
+    d = build_default_dispatcher(ToolContext(session=SessionState(), solver_config=SolverConfig()))
+    trace, pf = _trace(d)
+    no_vm = {"formulation": [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_powerflow", "args": {}}], "converged": True, "bus_voltages": [{"bus_id": b["bus_id"]} for b in pf["bus_voltages"]], "line_flows": pf["line_flows"], "cannot_answer": None}
+    v = verify_final_answer(trace, json.dumps(no_vm), enforce_v6v7=True)
+    assert v["conditions"]["complete_state"]["passed"] is False  # ids without magnitudes are not a state

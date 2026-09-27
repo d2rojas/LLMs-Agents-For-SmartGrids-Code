@@ -3,16 +3,16 @@ Request: Load the IEEE 300-bus system and disconnect the line between bus 79 and
 Expected outcome: converged   (reference solvable: yes, reference converged: yes)
 
 WHAT THE METHOD DID
-  1. LLM called load_case(case_name="case300"); disconnect_line(from_bus=79, to_bus=211)   (1008 in / 52 out tokens, 5.5 s)
+  1. LLM called load_case(case_name="case300"); disconnect_line(from_bus=79, to_bus=211)   (1047 in / 52 out tokens, 1.8 s)
        tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=24221.776
        tool disconnect_line -> converged=true, total_load_mw=24221.776, total_generation_mw=24654.713, total_loss_mw=397.35  [gate FAIL]
-  2. LLM called run_powerflow()   (1261 in / 11 out tokens, 1.0 s)
+  2. LLM called run_powerflow()   (1300 in / 11 out tokens, 9.9 s)
        tool run_powerflow -> 
 
 [校验提示] 功率平衡误差超过阈值（发电 ≈ 负荷 + 损耗）。请检查网络是否出现孤岛、未建模元件或求解器设置。  [gate FAIL]
-  3. LLM replied without tool calls: ```json { "converged": true, "bus_voltages": [ {"bus_id": 1, "vm_pu": 1.027674, "va_deg": 11.378, "is_violation": false, "violation_type": null}, {"bus_id": 2,    (38151 in / 16384 out tokens, 119.2 s)
-  4. LLM wrote the final answer   (54601 in / 14992 out tokens, 124.4 s)
-  Totals: 4 LLM calls, 3 tool calls, 2 tool rounds, 95021 in / 31439 out tokens, $0.0331, 250.3 s
+  3. LLM replied without tool calls: ```json { "converged": true, "bus_voltages": [ {"bus_id": 1, "vm_pu": 1.027674, "va_deg": 11.378, "is_violation": false, "violation_type": null}, {"bus_id": 2,    (38190 in / 16384 out tokens, 113.0 s)
+  4. LLM wrote the final answer   (54640 in / 15840 out tokens, 113.3 s)
+  Totals: 4 LLM calls, 3 tool calls, 2 tool rounds, 95177 in / 32287 out tokens, $0.0336, 238.3 s
 
 FORMULATION  (did the executed tool calls match the request?)
   intended: load_case(case_name="case300") -> disconnect_line(from_bus=79, to_bus=211)
@@ -26,5 +26,5 @@ REPORTING
 
 OUTCOME: WRONG, UNFLAGGED
   computation correct (solved): no   reason: incomplete_coverage
-  against the reference: voltage MAE 2.12e-07 p.u., flow MAE 0.2672 MW, KCL mismatch 7.27e-05 MW, power-balance error n/a
+  against the reference: voltage MAE 2.12e-07 p.u., flow MAE 2.44e-04 MW, KCL mismatch 7.62e-05 MW, power-balance error n/a
   raw trace: case300-ambiguous-002-s0_run0.json

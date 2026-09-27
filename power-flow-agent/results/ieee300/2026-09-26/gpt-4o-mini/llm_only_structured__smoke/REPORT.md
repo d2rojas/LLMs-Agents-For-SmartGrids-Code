@@ -1,6 +1,6 @@
 # llm_only:structured on IEEE 300-bus with gpt-4o-mini
 
-Generated 2026-09-26 19:58 by evaluation/postprocess.py from `report.rescored.json`. Runs: 3. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-26 21:24 by evaluation/postprocess.py from `report.rescored.json`. Runs: 3. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -41,21 +41,22 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 
 | group | metric | value |
 |---|---|---|
-| Task utility | Formulation exact | 3/3 (100.0%) |
-| Task utility | Voltage MAE, all runs | 0.2742 p.u. |
-| Task utility | Voltage MAE, formulation-exact runs | 0.2742 p.u. |
+| Task utility | Formulation exact | 2/3 (66.7%) |
+| Task utility | Formulation error types | unparsed: 1 |
+| Task utility | Voltage MAE, all runs | 0.59 p.u. |
+| Task utility | Voltage MAE, formulation-exact runs | 0.59 p.u. |
 | Task utility | Flow MAE, all runs | n/a MW |
 | Task utility | Flow MAE, formulation-exact runs | n/a MW |
 | Task utility | KCL mismatch, mean | n/a MW |
 | Solver-grounded correctness | Solved (computation right, any path) | 0/3 (0.0%) |
 | Solver-grounded correctness | V-pass (all conditions, offline) | 0/3 (0.0%) |
 | Reporting | Traceable answers | 0/3 (0.0%) |
-| Reporting | Traceable numbers, mean share | 0.166 |
+| Reporting | Traceable numbers, mean share | 0.009 |
 | Reporting | Stale state quoted | 0/3 |
 | Cost and time | LLM calls / tool calls, mean | 1 / 0 |
-| Cost and time | Prompt / completion tokens, mean | 25508 / 843 |
-| Cost and time | Cost, total | $0.0267 |
-| Cost and time | Wall time, mean | 74.5 s |
+| Cost and time | Prompt / completion tokens, mean | 25508 / 7442 |
+| Cost and time | Cost, total | $0.0249 |
+| Cost and time | Wall time, mean | 59.1 s |
 
 ### Cross-check against the runner's own scoreboard
 
@@ -66,7 +67,7 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 | common_solved_count | 0 | 0 |
 | common_escalated_count | 0 | 0 |
 | common_wrong_count | 3 | 3 |
-| common_formulation_count | 3 | 3 |
+| common_formulation_count | 2 | 2 |
 | common_traceable_count | 0 | 0 |
 | common_n | 3 | 3 |
 
@@ -74,21 +75,29 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 | difficulty | n | solved | escalated | wrong unflagged | formulation exact |
 |---|---:|---:|---:|---:|---:|
-| ambiguous | 1 | 0 | 0 | 1 | 1 |
+| ambiguous | 1 | 0 | 0 | 1 | 0 |
 | multistep | 1 | 0 | 0 | 1 | 1 |
 | parameterized | 1 | 0 | 0 | 1 | 1 |
 
 ## Wrong and unflagged (3)
 
-- `case300-ambiguous-002-s0` formulation exact; declared:  ([narrative](traces/01_case300-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case300-ambiguous-002-s0.transcript.txt))
+- `case300-ambiguous-002-s0` formulation unparsed; no formulation field in the answer  ([narrative](traces/01_case300-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case300-ambiguous-002-s0.transcript.txt))
 - `case300-multistep-001-s0` formulation exact; declared:  ([narrative](traces/02_case300-multistep-001-s0.narrative.txt), [transcript](traces/02_case300-multistep-001-s0.transcript.txt))
 - `case300-parameterized-000-s0` formulation exact; declared:  ([narrative](traces/03_case300-parameterized-000-s0.narrative.txt), [transcript](traces/03_case300-parameterized-000-s0.transcript.txt))
 
+## Formulation not exact (1)
+
+- `case300-ambiguous-002-s0` unparsed: no formulation field in the answer  ([narrative](traces/01_case300-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case300-ambiguous-002-s0.transcript.txt))
+
 ## Untraceable numbers in the answer (3)
 
-- `case300-ambiguous-002-s0` 603 of 603 numbers; values ['1.02', '0.0', '1.01', '-1.0', '-2.0', '-3.0', '-4.0', '-5.0', '-6.0', '-7.0', '-8.0', '-9.0', '-10.0', '-11.0', '-12.0', '-13.0', '-14.0', '-15.0', '-16.0', '-17.0']  ([narrative](traces/01_case300-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case300-ambiguous-002-s0.transcript.txt))
-- `case300-multistep-001-s0` 606 of 606 numbers; values ['0.9345 p.u.', '1.0456', '0.0', '1.0345', '-2.0', '1.0250', '-4.0', '1.0200', '-6.0', '1.0150', '-8.0', '1.0100', '-10.0', '1.0050', '-12.0', '1.0000', '-14.0', '0.9950', '-16.0', '0.9900']  ([narrative](traces/02_case300-multistep-001-s0.narrative.txt), [transcript](traces/02_case300-multistep-001-s0.transcript.txt))
-- `case300-parameterized-000-s0` 603 of 603 numbers; values ['1.02', '0.0', '1.01', '-1.5', '1.00', '-2.0', '1.00', '-2.5', '1.00', '-3.0', '1.00', '-3.5', '1.00', '-4.0', '1.00', '-4.5', '1.00', '-5.0', '1.00', '-5.5']  ([narrative](traces/03_case300-parameterized-000-s0.narrative.txt), [transcript](traces/03_case300-parameterized-000-s0.transcript.txt))
+- `case300-ambiguous-002-s0` 987 of 987 numbers; values ['10345.0 MW', '10345.0 MW', '0.0 MW', '1.020', '0.0', '1.015', '-2.0', '1.010', '-4.0', '-6.0', '1.025', '-1.0', '1.030', '-3.0', '1.018', '-2.5', '1.022', '-1.5', '1.015', '-2.0']  ([narrative](traces/01_case300-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case300-ambiguous-002-s0.transcript.txt))
+- `case300-multistep-001-s0` 307 of 307 numbers; values ['0.9345 p.u.', '1.045', '1.034', '1.025', '1.020', '1.015', '1.010', '1.005', '1.000', '0.995', '0.990', '0.985', '0.980', '0.975', '0.970', '0.965', '0.960', '0.955', '0.950', '0.945']  ([narrative](traces/02_case300-multistep-001-s0.narrative.txt), [transcript](traces/02_case300-multistep-001-s0.transcript.txt))
+- `case300-parameterized-000-s0` 6 of 6 numbers; values ['0.0 MW', '0.0 MW', '0.0 MW', '0.0', '0.0', '0.0']  ([narrative](traces/03_case300-parameterized-000-s0.narrative.txt), [transcript](traces/03_case300-parameterized-000-s0.transcript.txt))
+
+## Run errors (1)
+
+- `case300-ambiguous-002-s0` ValueError: no_json_object_found  ([narrative](traces/01_case300-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case300-ambiguous-002-s0.transcript.txt))
 
 ## Files
 

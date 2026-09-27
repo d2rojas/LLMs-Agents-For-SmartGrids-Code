@@ -1,6 +1,6 @@
 # llm_only:cot on IEEE 118-bus with gpt-4o-mini
 
-Generated 2026-09-26 20:02 by evaluation/postprocess.py from `report.rescored.json`. Runs: 3. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-26 21:22 by evaluation/postprocess.py from `report.rescored.json`. Runs: 3. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -43,20 +43,20 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 |---|---|---|
 | Task utility | Formulation exact | 2/3 (66.7%) |
 | Task utility | Formulation error types | missed_step: 1 |
-| Task utility | Voltage MAE, all runs | 0.0282 p.u. |
-| Task utility | Voltage MAE, formulation-exact runs | 0.0282 p.u. |
-| Task utility | Flow MAE, all runs | 457.7315 MW |
-| Task utility | Flow MAE, formulation-exact runs | 457.7315 MW |
-| Task utility | KCL mismatch, mean | 443.8698 MW |
+| Task utility | Voltage MAE, all runs | 0.1333 p.u. |
+| Task utility | Voltage MAE, formulation-exact runs | 0.023 p.u. |
+| Task utility | Flow MAE, all runs | 452.8927 MW |
+| Task utility | Flow MAE, formulation-exact runs | 452.8927 MW |
+| Task utility | KCL mismatch, mean | 429.666 MW |
 | Solver-grounded correctness | Solved (computation right, any path) | 0/3 (0.0%) |
 | Solver-grounded correctness | V-pass (all conditions, offline) | 0/3 (0.0%) |
 | Reporting | Traceable answers | 0/3 (0.0%) |
-| Reporting | Traceable numbers, mean share | 0.073 |
+| Reporting | Traceable numbers, mean share | 0.005 |
 | Reporting | Stale state quoted | 0/3 |
 | Cost and time | LLM calls / tool calls, mean | 1 / 0 |
-| Cost and time | Prompt / completion tokens, mean | 14217 / 8318 |
-| Cost and time | Cost, total | $0.0214 |
-| Cost and time | Wall time, mean | 70.8 s |
+| Cost and time | Prompt / completion tokens, mean | 14217 / 5152 |
+| Cost and time | Cost, total | $0.0157 |
+| Cost and time | Wall time, mean | 41.2 s |
 
 ### Cross-check against the runner's own scoreboard
 
@@ -91,9 +91,9 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 ## Untraceable numbers in the answer (3)
 
-- `case118-ambiguous-002-s0` 592 of 592 numbers; values ['2670.0 MW', '2670.0 MW', '0.0 MW', '1.02', '0.0', '1.01', '-2.0', '1.01', '-3.0', '-4.0', '-5.0', '-6.0', '-7.0', '-8.0', '-9.0', '-10.0', '-11.0', '-12.0', '-13.0', '-14.0']  ([narrative](traces/01_case118-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case118-ambiguous-002-s0.transcript.txt))
-- `case118-multistep-001-s0` 125 of 125 numbers; values ['0.9345 p.u.', '1.045', '1.034', '1.025', '1.020', '1.015', '1.010', '1.005', '1.000', '1.000', '1.000', '1.000', '1.000', '1.000', '1.000', '1.000', '1.000', '1.000', '1.000', '1.000']  ([narrative](traces/02_case118-multistep-001-s0.narrative.txt), [transcript](traces/02_case118-multistep-001-s0.transcript.txt))
-- `case118-parameterized-000-s0` 592 of 592 numbers; values ['2,000.0 MW', '1,800.0 MW', '200.0 MW', '1.02', '0.0', '1.01', '5.0', '1.00', '10.0', '1.03', '15.0', '1.02', '20.0', '1.01', '25.0', '1.00', '30.0', '1.04', '35.0', '1.03']  ([narrative](traces/03_case118-parameterized-000-s0.narrative.txt), [transcript](traces/03_case118-parameterized-000-s0.transcript.txt))
+- `case118-ambiguous-002-s0` 3 of 3 numbers; values ['0.0', '0.0', '0.0']  ([narrative](traces/01_case118-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case118-ambiguous-002-s0.transcript.txt))
+- `case118-multistep-001-s0` 243 of 243 numbers; values ['0.9345 p.u.', '1.045', '0.0', '1.034', '-2.0', '1.025', '-4.0', '1.020', '-6.0', '1.015', '-8.0', '1.010', '-10.0', '1.005', '-12.0', '1.000', '-14.0', '0.995', '-16.0', '0.990']  ([narrative](traces/02_case118-multistep-001-s0.narrative.txt), [transcript](traces/02_case118-multistep-001-s0.transcript.txt))
+- `case118-parameterized-000-s0` 589 of 589 numbers; values ['1.02', '0.0', '1.01', '-2.0', '1.00', '-4.0', '1.00', '-6.0', '1.00', '-8.0', '1.00', '-10.0', '1.00', '-12.0', '1.00', '-14.0', '1.00', '-16.0', '1.00', '-18.0']  ([narrative](traces/03_case118-parameterized-000-s0.narrative.txt), [transcript](traces/03_case118-parameterized-000-s0.transcript.txt))
 
 ## Files
 

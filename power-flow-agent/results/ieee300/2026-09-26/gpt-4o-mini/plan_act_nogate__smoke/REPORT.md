@@ -1,6 +1,6 @@
 # plan_act_nogate on IEEE 300-bus with gpt-4o-mini
 
-Generated 2026-09-26 20:01 by evaluation/postprocess.py from `report.json`. Runs: 3. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-26 21:24 by evaluation/postprocess.py from `report.rescored.json`. Runs: 3. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -18,7 +18,7 @@ Generated 2026-09-26 20:01 by evaluation/postprocess.py from `report.json`. Runs
 | tool_variant | load_split |
 | plan_variant | text |
 | temperature | 0.0 |
-| system_prompt_hash | 2efb17dd2582 |
+| system_prompt_hash | de3bfa18e09e |
 | description | Plan-and-Act with no gate. |
 | prompt files | _shared/agent_system_prompt.txt, _shared/final_answer_instruction.txt, plan_act_nogate/plan_system_prompt_prefix.txt, plan_act_nogate/plan_system_prompt_structured.txt |
 
@@ -41,9 +41,10 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 
 | group | metric | value |
 |---|---|---|
-| Task utility | Formulation exact | 3/3 (100.0%) |
-| Task utility | Voltage MAE, all runs | 2.06e-07 p.u. |
-| Task utility | Voltage MAE, formulation-exact runs | 2.06e-07 p.u. |
+| Task utility | Formulation exact | 1/3 (33.3%) |
+| Task utility | Formulation error types | unparsed: 2 |
+| Task utility | Voltage MAE, all runs | 2.03e-07 p.u. |
+| Task utility | Voltage MAE, formulation-exact runs | 2.03e-07 p.u. |
 | Task utility | Flow MAE, all runs | n/a MW |
 | Task utility | Flow MAE, formulation-exact runs | n/a MW |
 | Task utility | KCL mismatch, mean | n/a MW |
@@ -52,10 +53,10 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 | Reporting | Traceable answers | 3/3 (100.0%) |
 | Reporting | Traceable numbers, mean share | 1 |
 | Reporting | Stale state quoted | 0/3 |
-| Cost and time | LLM calls / tool calls, mean | 2 / 3 |
-| Cost and time | Prompt / completion tokens, mean | 14558 / 313 |
-| Cost and time | Cost, total | $0.0122 |
-| Cost and time | Wall time, mean | 38.9 s |
+| Cost and time | LLM calls / tool calls, mean | 2 / 3.67 |
+| Cost and time | Prompt / completion tokens, mean | 39508 / 13963 |
+| Cost and time | Cost, total | $0.0429 |
+| Cost and time | Wall time, mean | 98 s |
 
 ### Cross-check against the runner's own scoreboard
 
@@ -66,7 +67,7 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 | common_solved_count | 0 | 0 |
 | common_escalated_count | 0 | 0 |
 | common_wrong_count | 3 | 3 |
-| common_formulation_count | 3 | 3 |
+| common_formulation_count | 1 | 1 |
 | common_traceable_count | 3 | 3 |
 | common_n | 3 | 3 |
 
@@ -74,15 +75,20 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 | difficulty | n | solved | escalated | wrong unflagged | formulation exact |
 |---|---:|---:|---:|---:|---:|
-| ambiguous | 1 | 0 | 0 | 1 | 1 |
+| ambiguous | 1 | 0 | 0 | 1 | 0 |
 | multistep | 1 | 0 | 0 | 1 | 1 |
-| parameterized | 1 | 0 | 0 | 1 | 1 |
+| parameterized | 1 | 0 | 0 | 1 | 0 |
 
 ## Wrong and unflagged (3)
 
-- `case300-ambiguous-002-s0` formulation exact; declared:  ([narrative](traces/01_case300-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case300-ambiguous-002-s0.transcript.txt))
+- `case300-ambiguous-002-s0` formulation unparsed; no formulation field in the answer  ([narrative](traces/01_case300-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case300-ambiguous-002-s0.transcript.txt))
 - `case300-multistep-001-s0` formulation exact; declared:  ([narrative](traces/02_case300-multistep-001-s0.narrative.txt), [transcript](traces/02_case300-multistep-001-s0.transcript.txt))
-- `case300-parameterized-000-s0` formulation exact; declared:  ([narrative](traces/03_case300-parameterized-000-s0.narrative.txt), [transcript](traces/03_case300-parameterized-000-s0.transcript.txt))
+- `case300-parameterized-000-s0` formulation unparsed; no formulation field in the answer  ([narrative](traces/03_case300-parameterized-000-s0.narrative.txt), [transcript](traces/03_case300-parameterized-000-s0.transcript.txt))
+
+## Formulation not exact (2)
+
+- `case300-ambiguous-002-s0` unparsed: no formulation field in the answer  ([narrative](traces/01_case300-ambiguous-002-s0.narrative.txt), [transcript](traces/01_case300-ambiguous-002-s0.transcript.txt))
+- `case300-parameterized-000-s0` unparsed: no formulation field in the answer  ([narrative](traces/03_case300-parameterized-000-s0.narrative.txt), [transcript](traces/03_case300-parameterized-000-s0.transcript.txt))
 
 ## Files
 
