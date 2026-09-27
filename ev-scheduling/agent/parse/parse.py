@@ -25,6 +25,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+import methods
+
 from config.llm import (
     ModelSpec,
     RunRecorder,
@@ -119,77 +121,9 @@ class ParseResult:
 # Extraction prompt
 # ---------------------------------------------------------------------------
 
-_EXTRACTION_SYSTEM = (
-    "You are a data-extraction assistant for a CAMPUS EV charging scheduler (Caltech ACN network). "
-    "This is a workplace/university parking facility, not home charging. "
-    "Extract EV charging session details into a JSON object. Output ONLY valid JSON.\n\n"
-    "Return an object with this exact schema:\n"
-    "{\n"
-    '  "sessions": [\n'
-    "    {\n"
-    '      "session_id": "EV-1",          // label, or empty string\n'
-    '      "arrival_hour": 9.0,           // hour from midnight (0-24), or null if unknown\n'
-    '      "departure_hour": 17.0,        // hour from midnight (0-24), or null if unknown\n'
-    '      "energy_kwh": 15.0,            // kWh requested, or null if unknown\n'
-    '      "max_power_kw": 7.0            // max charging rate kW; default 7.0 (Level 2)\n'
-    "    }\n"
-    "  ],\n"
-    '  "site_cap_kw": 50.0,              // total site power cap kW; default 50.0\n'
-    '  "peak_price": 0.45,               // $/kWh peak TOU rate (4pm-9pm); default 0.45\n'
-    '  "off_peak_price": 0.12            // $/kWh off-peak TOU rate; default 0.12\n'
-    "}\n\n"
-    "Rules:\n"
-    "- Convert time expressions to fractional hours: '6pm' → 18.0, '6:30pm' → 18.5, "
-    "'9am' → 9.0, '5pm' → 17.0, 'noon' → 12.0.\n"
-    "- Campus context: 'morning' → 9.0, 'afternoon' → 14.0, 'evening' → 18.0, "
-    "'end of day' / 'after work' → 17.0.\n"
-    "- If the user gives a range like '20-30 kWh', use the midpoint (25.0).\n"
-    "- Default max_power_kw is 7.0 (Level 2 campus chargers).\n"
-    "- Do NOT invent values the user did not provide — use null for unknown required fields.\n"
-    "- Output ONLY the JSON object. No explanation."
-)
+_EXTRACTION_SYSTEM = methods.read_text("_shared/parse_extraction_system.txt")
 
-
-_INFERENCE_SYSTEM = (
-    "You are an EV charging expert helping to fill in missing session parameters based on context. "
-    "This is a CAMPUS/WORKPLACE charging facility (Caltech ACN network), NOT home charging. "
-    "Users are students, faculty, and staff who park while at work/school.\n\n"
-    "FACILITY CONTEXT:\n"
-    "- Site: University campus parking lot (Caltech, JPL, or similar)\n"
-    "- Chargers: Level 2 stations, max 7.0 kW per charger\n"
-    "- Site power cap: 50 kW total across all chargers\n"
-    "- Peak TOU hours: 4pm-9pm (higher electricity cost)\n"
-    "- Typical sessions: 15-66 EVs per day\n\n"
-    "ARRIVAL/DEPARTURE PATTERNS (campus context):\n"
-    "- Morning arrival (7am-10am): Commuters arriving for work/class\n"
-    "  → Departure typically 5pm-7pm (8-10 hour stay)\n"
-    "- Late morning arrival (10am-12pm): Late arrivals, visitors\n"
-    "  → Departure typically 4pm-6pm (5-7 hour stay)\n"
-    "- Afternoon arrival (12pm-3pm): Afternoon classes/meetings\n"
-    "  → Departure typically 5pm-8pm (3-5 hour stay)\n"
-    "- Evening arrival (4pm-7pm): Evening classes/events\n"
-    "  → Departure typically 9pm-11pm (3-5 hour stay)\n"
-    "- If departure is given, infer arrival by subtracting typical stay duration\n\n"
-    "ENERGY INFERENCE (campus commute patterns):\n"
-    "- Short commute (< 15 miles): 5-10 kWh\n"
-    "- Typical commute (15-30 miles): 10-20 kWh\n"
-    "- Longer commute (30-50 miles): 20-30 kWh\n"
-    "- Default if no context: 15 kWh (average campus commute)\n"
-    "- Max deliverable = stay_hours × 7.0 kW; don't request more than this\n\n"
-    "INFERENCE RULES:\n"
-    "- If arrival known but departure unknown: Add typical stay (8h for morning, 4h for afternoon/evening)\n"
-    "- If departure known but arrival unknown: Subtract typical stay from departure\n"
-    "- If only energy known: Assume morning arrival (9am), calculate departure based on energy/7kW\n"
-    "- Keep inferences conservative; better to underestimate energy than overestimate\n\n"
-    "Output a JSON object with the SAME structure as input, but with null values replaced by "
-    "your inferred values. Include an 'inference_notes' field explaining each inference.\n"
-    "{\n"
-    '  "sessions": [...],\n'
-    '  "inference_notes": ["EV-1: 9am arrival → departure 5pm (8h typical workday stay)", ...]\n'
-    "}"
-)
-
-
+_INFERENCE_SYSTEM = methods.read_text("_shared/parse_inference_system.txt")
 # ---------------------------------------------------------------------------
 # Inference detection
 # ---------------------------------------------------------------------------

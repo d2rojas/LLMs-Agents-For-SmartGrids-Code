@@ -94,6 +94,9 @@ box-shadow:var(--shadow);margin-bottom:12px}
 .card>:last-child{margin-bottom:0}
 
 .grid{display:grid;gap:12px}.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+/* a row of diagrams fits as many as stay legible: six on a wide screen, fewer
+   as it narrows, without a breakpoint per count */
+.gauto{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
 .g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .g6{grid-template-columns:repeat(6,minmax(0,1fr))}
 @media(max-width:1000px){.g3,.g4,.g6{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -326,12 +329,15 @@ def diagram(
     return "".join(d)
 
 
-def diagram_row(items: Sequence[Dict[str, Any]], cols: int = 3) -> str:
+def diagram_row(items: Sequence[Dict[str, Any]], cols: str = "auto") -> str:
     """A row of method diagrams, all at one scale.
 
     Each item is ``{title, subtitle, steps, loop?, branch?, note?}``. Every
     diagram is rendered at the tallest natural height in the set, so the boxes
     line up across diagrams and none is clipped by a neighbour's card.
+
+    ``cols`` is "auto" by default, which fits as many per row as stay legible
+    and rewraps with the window. Pass a number to force a count.
     """
     h = max(diagram_height(i["steps"], i.get("branch") is not None) for i in items)
     cells = []
@@ -344,7 +350,8 @@ def diagram_row(items: Sequence[Dict[str, Any]], cols: int = 3) -> str:
             + note_html
             + "</div>"
         )
-    return f"<div class='grid g{cols}'>" + "".join(cells) + "</div>"
+    klass = "gauto" if cols == "auto" else f"g{cols}"
+    return f"<div class='grid {klass}'>" + "".join(cells) + "</div>"
 
 
 def tab(key: str, body: str, *, on: bool = False) -> str:

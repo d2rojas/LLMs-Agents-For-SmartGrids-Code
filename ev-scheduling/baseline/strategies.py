@@ -55,6 +55,7 @@ from __future__ import annotations
 
 from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
+import methods
 from evaluation.requests import EVRequest
 
 # Strategies with a builder registered here; the two body-table rows.
@@ -100,10 +101,7 @@ _POWER_DECIMALS = 4
 
 # --------------------------------------------------------------------------- shared text
 
-_ROLE = (
-    "You are an EV charging scheduler for a workplace charging site. You have no tools, no "
-    "solver, and no internet access. Work out the schedule yourself, from the request below."
-)
+_ROLE = methods.read_text("_shared/llm_only_role.txt")
 
 
 def _context_section(request: EVRequest) -> str:
@@ -189,43 +187,13 @@ def _output_section(request: EVRequest) -> str:
     return "\n".join(lines)
 
 
-_SYSTEM_BASE = (
-    "You are an EV charging scheduler. You answer from the request text alone: you have no "
-    "tools and no solver. Follow the output format exactly. Every power value you write must "
-    "be a finite, non-negative decimal number; never write NaN, Infinity, a negative power, or "
-    "a placeholder such as '...' in place of numbers."
-)
+_SYSTEM_BASE = methods.read_text("_shared/llm_only_system_prompt.txt")
 
-_SYSTEM_STRUCTURED_SUFFIX = (
-    " Output only the schedule rows and, when the request asks a question, the final answer "
-    "line. No commentary, no explanation, no headings."
-)
+_SYSTEM_STRUCTURED_SUFFIX = methods.read_text("llm_only_structured/system_suffix.txt")
 
-_SYSTEM_CHAIN_OF_THOUGHT_SUFFIX = (
-    " You MAY write short plain-text reasoning before the schedule. The schedule rows and the "
-    "answer line must be the LAST part of the response, in that order, with nothing after "
-    "them. Do not state a conclusion in the reasoning: the answer line is the only place the "
-    "answer is given."
-)
+_SYSTEM_CHAIN_OF_THOUGHT_SUFFIX = methods.read_text("llm_only_cot/system_suffix.txt")
 
-_REASONING_SECTION = "\n".join(
-    [
-        REASONING_HEADING,
-        "Reason through the allocation before you commit to a schedule. Work in this order and "
-        "write the steps out in plain text:",
-        "1. Read each car out of the text: its arrival step, its departure step, the energy it "
-        "asks for, and its connector limit in kW. Convert each time expression to a step index.",
-        "2. For each car, the steps it may charge in are arrival step up to but not including "
-        "departure step, and the power it needs on average over that window to get its energy.",
-        "3. Find the steps where the cars together would exceed the site limit, and decide how "
-        "to share those steps out.",
-        "4. Decide where in each car's window to put its energy, given that some steps cost "
-        "more than others.",
-        "5. Check the plan against the limits: per-car connector limit, the site limit at every "
-        "step, no power outside a car's window, and no car over the energy it asked for.",
-        "Then write the schedule rows and the answer line. Do not state the answer before then.",
-    ]
-)
+_REASONING_SECTION = methods.read_text("llm_only_cot/reasoning_section.txt")
 
 
 # --------------------------------------------------------------------------- builders

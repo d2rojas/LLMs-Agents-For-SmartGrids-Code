@@ -421,7 +421,6 @@ def tab_methods() -> str:
                     }
                     for r in ROWS
                 ],
-                cols=3,
             ),
         ),
         card(
@@ -562,41 +561,98 @@ def tab_scenarios() -> str:
 
 
 def tab_prompts() -> str:
-    from baseline.strategies import STRATEGIES, build_messages, prompt_sections
+    """Every method's prompt, read from methods/ rather than from the code."""
+    import methods
+    from baseline.strategies import STRATEGIES, build_messages
 
-    colours = {
-        "## Role": "#6d4fc4",
-        "## System Data": "#0f8f84",
-        "## Task": "#2f5fd0",
-        "## Reasoning Instructions": "#c0392b",
-        "## Output Requirements": "#c99a06",
+    # One colour per role a text plays, so the same kind of text is the same
+    # colour in every method and a reader learns the key once.
+    COLOUR = {
+        "system": "#334155",
+        "role": "#6d4fc4",
+        "suffix": "#2f5fd0",
+        "reasoning": "#c0392b",
+        "parse": "#0f8f84",
+        "agent": "#2f5fd0",
     }
-    shared = set(prompt_sections(STRATEGIES[0]))
-    rows = []
-    for s in STRATEGIES:
-        cells = " ".join(
-            f"<span class='chip' style=\"background:{colours.get(sec, '#eef1f5')};color:#fff\">{E(sec)}</span>"
-            if sec not in shared
-            else f"<span class='chip'>{E(sec)}</span>"
-            for sec in prompt_sections(s)
-        )
-        rows.append([f"<code>{E(s)}</code>", cells])
 
-    body = [
+    def role_of(rel: str) -> str:
+        name = rel.rsplit("/", 1)[-1]
+        if "reasoning" in name:
+            return "reasoning"
+        if "suffix" in name:
+            return "suffix"
+        if "role" in name:
+            return "role"
+        if "parse" in name:
+            return "parse"
+        if "agent" in name:
+            return "agent"
+        return "system"
+
+    body: List[str] = [
         card(
-            "The prompts, as a run would send them",
-            "<p>Rendered by calling the same builders the benchmark calls, on a real request. Nothing below is a "
-            "copy of a prompt kept in sync by hand.</p>",
-            table(["strategy", "sections, in order"], rows),
-            note(
-                "The two prompting methods differ by one section and nothing else. That is what makes them a "
-                "controlled comparison rather than two prompts that happen to differ, and it is checkable here "
-                "rather than asserted in prose.",
-                "info",
+            "Where the prompts are",
+            "<p>Every fixed sentence of every prompt is a file under <code>methods/</code>, and the "
+            "code reads those files rather than carrying the text. A text several methods share sits "
+            "in <code>methods/_shared/</code>; a text belonging to one method sits in that method's "
+            "folder. Nothing below is a copy kept in step by hand.</p>"
+            "<p>The hash of every text is pinned by a test. Changing a prompt fails that test until "
+            "the pin is updated deliberately, because a silent wording change would make new runs "
+            "incomparable with the ones already reported and the scores would move with nothing to "
+            "say why.</p>",
+            table(
+                ["method", "texts it is built from", "built at run time"],
+                [
+                    [
+                        f"<b>{E(c['folder'])}</b><div class='muted'>{E(c['runner_name'])}</div>",
+                        "".join(
+                            f"<div><span class='sw' style='background:{COLOUR[role_of(r)]}'></span> "
+                            f"<code>{E(r)}</code>"
+                            + (" <span class='chip'>shared</span>" if r.startswith("_shared/") else "")
+                            + "</div>"
+                            for r in c.get("prompt_files", [])
+                        )
+                        or "<span class='muted'>none. This method has no prompt.</span>",
+                        "<ul style='margin:0;padding-left:16px'>"
+                        + "".join(f"<li>{E(d)}</li>" for d in c.get("dynamic_parts", []))
+                        + "</ul>"
+                        if c.get("dynamic_parts")
+                        else "<span class='muted'>nothing</span>",
+                    ]
+                    for c in methods.cards()
+                ],
             ),
         )
     ]
 
+    # the texts themselves, per method
+    for c in methods.cards():
+        files = c.get("prompt_files", [])
+        if not files:
+            body.append(
+                card(
+                    f"{c['folder']}",
+                    f"<p class='muted'>{E(c['description'])}</p>"
+                    "<p>No language model and therefore no prompt. What this method reads the request "
+                    "with is code, not text: see the Methods section.</p>",
+                )
+            )
+            continue
+        blocks = [
+            prompt_block(rel.rsplit("/", 1)[-1].replace(".txt", "").replace("_", " "), text,
+                         colour=COLOUR[role_of(rel)], source=f"methods/{rel}")
+            for rel, text in methods.texts(c["folder"])
+        ]
+        body.append(
+            card(
+                f"{c['folder']}",
+                f"<p class='muted'>{E(c['description'])}</p>",
+                *blocks,
+            )
+        )
+
+    # the two prompting methods, fully assembled on a real request
     req = sample_request()
     if req is None:
         return "".join(body)
@@ -609,48 +665,25 @@ def tab_prompts() -> str:
 
     body.append(
         card(
-            "The request these prompts carry",
-            f"<p class='muted'>variant <code>{E(req.get('variant'))}</code> · day {E(req.get('date'))} · "
-            f"{E(len(req.get('day', {}).get('sessions', [])))} sessions</p>"
-            f"<pre>{E(req.get('text', ''))[:4000]}</pre>",
+            "Assembled, on a real request",
+            "<p>The two no-tools methods rendered by calling the same builders the benchmark calls, "
+            "on one request of the set. The sections the code builds are visible here in place, "
+            "between the fixed texts above.</p>"
+            f"<p class='muted'>variant <code>{E(req.get('variant'))}</code> · day {E(req.get('date'))} "
+            f"· {E(len(req.get('day', {}).get('sessions', [])))} sessions</p>",
+            *[
+                "<details><summary>" + E(s) + "</summary>"
+                + "".join(
+                    prompt_block(m["role"], m["content"][:14000],
+                                 colour=COLOUR["system"] if m["role"] == "system" else "#2f5fd0",
+                                 source="baseline/strategies.py::build_messages")
+                    for m in build_messages(s, obj)
+                )
+                + "</details>"
+                for s in STRATEGIES
+            ],
         )
     )
-    for s in STRATEGIES:
-        try:
-            msgs = build_messages(s, obj)
-        except Exception:
-            continue
-        blocks = []
-        for m in msgs:
-            content = m["content"]
-            if m["role"] == "system":
-                blocks.append(
-                    prompt_block("system", content, colour="#334155", source="baseline/strategies.py::system_prompt")
-                )
-                continue
-            # split the user message on its own section headings, so each part
-            # is shown in the colour the table above gave it
-            parts: List[Tuple[str, str]] = []
-            current, buf = "(preamble)", []
-            for line in content.splitlines():
-                if line.strip().startswith("## "):
-                    if buf:
-                        parts.append((current, "\n".join(buf)))
-                    current, buf = line.strip(), []
-                else:
-                    buf.append(line)
-            if buf:
-                parts.append((current, "\n".join(buf)))
-            for label, text in parts:
-                blocks.append(
-                    prompt_block(
-                        label,
-                        text,
-                        colour=colours.get(label, "#94a3b8"),
-                        source="baseline/strategies.py::build_messages",
-                    )
-                )
-        body.append(card(f"{s}", "".join(blocks)))
     return "".join(body)
 
 

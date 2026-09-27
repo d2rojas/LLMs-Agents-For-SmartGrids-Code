@@ -40,6 +40,8 @@ from typing import Any, Dict, Iterator, List, Optional
 
 import numpy as np
 
+import methods
+
 from agent.explain.explain import extract_facts, generate_explanation
 from agent.optimize.call_solver import optimize
 from agent.validate.gate import (
@@ -306,31 +308,7 @@ def _execute_solve(
 
 def _build_system_message() -> str:
     """System message: role, conditional tool-use rules, and what-if guidance."""
-    return (
-        "You are an expert EV charging scheduler. You have access to the tool "
-        "`solve_ev_schedule` that runs a CVXPY convex optimizer.\n\n"
-        "WHEN TO CALL THE TOOL:\n"
-        "  • Call `solve_ev_schedule` when the user's request requires computing or "
-        "optimizing a charging schedule — for example: minimizing energy cost, reducing "
-        "peak load, checking feasibility, or exploring a what-if scenario (e.g. a charger "
-        "offline, a lower site cap, or an extra EV arriving).\n"
-        "  • Do NOT call the tool for general questions, definitions, or conceptual "
-        "explanations (e.g. 'What is TOU pricing?', 'What does peak load shaving mean?', "
-        "'Summarize the last schedule'). Answer those directly from your own knowledge.\n\n"
-        "WHAT-IF SCENARIOS:\n"
-        "  • If the user asks 'what if charger X is offline?', call the tool with "
-        "`disabled_chargers` set to the relevant charger ID(s).\n"
-        "  • If the user asks 'what if the site cap is Y kW?', call the tool with "
-        "`site_cap_kw` set to Y.\n"
-        "  • If the user asks 'what if another EV arrives?', call the tool with "
-        "`extra_sessions` containing the session details.\n\n"
-        "AFTER CALLING THE TOOL:\n"
-        "  • Use the returned metrics (total_cost_usd, peak_load_kw, total_unmet_kwh, "
-        "pct_fully_served) to explain the outcome in plain language.\n"
-        "  • Only report numbers you actually received from the tool result.\n\n"
-        "WITHOUT CALLING THE TOOL:\n"
-        "  • Answer directly and concisely. Do not invent schedule metrics."
-    )
+    return methods.read_text("_shared/agent_system_prompt.txt")
 
 
 # ---------------------------------------------------------------------------
