@@ -507,8 +507,8 @@ table.cmp td,table.cmp th{font-size:12.5px}.ex{display:none}.ex.on{display:block
 
     # ---------------- prompts
     H.append("<div class='tab' id='tab-prompts'>")
-    H.append("<div class='card'><h2>What the model receives, block by block</h2><p>Pick a scenario and a method. Each prompt is shown as the blocks it is assembled from; the colour tells the kind of block and the grey label says which file or code produces it. Pick the system too: the case-tables block changes with it (long, collapsed, identical for every scenario of that system); the rules, the operations catalogue and the output requirements are the same text in every prompt.</p><div class='legend'>" + "".join(f"<span><span class='sw' style='background:{c}'></span>{E(l)}</span>" for k, (c, l, s) in BLOCKS.items() if k in ('sys_base', 'sys_agent', 'sys_cot', 'u_data', 'u_task', 'u_reason', 'u_ops', 'u_out', 'planner', 'tools')) + "</div>")
-    all_methods = [r["runner"] for r in ROWS] + [c for r in ROWS for c, _ in r.get("companions", [])]
+    H.append("<div class='card'><h2>What the model receives, block by block</h2><p>Pick a scenario and a method. Each prompt is shown as the blocks it is assembled from; the colour tells the kind of block and the grey label says which file or code produces it. The deterministic parser is not here: it reads the request text with rules and sends nothing to a model. Pick the system too: the case-tables block changes with it (long, collapsed, identical for every scenario of that system); the rules, the operations catalogue and the output requirements are the same text in every prompt.</p><div class='legend'>" + "".join(f"<span><span class='sw' style='background:{c}'></span>{E(l)}</span>" for k, (c, l, s) in BLOCKS.items() if k in ('sys_base', 'sys_agent', 'sys_cot', 'u_data', 'u_task', 'u_reason', 'u_ops', 'u_out', 'planner', 'tools')) + "</div>")
+    all_methods = [r["runner"] for r in ROWS if methods.get_method(r["runner"]).uses_llm] + [c for r in ROWS for c, _ in r.get("companions", [])]  # the parser has no prompt
     labels = {r["runner"]: r["label"] for r in ROWS}
     for r in ROWS:
         for c, why in r.get("companions", []):
