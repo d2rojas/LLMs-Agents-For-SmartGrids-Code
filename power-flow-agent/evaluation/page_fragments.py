@@ -29,6 +29,8 @@ from typing import Any, Dict, List, Tuple
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT.parent))  # so `visuals` is importable
 
+from evaluation import design_page  # noqa: E402  (after the sys.path line above)
+
 CASE_ID = "pfagent"
 CASE_TITLE = "PFAgent"
 
@@ -156,11 +158,28 @@ def _home() -> Tuple[str, str]:
     return html[i:j], _inner(html, "<style>", "</style>")
 
 
+def _built_design_html() -> str:
+    """Run the design page and read it, leaving the working tree as it was.
+
+    ``design_page.build()`` writes to a tracked file. Rebuilding the shared site
+    would therefore show up as an uncommitted change to a page this adapter only
+    wanted to read, in a tree this case study's own session owns. The previous
+    contents are put back, so building the site changes nothing under git.
+    """
+    before = DESIGN.read_bytes() if DESIGN.exists() else None
+    try:
+        return design_page.build().read_text(encoding="utf-8")
+    finally:
+        if before is None:
+            DESIGN.unlink(missing_ok=True)
+        else:
+            DESIGN.write_bytes(before)
+
+
 def payload() -> Dict[str, Any]:
-    from evaluation import design_page
     from visuals import shell
 
-    html = design_page.build().read_text(encoding="utf-8")
+    html = _built_design_html()
     owned = _own_selectors(shell.CSS)
 
     css = _strip_shared(_inner(html, "<style>", "</style>"), owned)
