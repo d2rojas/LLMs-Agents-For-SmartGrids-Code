@@ -33,7 +33,7 @@ const $=s=>document.querySelector(s);const esc=s=>String(s==null?'':s).replace(/
 let INDEX=null;const REPORTS={},TRACES={};
 function tagOf(r){const m=r.dir.match(/__([A-Za-z0-9-]+)$/);return m?m[1]:'';}
 function setOptions(sel,opts,keep){const v=sel.value;sel.innerHTML=opts.map(([k,l])=>`<option value="${k}">${l}</option>`).join('');if(keep&&opts.some(o=>o[0]===v))sel.value=v;}
-function runsOf(){const set=$('#set').value,sys=$('#sys').value,model=$('#model').value;return INDEX.runs.filter(r=>r.kind==='run'&&`${tagOf(r)||'main'}·${r.date}`===set&&r.case===sys&&(model==='all'||r.model===model||r.model==='no-llm'));}
+function runsOf(){const set=$('#set').value,sys=$('#sys').value,model=$('#model').value;return INDEX.runs.filter(r=>r.kind==='run'&&(tagOf(r)||'main')===set&&r.case===sys&&(model==='all'||r.model===model||r.model==='no-llm'));}
 async function report(r){if(!REPORTS[r.path]){const j=await (await fetch('../'+r.path+'/raw/report.rescored.json')).json();REPORTS[r.path]=j.runs;}return REPORTS[r.path];}
 async function trace(r,row){const ids=[...new Set(REPORTS[r.path].map(x=>x.request_id))].sort();const nn=ids.indexOf(row.request_id)+1;const st=`${String(nn).padStart(2,'0')}_${row.request_id.replace(/[^A-Za-z0-9_.-]+/g,'_')}`;const key=r.path+'/'+st;if(!TRACES[key]){try{TRACES[key]=await (await fetch('../'+r.path+'/traces/'+st+'.json')).json();}catch(e){TRACES[key]=null;}}return TRACES[key];}
 function outcome(x){if(x.error&&String(x.error).includes('LLM request failed'))return 'run_error';return x.common_outcome||(x.escalated?'escalated':x.solved?'solved':'wrong_unflagged');}
@@ -71,9 +71,9 @@ async function render(){const runs=runsOf();const r=runs.find(x=>x.method===$('#
  list.querySelectorAll('details.card').forEach(d=>d.addEventListener('toggle',()=>{if(d.open&&!d.dataset.done){d.dataset.done=1;renderOne(r,rows[+d.dataset.i],d.querySelector('.body'));}}));
  const hp=new URLSearchParams(location.hash.slice(1));const want=hp.get('req');const first=list.querySelector(want?`details.card[data-i]`:'x');if(want){[...list.querySelectorAll('details.card')].forEach(d=>{if(rows[+d.dataset.i].request_id===want)d.open=true;});}}
 async function init(){INDEX=await (await fetch('../INDEX.json')).json();
- const sets=[...new Set(INDEX.runs.filter(r=>r.kind==='run').map(r=>`${tagOf(r)||'main'}·${r.date}`))].sort((a,b)=>b.split('·')[1].localeCompare(a.split('·')[1])||a.localeCompare(b));
- setOptions($('#set'),sets.map(k=>[k,k.replace('·',' · ')]));const main=sets.find(k=>k.startsWith('main·'));if(main)$('#set').value=main;
- function refill(){const rs=INDEX.runs.filter(r=>r.kind==='run'&&`${tagOf(r)||'main'}·${r.date}`===$('#set').value);const cases=[...new Set(rs.map(r=>r.case))].sort((a,b)=>parseInt(a.slice(4))-parseInt(b.slice(4)));setOptions($('#sys'),cases.map(c=>[c,SYS[c]||c]),true);const models=[...new Set(rs.map(r=>r.model).filter(m=>m!=='no-llm'))];setOptions($('#model'),[['all','all models'],...models.map(m=>[m,m])],true);if(models.length===1)$('#model').value=models[0];setOptions($('#mth'),METHODS.filter(([k])=>rs.some(r=>r.method===k)),true);}
+ const sets=[...new Set(INDEX.runs.filter(r=>r.kind==='run').map(r=>tagOf(r)||'main'))].sort((a,b)=>(a==='main'?-1:b==='main'?1:a.localeCompare(b)));
+ setOptions($('#set'),sets.map(k=>[k,k==='main'?'main (the paper runs)':k]));if(sets.includes('main'))$('#set').value='main';
+ function refill(){const rs=INDEX.runs.filter(r=>r.kind==='run'&&(tagOf(r)||'main')===$('#set').value);const cases=[...new Set(rs.map(r=>r.case))].sort((a,b)=>parseInt(a.slice(4))-parseInt(b.slice(4)));setOptions($('#sys'),cases.map(c=>[c,SYS[c]||c]),true);const models=[...new Set(rs.map(r=>r.model).filter(m=>m!=='no-llm'))];setOptions($('#model'),[['all','all models'],...models.map(m=>[m,m])],true);if(models.length===1)$('#model').value=models[0];setOptions($('#mth'),METHODS.filter(([k])=>rs.some(r=>r.method===k)),true);}
  refill();const hp=new URLSearchParams(location.hash.slice(1));if(hp.get('method'))$('#mth').value=hp.get('method');
  $('#set').onchange=()=>{refill();render();};$('#sys').onchange=render;$('#model').onchange=render;$('#mth').onchange=render;$('#all').onchange=render;render();}
 init();
