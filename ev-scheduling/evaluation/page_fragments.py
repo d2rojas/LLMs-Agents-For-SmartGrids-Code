@@ -1010,7 +1010,10 @@ def tab_results() -> str:
             split.append([f"<span class='muted'>{E(ref['label'])} (reference)</span>", str(len(rows)),
                           pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged")])
 
-    any_d, _r, any_h = next(iter(by_method.values()))
+    # the run's model is the one the LLM methods ran on; the reference rows say no-llm
+    any_d, _r, any_h = next(
+        (v for v in by_method.values() if v[2]["header"]["model"] != "no-llm"), next(iter(by_method.values()))
+    )
     cfg = json.loads((any_d / "config.json").read_text(encoding="utf-8")) if (any_d / "config.json").exists() else {}
     body.append(
         card(

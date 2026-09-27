@@ -307,13 +307,20 @@ def build(only: Optional[str] = None, python: str = PYTHON) -> List[Path]:
 
     # A case study with no generator still gets a page: the same sections, all
     # of them empty and saying so. The skeleton is the standard; filling it in
-    # is each case study's work.
+    # is each case study's work. A case study that has a generator but was not
+    # rebuilt this time (--case) keeps the page it already has: overwriting it
+    # with the placeholder would erase a finished page because another one was
+    # being worked on.
     pages = dict(built)
     for case in CASES:
-        pages.setdefault(case["id"], {
+        if case["id"] in pages:
+            continue
+        if has_generator(case["folder"]) and (SITE / f"{case['id']}.html").exists():
+            continue
+        pages[case["id"]] = {
             "id": case["id"], "title": case["title"], "brand": f"{case['title']} · {case['subtitle']}",
             "note": "", "blurb": case["subtitle"], "summary": [], "groups": [], "tabs": {},
-        })
+        }
 
     SITE.mkdir(parents=True, exist_ok=True)
     written: List[Path] = []

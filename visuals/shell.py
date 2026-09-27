@@ -186,11 +186,11 @@ def card(title: Optional[str], *body: str, cls: str = "") -> str:
 
 
 def table(headers: Sequence[str], rows: Iterable[Sequence[str]], *, escape: bool = False) -> str:
-    """A table. Cells are HTML unless ``escape`` is set."""
+    """A table. Headers are HTML; cells are HTML unless ``escape`` is set."""
     def cell(x: Any) -> str:
         return E(x) if escape else str(x)
 
-    head = "".join(f"<th>{E(h)}</th>" for h in headers)
+    head = "".join(f"<th>{h}</th>" for h in headers)  # headers are ours, and may carry a pill
     body = "".join("<tr>" + "".join(f"<td>{cell(c)}</td>" for c in r) + "</tr>" for r in rows)
     return f"<div class='tw'><table><tr>{head}</tr>{body}</table></div>"
 
