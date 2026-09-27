@@ -501,36 +501,65 @@ def tab_scenarios() -> str:
         )
     ]
 
+    examples = example_requests()
+    rows = []
+    for v in R.VARIANTS:
+        r = examples.get(v)
+        if r is None:
+            rows.append([f"<code>{E(v)}</code>", "<span class='muted'>could not be generated on the first days</span>", "", "", ""])
+            continue
+        if r.kind == "state":
+            asks = "<i>the schedule itself</i>. " + E(r.text.strip().splitlines()[-1][-160:])
+            truth = (
+                "the schedule must be runnable (no hard violation) and its cost within tolerance of the "
+                f"optimum, which for this day is ${r.truth.get('cost_usd', 0):,.2f} with "
+                f"{r.truth.get('unmet_kwh', 0):,.2f} kWh undelivered"
+            )
+        else:
+            asks = E(r.question)
+            t = r.truth
+            truth = E(", ".join(t) if isinstance(t, list) else str(t))
+            truth = f"<code>{truth}</code>" + (f" ± {E(r.tolerance)}" if r.tolerance else "")
+        cls = (
+            "state: the schedule is the answer" if v in R.STATE_VARIANTS
+            else "shortfall: the answer must state undelivered energy" if v in R.SHORTFALL_VARIANTS
+            else "question about the day"
+        )
+        rows.append([
+            f"<code>{E(v)}</code><div class='muted'>{E(cls)}</div>",
+            asks,
+            truth,
+            E(r.kind),
+            f"<details><summary>the request, {len(r.text):,} chars</summary><pre>{E(r.text)}</pre></details>",
+        ])
+
     body.append(
         card(
-            "The requests",
-            "<p>One request per day and variant, generated as free text rather than filled into a template: times "
-            "spelled out in words, energies given in Wh or kWh, power in W or kW, and several sentence shapes per "
-            "session. Reading the request is half of the task being measured, so the text has to be worth "
-            "reading.</p>"
-            "<p>The list is generated once, hashed, and the digest is recorded on every result row, so any table "
-            "built from those rows can be shown to have asked every method the same thing.</p>",
+            "The requests: what each variant asks, and what counts as correct",
+            "<p>Every day gets one request. Ten variants share the days in rotation, so the same "
+            "twenty days pose ten different questions. Every variant describes the same thing first, "
+            "the cars and the tariff, in free text: times spelled out, energies in Wh or kWh, power in "
+            "W or kW, several sentence shapes per car. What differs is the last sentence, which is the "
+            "question, and therefore what the answer is scored against.</p>"
+            "<p>The list is generated once, hashed, and the digest is recorded on every result row, so "
+            "a table built from those rows can be shown to have asked every method the same thing.</p>",
             table(
-                ["variant", "what the answer has to be", "note"],
-                [
-                    [
-                        f"<code>{E(v)}</code>",
-                        E(R.ANSWER_KIND_BY_VARIANT.get(v, "")),
-                        "<span class='muted'>"
-                        + E(
-                            "the schedule itself is the answer"
-                            if v in R.STATE_VARIANTS
-                            else "the answer has to state undelivered energy"
-                            if v in R.SHORTFALL_VARIANTS
-                            else ""
-                        )
-                        + "</span>",
-                    ]
-                    for v in R.VARIANTS
-                ],
+                ["variant", "what the request asks", "what counts as correct", "answer kind", "example"],
+                rows,
             ),
-            f"<p class='muted'>Site cap {R.SITE_CAP_KW:g} kW. Time-of-use tariff: ${R.PEAK_PRICE:.2f} per kWh "
-            f"between {R.PEAK_START_HOUR}:00 and {R.PEAK_END_HOUR}:00, ${R.OFF_PEAK_PRICE:.2f} otherwise.</p>",
+            note(
+                "Two variants have no question: the schedule is the answer, and it is scored as a state. "
+                "Three ask about a shortfall, and on a day that cannot be fully served the honest answer "
+                "is a number greater than zero, which is what the gate's condition E6 requires an agent to "
+                "say. The remaining five ask something with a single checkable value, so the answer term "
+                "of Solved applies to them.",
+                "info",
+            ),
+            f"<p class='muted'>Site cap {R.SITE_CAP_KW:g} kW unless the variant lowers it "
+            f"(<code>schedule_under_cap</code> draws from {', '.join(f'{c:g}' for c in R.LOWER_CAPS_KW)} kW). "
+            f"Time-of-use tariff: ${R.PEAK_PRICE:.2f} per kWh between {R.PEAK_START_HOUR}:00 and "
+            f"{R.PEAK_END_HOUR}:00, ${R.OFF_PEAK_PRICE:.2f} otherwise. Examples above are generated on "
+            "the first frozen day that can pose each variant.</p>",
         )
     )
 
@@ -1011,6 +1040,39 @@ def tab_results() -> str:
     return "".join(body)
 
 
+def tab_analysis() -> str:
+    """The report each run ends with, rendered. Written by scripts/ev_report.py, never by a model."""
+    from visuals.shell import markdown
+
+    dirs = [d for d in run_dirs() if (d / "REPORT.md").exists()]
+    if not dirs:
+        return card(
+            "Analysis",
+            "<p class='muted'>No results directory carries a REPORT.md yet.</p>"
+            "<p>Every run ends with <code>python -m scripts.ev_report &lt;dir&gt;</code>, which writes the "
+            "report from the rows the run already wrote: what was run, the protocol, every rate with its "
+            "denominator, per-method detail, budget and caveats. No model is called to write it.</p>",
+        )
+    body = [
+        card(
+            "What the reports are",
+            "<p>Each results directory ends with a <code>REPORT.md</code> written by "
+            "<code>scripts/ev_report.py</code> from the rows the run produced: what was run, the protocol, "
+            "every rate with the denominator it was computed over, per-method detail, the budget, and what "
+            "the numbers do not support. No model is called to write it, and nothing in it is typed by hand.</p>"
+            "<p class='muted'>The failure catalogue and the conclusions across runs are written once the "
+            "missing methods have run; until then this section is the reports as they stand.</p>",
+        )
+    ]
+    for d in reversed(dirs):
+        body.append(
+            f"<div class='card'><h2><code>{E(d.name)}</code></h2>"
+            + markdown((d / "REPORT.md").read_text(encoding="utf-8"))
+            + "</div>"
+        )
+    return "".join(body)
+
+
 def tab_status() -> str:
     A = arms()
     rows = []
@@ -1053,6 +1115,7 @@ GROUPS: Tuple[Tuple[str, Tuple[Tuple[str, str], ...]], ...] = (
     )),
     ("Results", (
         ("results", "Results"),
+        ("analysis", "Analysis"),
         ("status", "Implementation"),
     )),
 )
@@ -1065,6 +1128,7 @@ BUILDERS = {
     "tools": tab_tools,
     "gate": tab_gate,
     "results": tab_results,
+    "analysis": tab_analysis,
     "status": tab_status,
 }
 

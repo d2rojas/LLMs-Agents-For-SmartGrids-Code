@@ -46,15 +46,18 @@ SITE = ROOT / "site"
 # the landing page. The ones with no generator yet are listed all the same: how
 # many case studies there are is part of what the site has to show, and a case
 # that only appears once it is finished makes the set look smaller than it is.
+# The order is the paper's: Section 6.1 wind, 6.2 EV, 6.3 power flow, 6.4
+# contingency diagnosis. A reader moving between the paper and the site should
+# find the case studies in the same sequence in both.
 CASES: Tuple[Dict[str, str], ...] = (
-    {"id": "pfagent", "folder": "power-flow-agent", "title": "PFAgent",
-     "subtitle": "power flow, IEEE systems"},
-    {"id": "evagent", "folder": "ev-scheduling", "title": "EVAgent",
-     "subtitle": "EV charging schedules"},
-    {"id": "griddebug", "folder": "griddebug-agent", "title": "GridDebug",
-     "subtitle": "contingency diagnosis"},
     {"id": "wind", "folder": "wind-forecasting", "title": "Wind",
-     "subtitle": "power forecasting"},
+     "subtitle": "power forecasting (Sec. 6.1)"},
+    {"id": "evagent", "folder": "ev-scheduling", "title": "EVAgent",
+     "subtitle": "EV charging schedules (Sec. 6.2)"},
+    {"id": "pfagent", "folder": "power-flow-agent", "title": "PFAgent",
+     "subtitle": "power flow, IEEE systems (Sec. 6.3)"},
+    {"id": "griddebug", "folder": "griddebug-agent", "title": "GridDebug",
+     "subtitle": "contingency diagnosis (Sec. 6.4)"},
 )
 
 # The sections every case study's page has, in this order. A case study that
@@ -90,6 +93,9 @@ SECTIONS: Tuple[Tuple[str, str, str], ...] = (
      "the numbers as the runs produced them, every method on the same instances"),
     ("traces", "Traces",
      "any single run end to end: the messages, the tool calls, the verdicts and the final answer"),
+    ("analysis", "Analysis",
+     "what the results mean: the report each run ends with, the failure catalogue, and the "
+     "conclusions the case study draws, written only from what was measured"),
     ("status", "Implementation",
      "which methods run today and which are specified and not written yet"),
 )
