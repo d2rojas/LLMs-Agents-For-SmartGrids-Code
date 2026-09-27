@@ -1,0 +1,80 @@
+<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>PFAgent · Failure report</title>
+<style>
+:root{--bg:#f3f5f8;--panel:#fff;--line:#e3e7ee;--text:#0f172a;--muted:#64748b;--acc:#2f5fd0;--ok:#1f9d55;--esc:#e0891a;--bad:#d53f3f;--form:#2f5fd0;--comp:#0f8f84;--rep:#c99a06;--ver:#6d4fc4;--retry:#e0891a}
+*{box-sizing:border-box}body{margin:0;font:14px/1.5 Inter,-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:var(--text);background:var(--bg)}
+header{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line);padding:10px 22px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}header h1{font-size:17px;margin:0}
+main{padding:18px 22px;max-width:1500px;margin:0 auto}label{margin-right:8px}select{font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:#fff}.muted{color:var(--muted);font-size:12.5px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 14px;font-size:12.5px}.legend span{display:inline-flex;align-items:center;gap:6px}.sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:10px;box-shadow:0 1px 2px rgba(15,23,42,.06)}
+.card>summary{cursor:pointer;list-style:none;padding:12px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.card>summary::-webkit-details-marker{display:none}
+.card>summary .req{flex:1;min-width:280px}.card>summary .id{color:var(--muted);font-size:12px}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;color:#fff;font-size:11.5px;font-weight:600;white-space:nowrap}.pill.solved{background:var(--ok)}.pill.escalated{background:var(--esc)}.pill.wrong_unflagged{background:var(--bad)}.pill.run_error{background:#64748b}
+.body{padding:0 16px 16px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.box{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fafbfd}.box h4{margin:0 0 6px;font-size:13px}
+table{border-collapse:collapse;width:100%;font-size:12.5px;background:#fff}th,td{border:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}th{background:#f6f8fb}
+pre{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px;white-space:pre-wrap;word-break:break-word;font:11.5px/1.45 ui-monospace,Menlo,Consolas,monospace;margin:4px 0;max-height:360px;overflow:auto}
+details.sub{margin:6px 0}details.sub>summary{cursor:pointer;font-size:12.5px;color:var(--acc)}
+.tl{margin-top:12px}.step{border-left:5px solid #94a3b8;border-radius:8px;background:#fff;border-top:1px solid var(--line);border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px 12px;margin:8px 0}
+.step .hd{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px}.step .hd b{font-size:13px}.step .k{display:inline-block;padding:1px 8px;border-radius:999px;color:#fff;font-size:11px;font-weight:600}
+.step.form{border-left-color:var(--form)}.step.form .k{background:var(--form)}.step.comp{border-left-color:var(--comp)}.step.comp .k{background:var(--comp)}.step.rep{border-left-color:var(--rep)}.step.rep .k{background:var(--rep)}.step.ver{border-left-color:var(--ver)}.step.ver .k{background:var(--ver)}.step.retry{border-left-color:var(--retry)}.step.retry .k{background:var(--retry)}
+.cond{display:grid;grid-template-columns:auto auto 1fr;gap:4px 10px;font-size:12.5px;margin-top:6px}.cond .p{font-weight:700}.cond .p.ok{color:var(--ok)}.cond .p.no{color:var(--bad)}.cond .p.na{color:var(--muted)}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:3px 12px;font-size:12.5px}.kv b{color:var(--muted);font-weight:500}
+.toggle{margin-left:auto}
+</style></head><body>
+<header><h1>PFAgent · Failure report</h1><label>Run set <select id='set'></select></label><label>System <select id='sys'></select></label><label>Model <select id='model'></select></label><label>Method <select id='mth'></select></label><label class='toggle'><input type='checkbox' id='all'> show every request</label><span class='muted' id='status'></span></header>
+<main>
+<div class='legend'><span><span class='sw' style='background:var(--form)'></span>formulate: what the model decided to call</span><span><span class='sw' style='background:var(--comp)'></span>compute: what the solver returned</span><span><span class='sw' style='background:var(--rep)'></span>report: the answer written</span><span><span class='sw' style='background:var(--ver)'></span>verify: the gate on that answer</span><span><span class='sw' style='background:var(--retry)'></span>retry: what was sent back to the model</span><span><span class='pill solved'>solved</span> <span class='pill escalated'>escalated</span> <span class='pill wrong_unflagged'>wrong unflagged</span> <span class='pill run_error'>run error</span> the evaluator's verdict</span></div>
+<div id='list'></div>
+</main>
+<script>
+const METHODS=[['rule_based','Deterministic parser'],['llm_only_structured','Structured prompting'],['llm_only_cot','Chain-of-thought prompting'],['plan_act_nogate','Plan-and-Act'],['react_nogate','ReAct'],['pfagent','PFAgent']];
+const SYS={ieee14:'IEEE 14-bus',ieee30:'IEEE 30-bus',ieee57:'IEEE 57-bus',ieee118:'IEEE 118-bus',ieee300:'IEEE 300-bus'};
+const $=s=>document.querySelector(s);const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+let INDEX=null;const REPORTS={},TRACES={};
+function tagOf(r){const m=r.dir.match(/__([A-Za-z0-9-]+)$/);return m?m[1]:'';}
+function setOptions(sel,opts,keep){const v=sel.value;sel.innerHTML=opts.map(([k,l])=>`<option value="${k}">${l}</option>`).join('');if(keep&&opts.some(o=>o[0]===v))sel.value=v;}
+function runsOf(){const set=$('#set').value,sys=$('#sys').value,model=$('#model').value;return INDEX.runs.filter(r=>r.kind==='run'&&`${tagOf(r)||'main'}·${r.date}`===set&&r.case===sys&&(model==='all'||r.model===model||r.model==='no-llm'));}
+async function report(r){if(!REPORTS[r.path]){const j=await (await fetch('../'+r.path+'/raw/report.rescored.json')).json();REPORTS[r.path]=j.runs;}return REPORTS[r.path];}
+async function trace(r,row){const ids=[...new Set(REPORTS[r.path].map(x=>x.request_id))].sort();const nn=ids.indexOf(row.request_id)+1;const st=`${String(nn).padStart(2,'0')}_${row.request_id.replace(/[^A-Za-z0-9_.-]+/g,'_')}`;const key=r.path+'/'+st;if(!TRACES[key]){try{TRACES[key]=await (await fetch('../'+r.path+'/traces/'+st+'.json')).json();}catch(e){TRACES[key]=null;}}return TRACES[key];}
+function outcome(x){if(x.error&&String(x.error).includes('LLM request failed'))return 'run_error';return x.common_outcome||(x.escalated?'escalated':x.solved?'solved':'wrong_unflagged');}
+function pj(o){try{return JSON.stringify(typeof o==='string'?JSON.parse(o):o,null,1);}catch(e){return String(o);}}
+function peek(s,n){s=String(s==null?'':s);return s.length>n?esc(s.slice(0,n))+'…':esc(s);}
+function argsOf(a){if(typeof a==='string'){try{a=JSON.parse(a);}catch(e){}}return typeof a==='string'?a:Object.entries(a||{}).map(([k,v])=>`${k}=${JSON.stringify(v)}`).join(', ');}
+function condGrid(conds){return "<div class='cond'>"+Object.entries(conds||{}).map(([k,c])=>{const na=c.applicable===false;const cls=na?'na':(c.passed?'ok':'no');const lab=c.label||'';return `<span class='p ${cls}'>${lab} ${na?'n/a':(c.passed?'pass':'FAIL')}</span><span>${esc(k)}${c.enforced===false?' <span class=muted>(advisory)</span>':''}</span><span class='muted'>${esc(c.detail||(c.residual!=null?'residual '+c.residual:''))}</span>`;}).join('')+"</div>";}
+function timeline(t,answer){let h='';const rounds=t.rounds||[];if(t.plan){h+=`<div class='step form'><div class='hd'><span class='k'>formulate</span><b>Plan written by the planner</b></div><pre>${esc(pj(t.plan))}</pre></div>`;}
+ let attempt=0;
+ rounds.forEach((rd,i)=>{const llm=rd.llm;if(llm){const calls=(llm.tool_calls||[]).map(tc=>`${tc.name}(${argsOf(tc.arguments)})`);const u=llm.usage||{};
+   if(calls.length)h+=`<div class='step form'><div class='hd'><span class='k'>formulate</span><b>Round ${rd.round}: the model calls</b><span class='muted'>${u.prompt_tokens||'?'} in / ${u.completion_tokens||'?'} out tokens · ${(llm.latency_s||0).toFixed(1)} s</span></div><pre>${esc(calls.join('\n'))}</pre>${llm.content?`<details class='sub'><summary>what it said alongside</summary><pre>${esc(llm.content)}</pre></details>`:''}</div>`;
+   else h+=`<div class='step rep'><div class='hd'><span class='k'>report</span><b>Round ${rd.round}: ${rd.final?'the answer written in reply to the final-answer instruction':'the model replies without calling tools'}</b><span class='muted'>${u.prompt_tokens||'?'} in / ${u.completion_tokens||'?'} out tokens · ${(llm.latency_s||0).toFixed(1)} s</span></div><pre>${esc(pj(llm.content))}</pre></div>`;}
+  (rd.tools||[]).forEach(tc=>{const g=tc.gate;const badge=g==null?'':(g.passed?" <span class='muted'>observation gate: pass</span>":" <span style='color:var(--bad)'>observation gate: FAIL "+esc((g.reasons||[]).join(', '))+"</span>");
+   h+=`<div class='step comp'><div class='hd'><span class='k'>compute</span><b>${esc(tc.name)}(${esc(argsOf(tc.arguments))})</b><span class='muted'>${tc.output_chars||String(tc.output||'').length} chars · ${(tc.latency_s||0).toFixed(2)} s</span>${badge}</div><details class='sub'><summary>${peek(tc.output,220)}</summary><pre>${esc(pj(tc.output))}</pre></details></div>`;});
+  // a verification attempt follows a content-only reply when the final gate is on
+  const isReport=llm&&!(llm.tool_calls||[]).length;
+  if(isReport&&t.verification&&t.verification[attempt]){const v=t.verification[attempt];h+=`<div class='step ver'><div class='hd'><span class='k'>verify</span><b>Gate attempt ${attempt+1}: ${v.passed?'PASS':'FAIL'}</b></div>${condGrid(v.conditions)}</div>`;
+   const rm=(t.verification_retry_messages||[])[attempt];if(!v.passed&&rm)h+=`<div class='step retry'><div class='hd'><span class='k'>retry</span><b>Sent back to the model</b></div><pre>${esc(rm)}</pre></div>`;attempt++;}
+ });
+ h+=`<div class='step rep'><div class='hd'><span class='k'>report</span><b>Final answer as scored</b><span class='muted'>status ${esc(t.status)}${t.verification_outcome?' · gate '+esc(t.verification_outcome):''}</span></div><pre>${esc(pj(answer))}</pre></div>`;return h;}
+async function renderOne(r,row,el){const t=await trace(r,row);const tr=(t&&t.trace)||{};const msgs=tr.messages||[];const sys=msgs.find(m=>m.role==='system'),usr=msgs.find(m=>m.role==='user');
+ const m=row.metrics||{};const decl=row.common_declared_formulation;
+ let h="<div class='grid'>";
+ h+=`<div class='box'><h4>The evaluator's verdict</h4><div class='kv'><b>outcome</b><span><span class='pill ${outcome(row)}'>${outcome(row).replace('_',' ')}</span> ${esc(row.common_reason||row.solved_reason||'')}</span><b>formulation</b><span>${row.common_formulation_exact?'exact':'NOT exact: '+esc(row.common_formulation_error_type||'')}<br><span class='muted'>${esc(row.common_formulation_detail||'')}</span></span><b>intended</b><span class='muted'>${esc((row.intended_calls||[]).map(c=>c.tool+'('+argsOf(c.args)+')').join(' → '))}</span><b>declared</b><span class='muted'>${decl?esc(decl.map(c=>c.tool+'('+argsOf(c.args)+')').join(' → ')):'—'}</span><b>executed</b><span class='muted'>${esc((row.executed_calls||[]).map(c=>c.tool+'('+argsOf(c.args)+')').join(' → '))}</span><b>numbers</b><span>V_MAE ${m.voltage_mae!=null?Number(m.voltage_mae).toExponential(2):'—'} p.u. · coverage ${(m.bus_coverage||{}).intersection??'—'}/${(m.bus_coverage||{}).truth??'—'} buses · ${row.n_untraceable_numbers??'—'} of ${row.n_numbers??'—'} numbers untraceable</span><b>escalation</b><span>${esc(row.common_escalation_reason||'—')}</span>${row.error?`<b>error</b><span style='color:var(--bad)'>${esc(row.error)}</span>`:''}</div></div>`;
+ h+=`<div class='box'><h4>The reference (what the solver says)</h4><pre>${esc(pj(row.truth_answer))}</pre></div></div>`;
+ h+=`<details class='sub'><summary>System prompt (${sys?sys.content.length:0} characters)</summary><pre>${esc(sys?sys.content:'(this run did not store the messages)')}</pre></details>`;
+ h+=`<details class='sub'><summary>User prompt (${usr?usr.content.length:0} characters)</summary><pre>${esc(usr?usr.content:'(not stored)')}</pre></details>`;
+ if(t){h+=`<div class='tl'><b>Timeline</b> <span class='muted'>${tr.n_llm_calls??0} model calls · ${tr.n_tool_calls??0} solver calls · ${tr.n_tool_rounds??0} rounds · ${tr.verification_attempts??0} gate attempts · ${(tr.prompt_tokens||0)+(tr.completion_tokens||0)} tokens · ${(tr.wall_time_s||0).toFixed(1)} s</span>${timeline(tr,t.answer||row.raw_response)}</div>`;}
+ else h+=`<div class='tl'><div class='step rep'><div class='hd'><span class='k'>report</span><b>Answer as scored</b></div><pre>${esc(pj(row.raw_response))}</pre></div></div>`;
+ el.innerHTML=h;}
+async function render(){const runs=runsOf();const r=runs.find(x=>x.method===$('#mth').value);const list=$('#list');if(!r){list.innerHTML="<p class='muted'>No run of this method in the selected set.</p>";return;}
+ const rows=await report(r);const all=$('#all').checked;const shown=rows.filter(x=>all||outcome(x)!=='solved');
+ $('#status').textContent=`${r.path} · ${shown.length} of ${rows.length} requests shown`;
+ list.innerHTML=shown.map((x,i)=>`<details class='card' data-i='${rows.indexOf(x)}'><summary><span class='pill ${outcome(x)}'>${outcome(x).replace('_',' ')}</span><span class='req'><b>${esc(x.difficulty)}</b> · ${esc(x.request_text)}<br><span class='id'>${esc(x.request_id)} · ${esc(x.common_reason||x.solved_reason||'')}${x.common_formulation_exact===false?' · formulation '+esc(x.common_formulation_error_type):''}</span></span></summary><div class='body'><p class='muted'>loading…</p></div></details>`).join('')||"<p class='muted'>Every request of this run is solved.</p>";
+ list.querySelectorAll('details.card').forEach(d=>d.addEventListener('toggle',()=>{if(d.open&&!d.dataset.done){d.dataset.done=1;renderOne(r,rows[+d.dataset.i],d.querySelector('.body'));}}));
+ const hp=new URLSearchParams(location.hash.slice(1));const want=hp.get('req');const first=list.querySelector(want?`details.card[data-i]`:'x');if(want){[...list.querySelectorAll('details.card')].forEach(d=>{if(rows[+d.dataset.i].request_id===want)d.open=true;});}}
+async function init(){INDEX=await (await fetch('../INDEX.json')).json();
+ const sets=[...new Set(INDEX.runs.filter(r=>r.kind==='run').map(r=>`${tagOf(r)||'main'}·${r.date}`))].sort((a,b)=>b.split('·')[1].localeCompare(a.split('·')[1])||a.localeCompare(b));
+ setOptions($('#set'),sets.map(k=>[k,k.replace('·',' · ')]));const main=sets.find(k=>k.startsWith('main·'));if(main)$('#set').value=main;
+ function refill(){const rs=INDEX.runs.filter(r=>r.kind==='run'&&`${tagOf(r)||'main'}·${r.date}`===$('#set').value);const cases=[...new Set(rs.map(r=>r.case))].sort((a,b)=>parseInt(a.slice(4))-parseInt(b.slice(4)));setOptions($('#sys'),cases.map(c=>[c,SYS[c]||c]),true);const models=[...new Set(rs.map(r=>r.model).filter(m=>m!=='no-llm'))];setOptions($('#model'),[['all','all models'],...models.map(m=>[m,m])],true);if(models.length===1)$('#model').value=models[0];setOptions($('#mth'),METHODS.filter(([k])=>rs.some(r=>r.method===k)),true);}
+ refill();const hp=new URLSearchParams(location.hash.slice(1));if(hp.get('method'))$('#mth').value=hp.get('method');
+ $('#set').onchange=()=>{refill();render();};$('#sys').onchange=render;$('#model').onchange=render;$('#mth').onchange=render;$('#all').onchange=render;render();}
+init();
+</script></body></html>
