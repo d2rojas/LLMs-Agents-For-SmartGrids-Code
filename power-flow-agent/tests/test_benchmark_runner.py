@@ -221,12 +221,32 @@ class FakeAgentClient(LLMClient):
             return _resp(content="The power flow did not converge; no verified numbers are available.")
         if self.hallucinate:
             return _resp(content="Power flow converged. Total load 999.000 MW, losses 77.7 MW.")
-        return _resp(
-            content=(
-                f"Power flow converged. Total load {pf['total_load_mw']:.3f} MW, generation "
-                f"{pf['total_generation_mw']:.3f} MW, losses {pf['total_loss_mw']:.3f} MW."
-            )
-        )
+        # the answer object of the design, copied from the last solve (what a real agent does in reply
+        # to the final-answer instruction)
+        executed = []
+        for m in messages:
+            for tc in (m.get("tool_calls") or []) if m.get("role") == "assistant" else []:
+                fn = tc.get("function") or {}
+                try:
+                    args = json.loads(fn.get("arguments") or "{}")
+                except Exception:
+                    args = {}
+                executed.append({"tool": fn.get("name"), "args": args})
+        answer = {
+            "formulation": executed,
+            "converged": True,
+            "summary": "Power flow converged.",
+            "answer": f"Total load {pf['total_load_mw']:.3f} MW, generation {pf['total_generation_mw']:.3f} MW, losses {pf['total_loss_mw']:.3f} MW.",
+            "bus_voltages": [{"bus_id": b["bus_id"], "vm_pu": b["vm_pu"], "va_deg": b.get("va_deg", 0.0)} for b in pf.get("bus_voltages") or []],
+            "line_flows": [{"line_id": f.get("line_id"), "from_bus": f["from_bus"], "to_bus": f["to_bus"], "p_from_mw": f["p_from_mw"], "loading_percent": f.get("loading_percent", 0.0)} for f in pf.get("line_flows") or []],
+            "total_generation_mw": pf["total_generation_mw"],
+            "total_load_mw": pf["total_load_mw"],
+            "total_loss_mw": pf["total_loss_mw"],
+            "violations": {"voltage": [], "thermal": []},
+            "next_step": "none",
+            "cannot_answer": None,
+        }
+        return _resp(content=json.dumps(answer))
 
 
 class FakeLLMOnlyClient(LLMClient):

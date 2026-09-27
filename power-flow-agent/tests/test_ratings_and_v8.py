@@ -80,5 +80,7 @@ def test_v8_request_applied_reads_the_final_state():
 def test_v8_not_applicable_without_a_network_change():
     d = build_default_dispatcher(ToolContext(session=SessionState(), solver_config=SolverConfig()))
     lc = d.dispatch("load_case", {"case_name": "case14"}); pf = d.dispatch("run_powerflow", {})
-    v = verify_final_answer(_trace_with([{"name": "load_case", "arguments": {"case_name": "case14"}, "output": lc}, {"name": "run_powerflow", "arguments": {}, "output": pf}]), "{}", enforce_v6v7=True)
+    state = json.loads(pf)
+    full = json.dumps({"formulation": [], "converged": True, "bus_voltages": state["bus_voltages"], "line_flows": state["line_flows"], "cannot_answer": None})
+    v = verify_final_answer(_trace_with([{"name": "load_case", "arguments": {"case_name": "case14"}, "output": lc}, {"name": "run_powerflow", "arguments": {}, "output": pf}]), full, enforce_v6v7=True)
     assert v["conditions"]["request_applied"]["applicable"] is False and v["passed"]

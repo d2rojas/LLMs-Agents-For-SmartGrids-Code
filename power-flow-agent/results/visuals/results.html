@@ -7,7 +7,7 @@ main{padding:18px 22px;max-width:1500px;margin:0 auto}.card{background:var(--pan
 .card h2{font-size:16px;margin:0 0 8px}.muted{color:var(--muted);font-size:12.5px}label{margin-right:12px}select{font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:#fff}
 table{border-collapse:collapse;width:100%;font-size:13px;background:#fff}th,td{border:1px solid var(--line);padding:6px 8px;text-align:right;vertical-align:top}th{background:#f6f8fb;font-weight:600}td:first-child,th:first-child{text-align:left}
 th.g{text-align:center;background:#eef2fb}
-.pill{display:inline-block;padding:1px 8px;border-radius:999px;color:#fff;font-size:11px;font-weight:600}.pill.solved{background:var(--ok)}.pill.escalated{background:var(--esc)}.pill.wrong_unflagged{background:var(--bad)}.pill.na{background:#94a3b8}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;color:#fff;font-size:11px;font-weight:600}.pill.solved{background:var(--ok)}.pill.escalated{background:var(--esc)}.pill.wrong_unflagged{background:var(--bad)}.pill.na{background:#94a3b8}.pill.run_error{background:#64748b}
 .sc td{vertical-align:top;text-align:left;font-size:12.5px}.sc a{color:var(--acc);text-decoration:none}.sc a:hover{text-decoration:underline}.sc .why{color:var(--muted);font-size:11.5px}
 .kpi{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 10px}.kpi div{background:#fafbfd;border:1px solid var(--line);border-radius:10px;padding:6px 12px;font-size:12.5px}.kpi b{display:block;font-size:16px}
 </style></head><body>
@@ -29,20 +29,20 @@ function tagOf(r){const m=r.dir.match(/__([A-Za-z0-9-]+)$/);return m?m[1]:'';}
 function setOptions(sel,opts,keep){const v=sel.value;sel.innerHTML=opts.map(([k,l])=>`<option value="${k}">${l}</option>`).join('');if(keep&&opts.some(o=>o[0]===v))sel.value=v;}
 function runsOf(){const set=$('#set').value,sys=$('#sys').value,model=$('#model').value;return INDEX.runs.filter(r=>r.kind==='run'&&`${tagOf(r)||'main'}·${r.date}`===set&&r.case===sys&&(model==='all'||r.model===model||r.model==='no-llm'));}
 async function rowsFor(r){if(!ROWS[r.path]){ROWS[r.path]=parseCSV(await (await fetch('../'+r.path+'/summary.csv')).text());}return ROWS[r.path];}
-function outcome(x){return x.outcome||(T(x.solved)?'solved':T(x.escalated)?'escalated':'wrong_unflagged');}
+function outcome(x){if(x.error&&x.error!=='')return 'run_error';return x.outcome||(T(x.solved)?'solved':T(x.escalated)?'escalated':'wrong_unflagged');}
 async function render(){const runs=runsOf();const byM={};for(const r of runs){byM[r.method]=r;}
- let h="<table><tr><th></th><th class='g' colspan='5'>Task utility</th><th class='g' colspan='4'>Solver-grounded correctness</th><th class='g' colspan='2'>Cost and time</th><th></th></tr><tr><th>Method</th><th>Formulation %</th><th>V_MAE solved</th><th>V_MAE all</th><th>B_mean solved</th><th>B_mean all</th><th>Solved %</th><th>Escalated %</th><th>Wrong unflagged %</th><th>Traceable %</th><th>Tokens</th><th>Time (s)</th><th>n</th></tr>";
+ let h="<table><tr><th></th><th class='g' colspan='5'>Task utility</th><th class='g' colspan='4'>Solver-grounded correctness</th><th class='g' colspan='2'>Cost and time</th><th></th></tr><tr><th>Method</th><th>Formulation %</th><th>V_MAE solved</th><th>V_MAE all</th><th>B_mean solved</th><th>B_mean all</th><th>Solved %</th><th>Escalated %</th><th>Wrong unflagged %</th><th>Traceable %</th><th>Tokens</th><th>Time (s)</th><th>n answered</th></tr>";
  const scen={};
  for(const [key,label] of METHODS){const r=byM[key];if(!r){h+=`<tr><td>${label}</td><td colspan='12' class='muted' style='text-align:left'>no run in this set</td></tr>`;continue;}
-  const rows=await rowsFor(r);const n=rows.length;const solved=rows.filter(x=>outcome(x)==='solved');
+  const all=await rowsFor(r);const errs=all.filter(x=>outcome(x)==='run_error');const rows=all.filter(x=>outcome(x)!=='run_error');const n=rows.length||1;const solved=rows.filter(x=>outcome(x)==='solved');
   const pct=k=>100*rows.filter(x=>outcome(x)===k).length/n;
   const form=100*rows.filter(x=>T(x.formulation_exact)).length/n;
   const vAll=mean(rows.map(x=>num(x.voltage_mae_pu)).filter(x=>x!=null)),vSol=mean(solved.map(x=>num(x.voltage_mae_pu)).filter(x=>x!=null));
   const bAll=mean(rows.map(x=>num(x.kcl_mismatch_mw)).filter(x=>x!=null)),bSol=mean(solved.map(x=>num(x.kcl_mismatch_mw)).filter(x=>x!=null));
   const trRows=rows.filter(x=>x.faithful_answers!==''&&x.faithful_answers!=null);const tr=r.model==='no-llm'||trRows.length?100*trRows.filter(x=>T(x.faithful_answers)).length/(trRows.length||1):null;
   const tok=r.model==='no-llm'?null:mean(rows.map(x=>(num(x.prompt_tokens)||0)+(num(x.completion_tokens)||0)));const tm=mean(rows.map(x=>num(x.wall_time_s)).filter(x=>x!=null));
-  h+=`<tr><td><b>${label}</b><br><span class='muted'>${r.model} · ${r.dir}</span></td><td>${fmtP(form)}</td><td>${fmtE(vSol)}</td><td>${fmtE(vAll)}</td><td>${fmtE(bSol)}</td><td>${fmtE(bAll)}</td><td>${fmtP(pct('solved'))}</td><td>${fmtP(pct('escalated'))}</td><td>${fmtP(pct('wrong_unflagged'))}</td><td>${r.model==='no-llm'?'100.0':fmtP(tr)}</td><td>${tok==null?'–':Math.round(tok)}</td><td>${tm==null?'–':tm.toFixed(1)}</td><td>${n}</td></tr>`;
-  rows.forEach(x=>{(scen[x.request_id]=scen[x.request_id]||{text:x.request_text,difficulty:x.difficulty,cells:{}}).cells[key]={run:r,row:x};});}
+  h+=`<tr><td><b>${label}</b><br><span class='muted'>${r.model} · ${r.dir}</span></td><td>${fmtP(form)}</td><td>${fmtE(vSol)}</td><td>${fmtE(vAll)}</td><td>${fmtE(bSol)}</td><td>${fmtE(bAll)}</td><td>${fmtP(pct('solved'))}</td><td>${fmtP(pct('escalated'))}</td><td>${fmtP(pct('wrong_unflagged'))}</td><td>${r.model==='no-llm'?'100.0':fmtP(tr)}</td><td>${tok==null?'–':Math.round(tok)}</td><td>${tm==null?'–':tm.toFixed(1)}</td><td>${rows.length}${errs.length?`<br><span class='pill run_error'>${errs.length} run error${errs.length>1?'s':''}</span>`:''}</td></tr>`;
+  all.forEach(x=>{(scen[x.request_id]=scen[x.request_id]||{text:x.request_text,difficulty:x.difficulty,cells:{}}).cells[key]={run:r,row:x};});}
  h+="</table>";$('#table').innerHTML=h;
  let s="<table class='sc'><tr><th style='text-align:left'>request</th>"+METHODS.map(m=>`<th style='text-align:left'>${m[1]}</th>`).join('')+"</tr>";
  for(const [rid,sc] of Object.entries(scen)){s+=`<tr><td><b>${sc.difficulty}</b><br>${sc.text}<br><span class='why'>${rid}</span></td>`;

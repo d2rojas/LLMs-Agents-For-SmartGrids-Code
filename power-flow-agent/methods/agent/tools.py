@@ -254,6 +254,26 @@ def round_floats(obj: Any, key: str = "") -> Any:
     return obj
 
 
+def compact_change(res_dump: Dict[str, Any], applied: Dict[str, Any]) -> Dict[str, Any]:
+    """What a network-changing tool returns (2026-09-26): the change it applied, whether the network
+    still converges, the totals and the violation counts, never the bus and branch tables. The full
+    state comes from ``run_powerflow``, which every method must call before reporting numbers. On the
+    300-bus system a full state is 22k tokens; returning it with every change overflowed the model's
+    context on multistep requests, and the agent re-solves before answering anyway."""
+    vv = res_dump.get("voltage_violations") or []
+    tv = res_dump.get("thermal_violations") or []
+    return {
+        "applied": applied,
+        "converged": bool(res_dump.get("converged")),
+        "total_generation_mw": res_dump.get("total_generation_mw"),
+        "total_load_mw": res_dump.get("total_load_mw"),
+        "total_loss_mw": res_dump.get("total_loss_mw"),
+        "n_voltage_violations": len(vv),
+        "n_thermal_violations": len(tv),
+        "note": "Change applied and the network re-solved. Call run_powerflow to get the bus voltages and branch flows of the new state.",
+    }
+
+
 @dataclass
 class ToolDispatcher:
     handlers: MutableMapping[str, Handler]
@@ -498,7 +518,7 @@ def build_default_dispatcher(ctx: ToolContext) -> ToolDispatcher:
                 parameters={"bus_id": bus_id, "p_mw": p_mw, "q_mvar": q_mvar},
             )
         )
-        return res.model_dump()
+        return compact_change(res.model_dump(), {"tool": "modify_load", "bus_id": bus_id, "p_mw": p_mw, "q_mvar": q_mvar})
 
     def _set_load_impl(args: Mapping[str, Any], *, tool_name: str, force_q_none: bool) -> Any:
         """Shared body of set_active_load/set_load (TOOLS_LOAD_SPLIT, not used by TOOLS):
@@ -531,7 +551,7 @@ def build_default_dispatcher(ctx: ToolContext) -> ToolDispatcher:
                 parameters={"bus_id": bus_id, "p_mw": p_mw, "q_mvar": q_mvar},
             )
         )
-        out = res.model_dump()
+        out = compact_change(res.model_dump(), {"tool": tool_name, "bus_id": bus_id, "p_mw": p_mw, "q_mvar": q_mvar})
         out["resolved_bus_id"] = bus_id
         out["assumption"] = (
             "reactive load at this bus is unchanged from its present value"
@@ -563,7 +583,7 @@ def build_default_dispatcher(ctx: ToolContext) -> ToolDispatcher:
         ctx.session.modification_log.append(
             Modification(action="disconnect_line", description=f"Disconnect branch bus {fb} - bus {tb}", parameters={"from_bus": fb, "to_bus": tb})
         )
-        return res.model_dump()
+        return compact_change(res.model_dump(), {"tool": "disconnect_line", "from_bus": fb, "to_bus": tb, "in_service": False})
 
     def reconnect_line(args: Mapping[str, Any]) -> Any:
         if ctx.net is None:
@@ -582,7 +602,7 @@ def build_default_dispatcher(ctx: ToolContext) -> ToolDispatcher:
         ctx.session.modification_log.append(
             Modification(action="reconnect_line", description=f"Reconnect branch bus {fb} - bus {tb}", parameters={"from_bus": fb, "to_bus": tb})
         )
-        return res.model_dump()
+        return compact_change(res.model_dump(), {"tool": "reconnect_line", "from_bus": fb, "to_bus": tb, "in_service": True})
 
     def get_status(_: Mapping[str, Any]) -> Any:
         if ctx.net is None:
@@ -800,7 +820,7 @@ def build_default_dispatcher(ctx: ToolContext) -> ToolDispatcher:
             "applied": True,
             "applied_action_index": idx + 1,
             "applied_action": {"action": act.action, "description": act.description, "parameters": act.parameters},
-            "result": new_res.model_dump(),
+            "result": compact_change(new_res.model_dump(), {"tool": "apply_remedial_action", "action_index": idx + 1}),
             "extra_figures": extra_figures,
         }
 

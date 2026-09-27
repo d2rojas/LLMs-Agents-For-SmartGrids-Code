@@ -1207,6 +1207,7 @@ def evaluate_item(
 
     try:
         common = score_common(
+            run_error=error,
             answer_text=raw_text, truth=item.truth, truth_answer=truth_answer, expected_outcome=item.expected_outcome,
             reference_solvable=reference_solvable, trace=trace, intended_calls=item.intended_calls, executed_calls=executed,
             has_tools=has_tools, preloaded_case=preloaded_case, request_text=item.text, solver_config=solver_config,
