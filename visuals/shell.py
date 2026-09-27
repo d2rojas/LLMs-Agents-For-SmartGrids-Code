@@ -31,7 +31,8 @@ __all__ = [
     "note",
     "prompt_block",
     "diagram",
-    "diagram_card",
+    "diagram_height",
+    "diagram_row",
     "tab",
     "page",
 ]
@@ -109,8 +110,12 @@ background:#eef1f5;color:#334155;margin:2px 4px 2px 0}
 white-space:nowrap}
 .vd.solved{background:var(--ok)}.vd.escalated{background:var(--esc)}.vd.wrong{background:var(--bad)}
 
-.dg{background:#fafbfd;border:1px solid var(--line);border-radius:10px;padding:8px}
-.dg h4{margin:0;font-size:12.5px}.dg .muted{font-size:11.5px;margin-bottom:4px}
+.dg{background:#fafbfd;border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+display:flex;flex-direction:column}
+.dg h4{margin:0;font-size:13px}.dg>.muted{font-size:11.5px;margin-bottom:6px}
+/* flex:none or the card, stretched to its row, shrinks the drawing and clips it */
+.dg svg{display:block;margin:0 auto;max-width:300px;width:100%;flex:none}
+.dg .fn{margin:8px 0 0;font-size:11.5px;color:var(--muted);line-height:1.45}
 .flow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
 .flow .box{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 12px;box-shadow:var(--shadow)}
 .flow .box b{display:block;font-size:13px}.flow .box span{font-size:12px;color:var(--muted)}
@@ -227,12 +232,21 @@ STEP_STYLE: Dict[str, Tuple[str, str]] = {
 }
 
 
+def diagram_height(steps: Sequence[Tuple[str, str]], branch: bool = False) -> int:
+    """The viewBox height one diagram needs. Exposed so a row can share one."""
+    n = len(steps)
+    return _TOP + n * _BH + (n - 1) * _GAP + (_BRANCH_H if branch else 0) + _TOP
+
+
+_TOP, _BH, _GAP, _BRANCH_H, _W = 8, 30, 26, 56, 230
+
+
 def diagram(
     steps: Sequence[Tuple[str, str]],
     *,
-    loop: Optional[Tuple[int, str]] = None,
+    loop: Optional[int] = None,
     branch: Optional[Tuple[str, str]] = None,
-    footnote: str = "",
+    height: Optional[int] = None,
 ) -> str:
     """The control flow of one method, as a small inline SVG.
 
@@ -240,87 +254,97 @@ def diagram(
     same way look the same on two different pages, and a difference on the page
     means a difference in the method.
 
+    Nothing is written inside the drawing that a box cannot hold. Notes go
+    under the diagram as HTML, where they wrap; an SVG text node does not, and
+    a note longer than the viewBox is silently cut in half.
+
     Args:
         steps: (text, kind) top to bottom; kind indexes ``STEP_STYLE``.
-        loop: (index, label) to draw a return arc from that step back to the
-            one above it, for an iterating method.
+        loop: index of the step whose output returns to the step above it, for
+            an iterating method. The count of rounds belongs in the note, not
+            on the arc, where it lands on top of the boxes.
         branch: (left, right) two outcome boxes below the last step, for a
             method that can end in more than one place.
-        footnote: One line under the diagram, for what the boxes cannot say.
+        height: viewBox height to use instead of the natural one. Pass the same
+            value to every diagram in a row and they render at one scale, with
+            their boxes on the same lines.
 
     Returns:
         A complete ``<svg>`` element that scales to its container's width.
     """
-    W = 230
-    top, bh, gap = 8, 28, 24
     n = len(steps)
-    height = top + n * bh + (n - 1) * gap + (58 if branch else 0) + (24 if footnote else 8)
+    h = height or diagram_height(steps, branch is not None)
 
-    def box(x: float, y: float, w: float, h: float, text: str, kind: str) -> str:
+    def box(x: float, y: float, w: float, txt: str, kind: str) -> str:
         fill, stroke = STEP_STYLE.get(kind, STEP_STYLE["out"])
         return (
-            f"<rect x='{x}' y='{y}' width='{w}' height='{h}' rx='8' fill='{fill}' stroke='{stroke}'/>"
-            f"<text x='{x + w / 2}' y='{y + h / 2 + 4}' text-anchor='middle' font-size='11' "
-            f"font-family='Inter,Helvetica,Arial' fill='#0f172a'>{E(text)}</text>"
+            f"<rect x='{x}' y='{y}' width='{w}' height='{_BH}' rx='8' fill='{fill}' stroke='{stroke}'/>"
+            f"<text x='{x + w / 2}' y='{y + _BH / 2 + 4}' text-anchor='middle' font-size='11.5' "
+            f"font-family='Inter,Helvetica,Arial' fill='#0f172a'>{E(txt)}</text>"
         )
 
     def arrow(y1: float, y2: float) -> str:
         return (
-            f"<line x1='115' y1='{y1}' x2='115' y2='{y2}' stroke='#64748b' stroke-width='1.6' "
-            "marker-end='url(#a)'/>"
+            f"<line x1='{_W / 2}' y1='{y1}' x2='{_W / 2}' y2='{y2}' stroke='#64748b' "
+            "stroke-width='1.6' marker-end='url(#a)'/>"
         )
 
     d = [
-        f"<svg viewBox='0 0 {W} {height}' width='100%' xmlns='http://www.w3.org/2000/svg'>"
+        f"<svg viewBox='0 0 {_W} {h}' width='100%' height='{h}' "
+        "xmlns='http://www.w3.org/2000/svg'>"
         "<defs><marker id='a' markerWidth='8' markerHeight='8' refX='7' refY='4' orient='auto'>"
         "<path d='M0,0 L8,4 L0,8 z' fill='#64748b'/></marker></defs>"
     ]
     ys: List[float] = []
-    y = float(top)
+    y = float(_TOP)
     for i, (text, kind) in enumerate(steps):
         if i:
-            d.append(arrow(y - gap, y - 4))
-        wide = 170 if kind in ("llm", "plan", "solver", "gate") else 140
-        d.append(box((W - wide) / 2, y, wide, bh, text, kind))
+            d.append(arrow(y - _GAP, y - 4))
+        # every box the same width, so the column reads as one flow
+        d.append(box(24, y, _W - 48, text, kind))
         ys.append(y)
-        y += bh + gap
-    y -= gap
+        y += _BH + _GAP
+    bottom = ys[-1] + _BH  # the last box's lower edge, not its top
 
     if loop is not None:
-        idx, text = loop
-        idx = max(1, min(idx, n - 1))
-        bottom, top_y = ys[idx] + bh / 2, ys[idx - 1] + bh / 2
+        i = max(1, min(loop, n - 1))
+        lo, hi = ys[i] + _BH / 2, ys[i - 1] + _BH / 2
         d.append(
-            f"<path d='M200,{bottom} C226,{bottom} 226,{top_y} 200,{top_y}' fill='none' "
+            f"<path d='M{_W - 24},{lo} C{_W - 6},{lo} {_W - 6},{hi} {_W - 24},{hi}' fill='none' "
             "stroke='#64748b' stroke-width='1.6' marker-end='url(#a)'/>"
-        )
-        d.append(
-            f"<text x='{W - 8}' y='{(bottom + top_y) / 2 - 4}' text-anchor='end' font-size='10' "
-            f"font-family='Inter,Helvetica,Arial' fill='#64748b'>{E(text)}</text>"
         )
 
     if branch is not None:
         left, right = branch
-        d.append(arrow(y + bh, y + bh + 20))
-        by = y + bh + 24
-        d.append(box(12, by, 96, 26, left, "ok"))
-        d.append(box(122, by, 96, 26, right, "esc"))
-        y = by
+        d.append(arrow(bottom, bottom + 18))
+        by = bottom + 22
+        half = (_W - 48 - 10) / 2
+        d.append(box(24, by, half, left, "ok"))
+        d.append(box(24 + half + 10, by, half, right, "esc"))
 
-    if footnote:
-        d.append(
-            f"<text x='4' y='{height - 6}' font-size='10' font-family='Inter,Helvetica,Arial' "
-            f"fill='#64748b'>{E(footnote)}</text>"
-        )
     d.append("</svg>")
     return "".join(d)
 
 
-def diagram_card(title: str, subtitle: str, svg: str) -> str:
-    """One labelled diagram, sized for a row of them."""
-    return (
-        f"<div class='dg'><h4>{E(title)}</h4><div class='muted'>{E(subtitle)}</div>{svg}</div>"
-    )
+def diagram_row(items: Sequence[Dict[str, Any]], cols: int = 3) -> str:
+    """A row of method diagrams, all at one scale.
+
+    Each item is ``{title, subtitle, steps, loop?, branch?, note?}``. Every
+    diagram is rendered at the tallest natural height in the set, so the boxes
+    line up across diagrams and none is clipped by a neighbour's card.
+    """
+    h = max(diagram_height(i["steps"], i.get("branch") is not None) for i in items)
+    cells = []
+    for i in items:
+        note_html = f"<p class='fn'>{E(i['note'])}</p>" if i.get("note") else ""
+        cells.append(
+            f"<div class='dg'><h4>{E(i['title'])}</h4>"
+            f"<div class='muted'>{E(i.get('subtitle', ''))}</div>"
+            + diagram(i["steps"], loop=i.get("loop"), branch=i.get("branch"), height=h)
+            + note_html
+            + "</div>"
+        )
+    return f"<div class='grid g{cols}'>" + "".join(cells) + "</div>"
 
 
 def tab(key: str, body: str, *, on: bool = False) -> str:

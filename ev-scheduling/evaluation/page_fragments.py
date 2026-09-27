@@ -33,7 +33,7 @@ from visuals.shell import (  # noqa: E402
     card,
     chip,
     diagram,
-    diagram_card,
+    diagram_row,
     flow,
     kv,
     note,
@@ -48,32 +48,34 @@ DIAGRAMS: Dict[str, Dict[str, Any]] = {
     "rule_based": {
         "steps": [("request", "input"), ("regex parser", "code"), ("solver (CVXPY)", "solver"),
                   ("template answer", "out")],
-        "footnote": "no LLM · no gate",
+        "note": "No language model and no prompt. What the parser cannot read, it cannot answer.",
     },
     "llm_only_structured": {
         "steps": [("request", "input"), ("LLM writes the kW matrix", "llm"), ("text answer", "out")],
-        "footnote": "no solver · no tool calls · no gate",
+        "note": "No solver and no tool calls. The kilowatts are written as text, and nothing checks them.",
     },
     "llm_only_cot": {
         "steps": [("request", "input"), ("LLM reasons, then writes it", "llm"), ("text answer", "out")],
-        "footnote": "one added prompt section · otherwise identical",
+        "note": "One added prompt section. Identical to the method on its left in every other respect.",
     },
     "plan_act_nogate": {
         "steps": [("request", "input"), ("LLM writes the whole plan", "plan"), ("solver runs every step", "solver"),
                   ("LLM writes the answer", "llm")],
-        "footnote": "plans once, never sees results before committing",
+        "note": "Plans once. The whole sequence is committed before any result comes back.",
     },
     "react_nogate": {
         "steps": [("request", "input"), ("LLM decides a tool call", "llm"), ("solver executes it", "solver"),
                   ("LLM writes the answer", "llm")],
-        "loop": (2, "up to 3 rounds"),
-        "footnote": "sees every result · no gate",
+        "loop": 2,
+        "note": "Up to three rounds. The model sees every result, and nothing checks the answer.",
     },
     "evagent": {
         "steps": [("request", "input"), ("LLM decides a tool call", "llm"), ("solver executes it", "solver"),
                   ("gate E1-E6", "gate")],
-        "loop": (2, "up to 3 rounds"),
+        "loop": 2,
         "branch": ("report", "escalate"),
+        "note": "Up to three rounds, then six conditions on the answer. A request it cannot verify leaves as an "
+                "escalation rather than as a number.",
     },
 }
 
@@ -408,21 +410,19 @@ def tab_methods() -> str:
     body = [
         card(
             "Six ways to answer the same request",
-            "<div class='grid g6'>"
-            + "".join(
-                diagram_card(
-                    r["label"],
-                    ("no LLM" if r["llm"] == "no" else ("LLM only, no tools" if r["tools"] == "none" else "LLM + solver")),
-                    diagram(
-                        DIAGRAMS[r["name"]]["steps"],
-                        loop=DIAGRAMS[r["name"]].get("loop"),
-                        branch=DIAGRAMS[r["name"]].get("branch"),
-                        footnote=DIAGRAMS[r["name"]].get("footnote", ""),
-                    ),
-                )
-                for r in ROWS
-            )
-            + "</div>",
+            diagram_row(
+                [
+                    {
+                        "title": r["label"],
+                        "subtitle": ("no LLM" if r["llm"] == "no"
+                                     else "LLM only, no tools" if r["tools"] == "none"
+                                     else "LLM + solver"),
+                        **DIAGRAMS[r["name"]],
+                    }
+                    for r in ROWS
+                ],
+                cols=3,
+            ),
         ),
         card(
             "Six methods, one factor apart",
