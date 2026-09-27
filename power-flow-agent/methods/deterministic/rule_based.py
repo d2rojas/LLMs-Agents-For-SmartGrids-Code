@@ -387,6 +387,18 @@ def run(request_text: str, ctx: ToolContext, dispatcher: Optional[ToolDispatcher
             derived.append(d)
             lines.append(d.get("text") or f"{d.get('kind')}: {d.get('error')}")
 
+    # The tools that change the network return a compact confirmation, not the state; the answer
+    # needs the state of the final network, so solve once more when the plan ended in a change
+    # (an extra read-only call the formulation comparator ignores).
+    if ok and outputs and outputs[-1]["tool"] in ("set_active_load", "set_load", "modify_load", "disconnect_line", "reconnect_line", "apply_remedial_action"):
+        raw = dispatcher.dispatch("run_powerflow", {})
+        try:
+            out = json.loads(raw)
+        except Exception:
+            out = {"raw": raw}
+        outputs.append({"tool": "run_powerflow", "args": {}, "output": out if isinstance(out, dict) else {"raw": out}})
+        lines.append(_summarize("run_powerflow", outputs[-1]["output"]))
+
     for w in parsed["warnings"]:
         lines.append(f"Warning: {w}")
 

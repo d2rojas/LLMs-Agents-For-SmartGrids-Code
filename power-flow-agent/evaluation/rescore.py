@@ -422,6 +422,7 @@ def rescore_row(
 
     try:
         new.update(score_common(
+            run_error=row.get("error"),
             answer_text=raw, truth=truth_result, truth_answer=truth_answer, expected_outcome=row.get("expected_outcome"),
             reference_solvable=reference_solvable, trace=trace, intended_calls=list(row.get("intended_calls") or []),
             executed_calls=new.get("executed_calls") if has_tools else None, has_tools=has_tools,

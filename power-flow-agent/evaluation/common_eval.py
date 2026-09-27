@@ -50,6 +50,7 @@ def _cannot_answer(obj: Optional[Dict[str, Any]]) -> Optional[str]:
 
 def score_common(
     *,
+    run_error: Optional[str] = None,
     answer_text: Optional[str],
     truth: Any,
     truth_answer: Any,
@@ -173,14 +174,24 @@ def score_common(
     out["common_solved"] = bool(solved)
     out["common_reason"] = reason
     out["common_outcome"] = "escalated" if out["common_escalated"] else ("solved" if solved else "wrong_unflagged")
+    if run_error:
+        # An API failure (timeout, connection, context length) is not an answer: the method never
+        # got to reply. Reported apart, never as a wrong answer; the request is rerun.
+        out["common_outcome"] = "run_error"
+        out["common_solved"] = False
+        out["common_escalated"] = False
+        out["common_reason"] = "run_error"
+        out["common_run_error"] = str(run_error)[:200]
     return out
 
 
 def aggregate_common(rows: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
-    rows = [r for r in rows if r.get("common_outcome") is not None]
+    rows_all = [r for r in rows if r.get("common_outcome") is not None]
+    errors = [r for r in rows_all if r.get("common_outcome") == "run_error"]
+    rows = [r for r in rows_all if r.get("common_outcome") != "run_error"]  # rates are over the answered requests
     n = len(rows)
     if not n:
-        return {}
+        return {"common_n": 0, "common_run_error_count": len(errors)} if errors else {}
     def rate(key: str, val: Any = True) -> float:
         return sum(1 for r in rows if r.get(key) == val) / n
     def mean(key: str) -> Optional[float]:
@@ -199,4 +210,5 @@ def aggregate_common(rows: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
         "common_traceable_rate": (sum(1 for r in trace_rows if r.get("common_traceable")) / len(trace_rows)) if trace_rows else None,
         "common_traceable_count": sum(1 for r in trace_rows if r.get("common_traceable")), "common_traceable_total": len(trace_rows),
         "common_reported_state_rate": rate("common_reported_state", True),
+        "common_run_error_count": len(errors),
     }

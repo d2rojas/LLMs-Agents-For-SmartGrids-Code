@@ -36,7 +36,6 @@ main{flex:1;min-width:0;display:flex;overflow:auto}iframe{border:0;width:100%;he
 <a href='#home' data-r='home' style='padding-left:18px;font-weight:600'>Home</a>
 <hr>
 <div class='grp'><span class='n'>1</span>Design</div>
-<a href='#design/overview' data-r='design/overview'>Overview</a>
 <a href='#design/methods' data-r='design/methods'>Methods</a>
 <a href='#design/scenarios' data-r='design/scenarios'>Scenarios</a>
 <a href='#design/prompts' data-r='design/prompts'>Prompts</a>
@@ -52,7 +51,7 @@ main{flex:1;min-width:0;display:flex;overflow:auto}iframe{border:0;width:100%;he
 <span class='off'>Comparisons &amp; conclusions<small>written after the results exist</small></span>
 </aside>
 <main><section id='home'><h1>PFAgent · IEEE 14 to 300-bus evaluation</h1><p class='lead'>Can a language model act as a power-flow analyst an operator can trust? We compare five ways of using an LLM for the same requests, from prompting alone to the solver-grounded agent, against a deterministic parser with no LLM, on the same five IEEE systems, with the same scoring.</p>
-<div class='prob'><h2>The problem</h2><p>An operator writes a request in plain English about an IEEE test system (14 to 300 buses): run the power flow, change a load, take a line out, scan every single outage. Somebody has to turn that sentence into the right solver operations with the right arguments, compute the result, and report the numbers the operator needs, in the units they expect. Today that somebody is an engineer with a power-flow tool. The question is what happens when it is a language model.</p>
+<div class='prob'><h2>The problem</h2><p>An operator writes a request in plain English about an IEEE test system (14 to 300 buses): run the power flow, change a load, take a line out, scan every single outage. Somebody has to turn that sentence into the right solver operations with the right arguments, compute the result, and report the numbers the operator needs, in the units they expect. Today that somebody is an engineer with a power-flow tool.</p><p><b>The research question of this case study:</b> when a language model takes that seat, which way of using it, from prompting alone to a solver-grounded agent with a verification gate, keeps every reported number grounded in the solver, turns its own failures into escalations instead of wrong answers, and at what cost in tokens and time as the network grows from 14 to 300 buses?</p>
 <div class='req'>"Load the 14-bus test case (case14), set the active load at bus 4 to 42.7 MW, disconnect the line between bus 3 and bus 4, reconnect the line between bus 3 and bus 4, and finally rerun the power flow, then list every line whose loading is above 80%."</div>
 <p style='font-size:12.5px;color:var(--muted)'>One of the 20 requests per system. Five are plain, five state a value or a criterion, five chain several operations, five are ambiguous on purpose (numbers spelled out, units in kW, 0-based indices).</p>
 <div class='g'>
@@ -60,12 +59,6 @@ main{flex:1;min-width:0;display:flex;overflow:auto}iframe{border:0;width:100%;he
 <div class='b'><h4>What can go wrong</h4><ul><li>Plausible numbers that are not the solver's: <b>wrong, presented as right</b>.</li><li>A right-looking plan with a wrong argument: the wrong bus, a made-up MVAr value, an index off by one.</li><li>Answering a request that cannot be completed instead of saying so.</li></ul></div>
 <div class='b'><h4>What we expect from PFAgent</h4><p>Every reported number comes from PandaPower and passes a verification gate before it reaches the operator. When the gate cannot pass, the request is <b>escalated</b> to a person rather than answered. The target for the solver-grounded row: <span class='tag ok'>solved</span> + <span class='tag esc'>escalated</span> = 100%, <span class='tag bad'>wrong, unflagged</span> = 0%.</p></div>
 </div></div>
-<h2 class='sec'>Three stages</h2>
-<div class='stages'>
-<a class='stg' href='#design/overview'><span class='n'>1</span><h3>Design</h3><p>Methods, prompts, the answer object every method returns, the evaluator and the run plan with its cost. Written before any run: no numbers, no verdicts.</p><div class='st'>Open the design →</div></a>
-<a class='stg' href='#results/table'><span class='n'>2</span><h3>Results</h3><p>The numbers and every trace, exactly as the runs produced them. The table, the same scenario under each method, and a viewer for any run.</p><div class='st'>Open the results →</div></a>
-<span class='stg off'><span class='n'>3</span><h3>Analysis</h3><p>Comparisons, failure catalogue and conclusions, written only from the results. Comes last.</p><div class='st'>After the runs</div></span>
-</div>
 </section><iframe id='frame' title='content' hidden></iframe></main>
 </div>
 <script>
@@ -79,9 +72,9 @@ function go(){const r=(location.hash||'#home').slice(1);const [sec,sub]=r.split(
  if(sec==='home'){home.classList.add('on');frame.hidden=true;document.querySelectorAll('aside a').forEach(a=>a.classList.toggle('on',a.dataset.r==='home'));crumb.innerHTML='';note.textContent='';side.classList.remove('open');return;}
  home.classList.remove('on');frame.hidden=false;
  const route=sec==='design'?ROUTES.design:(ROUTES[r]||ROUTES.design);
- if(cur!==route.src){frame.src=sec==='design'?'design.html#'+(sub||'overview'):route.src;cur=route.src;}
- else if(sec==='design'){try{frame.contentWindow.location.hash=sub||'overview';}catch(e){}}
- const key=sec==='design'?'design/'+(sub||'overview'):r;
+ if(cur!==route.src){frame.src=sec==='design'?'design.html#'+(sub||'methods'):route.src;cur=route.src;}
+ else if(sec==='design'){try{frame.contentWindow.location.hash=sub||'methods';}catch(e){}}
+ const key=sec==='design'?'design/'+(sub||'methods'):r;
  document.querySelectorAll('aside a').forEach(a=>a.classList.toggle('on',a.dataset.r===key));
  const item=document.querySelector('aside a.on');crumb.innerHTML=(sec==='design'?'1 · Design':'2 · Results')+' <b>› '+(item?item.textContent:'')+'</b>';note.textContent=route.note;side.classList.remove('open');}
 window.addEventListener('hashchange',go);go();

@@ -335,7 +335,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--k", type=int, default=1, help="perturbation strength")
     r.add_argument("--max-rounds", type=int, default=8)
     r.add_argument("--temperature", type=float, default=0.0)
-    r.add_argument("--timeout-s", type=float, default=90.0)
+    r.add_argument("--timeout-s", type=float, default=600.0, help="per model call; a 300-bus answer takes minutes to write")
     r.add_argument("--tool-variant", default=DEFAULT_TOOL_VARIANT, choices=["v1", "load_split"], help="tool set; load_split is the one behind Table 5")
     r.add_argument("--plan-variant", default="text", choices=["text", "structured"])
     r.add_argument("--requests", default=None, help="a frozen requests .jsonl instead of --n generated ones")

@@ -83,6 +83,7 @@ CONDITION_LABELS: Dict[str, str] = {
     "argument_grounding": "V6",
     "claims_from_tools": "V7",
     "request_applied": "V8",
+    "complete_state": "V10",
     "plausible_state": "V9",
 }
 _MUTATING_TOOLS = ("set_active_load", "set_load", "modify_load", "disconnect_line", "reconnect_line", "apply_remedial_action")
@@ -146,6 +147,54 @@ def _request_applied_check(records: List[Dict[str, Any]], pf: Optional[Dict[str,
                 elif state == "in" and not carrying:
                     problems.append(f"branch {a}-{b} carries no flow in the final state although it was reconnected")
     return {"passed": not problems, "applicable": True, "detail": "; ".join(problems) or "every change applied and reflected in the final state"}
+
+
+def _answer_object(text: str) -> Optional[Dict[str, Any]]:
+    """The answer JSON object in ``text`` (the whole text, or the first {...} block), else None."""
+    try:
+        obj = json.loads(text)
+        return obj if isinstance(obj, dict) else None
+    except Exception:
+        pass
+    m = re.search(r"\{.*\}", text or "", flags=re.S)
+    if not m:
+        return None
+    try:
+        obj = json.loads(m.group(0))
+        return obj if isinstance(obj, dict) else None
+    except Exception:
+        return None
+
+
+def _complete_state_check(final_answer_text: str, pf: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """V10: the answer carries the whole state of the last solve: every bus of ``bus_voltages`` and
+    every branch of ``line_flows``. A state with buses missing, reported as the state, is not a
+    result an operator can use; the gate sends it back. An answer that declares it cannot complete
+    the request (``cannot_answer`` filled, or converged false with empty arrays) is not judged here."""
+    if not pf:
+        return {"passed": True, "applicable": False, "detail": "no solved state"}
+    ans = _answer_object(final_answer_text)
+    if ans is None:
+        return {"passed": False, "applicable": True, "detail": "the answer is not the JSON answer object, so it carries no state"}
+    if ans.get("cannot_answer") or (ans.get("converged") is False and not ans.get("bus_voltages")):
+        return {"passed": True, "applicable": False, "detail": "the answer declares it cannot complete the request"}
+    want_b = {int(b.get("bus_id")) for b in (pf.get("bus_voltages") or []) if isinstance(b, dict) and b.get("bus_id") is not None}
+    got_b = {int(b.get("bus_id")) for b in (ans.get("bus_voltages") or []) if isinstance(b, dict) and isinstance(b.get("bus_id"), (int, float, str)) and str(b.get("bus_id")).lstrip("-").isdigit()}
+    want_l = {frozenset((int(f.get("from_bus")), int(f.get("to_bus")))) for f in (pf.get("line_flows") or []) if isinstance(f, dict) and f.get("from_bus") is not None and f.get("to_bus") is not None}
+    got_l = set()
+    for f in ans.get("line_flows") or []:
+        if isinstance(f, dict) and f.get("from_bus") is not None and f.get("to_bus") is not None:
+            try:
+                got_l.add(frozenset((int(f["from_bus"]), int(f["to_bus"]))))
+            except (TypeError, ValueError):
+                pass
+    miss_b, miss_l = want_b - got_b, want_l - got_l
+    problems = []
+    if miss_b:
+        problems.append(f"{len(miss_b)} of {len(want_b)} buses are missing from bus_voltages")
+    if miss_l:
+        problems.append(f"{len(miss_l)} of {len(want_l)} branches are missing from line_flows")
+    return {"passed": not problems, "applicable": True, "detail": "; ".join(problems) or f"all {len(want_b)} buses and {len(want_l)} branches reported", "missing_buses": len(miss_b), "missing_branches": len(miss_l)}
 
 
 def _plausible_state_check(pf: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -222,6 +271,8 @@ class EngineConfig:
     # final-answer instruction (methods/_shared/final_answer_instruction.txt, the shared answer
     # object) is sent and the reply to it is the answer. False keeps the free-text reply (the UI).
     final_answer_instruction: bool = True
+    # V10 (complete_state) in the final gate. On by default; tests that script free-text answers turn it off.
+    complete_state_gate: bool = True
     timeout_s: float = 60.0
 
     architecture: str = "react"
@@ -275,8 +326,23 @@ class OpenAIChatClient(LLMClient):
 
         self._client = OpenAI(api_key=api_key, base_url=base_url)
 
+    RETRY_DELAYS_S = (3.0, 10.0, 30.0)
+
     def create(self, **kwargs: Any) -> Any:
-        return self._client.chat.completions.create(**kwargs)
+        """One chat completion, retried on transient failures (timeouts, connection errors, rate
+        limits, 5xx) with growing waits; a 4xx such as context-length is not retried."""
+        import time as _time
+
+        import openai as _openai
+
+        transient = (_openai.APITimeoutError, _openai.APIConnectionError, _openai.RateLimitError, _openai.InternalServerError)
+        for attempt, delay in enumerate(self.RETRY_DELAYS_S + (None,)):
+            try:
+                return self._client.chat.completions.create(**kwargs)
+            except transient:
+                if delay is None:
+                    raise
+                _time.sleep(delay)
 
 
 def _trim_history(history: List[Dict[str, Any]], max_messages: int) -> List[Dict[str, Any]]:
@@ -463,6 +529,7 @@ def verify_final_answer(
     balance_tol_mw: float = GATE_BALANCE_TOL_MW,
     balance_rel_tol: float = GATE_BALANCE_REL_TOL,
     enforce_v6v7: bool = False,
+    enforce_complete_state: bool = True,
 ) -> Dict[str, Any]:
     """Task-level verification V(x, c, z, y), applied once to the final answer text.
 
@@ -581,6 +648,8 @@ def verify_final_answer(
 
     if enforce_v6v7:
         conditions["request_applied"] = _request_applied_check(records, pf)
+        if enforce_complete_state:
+            conditions["complete_state"] = _complete_state_check(final_answer_text, pf)
     conditions["plausible_state"] = _plausible_state_check(pf)
 
     for key, label in CONDITION_LABELS.items():
@@ -655,6 +724,9 @@ def _condition_plain_text(name: str, cond: Dict[str, Any], verdict: Dict[str, An
 
     if name == "request_applied":
         return str(cond.get("detail") or "a requested network change is not reflected in the final state")
+
+    if name == "complete_state":
+        return str(cond.get("detail") or "the answer does not carry the whole state of the last solve") + " (report every bus in bus_voltages and every branch in line_flows, copied from the last run_powerflow output)"
 
     if name == "traceability":
         r = cond.get("residual") or 0.0
@@ -1108,7 +1180,7 @@ class LLMEngine:
                 return final_text
 
             verify_attempts += 1
-            verdict = verify_final_answer(trace, final_text, request_text=trace.get("request_text"), enforce_v6v7=True)
+            verdict = verify_final_answer(trace, final_text, request_text=trace.get("request_text"), enforce_v6v7=True, enforce_complete_state=self.config.complete_state_gate)
             trace["verification"].append(verdict)
             if verdict["passed"]:
                 trace["verification_attempts"] = verify_attempts
