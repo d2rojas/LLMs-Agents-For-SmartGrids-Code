@@ -84,6 +84,7 @@ CONDITION_LABELS: Dict[str, str] = {
     "claims_from_tools": "V7",
     "request_applied": "V8",
     "complete_state": "V10",
+    "formulation_matches_trace": "V11",
     "plausible_state": "V9",
 }
 _MUTATING_TOOLS = ("set_active_load", "set_load", "modify_load", "disconnect_line", "reconnect_line", "apply_remedial_action")
@@ -195,6 +196,26 @@ def _complete_state_check(final_answer_text: str, pf: Optional[Dict[str, Any]]) 
     if miss_l:
         problems.append(f"{len(miss_l)} of {len(want_l)} branches are missing from line_flows")
     return {"passed": not problems, "applicable": True, "detail": "; ".join(problems) or f"all {len(want_b)} buses and {len(want_l)} branches reported", "missing_buses": len(miss_b), "missing_branches": len(miss_l)}
+
+
+def _formulation_matches_trace_check(final_answer_text: str, trace: Dict[str, Any]) -> Dict[str, Any]:
+    """V11: the ``formulation`` the answer declares is the sequence of operations the trace shows the
+    agent ran (read-only repeats ignored, the same comparator the evaluator uses). An answer that
+    reports a change it did not make, or hides one it made, goes back to the model."""
+    from evaluation import metrics as bm
+
+    ans = _answer_object(final_answer_text)
+    if ans is None:
+        return {"passed": False, "applicable": True, "detail": "the answer is not the JSON answer object, so it declares no formulation"}
+    if ans.get("cannot_answer") or (ans.get("converged") is False and not ans.get("bus_voltages")):
+        return {"passed": True, "applicable": False, "detail": "the answer declares it cannot complete the request"}
+    declared = ans.get("formulation")
+    if not isinstance(declared, list):
+        return {"passed": False, "applicable": True, "detail": "the answer has no formulation list"}
+    executed = bm.executed_calls_from_trace(trace)
+    fm = bm.formulation_check(list(executed), [c for c in declared if isinstance(c, dict)], preloaded_case=False)
+    ok = bool(fm.get("formulation_exact"))
+    return {"passed": ok, "applicable": True, "detail": "the declared operations are the ones the trace shows" if ok else f"the declared operations differ from the ones run ({fm.get('formulation_error_type')}: {fm.get('detail')})"}
 
 
 def _plausible_state_check(pf: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -648,8 +669,9 @@ def verify_final_answer(
 
     if enforce_v6v7:
         conditions["request_applied"] = _request_applied_check(records, pf)
-        if enforce_complete_state:
+        if enforce_complete_state:  # the two checks on the answer object itself (off only in tests that script free text)
             conditions["complete_state"] = _complete_state_check(final_answer_text, pf)
+            conditions["formulation_matches_trace"] = _formulation_matches_trace_check(final_answer_text, trace)
     conditions["plausible_state"] = _plausible_state_check(pf)
 
     for key, label in CONDITION_LABELS.items():
@@ -724,6 +746,9 @@ def _condition_plain_text(name: str, cond: Dict[str, Any], verdict: Dict[str, An
 
     if name == "request_applied":
         return str(cond.get("detail") or "a requested network change is not reflected in the final state")
+
+    if name == "formulation_matches_trace":
+        return str(cond.get("detail") or "the declared formulation differs from the tool calls made") + " (list in `formulation` exactly the operations you ran, in order, with the arguments you used)"
 
     if name == "complete_state":
         return str(cond.get("detail") or "the answer does not carry the whole state of the last solve") + " (report every bus in bus_voltages and every branch in line_flows, copied from the last run_powerflow output)"

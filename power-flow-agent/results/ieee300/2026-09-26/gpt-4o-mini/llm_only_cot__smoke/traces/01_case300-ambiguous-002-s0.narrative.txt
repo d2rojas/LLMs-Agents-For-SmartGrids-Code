@@ -1,0 +1,23 @@
+RUN 01  |  case300-ambiguous-002-s0  |  llm_only:cot  |  gpt-4o-mini  |  IEEE 300-bus  |  seed 0  |  difficulty ambiguous
+Request: Load the IEEE 300-bus system and disconnect the line between bus 79 and bus 211 (1-based).
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): 1. The request refers to buses 79 and 211. Bus 79 is a load bus, while bus 211 is also a load bus. The slack bus is not specified in the request, but typically in the IEEE 300-bus system, there is a d...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 25677 in / 431 out tokens, $0.0041, 10.7 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> disconnect_line(from_bus=79, to_bus=211)
+  declared: disconnect_line(from_bus=79, to_bus=211) -> run_powerflow()   [no tools: the model states the operations, nothing is executed]
+  verdict:  NOT EXACT (missed_step): declared: missing tools: ['load_case']
+
+REPORTING
+  numbers in the answer: 3, untraceable: 3 -> traceable answer: no
+  untraceable values: ['0.0', '0.0', '0.0']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: formulation
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case300-ambiguous-002-s0_run0.json

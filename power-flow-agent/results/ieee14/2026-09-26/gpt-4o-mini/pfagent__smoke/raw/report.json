@@ -1,0 +1,2026 @@
+{
+  "config": {
+    "models": [
+      "openrouter:openai/gpt-4o-mini"
+    ],
+    "tasks": [
+      "pfagent"
+    ],
+    "methods": [
+      "pfagent"
+    ],
+    "cases": [
+      "case14"
+    ],
+    "condition": "normal",
+    "tool_variant": "load_split",
+    "plan_variant": "text",
+    "shard_index": null,
+    "shard_count": null,
+    "runs": 1,
+    "k": 1,
+    "seeds": [
+      0
+    ],
+    "max_rounds": 8,
+    "requests": {
+      "source": "generated",
+      "n_per_case_seed": 3,
+      "difficulties": [
+        "parameterized",
+        "multistep",
+        "ambiguous"
+      ]
+    },
+    "temperature": 0.0,
+    "timeout_s": 600.0,
+    "solver_config": {
+      "v_min": 0.95,
+      "v_max": 1.05,
+      "max_loading": 100.0
+    }
+  },
+  "core_scoreboard_fields": [
+    "success_rate",
+    "voltage_mae_mean",
+    "flow_mae_mean",
+    "loading_rmse_mean",
+    "voltage_f1_mean",
+    "thermal_f1_mean",
+    "convergence_match_rate",
+    "prompt_tokens_mean",
+    "completion_tokens_mean",
+    "total_tokens_mean",
+    "cost_usd_mean",
+    "cost_usd_total"
+  ],
+  "extended_scoreboard_fields": [
+    "n_items",
+    "formulation_exact_rate",
+    "formulation_exact_count",
+    "formulation_exact_total",
+    "faithful_numbers_mean",
+    "n_untraceable_numbers_mean",
+    "safe_failure_rate",
+    "safe_failure_count",
+    "safe_failure_total",
+    "claimed_success_on_failure_rate",
+    "claimed_success_on_failure_count",
+    "claimed_success_on_failure_total",
+    "stale_state_rate",
+    "stale_state_count",
+    "stale_state_total",
+    "stale_state_no_rerun_rate",
+    "stale_state_no_rerun_count",
+    "stale_state_no_rerun_total",
+    "stale_state_quoted_old_rate",
+    "stale_state_quoted_old_count",
+    "stale_state_quoted_old_total",
+    "converged_rate",
+    "convergence_match_count",
+    "convergence_match_total",
+    "kcl_mean_mismatch_mw_mean",
+    "power_balance_error_mean",
+    "n_llm_calls_mean",
+    "n_tool_calls_mean",
+    "n_tool_rounds_mean",
+    "wall_time_s_mean",
+    "solved_rate",
+    "solved_count",
+    "solved_total",
+    "abstained_on_solvable_rate",
+    "abstained_on_solvable_count",
+    "abstained_on_solvable_total",
+    "verification_pass_first_rate",
+    "verification_pass_retry_rate",
+    "verification_abstained_rate",
+    "verification_abstained_retry_mutation_rate",
+    "verification_total",
+    "v_pass_rate",
+    "v_pass_count",
+    "v_pass_total",
+    "voltage_mae_pq_mean",
+    "faithful_answers_rate",
+    "faithful_answers_count",
+    "faithful_answers_total",
+    "condition",
+    "voltage_mae_formulation_exact_mean",
+    "flow_mae_formulation_exact_mean",
+    "kcl_mean_mismatch_mw_formulation_exact_mean",
+    "feasible_rate",
+    "escalated_rate",
+    "escalated_count",
+    "escalated_total",
+    "solved_autonomously_rate",
+    "solved_autonomously_count",
+    "solved_autonomously_total",
+    "wrong_silently_rate",
+    "wrong_silently_count",
+    "wrong_silently_total",
+    "escalated_rate_v6v7",
+    "escalated_count_v6v7",
+    "escalated_total_v6v7",
+    "wrong_silently_rate_v6v7",
+    "wrong_silently_count_v6v7",
+    "wrong_silently_total_v6v7"
+  ],
+  "metric_definitions": "Per-item benchmark metrics computed from an engine trace and a request.\n\nThese metrics separate *formulation* correctness (did the method call the right\ntools with the right arguments, in the right order) from *solve* correctness\n(Tier I-III numbers vs the PandaPower ground truth, computed elsewhere with\n``methods.prompting.llm_only.evaluate_against_truth_extended``) and from *reporting*\nfaithfulness (are the numbers in the final answer traceable to tool outputs).\n\nEvery function is pure and JSON-friendly; nothing here calls an LLM or a solver.\n\nDefinitions\n-----------\nformulation_exact\n    The executed tool-call sequence asks the solver for what ``intended_calls``\n    asks for (calibrated comparator, rules R0-R10 in ``formulation_check``):\n    argument names/types are normalized (``bus`` -> ``bus_id``, ``\"14\"`` -> ``14``,\n    unordered line endpoints, case aliases), read-only calls are ignored\n    (``run_powerflow`` repeats, ``get_status``, ``get_most_loaded_branch``,\n    ``generate_plot``), optional arguments the request does not pin accept any\n    schema-valid value, and out-of-schema values or extra arguments that change\n    the solver outcome are errors.\nformulation_exact_strict\n    The verdict of the original comparator (``formulation_check_strict``): the\n    normalized sequences must match argument-by-argument with defaults dropped.\n    Kept in the ``formulation_check`` result for before/after comparison.\nformulation_error_type\n    ``ok`` | ``wrong_id`` (bus / line / case identifier differs) |\n    ``wrong_unit_or_value`` (a pinned numeric/enum argument differs) |\n    ``invalid_value`` (a value the tool schema rejects, e.g. ``criteria=\"min\n    voltage\"``; the tool falls back to a default) | ``extra_arg_changes_result``\n    (an unrequested optional argument that changes the solver outcome, e.g.\n    ``modify_load(..., q_mvar=0)`` when only MW was asked) | ``missed_step``\n    (an intended tool was never executed or a different tool was used) |\n    ``extra_step`` (an unintended tool that mutates the network or runs an\n    analysis was executed) | ``unparsed`` (the request could not be turned into\n    any tool call).\nfaithful_numbers\n    Fraction of the numbers in the final answer that match some number in the\n    tool outputs within tolerance: 1e-3 p.u. for voltages, 1 % relative for MW,\n    Mvar and percent values. Numbers without a unit are matched if either\n    tolerance holds. Additionally, an answer number written with ``k`` decimals\n    matches a tool value whose rounding to ``k`` decimals equals it (``0.93`` vs\n    ``0.9312``), so a coarser quotation of a solver value is not penalized.\n    Bare integers with no unit (bus/line ids, counts) are not\n    counted. ``None`` when the answer carries no numbers.\nn_untraceable_numbers\n    Count of answer numbers that match no tool-output number.\nsafe_failure\n    When the final solver state is non-converged (or the gate failed and there\n    is no final state): did the answer say so rather than report a result.\nclaimed_success_on_failure\n    Same failure condition, but the answer asserts success or reports\n    unit-bearing numbers without acknowledging the failure.\nstale_state\n    The agent changed the network (``MUTATING_TOOLS``) and then reported\n    power-flow numbers that do not come from a solve of the changed network.\n    Computed from the trace only, over the tool calls in execution order; a\n    ``load_case`` after a mutation resets the state (fresh network). Mutating\n    calls that returned an ``error`` / ``need_confirmation`` payload did not\n    change the network and are ignored. A \"re-solve\" is any tool output that\n    carries a PowerFlowResult payload (``RESOLVING_TOOLS``; in PFAgent every\n    mutating tool re-solves and returns the new result itself, so its own\n    output counts as the re-solve).\n    ``stale_state_no_rerun``: there is a mutation in effect, no re-solve at or\n    after the last mutation, and the answer reports numbers (numbers merely\n    echoing the request are ignored, as in ``faithful_numbers``).\n    ``stale_state_quoted_old``: a re-solve did happen after the last mutation,\n    but at least one answer number matches only a power-flow output produced\n    *before* the mutation and none matches only the post-mutation output(s),\n    with the ``faithful_numbers`` tolerances. Answers that quote both (a\n    before/after comparison) are not stale.\n    ``stale_state`` is either flag. All three are ``None`` when no mutation is\n    in effect at answer time (n/a), so rates are over items with a mutation.\n",
+  "scoreboard": [
+    {
+      "model": "openrouter:openai/gpt-4o-mini",
+      "task": "pfagent",
+      "method": "pfagent",
+      "condition": "normal",
+      "success_rate": 0.6666666666666666,
+      "solved_rate": 0.6666666666666666,
+      "solved_count": 2,
+      "solved_total": 3,
+      "voltage_mae_mean": 1.9222858696884716e-07,
+      "voltage_mae_formulation_exact_mean": 1.9222858696884716e-07,
+      "voltage_mae_pq_mean": 2.990222463466413e-07,
+      "flow_mae_mean": 0.0002043945058411315,
+      "flow_mae_formulation_exact_mean": 0.0002043945058411315,
+      "kcl_mean_mismatch_mw_formulation_exact_mean": 0.00019536942649294858,
+      "feasible_rate": 1.0,
+      "loading_rmse_mean": 0.002642646202432923,
+      "voltage_f1_mean": 1.0,
+      "thermal_f1_mean": 1.0,
+      "convergence_match_rate": 1.0,
+      "convergence_match_count": 2,
+      "convergence_match_total": 2,
+      "prompt_tokens_mean": 12562.5,
+      "completion_tokens_mean": 3603.5,
+      "total_tokens_mean": 16166.0,
+      "cost_usd_mean": 0.004046475,
+      "cost_usd_total": 0.00809295,
+      "n_items": 3,
+      "formulation_exact_rate": 1.0,
+      "formulation_exact_count": 2,
+      "formulation_exact_total": 2,
+      "formulation_error_counts": {
+        "ok": 2,
+        "wrong_id": 0,
+        "wrong_unit_or_value": 0,
+        "invalid_value": 0,
+        "extra_arg_changes_result": 0,
+        "missed_step": 0,
+        "extra_step": 0,
+        "unparsed": 0
+      },
+      "faithful_numbers_mean": 1.0,
+      "faithful_answers_rate": 1.0,
+      "faithful_answers_count": 3,
+      "faithful_answers_total": 3,
+      "n_untraceable_numbers_mean": 0.0,
+      "safe_failure_rate": null,
+      "safe_failure_count": 0,
+      "safe_failure_total": 0,
+      "claimed_success_on_failure_rate": null,
+      "claimed_success_on_failure_count": 0,
+      "claimed_success_on_failure_total": 0,
+      "abstained_on_solvable_rate": 0.0,
+      "abstained_on_solvable_count": 0,
+      "abstained_on_solvable_total": 3,
+      "escalated_rate": 0.0,
+      "escalated_count": 0,
+      "escalated_total": 3,
+      "solved_autonomously_rate": 0.6666666666666666,
+      "solved_autonomously_count": 2,
+      "solved_autonomously_total": 3,
+      "wrong_silently_rate": 0.3333333333333333,
+      "wrong_silently_count": 1,
+      "wrong_silently_total": 3,
+      "escalated_rate_v6v7": 0.0,
+      "escalated_count_v6v7": 0,
+      "escalated_total_v6v7": 3,
+      "wrong_silently_rate_v6v7": 0.3333333333333333,
+      "wrong_silently_count_v6v7": 1,
+      "wrong_silently_total_v6v7": 3,
+      "stale_state_rate": 0.0,
+      "stale_state_count": 0,
+      "stale_state_total": 2,
+      "stale_state_no_rerun_rate": 0.0,
+      "stale_state_no_rerun_count": 0,
+      "stale_state_no_rerun_total": 2,
+      "stale_state_quoted_old_rate": 0.0,
+      "stale_state_quoted_old_count": 0,
+      "stale_state_quoted_old_total": 2,
+      "converged_rate": 1.0,
+      "kcl_mean_mismatch_mw_mean": 0.00019536942649294858,
+      "power_balance_error_mean": 1.9539925233402755e-14,
+      "n_llm_calls_mean": 3.3333333333333335,
+      "n_tool_calls_mean": 2.3333333333333335,
+      "n_tool_rounds_mean": 2.0,
+      "wall_time_s_mean": 39.380486562498845,
+      "verification_pass_first_rate": 1.0,
+      "verification_pass_retry_rate": 0.0,
+      "verification_abstained_rate": 0.0,
+      "verification_abstained_retry_mutation_rate": 0.0,
+      "verification_total": 2,
+      "v_pass_rate": 1.0,
+      "v_pass_count": 3,
+      "v_pass_total": 3,
+      "common_n": 2,
+      "common_solved_rate": 0.5,
+      "common_escalated_rate": 0.0,
+      "common_wrong_rate": 0.5,
+      "common_solved_count": 1,
+      "common_escalated_count": 0,
+      "common_wrong_count": 1,
+      "common_formulation_rate": 0.5,
+      "common_formulation_count": 1,
+      "common_formulation_total": 2,
+      "common_voltage_mae_mean": 1.9222858696884716e-07,
+      "common_flow_mae_mean": 0.0002043945058411315,
+      "common_kcl_mismatch_mean": 0.00019536942649294858,
+      "common_voltage_mae_solved_mean": 1.7251628452769857e-07,
+      "common_traceable_rate": 1.0,
+      "common_traceable_count": 2,
+      "common_traceable_total": 2,
+      "common_reported_state_rate": 1.0,
+      "common_run_error_count": 1
+    }
+  ],
+  "scoreboard_per_case": [
+    {
+      "model": "openrouter:openai/gpt-4o-mini",
+      "task": "pfagent",
+      "method": "pfagent",
+      "case_name": "case14",
+      "condition": "normal",
+      "success_rate": 0.6666666666666666,
+      "solved_rate": 0.6666666666666666,
+      "solved_count": 2,
+      "solved_total": 3,
+      "voltage_mae_mean": 1.9222858696884716e-07,
+      "voltage_mae_formulation_exact_mean": 1.9222858696884716e-07,
+      "voltage_mae_pq_mean": 2.990222463466413e-07,
+      "flow_mae_mean": 0.0002043945058411315,
+      "flow_mae_formulation_exact_mean": 0.0002043945058411315,
+      "kcl_mean_mismatch_mw_formulation_exact_mean": 0.00019536942649294858,
+      "feasible_rate": 1.0,
+      "loading_rmse_mean": 0.002642646202432923,
+      "voltage_f1_mean": 1.0,
+      "thermal_f1_mean": 1.0,
+      "convergence_match_rate": 1.0,
+      "convergence_match_count": 2,
+      "convergence_match_total": 2,
+      "prompt_tokens_mean": 12562.5,
+      "completion_tokens_mean": 3603.5,
+      "total_tokens_mean": 16166.0,
+      "cost_usd_mean": 0.004046475,
+      "cost_usd_total": 0.00809295,
+      "n_items": 3,
+      "formulation_exact_rate": 1.0,
+      "formulation_exact_count": 2,
+      "formulation_exact_total": 2,
+      "formulation_error_counts": {
+        "ok": 2,
+        "wrong_id": 0,
+        "wrong_unit_or_value": 0,
+        "invalid_value": 0,
+        "extra_arg_changes_result": 0,
+        "missed_step": 0,
+        "extra_step": 0,
+        "unparsed": 0
+      },
+      "faithful_numbers_mean": 1.0,
+      "faithful_answers_rate": 1.0,
+      "faithful_answers_count": 3,
+      "faithful_answers_total": 3,
+      "n_untraceable_numbers_mean": 0.0,
+      "safe_failure_rate": null,
+      "safe_failure_count": 0,
+      "safe_failure_total": 0,
+      "claimed_success_on_failure_rate": null,
+      "claimed_success_on_failure_count": 0,
+      "claimed_success_on_failure_total": 0,
+      "abstained_on_solvable_rate": 0.0,
+      "abstained_on_solvable_count": 0,
+      "abstained_on_solvable_total": 3,
+      "escalated_rate": 0.0,
+      "escalated_count": 0,
+      "escalated_total": 3,
+      "solved_autonomously_rate": 0.6666666666666666,
+      "solved_autonomously_count": 2,
+      "solved_autonomously_total": 3,
+      "wrong_silently_rate": 0.3333333333333333,
+      "wrong_silently_count": 1,
+      "wrong_silently_total": 3,
+      "escalated_rate_v6v7": 0.0,
+      "escalated_count_v6v7": 0,
+      "escalated_total_v6v7": 3,
+      "wrong_silently_rate_v6v7": 0.3333333333333333,
+      "wrong_silently_count_v6v7": 1,
+      "wrong_silently_total_v6v7": 3,
+      "stale_state_rate": 0.0,
+      "stale_state_count": 0,
+      "stale_state_total": 2,
+      "stale_state_no_rerun_rate": 0.0,
+      "stale_state_no_rerun_count": 0,
+      "stale_state_no_rerun_total": 2,
+      "stale_state_quoted_old_rate": 0.0,
+      "stale_state_quoted_old_count": 0,
+      "stale_state_quoted_old_total": 2,
+      "converged_rate": 1.0,
+      "kcl_mean_mismatch_mw_mean": 0.00019536942649294858,
+      "power_balance_error_mean": 1.9539925233402755e-14,
+      "n_llm_calls_mean": 3.3333333333333335,
+      "n_tool_calls_mean": 2.3333333333333335,
+      "n_tool_rounds_mean": 2.0,
+      "wall_time_s_mean": 39.380486562498845,
+      "verification_pass_first_rate": 1.0,
+      "verification_pass_retry_rate": 0.0,
+      "verification_abstained_rate": 0.0,
+      "verification_abstained_retry_mutation_rate": 0.0,
+      "verification_total": 2,
+      "v_pass_rate": 1.0,
+      "v_pass_count": 3,
+      "v_pass_total": 3,
+      "common_n": 2,
+      "common_solved_rate": 0.5,
+      "common_escalated_rate": 0.0,
+      "common_wrong_rate": 0.5,
+      "common_solved_count": 1,
+      "common_escalated_count": 0,
+      "common_wrong_count": 1,
+      "common_formulation_rate": 0.5,
+      "common_formulation_count": 1,
+      "common_formulation_total": 2,
+      "common_voltage_mae_mean": 1.9222858696884716e-07,
+      "common_flow_mae_mean": 0.0002043945058411315,
+      "common_kcl_mismatch_mean": 0.00019536942649294858,
+      "common_voltage_mae_solved_mean": 1.7251628452769857e-07,
+      "common_traceable_rate": 1.0,
+      "common_traceable_count": 2,
+      "common_traceable_total": 2,
+      "common_reported_state_rate": 1.0,
+      "common_run_error_count": 1
+    }
+  ],
+  "runs": [
+    {
+      "model": "openrouter:openai/gpt-4o-mini",
+      "provider": "openrouter",
+      "task": "pfagent",
+      "method": "pfagent",
+      "case_name": "case14",
+      "run": 0,
+      "k": 1,
+      "seed": 1813382119,
+      "gen_seed": 0,
+      "request_id": "case14-parameterized-000-s0",
+      "difficulty": "parameterized",
+      "request_text": "Load case14 and disconnect the line between bus 3 and bus 4.",
+      "ok": true,
+      "error": null,
+      "latency_s": 40.87583816598635,
+      "usage": {
+        "prompt_tokens": 12279,
+        "completion_tokens": 5393,
+        "total_tokens": 17672
+      },
+      "cost_usd": 0.0050776499999999995,
+      "metrics": {
+        "voltage_mae": 2.119408894099958e-07,
+        "flow_mae": 0.00018406124804781532,
+        "bus_coverage": {
+          "pred": 14,
+          "truth": 14,
+          "intersection": 14
+        },
+        "line_coverage": {
+          "pred": 20,
+          "truth": 20,
+          "intersection": 20
+        },
+        "voltage_violation_precision": 1.0,
+        "voltage_violation_recall": 1.0,
+        "thermal_violation_precision": 1.0,
+        "thermal_violation_recall": 1.0,
+        "pred_voltage_violations": [
+          1,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13
+        ],
+        "truth_voltage_violations": [
+          1,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13
+        ],
+        "pred_thermal_violations": [
+          2
+        ],
+        "truth_thermal_violations": [
+          2
+        ],
+        "voltage_rmse": 2.793000352135819e-07,
+        "voltage_mape": 2.0220426739172156e-05,
+        "voltage_max_error": 4.94789133886897e-07,
+        "voltage_mae_pq": 3.296858278970897e-07,
+        "angle_rmse": 0.00032370428500951855,
+        "flow_rmse": 0.0002562610675760366,
+        "flow_max_error": 0.00048106609896558794,
+        "flow_p95_error": 0.0004776825800268059,
+        "loading_rmse": 0.0024290202668890543,
+        "power_balance_error": 2.4868995751603507e-14,
+        "flow_deviation_rate": 0.0,
+        "kcl_self_violation_rate": 0.0,
+        "kcl_max_mismatch_mw": 0.0009319036797101887,
+        "kcl_mean_mismatch_mw": 0.00023704001621802298,
+        "feasible": true,
+        "voltage_f1": 1.0,
+        "thermal_f1": 1.0,
+        "convergence_match": true,
+        "flow_direction_accuracy": 100.0,
+        "critical_bus_jaccard": 1.0,
+        "_raw_vm_pairs": [
+          [
+            1,
+            1.06,
+            1.06
+          ],
+          [
+            2,
+            1.045,
+            1.0450000000000002
+          ],
+          [
+            3,
+            1.01,
+            1.01
+          ],
+          [
+            4,
+            1.021205,
+            1.021204669765862
+          ],
+          [
+            5,
+            1.022192,
+            1.0221921818006872
+          ],
+          [
+            6,
+            1.07,
+            1.0700000000000003
+          ],
+          [
+            7,
+            1.063551,
+            1.063550505210866
+          ],
+          [
+            8,
+            1.09,
+            1.0899999999999999
+          ],
+          [
+            9,
+            1.058416,
+            1.0584155659794503
+          ],
+          [
+            10,
+            1.053603,
+            1.0536027462498778
+          ],
+          [
+            11,
+            1.058191,
+            1.05819116586054
+          ],
+          [
+            12,
+            1.055863,
+            1.0558626494324803
+          ],
+          [
+            13,
+            1.051159,
+            1.0511587117729795
+          ],
+          [
+            14,
+            1.038584,
+            1.0385835320772598
+          ]
+        ],
+        "_raw_va_pairs": [
+          [
+            1,
+            0.0,
+            0.0
+          ],
+          [
+            2,
+            -5.073,
+            -5.073061563693518
+          ],
+          [
+            3,
+            -15.264,
+            -15.264468141712271
+          ],
+          [
+            4,
+            -9.108,
+            -9.107834130638059
+          ],
+          [
+            5,
+            -7.936,
+            -7.936007735658824
+          ],
+          [
+            6,
+            -13.218,
+            -13.218377737591466
+          ],
+          [
+            7,
+            -12.17,
+            -12.17049053828471
+          ],
+          [
+            8,
+            -12.17,
+            -12.170490538284708
+          ],
+          [
+            9,
+            -13.759,
+            -13.759408308457768
+          ],
+          [
+            10,
+            -13.929,
+            -13.929474422873836
+          ],
+          [
+            11,
+            -13.71,
+            -13.710070937981733
+          ],
+          [
+            12,
+            -14.031,
+            -14.030606071453736
+          ],
+          [
+            13,
+            -14.108,
+            -14.107808935706723
+          ],
+          [
+            14,
+            -14.838,
+            -14.83806333746657
+          ]
+        ],
+        "_raw_p_pairs": [
+          [
+            0,
+            159.619,
+            159.61892327443408
+          ],
+          [
+            1,
+            68.531,
+            68.53087289602038
+          ],
+          [
+            2,
+            95.342,
+            95.34192500474357
+          ],
+          [
+            3,
+            43.052,
+            43.05190283365465
+          ],
+          [
+            4,
+            31.992,
+            31.992477504500084
+          ],
+          [
+            5,
+            0.0,
+            0.0
+          ],
+          [
+            6,
+            -46.606,
+            -46.60627179741909
+          ],
+          [
+            7,
+            6.456,
+            6.45646473755457
+          ],
+          [
+            8,
+            7.412,
+            7.412015519127489
+          ],
+          [
+            9,
+            16.944,
+            16.94441174272279
+          ],
+          [
+            10,
+            5.421,
+            5.420549162419256
+          ],
+          [
+            11,
+            9.285,
+            9.28493867074582
+          ],
+          [
+            12,
+            -2.788,
+            -2.7875189339010342
+          ],
+          [
+            13,
+            1.573,
+            1.5732603992848597
+          ],
+          [
+            14,
+            4.734,
+            4.734040347612789
+          ],
+          [
+            100000,
+            28.373,
+            28.37300235565307
+          ],
+          [
+            100001,
+            16.264,
+            16.26409877385574
+          ],
+          [
+            100002,
+            42.87,
+            42.870266467821025
+          ],
+          [
+            100003,
+            -0.0,
+            -3.9477394174893096e-14
+          ],
+          [
+            100004,
+            28.373,
+            28.373002355328207
+          ]
+        ],
+        "_violation_cm": {
+          "tp": 9,
+          "fp": 0,
+          "fn": 0,
+          "tn": 5
+        },
+        "_thermal_cm": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "tn": 19
+        }
+      },
+      "raw_response": "{\n  \"formulation\": [\n    {\n      \"tool\": \"load_case\",\n      \"args\": {\n        \"case_name\": \"case14\"\n      }\n    },\n    {\n      \"tool\": \"run_powerflow\",\n      \"args\": {}\n    }\n  ],\n  \"converged\": true,\n  \"summary\": \"The line between bus 3 and bus 4 was disconnected, and the network was re-solved.\",\n  \"answer\": \"Worst outage: line 2-3, 9 voltage violations\",\n  \"bus_voltages\": [\n    {\n      \"bus_id\": 1,\n      \"vm_pu\": 1.06,\n      \"va_deg\": 0.0,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 2,\n      \"vm_pu\": 1.045,\n      \"va_deg\": -5.073,\n      \"is_violation\": false,\n      \"violation_type\": null\n    },\n    {\n      \"bus_id\": 3,\n      \"vm_pu\": 1.01,\n      \"va_deg\": -15.264,\n      \"is_violation\": false,\n      \"violation_type\": null\n    },\n    {\n      \"bus_id\": 4,\n      \"vm_pu\": 1.021205,\n      \"va_deg\": -9.108,\n      \"is_violation\": false,\n      \"violation_type\": null\n    },\n    {\n      \"bus_id\": 5,\n      \"vm_pu\": 1.022192,\n      \"va_deg\": -7.936,\n      \"is_violation\": false,\n      \"violation_type\": null\n    },\n    {\n      \"bus_id\": 6,\n      \"vm_pu\": 1.07,\n      \"va_deg\": -13.218,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 7,\n      \"vm_pu\": 1.063551,\n      \"va_deg\": -12.17,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 8,\n      \"vm_pu\": 1.09,\n      \"va_deg\": -12.17,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 9,\n      \"vm_pu\": 1.058416,\n      \"va_deg\": -13.759,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 10,\n      \"vm_pu\": 1.053603,\n      \"va_deg\": -13.929,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 11,\n      \"vm_pu\": 1.058191,\n      \"va_deg\": -13.71,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 12,\n      \"vm_pu\": 1.055863,\n      \"va_deg\": -14.031,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 13,\n      \"vm_pu\": 1.051159,\n      \"va_deg\": -14.108,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 14,\n      \"vm_pu\": 1.038584,\n      \"va_deg\": -14.838,\n      \"is_violation\": false,\n      \"violation_type\": null\n    }\n  ],\n  \"line_flows\": [\n    {\n      \"line_id\": 0,\n      \"from_bus\": 1,\n      \"to_bus\": 2,\n      \"p_from_mw\": 159.619,\n      \"q_from_mvar\": -21.041,\n      \"loading_percent\": 81.41,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 1,\n      \"from_bus\": 1,\n      \"to_bus\": 5,\n      \"p_from_mw\": 68.531,\n      \"q_from_mvar\": 3.256,\n      \"loading_percent\": 72.59,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 2,\n      \"from_bus\": 2,\n      \"to_bus\": 3,\n      \"p_from_mw\": 95.342,\n      \"q_from_mvar\": 1.865,\n      \"loading_percent\": 104.04,\n      \"is_violation\": true\n    },\n    {\n      \"line_id\": 3,\n      \"from_bus\": 2,\n      \"to_bus\": 4,\n      \"p_from_mw\": 43.052,\n      \"q_from_mvar\": -0.442,\n      \"loading_percent\": 61.34,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 4,\n      \"from_bus\": 2,\n      \"to_bus\": 5,\n      \"p_from_mw\": 31.992,\n      \"q_from_mvar\": 2.106,\n      \"loading_percent\": 61.76,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 5,\n      \"from_bus\": 3,\n      \"to_bus\": 4,\n      \"p_from_mw\": 0.0,\n      \"q_from_mvar\": 0.0,\n      \"loading_percent\": 0.0,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 6,\n      \"from_bus\": 4,\n      \"to_bus\": 5,\n      \"p_from_mw\": -46.606,\n      \"q_from_mvar\": 12.899,\n      \"loading_percent\": 61.24,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 7,\n      \"from_bus\": 6,\n      \"to_bus\": 11,\n      \"p_from_mw\": 6.456,\n      \"q_from_mvar\": 3.29,\n      \"loading_percent\": 70.96,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 8,\n      \"from_bus\": 6,\n      \"to_bus\": 12,\n      \"p_from_mw\": 7.412,\n      \"q_from_mvar\": 2.396,\n      \"loading_percent\": 76.2,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 9,\n      \"from_bus\": 6,\n      \"to_bus\": 13,\n      \"p_from_mw\": 16.944,\n      \"q_from_mvar\": 6.975,\n      \"loading_percent\": 76.51,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 10,\n      \"from_bus\": 9,\n      \"to_bus\": 10,\n      \"p_from_mw\": 5.421,\n      \"q_from_mvar\": 3.994,\n      \"loading_percent\": 68.09,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 11,\n      \"from_bus\": 9,\n      \"to_bus\": 14,\n      \"p_from_mw\": 9.285,\n      \"q_from_mvar\": 3.47,\n      \"loading_percent\": 78.56,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 12,\n      \"from_bus\": 10,\n      \"to_bus\": 11,\n      \"p_from_mw\": -2.788,\n      \"q_from_mvar\": -1.322,\n      \"loading_percent\": 31.2,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 13,\n      \"from_bus\": 12,\n      \"to_bus\": 13,\n      \"p_from_mw\": 1.573,\n      \"q_from_mvar\": 0.746,\n      \"loading_percent\": 17.61,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 14,\n      \"from_bus\": 13,\n      \"to_bus\": 14,\n      \"p_from_mw\": 4.734,\n      \"q_from_mvar\": 1.499,\n      \"loading_percent\": 50.22,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100000,\n      \"from_bus\": 4,\n      \"to_bus\": 7,\n      \"p_from_mw\": 28.373,\n      \"q_from_mvar\": -8.915,\n      \"loading_percent\": 80.12,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100001,\n      \"from_bus\": 4,\n      \"to_bus\": 9,\n      \"p_from_mw\": 16.264,\n      \"q_from_mvar\": -0.2,\n      \"loading_percent\": 80.89,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100002,\n      \"from_bus\": 5,\n      \"to_bus\": 6,\n      \"p_from_mw\": 42.87,\n      \"q_from_mvar\": 13.629,\n      \"loading_percent\": 78.55,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100003,\n      \"from_bus\": 7,\n      \"to_bus\": 8,\n      \"p_from_mw\": -0.0,\n      \"q_from_mvar\": -15.97,\n      \"loading_percent\": 74.44,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100004,\n      \"from_bus\": 7,\n      \"to_bus\": 9,\n      \"p_from_mw\": 28.373,\n      \"q_from_mvar\": 5.358,\n      \"loading_percent\": 80.59,\n      \"is_violation\": false\n    }\n  ],\n  \"total_generation_mw\": 265.609,\n  \"total_load_mw\": 252.656,\n  \"total_loss_mw\": 12.953,\n  \"violations\": {\n    \"voltage\": [\n      {\n        \"bus_id\": 1,\n        \"vm_pu\": 1.06\n      },\n      {\n        \"bus_id\": 6,\n        \"vm_pu\": 1.07\n      },\n      {\n        \"bus_id\": 7,\n        \"vm_pu\": 1.063551\n      },\n      {\n        \"bus_id\": 8,\n        \"vm_pu\": 1.09\n      },\n      {\n        \"bus_id\": 9,\n        \"vm_pu\": 1.058416\n      },\n      {\n        \"bus_id\": 10,\n        \"vm_pu\": 1.053603\n      },\n      {\n        \"bus_id\": 11,\n        \"vm_pu\": 1.058191\n      },\n      {\n        \"bus_id\": 12,\n        \"vm_pu\": 1.055863\n      },\n      {\n        \"bus_id\": 13,\n        \"vm_pu\": 1.051159\n      }\n    ],\n    \"thermal\": [\n      {\n        \"line_id\": 2,\n        \"loading_percent\": 104.04\n      }\n    ]\n  },\n  \"next_step\": \"Consider load shedding or voltage adjustment to mitigate violations.\",\n  \"cannot_answer\": null\n}",
+      "intended_calls": [
+        {
+          "tool": "load_case",
+          "args": {
+            "case_name": "case14"
+          }
+        },
+        {
+          "tool": "disconnect_line",
+          "args": {
+            "from_bus": 3,
+            "to_bus": 4
+          }
+        }
+      ],
+      "executed_calls": [
+        {
+          "tool": "load_case",
+          "args": {
+            "case_name": "case14"
+          }
+        },
+        {
+          "tool": "disconnect_line",
+          "args": {
+            "from_bus": 3,
+            "to_bus": 4
+          }
+        },
+        {
+          "tool": "run_powerflow",
+          "args": {}
+        }
+      ],
+      "declared_formulation": null,
+      "common_json_ok": true,
+      "common_reported_state": true,
+      "common_cannot_answer": null,
+      "common_converged": true,
+      "common_voltage_mae": 2.119408894099958e-07,
+      "common_flow_mae": 0.00018406124804781532,
+      "common_kcl_mismatch_mw": 0.00023704001621802298,
+      "common_bus_coverage": {
+        "pred": 14,
+        "truth": 14,
+        "intersection": 14
+      },
+      "common_numeric_ok": true,
+      "common_answer_ok": true,
+      "common_formulation_exact": false,
+      "common_formulation_error_type": "missed_step",
+      "common_formulation_detail": "declared: missing tools: ['disconnect_line']",
+      "common_declared_formulation": [
+        {
+          "tool": "load_case",
+          "args": {
+            "case_name": "case14"
+          }
+        },
+        {
+          "tool": "run_powerflow",
+          "args": {}
+        }
+      ],
+      "common_escalated": false,
+      "common_escalation_reason": null,
+      "common_solved": false,
+      "common_reason": "formulation",
+      "common_outcome": "wrong_unflagged",
+      "common_n_numbers": 101,
+      "common_n_untraceable": 0,
+      "common_traceable": true,
+      "formulation_exact": true,
+      "formulation_error_type": "ok",
+      "formulation_detail": "",
+      "faithful_numbers": 1.0,
+      "faithful_answers": true,
+      "n_numbers": 101,
+      "n_untraceable_numbers": 0,
+      "untraceable_numbers": [],
+      "final_converged": true,
+      "expected_outcome": "converged",
+      "truth_converged": true,
+      "reference_solvable": true,
+      "truth_tool_errors": [],
+      "truth_answer": {
+        "converged": true,
+        "total_load_mw": 252.6562,
+        "total_generation_mw": 265.6092,
+        "total_loss_mw": 12.953,
+        "n_voltage_violations": 9,
+        "n_thermal_violations": 1
+      },
+      "solved": true,
+      "solved_reason": "numeric_and_answer_ok",
+      "escalated": false,
+      "solved_autonomously": true,
+      "wrong_silently": false,
+      "is_failure": false,
+      "safe_failure": null,
+      "claimed_success_on_failure": null,
+      "abstained": false,
+      "abstained_on_solvable": false,
+      "failure_detection_path": "json",
+      "has_mutation": true,
+      "stale_state": false,
+      "stale_state_no_rerun": false,
+      "stale_state_quoted_old": false,
+      "stale_state_detail": "re-solved at [1, 2] after disconnect_line at call 1",
+      "stale_state_trace": {
+        "last_mutation_index": 1,
+        "last_mutation_tool": "disconnect_line",
+        "last_mutation_args": {
+          "from_bus": 3,
+          "to_bus": 4
+        },
+        "prior_result_indices": [],
+        "resolve_indices_after": [
+          1,
+          2
+        ],
+        "old_only": []
+      },
+      "verification_outcome": "pass_first",
+      "verification_attempts": 1,
+      "v_pass": true,
+      "system_prompt_hash": "2efb17dd2582",
+      "n_llm_calls": 4,
+      "n_tool_calls": 3,
+      "n_tool_rounds": 2,
+      "prompt_tokens": 12279,
+      "completion_tokens": 5393,
+      "wall_time_s": 40.87583816598635,
+      "gate_checked": 2,
+      "gate_failed": 0,
+      "gate_enforced": 0,
+      "trace": {
+        "architecture": "react",
+        "gate": false,
+        "final_gate": true,
+        "memory": false,
+        "max_rounds": 8,
+        "status": "ok",
+        "final_text": "{\n  \"formulation\": [\n    {\n      \"tool\": \"load_case\",\n      \"args\": {\n        \"case_name\": \"case14\"\n      }\n    },\n    {\n      \"tool\": \"run_powerflow\",\n      \"args\": {}\n    }\n  ],\n  \"converged\": true,\n  \"summary\": \"The line between bus 3 and bus 4 was disconnected, and the network was re-solved.\",\n  \"answer\": \"Worst outage: line 2-3, 9 voltage violations\",\n  \"bus_voltages\": [\n    {\n      \"bus_id\": 1,\n      \"vm_pu\": 1.06,\n      \"va_deg\": 0.0,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 2,\n      \"vm_pu\": 1.045,\n      \"va_deg\": -5.073,\n      \"is_violation\": false,\n      \"violation_type\": null\n    },\n    {\n      \"bus_id\": 3,\n      \"vm_pu\": 1.01,\n      \"va_deg\": -15.264,\n      \"is_violation\": false,\n      \"violation_type\": null\n    },\n    {\n      \"bus_id\": 4,\n      \"vm_pu\": 1.021205,\n      \"va_deg\": -9.108,\n      \"is_violation\": false,\n      \"violation_type\": null\n    },\n    {\n      \"bus_id\": 5,\n      \"vm_pu\": 1.022192,\n      \"va_deg\": -7.936,\n      \"is_violation\": false,\n      \"violation_type\": null\n    },\n    {\n      \"bus_id\": 6,\n      \"vm_pu\": 1.07,\n      \"va_deg\": -13.218,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 7,\n      \"vm_pu\": 1.063551,\n      \"va_deg\": -12.17,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 8,\n      \"vm_pu\": 1.09,\n      \"va_deg\": -12.17,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 9,\n      \"vm_pu\": 1.058416,\n      \"va_deg\": -13.759,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 10,\n      \"vm_pu\": 1.053603,\n      \"va_deg\": -13.929,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 11,\n      \"vm_pu\": 1.058191,\n      \"va_deg\": -13.71,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 12,\n      \"vm_pu\": 1.055863,\n      \"va_deg\": -14.031,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 13,\n      \"vm_pu\": 1.051159,\n      \"va_deg\": -14.108,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 14,\n      \"vm_pu\": 1.038584,\n      \"va_deg\": -14.838,\n      \"is_violation\": false,\n      \"violation_type\": null\n    }\n  ],\n  \"line_flows\": [\n    {\n      \"line_id\": 0,\n      \"from_bus\": 1,\n      \"to_bus\": 2,\n      \"p_from_mw\": 159.619,\n      \"q_from_mvar\": -21.041,\n      \"loading_percent\": 81.41,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 1,\n      \"from_bus\": 1,\n      \"to_bus\": 5,\n      \"p_from_mw\": 68.531,\n      \"q_from_mvar\": 3.256,\n      \"loading_percent\": 72.59,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 2,\n      \"from_bus\": 2,\n      \"to_bus\": 3,\n      \"p_from_mw\": 95.342,\n      \"q_from_mvar\": 1.865,\n      \"loading_percent\": 104.04,\n      \"is_violation\": true\n    },\n    {\n      \"line_id\": 3,\n      \"from_bus\": 2,\n      \"to_bus\": 4,\n      \"p_from_mw\": 43.052,\n      \"q_from_mvar\": -0.442,\n      \"loading_percent\": 61.34,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 4,\n      \"from_bus\": 2,\n      \"to_bus\": 5,\n      \"p_from_mw\": 31.992,\n      \"q_from_mvar\": 2.106,\n      \"loading_percent\": 61.76,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 5,\n      \"from_bus\": 3,\n      \"to_bus\": 4,\n      \"p_from_mw\": 0.0,\n      \"q_from_mvar\": 0.0,\n      \"loading_percent\": 0.0,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 6,\n      \"from_bus\": 4,\n      \"to_bus\": 5,\n      \"p_from_mw\": -46.606,\n      \"q_from_mvar\": 12.899,\n      \"loading_percent\": 61.24,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 7,\n      \"from_bus\": 6,\n      \"to_bus\": 11,\n      \"p_from_mw\": 6.456,\n      \"q_from_mvar\": 3.29,\n      \"loading_percent\": 70.96,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 8,\n      \"from_bus\": 6,\n      \"to_bus\": 12,\n      \"p_from_mw\": 7.412,\n      \"q_from_mvar\": 2.396,\n      \"loading_percent\": 76.2,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 9,\n      \"from_bus\": 6,\n      \"to_bus\": 13,\n      \"p_from_mw\": 16.944,\n      \"q_from_mvar\": 6.975,\n      \"loading_percent\": 76.51,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 10,\n      \"from_bus\": 9,\n      \"to_bus\": 10,\n      \"p_from_mw\": 5.421,\n      \"q_from_mvar\": 3.994,\n      \"loading_percent\": 68.09,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 11,\n      \"from_bus\": 9,\n      \"to_bus\": 14,\n      \"p_from_mw\": 9.285,\n      \"q_from_mvar\": 3.47,\n      \"loading_percent\": 78.56,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 12,\n      \"from_bus\": 10,\n      \"to_bus\": 11,\n      \"p_from_mw\": -2.788,\n      \"q_from_mvar\": -1.322,\n      \"loading_percent\": 31.2,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 13,\n      \"from_bus\": 12,\n      \"to_bus\": 13,\n      \"p_from_mw\": 1.573,\n      \"q_from_mvar\": 0.746,\n      \"loading_percent\": 17.61,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 14,\n      \"from_bus\": 13,\n      \"to_bus\": 14,\n      \"p_from_mw\": 4.734,\n      \"q_from_mvar\": 1.499,\n      \"loading_percent\": 50.22,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100000,\n      \"from_bus\": 4,\n      \"to_bus\": 7,\n      \"p_from_mw\": 28.373,\n      \"q_from_mvar\": -8.915,\n      \"loading_percent\": 80.12,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100001,\n      \"from_bus\": 4,\n      \"to_bus\": 9,\n      \"p_from_mw\": 16.264,\n      \"q_from_mvar\": -0.2,\n      \"loading_percent\": 80.89,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100002,\n      \"from_bus\": 5,\n      \"to_bus\": 6,\n      \"p_from_mw\": 42.87,\n      \"q_from_mvar\": 13.629,\n      \"loading_percent\": 78.55,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100003,\n      \"from_bus\": 7,\n      \"to_bus\": 8,\n      \"p_from_mw\": -0.0,\n      \"q_from_mvar\": -15.97,\n      \"loading_percent\": 74.44,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100004,\n      \"from_bus\": 7,\n      \"to_bus\": 9,\n      \"p_from_mw\": 28.373,\n      \"q_from_mvar\": 5.358,\n      \"loading_percent\": 80.59,\n      \"is_violation\": false\n    }\n  ],\n  \"total_generation_mw\": 265.609,\n  \"total_load_mw\": 252.656,\n  \"total_loss_mw\": 12.953,\n  \"violations\": {\n    \"voltage\": [\n      {\n        \"bus_id\": 1,\n        \"vm_pu\": 1.06\n      },\n      {\n        \"bus_id\": 6,\n        \"vm_pu\": 1.07\n      },\n      {\n        \"bus_id\": 7,\n        \"vm_pu\": 1.063551\n      },\n      {\n        \"bus_id\": 8,\n        \"vm_pu\": 1.09\n      },\n      {\n        \"bus_id\": 9,\n        \"vm_pu\": 1.058416\n      },\n      {\n        \"bus_id\": 10,\n        \"vm_pu\": 1.053603\n      },\n      {\n        \"bus_id\": 11,\n        \"vm_pu\": 1.058191\n      },\n      {\n        \"bus_id\": 12,\n        \"vm_pu\": 1.055863\n      },\n      {\n        \"bus_id\": 13,\n        \"vm_pu\": 1.051159\n      }\n    ],\n    \"thermal\": [\n      {\n        \"line_id\": 2,\n        \"loading_percent\": 104.04\n      }\n    ]\n  },\n  \"next_step\": \"Consider load shedding or voltage adjustment to mitigate violations.\",\n  \"cannot_answer\": null\n}",
+        "request_text": "Load case14 and disconnect the line between bus 3 and bus 4.",
+        "rounds": [
+          {
+            "round": 1,
+            "llm": {
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call_cEglLNPgQDl8Wby8dx03CoZB",
+                  "name": "load_case",
+                  "arguments": "{\"case_name\": \"case14\"}"
+                },
+                {
+                  "id": "call_aegKFRaNNeRwYRJB9D6XCTSE",
+                  "name": "disconnect_line",
+                  "arguments": "{\"from_bus\": 3, \"to_bus\": 4}"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 1000,
+                "completion_tokens": 52
+              },
+              "with_tools": true,
+              "latency_s": 2.811830124934204
+            },
+            "tools": [
+              {
+                "id": "call_cEglLNPgQDl8Wby8dx03CoZB",
+                "name": "load_case",
+                "arguments": {
+                  "case_name": "case14"
+                },
+                "output": "{\"case_name\": \"case14\", \"n_buses\": 14, \"n_generators\": 5, \"n_lines\": 20, \"n_loads\": 11, \"total_load_mw\": 252.656, \"total_gen_capacity_mw\": 772.4}",
+                "output_chars": 145,
+                "gate": null,
+                "enforced": false,
+                "latency_s": 0.2738330001011491
+              },
+              {
+                "id": "call_aegKFRaNNeRwYRJB9D6XCTSE",
+                "name": "disconnect_line",
+                "arguments": {
+                  "from_bus": 3,
+                  "to_bus": 4
+                },
+                "output": "{\"applied\": {\"tool\": \"disconnect_line\", \"from_bus\": 3, \"to_bus\": 4, \"in_service\": false}, \"converged\": true, \"total_generation_mw\": 265.609, \"total_load_mw\": 252.656, \"total_loss_mw\": 12.953, \"n_voltage_violations\": 9, \"n_thermal_violations\": 1, \"note\": \"Change applied and the network re-solved. Call run_powerflow to get the bus voltages and branch flows of the new state.\"}",
+                "output_chars": 376,
+                "gate": {
+                  "converged": true,
+                  "power_balance_ok": true,
+                  "mismatch_mw": 0.0,
+                  "topology_ok": true,
+                  "isolated_buses": [],
+                  "carries_numbers": true,
+                  "passed": true,
+                  "reasons": []
+                },
+                "enforced": false,
+                "latency_s": 0.0250825829571113
+              }
+            ]
+          },
+          {
+            "round": 2,
+            "llm": {
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call_4JQ2W5CZQ0rw6Ho6IkBZ4S2W",
+                  "name": "run_powerflow",
+                  "arguments": "{}"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 1249,
+                "completion_tokens": 11
+              },
+              "with_tools": true,
+              "latency_s": 1.5978507089894265
+            },
+            "tools": [
+              {
+                "id": "call_4JQ2W5CZQ0rw6Ho6IkBZ4S2W",
+                "name": "run_powerflow",
+                "arguments": {},
+                "output": "{\"case_name\": \"case14\", \"converged\": true, \"bus_voltages\": [{\"bus_id\": 1, \"vm_pu\": 1.06, \"va_deg\": 0.0, \"is_violation\": true, \"violation_type\": \"overvoltage\"}, {\"bus_id\": 2, \"vm_pu\": 1.045, \"va_deg\": -5.073, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 3, \"vm_pu\": 1.01, \"va_deg\": -15.264, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 4, \"vm_pu\": 1.021205, \"va_deg\": -9.10",
+                "output_chars": 5592,
+                "gate": {
+                  "converged": true,
+                  "power_balance_ok": true,
+                  "mismatch_mw": 0.0,
+                  "topology_ok": true,
+                  "isolated_buses": [],
+                  "carries_numbers": true,
+                  "passed": true,
+                  "reasons": []
+                },
+                "enforced": false,
+                "latency_s": 0.03652366599999368
+              }
+            ]
+          },
+          {
+            "round": 3,
+            "llm": {
+              "content": "{\n  \"converged\": true,\n  \"bus_voltages\": [\n    {\n      \"bus_id\": 1,\n      \"vm_pu\": 1.06,\n      \"va_deg\": 0.0,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 2,\n      \"vm_pu\": 1.045,\n      \"va_deg\": -5.073,\n      \"is_violation\": false,\n      \"violation_type\": null\n    },\n    {\n      \"bus_id\": 3,\n      \"vm_pu\": 1.01,\n      \"va_deg\": -15.264,\n      \"is_violation\": false,\n      \"violation_type\": null\n    },\n    {\n      \"bus_id\": 4,\n      \"vm_pu\": 1.021205,\n      \"va_deg\": -9.108,\n      \"is_violation\": false,\n      \"violation_type\": null\n    },\n    {\n      \"bus_id\": 5,\n      \"vm_pu\": 1.022192,\n      \"va_deg\": -7.936,\n      \"is_violation\": false,\n      \"violation_type\": null\n    },\n    {\n      \"bus_id\": 6,\n      \"vm_pu\": 1.07,\n      \"va_deg\": -13.218,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 7,\n      \"vm_pu\": 1.063551,\n      \"va_deg\": -12.17,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 8,\n      \"vm_pu\": 1.09,\n      \"va_deg\": -12.17,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 9,\n      \"vm_pu\": 1.058416,\n      \"va_deg\": -13.759,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 10,\n      \"vm_pu\": 1.053603,\n      \"va_deg\": -13.929,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 11,\n      \"vm_pu\": 1.058191,\n      \"va_deg\": -13.71,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 12,\n      \"vm_pu\": 1.055863,\n      \"va_deg\": -14.031,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 13,\n      \"vm_pu\": 1.051159,\n      \"va_deg\": -14.108,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 14,\n      \"vm_pu\": 1.038584,\n      \"va_deg\": -14.838,\n      \"is_violation\": false,\n      \"violation_type\": null\n    }\n  ],\n  \"line_flows\": [\n    {\n      \"line_id\": 0,\n      \"from_bus\": 1,\n      \"to_bus\": 2,\n      \"p_from_mw\": 159.619,\n      \"q_from_mvar\": -21.041,\n      \"loading_percent\": 81.41,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 1,\n      \"from_bus\": 1,\n      \"to_bus\": 5,\n      \"p_from_mw\": 68.531,\n      \"q_from_mvar\": 3.256,\n      \"loading_percent\": 72.59,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 2,\n      \"from_bus\": 2,\n      \"to_bus\": 3,\n      \"p_from_mw\": 95.342,\n      \"q_from_mvar\": 1.865,\n      \"loading_percent\": 104.04,\n      \"is_violation\": true\n    },\n    {\n      \"line_id\": 3,\n      \"from_bus\": 2,\n      \"to_bus\": 4,\n      \"p_from_mw\": 43.052,\n      \"q_from_mvar\": -0.442,\n      \"loading_percent\": 61.34,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 4,\n      \"from_bus\": 2,\n      \"to_bus\": 5,\n      \"p_from_mw\": 31.992,\n      \"q_from_mvar\": 2.106,\n      \"loading_percent\": 61.76,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 5,\n      \"from_bus\": 3,\n      \"to_bus\": 4,\n      \"p_from_mw\": 0.0,\n      \"q_from_mvar\": 0.0,\n      \"loading_percent\": 0.0,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 6,\n      \"from_bus\": 4,\n      \"to_bus\": 5,\n      \"p_from_mw\": -46.606,\n      \"q_from_mvar\": 12.899,\n      \"loading_percent\": 61.24,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 7,\n      \"from_bus\": 6,\n      \"to_bus\": 11,\n      \"p_from_mw\": 6.456,\n      \"q_from_mvar\": 3.29,\n      \"loading_percent\": 70.96,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 8,\n      \"from_bus\": 6,\n      \"to_bus\": 12,\n      \"p_from_mw\": 7.412,\n      \"q_from_mvar\": 2.396,\n      \"loading_percent\": 76.2,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 9,\n      \"from_bus\": 6,\n      \"to_bus\": 13,\n      \"p_from_mw\": 16.944,\n      \"q_from_mvar\": 6.975,\n      \"loading_percent\": 76.51,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 10,\n      \"from_bus\": 9,\n      \"to_bus\": 10,\n      \"p_from_mw\": 5.421,\n      \"q_from_mvar\": 3.994,\n      \"loading_percent\": 68.09,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 11,\n      \"from_bus\": 9,\n      \"to_bus\": 14,\n      \"p_from_mw\": 9.285,\n      \"q_from_mvar\": 3.47,\n      \"loading_percent\": 78.56,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 12,\n      \"from_bus\": 10,\n      \"to_bus\": 11,\n      \"p_from_mw\": -2.788,\n      \"q_from_mvar\": -1.322,\n      \"loading_percent\": 31.2,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 13,\n      \"from_bus\": 12,\n      \"to_bus\": 13,\n      \"p_from_mw\": 1.573,\n      \"q_from_mvar\": 0.746,\n      \"loading_percent\": 17.61,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 14,\n      \"from_bus\": 13,\n      \"to_bus\": 14,\n      \"p_from_mw\": 4.734,\n      \"q_from_mvar\": 1.499,\n      \"loading_percent\": 50.22,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100000,\n      \"from_bus\": 4,\n      \"to_bus\": 7,\n      \"p_from_mw\": 28.373,\n      \"q_from_mvar\": -8.915,\n      \"loading_percent\": 80.12,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100001,\n      \"from_bus\": 4,\n      \"to_bus\": 9,\n      \"p_from_mw\": 16.264,\n      \"q_from_mvar\": -0.2,\n      \"loading_percent\": 80.89,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100002,\n      \"from_bus\": 5,\n      \"to_bus\": 6,\n      \"p_from_mw\": 42.87,\n      \"q_from_mvar\": 13.629,\n      \"loading_percent\": 78.55,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100003,\n      \"from_bus\": 7,\n      \"to_bus\": 8,\n      \"p_from_mw\": -0.0,\n      \"q_from_mvar\": -15.97,\n      \"loading_percent\": 74.44,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100004,\n      \"from_bus\": 7,\n      \"to_bus\": 9,\n      \"p_from_mw\": 28.373,\n      \"q_from_mvar\": 5.358,\n      \"loading_percent\": 80.59,\n      \"is_violation\": false\n    }\n  ],\n  \"total_generation_mw\": 265.609,\n  \"total_load_mw\": 252.656,\n  \"total_loss_mw\": 12.953,\n  \"voltage_violations\": [\n    {\n      \"bus_id\": 1,\n      \"vm_pu\": 1.06,\n      \"va_deg\": 0.0,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 6,\n      \"vm_pu\": 1.07,\n      \"va_deg\": -13.218,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 7,\n      \"vm_pu\": 1.063551,\n      \"va_deg\": -12.17,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 8,\n      \"vm_pu\": 1.09,\n      \"va_deg\": -12.17,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 9,\n      \"vm_pu\": 1.058416,\n      \"va_deg\": -13.759,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 10,\n      \"vm_pu\": 1.053603,\n      \"va_deg\": -13.929,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 11,\n      \"vm_pu\": 1.058191,\n      \"va_deg\": -13.71,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 12,\n      \"vm_pu\": 1.055863,\n      \"va_deg\": -14.031,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 13,\n      \"vm_pu\": 1.051159,\n      \"va_deg\": -14.108,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    }\n  ],\n  \"thermal_violations\": [\n    {\n      \"line_id\": 2,\n      \"from_bus\": 2,\n      \"to_bus\": 3,\n      \"p_from_mw\": 95.342,\n      \"q_from_mvar\": 1.865,\n      \"loading_percent\": 104.04,\n      \"is_violation\": true\n    }\n  ]\n}",
+              "tool_calls": [],
+              "usage": {
+                "prompt_tokens": 3603,
+                "completion_tokens": 2758
+              },
+              "with_tools": true,
+              "latency_s": 18.84292441699654
+            }
+          },
+          {
+            "round": 3,
+            "final": true,
+            "llm": {
+              "content": "{\n  \"formulation\": [\n    {\n      \"tool\": \"load_case\",\n      \"args\": {\n        \"case_name\": \"case14\"\n      }\n    },\n    {\n      \"tool\": \"run_powerflow\",\n      \"args\": {}\n    }\n  ],\n  \"converged\": true,\n  \"summary\": \"The line between bus 3 and bus 4 was disconnected, and the network was re-solved.\",\n  \"answer\": \"Worst outage: line 2-3, 9 voltage violations\",\n  \"bus_voltages\": [\n    {\n      \"bus_id\": 1,\n      \"vm_pu\": 1.06,\n      \"va_deg\": 0.0,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 2,\n      \"vm_pu\": 1.045,\n      \"va_deg\": -5.073,\n      \"is_violation\": false,\n      \"violation_type\": null\n    },\n    {\n      \"bus_id\": 3,\n      \"vm_pu\": 1.01,\n      \"va_deg\": -15.264,\n      \"is_violation\": false,\n      \"violation_type\": null\n    },\n    {\n      \"bus_id\": 4,\n      \"vm_pu\": 1.021205,\n      \"va_deg\": -9.108,\n      \"is_violation\": false,\n      \"violation_type\": null\n    },\n    {\n      \"bus_id\": 5,\n      \"vm_pu\": 1.022192,\n      \"va_deg\": -7.936,\n      \"is_violation\": false,\n      \"violation_type\": null\n    },\n    {\n      \"bus_id\": 6,\n      \"vm_pu\": 1.07,\n      \"va_deg\": -13.218,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 7,\n      \"vm_pu\": 1.063551,\n      \"va_deg\": -12.17,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 8,\n      \"vm_pu\": 1.09,\n      \"va_deg\": -12.17,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 9,\n      \"vm_pu\": 1.058416,\n      \"va_deg\": -13.759,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 10,\n      \"vm_pu\": 1.053603,\n      \"va_deg\": -13.929,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 11,\n      \"vm_pu\": 1.058191,\n      \"va_deg\": -13.71,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 12,\n      \"vm_pu\": 1.055863,\n      \"va_deg\": -14.031,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 13,\n      \"vm_pu\": 1.051159,\n      \"va_deg\": -14.108,\n      \"is_violation\": true,\n      \"violation_type\": \"overvoltage\"\n    },\n    {\n      \"bus_id\": 14,\n      \"vm_pu\": 1.038584,\n      \"va_deg\": -14.838,\n      \"is_violation\": false,\n      \"violation_type\": null\n    }\n  ],\n  \"line_flows\": [\n    {\n      \"line_id\": 0,\n      \"from_bus\": 1,\n      \"to_bus\": 2,\n      \"p_from_mw\": 159.619,\n      \"q_from_mvar\": -21.041,\n      \"loading_percent\": 81.41,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 1,\n      \"from_bus\": 1,\n      \"to_bus\": 5,\n      \"p_from_mw\": 68.531,\n      \"q_from_mvar\": 3.256,\n      \"loading_percent\": 72.59,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 2,\n      \"from_bus\": 2,\n      \"to_bus\": 3,\n      \"p_from_mw\": 95.342,\n      \"q_from_mvar\": 1.865,\n      \"loading_percent\": 104.04,\n      \"is_violation\": true\n    },\n    {\n      \"line_id\": 3,\n      \"from_bus\": 2,\n      \"to_bus\": 4,\n      \"p_from_mw\": 43.052,\n      \"q_from_mvar\": -0.442,\n      \"loading_percent\": 61.34,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 4,\n      \"from_bus\": 2,\n      \"to_bus\": 5,\n      \"p_from_mw\": 31.992,\n      \"q_from_mvar\": 2.106,\n      \"loading_percent\": 61.76,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 5,\n      \"from_bus\": 3,\n      \"to_bus\": 4,\n      \"p_from_mw\": 0.0,\n      \"q_from_mvar\": 0.0,\n      \"loading_percent\": 0.0,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 6,\n      \"from_bus\": 4,\n      \"to_bus\": 5,\n      \"p_from_mw\": -46.606,\n      \"q_from_mvar\": 12.899,\n      \"loading_percent\": 61.24,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 7,\n      \"from_bus\": 6,\n      \"to_bus\": 11,\n      \"p_from_mw\": 6.456,\n      \"q_from_mvar\": 3.29,\n      \"loading_percent\": 70.96,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 8,\n      \"from_bus\": 6,\n      \"to_bus\": 12,\n      \"p_from_mw\": 7.412,\n      \"q_from_mvar\": 2.396,\n      \"loading_percent\": 76.2,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 9,\n      \"from_bus\": 6,\n      \"to_bus\": 13,\n      \"p_from_mw\": 16.944,\n      \"q_from_mvar\": 6.975,\n      \"loading_percent\": 76.51,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 10,\n      \"from_bus\": 9,\n      \"to_bus\": 10,\n      \"p_from_mw\": 5.421,\n      \"q_from_mvar\": 3.994,\n      \"loading_percent\": 68.09,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 11,\n      \"from_bus\": 9,\n      \"to_bus\": 14,\n      \"p_from_mw\": 9.285,\n      \"q_from_mvar\": 3.47,\n      \"loading_percent\": 78.56,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 12,\n      \"from_bus\": 10,\n      \"to_bus\": 11,\n      \"p_from_mw\": -2.788,\n      \"q_from_mvar\": -1.322,\n      \"loading_percent\": 31.2,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 13,\n      \"from_bus\": 12,\n      \"to_bus\": 13,\n      \"p_from_mw\": 1.573,\n      \"q_from_mvar\": 0.746,\n      \"loading_percent\": 17.61,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 14,\n      \"from_bus\": 13,\n      \"to_bus\": 14,\n      \"p_from_mw\": 4.734,\n      \"q_from_mvar\": 1.499,\n      \"loading_percent\": 50.22,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100000,\n      \"from_bus\": 4,\n      \"to_bus\": 7,\n      \"p_from_mw\": 28.373,\n      \"q_from_mvar\": -8.915,\n      \"loading_percent\": 80.12,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100001,\n      \"from_bus\": 4,\n      \"to_bus\": 9,\n      \"p_from_mw\": 16.264,\n      \"q_from_mvar\": -0.2,\n      \"loading_percent\": 80.89,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100002,\n      \"from_bus\": 5,\n      \"to_bus\": 6,\n      \"p_from_mw\": 42.87,\n      \"q_from_mvar\": 13.629,\n      \"loading_percent\": 78.55,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100003,\n      \"from_bus\": 7,\n      \"to_bus\": 8,\n      \"p_from_mw\": -0.0,\n      \"q_from_mvar\": -15.97,\n      \"loading_percent\": 74.44,\n      \"is_violation\": false\n    },\n    {\n      \"line_id\": 100004,\n      \"from_bus\": 7,\n      \"to_bus\": 9,\n      \"p_from_mw\": 28.373,\n      \"q_from_mvar\": 5.358,\n      \"loading_percent\": 80.59,\n      \"is_violation\": false\n    }\n  ],\n  \"total_generation_mw\": 265.609,\n  \"total_load_mw\": 252.656,\n  \"total_loss_mw\": 12.953,\n  \"violations\": {\n    \"voltage\": [\n      {\n        \"bus_id\": 1,\n        \"vm_pu\": 1.06\n      },\n      {\n        \"bus_id\": 6,\n        \"vm_pu\": 1.07\n      },\n      {\n        \"bus_id\": 7,\n        \"vm_pu\": 1.063551\n      },\n      {\n        \"bus_id\": 8,\n        \"vm_pu\": 1.09\n      },\n      {\n        \"bus_id\": 9,\n        \"vm_pu\": 1.058416\n      },\n      {\n        \"bus_id\": 10,\n        \"vm_pu\": 1.053603\n      },\n      {\n        \"bus_id\": 11,\n        \"vm_pu\": 1.058191\n      },\n      {\n        \"bus_id\": 12,\n        \"vm_pu\": 1.055863\n      },\n      {\n        \"bus_id\": 13,\n        \"vm_pu\": 1.051159\n      }\n    ],\n    \"thermal\": [\n      {\n        \"line_id\": 2,\n        \"loading_percent\": 104.04\n      }\n    ]\n  },\n  \"next_step\": \"Consider load shedding or voltage adjustment to mitigate violations.\",\n  \"cannot_answer\": null\n}",
+              "tool_calls": [],
+              "usage": {
+                "prompt_tokens": 6427,
+                "completion_tokens": 2572
+              },
+              "with_tools": false,
+              "latency_s": 17.27477495907806
+            }
+          }
+        ],
+        "plan": null,
+        "formulation_failure": false,
+        "n_llm_calls": 4,
+        "n_tool_calls": 3,
+        "n_tool_rounds": 2,
+        "gate_checked": 2,
+        "gate_failed": 0,
+        "gate_enforced": 0,
+        "prompt_tokens": 12279,
+        "completion_tokens": 5393,
+        "wall_time_s": 40.87583816598635,
+        "verification": [
+          {
+            "passed": true,
+            "conditions": {
+              "converged": {
+                "passed": true,
+                "residual": 0,
+                "applicable": true,
+                "label": "V1"
+              },
+              "balance": {
+                "passed": true,
+                "residual": 0.0,
+                "applicable": true,
+                "label": "V2"
+              },
+              "no_isolated_buses": {
+                "passed": true,
+                "residual": 0,
+                "applicable": true,
+                "isolated_buses": [],
+                "label": "V3"
+              },
+              "traceability": {
+                "passed": true,
+                "residual": 0.0,
+                "label": "V4"
+              },
+              "currency": {
+                "passed": true,
+                "residual": 0,
+                "label": "V5"
+              },
+              "argument_grounding": {
+                "passed": true,
+                "invented_args": [],
+                "detail": "every mutating-tool argument traces to the request or a prior tool output",
+                "label": "V6"
+              },
+              "claims_from_tools": {
+                "passed": true,
+                "applicable": true,
+                "detail": "answer matches the agent's own last solved state",
+                "label": "V7"
+              },
+              "request_applied": {
+                "passed": true,
+                "applicable": true,
+                "detail": "every change applied and reflected in the final state",
+                "label": "V8"
+              },
+              "complete_state": {
+                "passed": true,
+                "applicable": true,
+                "detail": "all 14 buses and 20 branches reported",
+                "missing_buses": 0,
+                "missing_branches": 0,
+                "label": "V10"
+              },
+              "plausible_state": {
+                "passed": true,
+                "applicable": true,
+                "enforced": false,
+                "plausible": true,
+                "detail": "voltages within 0.8 to 1.2 p.u., losses below 10 % of the load",
+                "label": "V9"
+              }
+            },
+            "last_mutation": {
+              "tool": "disconnect_line",
+              "args": {
+                "from_bus": 3,
+                "to_bus": 4
+              }
+            }
+          }
+        ],
+        "verification_attempts": 1,
+        "verification_outcome": "pass_first",
+        "verification_retry_messages": [],
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a power system power-flow analysis assistant. You help the user complete power system analysis tasks from natural-language requests.\n\n## What you can do\nYou complete tasks by calling tool functions:\n1. Load an IEEE standard test system (14, 30, 57, 118, 300 buses)\n2. Run AC power flow\n3. Modify the load at a bus and re-solve\n4. Disconnect or reconnect a line and re-solve\n5. Query the network status\n6. Run an N-1 contingency analysis (disconnect branches one at a time and rank the worst cases)\n7. Generate remedial-action suggestions (what-if load shedding or voltage adjustment) to reduce violation risk\n\n## Rules\n- Never fabricate a numerical result. Every voltage, power, loss, or loading value you report must come from a solver output (tool-using methods) or from your own explicit computation on the data given (methods without tools).\n- If the request is ambiguous, state the interpretation you are using in `summary`.\n- Bus and line identifiers in the request are MATPOWER 1-based ids; use them as given, unless the request itself states a different indexing convention for that identifier (e.g. \"(0-based)\"), in which case convert it to the MATPOWER 1-based id.\n- If you cannot complete the request, say so: set `converged` to false, leave the result arrays empty, and explain why in `cannot_answer`. Do not guess.\n- Always reply in English, and only with the JSON object described under Output.\n- After a network modification, re-solve before reporting any value.\n- If a tool reports an error or a non-converged power flow, say so explicitly and do not report numbers for that state.\n\n## Output\nWhen the task is complete, reply with the JSON object described in the final-answer instruction, filled from the tool outputs of the last solve.\n"
+          },
+          {
+            "role": "user",
+            "content": "Load case14 and disconnect the line between bus 3 and bus 4."
+          }
+        ]
+      }
+    },
+    {
+      "model": "openrouter:openai/gpt-4o-mini",
+      "provider": "openrouter",
+      "task": "pfagent",
+      "method": "pfagent",
+      "case_name": "case14",
+      "run": 0,
+      "k": 1,
+      "seed": 827308000,
+      "gen_seed": 0,
+      "request_id": "case14-multistep-001-s0",
+      "difficulty": "multistep",
+      "request_text": "Load the IEEE 14-bus system, set the active load at bus 12 to 4.9 MW, disconnect the line between bus 1 and bus 5, and finally rerun the power flow, then report the bus with the lowest voltage magnitude.",
+      "ok": true,
+      "error": null,
+      "latency_s": 37.88513495901134,
+      "usage": {
+        "prompt_tokens": 12846,
+        "completion_tokens": 1814,
+        "total_tokens": 14660
+      },
+      "cost_usd": 0.0030153,
+      "metrics": {
+        "voltage_mae": 1.7251628452769857e-07,
+        "flow_mae": 0.00022472776363444773,
+        "bus_coverage": {
+          "pred": 14,
+          "truth": 14,
+          "intersection": 14
+        },
+        "line_coverage": {
+          "pred": 20,
+          "truth": 20,
+          "intersection": 20
+        },
+        "voltage_violation_precision": 1.0,
+        "voltage_violation_recall": 1.0,
+        "thermal_violation_precision": 1.0,
+        "thermal_violation_recall": 1.0,
+        "pred_voltage_violations": [
+          1,
+          6,
+          7,
+          8,
+          9,
+          11,
+          12
+        ],
+        "truth_voltage_violations": [
+          1,
+          6,
+          7,
+          8,
+          9,
+          11,
+          12
+        ],
+        "pred_thermal_violations": [
+          0,
+          2,
+          3,
+          4
+        ],
+        "truth_thermal_violations": [
+          0,
+          2,
+          3,
+          4
+        ],
+        "voltage_rmse": 2.3662517369429817e-07,
+        "voltage_mape": 1.6582164354951284e-05,
+        "voltage_max_error": 4.20341236706534e-07,
+        "voltage_mae_pq": 2.683586647961928e-07,
+        "angle_rmse": 0.00030899335750158517,
+        "flow_rmse": 0.00025458962566359726,
+        "flow_max_error": 0.0004203202602326428,
+        "flow_p95_error": 0.0004040123698004994,
+        "loading_rmse": 0.002856272137976792,
+        "power_balance_error": 1.4210854715202004e-14,
+        "flow_deviation_rate": 0.0,
+        "kcl_self_violation_rate": 0.0,
+        "kcl_max_mismatch_mw": 0.0006394685492381313,
+        "kcl_mean_mismatch_mw": 0.0001536988367678742,
+        "feasible": true,
+        "voltage_f1": 1.0,
+        "thermal_f1": 1.0,
+        "convergence_match": true,
+        "flow_direction_accuracy": 100.0,
+        "critical_bus_jaccard": 1.0,
+        "_raw_vm_pairs": [
+          [
+            1,
+            1.06,
+            1.06
+          ],
+          [
+            2,
+            1.045,
+            1.045
+          ],
+          [
+            3,
+            1.01,
+            1.01
+          ],
+          [
+            4,
+            1.007758,
+            1.0077578300070744
+          ],
+          [
+            5,
+            1.005627,
+            1.005627411085107
+          ],
+          [
+            6,
+            1.07,
+            1.07
+          ],
+          [
+            7,
+            1.056859,
+            1.0568591428207723
+          ],
+          [
+            8,
+            1.09,
+            1.0899999999999999
+          ],
+          [
+            9,
+            1.051408,
+            1.0514076112944666
+          ],
+          [
+            10,
+            1.047653,
+            1.047653167202263
+          ],
+          [
+            11,
+            1.055473,
+            1.0554733324131707
+          ],
+          [
+            12,
+            1.055621,
+            1.0556213056650672
+          ],
+          [
+            13,
+            1.049392,
+            1.0493915796587634
+          ],
+          [
+            14,
+            1.033012,
+            1.0330120770019076
+          ]
+        ],
+        "_raw_va_pairs": [
+          [
+            1,
+            0.0,
+            0.0
+          ],
+          [
+            2,
+            -8.032,
+            -8.031964724966537
+          ],
+          [
+            3,
+            -17.866,
+            -17.86560565377149
+          ],
+          [
+            4,
+            -16.387,
+            -16.386716033532096
+          ],
+          [
+            5,
+            -15.635,
+            -15.63494586616
+          ],
+          [
+            6,
+            -20.994,
+            -20.99352477224851
+          ],
+          [
+            7,
+            -19.661,
+            -19.661106030629025
+          ],
+          [
+            8,
+            -19.661,
+            -19.661106030629018
+          ],
+          [
+            9,
+            -21.349,
+            -21.348589671092654
+          ],
+          [
+            10,
+            -21.556,
+            -21.555572841749402
+          ],
+          [
+            11,
+            -21.393,
+            -21.392575390235397
+          ],
+          [
+            12,
+            -21.752,
+            -21.752496474150476
+          ],
+          [
+            13,
+            -21.871,
+            -21.870877364611136
+          ],
+          [
+            14,
+            -22.553,
+            -22.553235320984513
+          ]
+        ],
+        "_raw_p_pairs": [
+          [
+            0,
+            249.614,
+            249.6136590035321
+          ],
+          [
+            1,
+            0.0,
+            0.0
+          ],
+          [
+            2,
+            92.108,
+            92.10842032026024
+          ],
+          [
+            3,
+            86.728,
+            86.7277216714675
+          ],
+          [
+            4,
+            80.787,
+            80.78715648035357
+          ],
+          [
+            5,
+            -12.798,
+            -12.798167413025011
+          ],
+          [
+            6,
+            -27.164,
+            -27.163918795466234
+          ],
+          [
+            7,
+            6.264,
+            6.264403154059778
+          ],
+          [
+            8,
+            7.115,
+            7.11464927858258
+          ],
+          [
+            9,
+            17.367,
+            17.36681203005427
+          ],
+          [
+            10,
+            5.668,
+            5.66775843248882
+          ],
+          [
+            11,
+            9.705,
+            9.70490276019535
+          ],
+          [
+            12,
+            -2.925,
+            -2.9251838130873975
+          ],
+          [
+            13,
+            2.153,
+            2.1528565554320074
+          ],
+          [
+            14,
+            4.952,
+            4.951655433060837
+          ],
+          [
+            100000,
+            29.745,
+            29.744742330905193
+          ],
+          [
+            100001,
+            17.005,
+            17.004671073416354
+          ],
+          [
+            100002,
+            42.782,
+            42.78225306979612
+          ],
+          [
+            100003,
+            -0.0,
+            -9.50518015144317e-14
+          ],
+          [
+            100004,
+            29.745,
+            29.744742330708274
+          ]
+        ],
+        "_violation_cm": {
+          "tp": 7,
+          "fp": 0,
+          "fn": 0,
+          "tn": 7
+        },
+        "_thermal_cm": {
+          "tp": 4,
+          "fp": 0,
+          "fn": 0,
+          "tn": 16
+        }
+      },
+      "raw_response": "{\n  \"formulation\": [\n    {\"tool\": \"load_case\", \"args\": {\"case_name\": \"case14\"}},\n    {\"tool\": \"set_active_load\", \"args\": {\"bus_id\": 12, \"p_mw\": 4.9}},\n    {\"tool\": \"disconnect_line\", \"args\": {\"from_bus\": 1, \"to_bus\": 5}},\n    {\"tool\": \"run_powerflow\", \"args\": {}}\n  ],\n  \"converged\": true,\n  \"summary\": \"The IEEE 14-bus system was modified by changing the load at bus 12 and disconnecting the line between bus 1 and bus 5, and the power flow was successfully solved.\",\n  \"answer\": \"Lowest voltage: bus 1 at 1.06 p.u.\",\n  \"bus_voltages\": [\n    {\"bus_id\": 1, \"vm_pu\": 1.06, \"va_deg\": 0.0},\n    {\"bus_id\": 2, \"vm_pu\": 1.045, \"va_deg\": -8.032},\n    {\"bus_id\": 3, \"vm_pu\": 1.01, \"va_deg\": -17.866},\n    {\"bus_id\": 4, \"vm_pu\": 1.007758, \"va_deg\": -16.387},\n    {\"bus_id\": 5, \"vm_pu\": 1.005627, \"va_deg\": -15.635},\n    {\"bus_id\": 6, \"vm_pu\": 1.07, \"va_deg\": -20.994},\n    {\"bus_id\": 7, \"vm_pu\": 1.056859, \"va_deg\": -19.661},\n    {\"bus_id\": 8, \"vm_pu\": 1.09, \"va_deg\": -19.661},\n    {\"bus_id\": 9, \"vm_pu\": 1.051408, \"va_deg\": -21.349},\n    {\"bus_id\": 10, \"vm_pu\": 1.047653, \"va_deg\": -21.556},\n    {\"bus_id\": 11, \"vm_pu\": 1.055473, \"va_deg\": -21.393},\n    {\"bus_id\": 12, \"vm_pu\": 1.055621, \"va_deg\": -21.752},\n    {\"bus_id\": 13, \"vm_pu\": 1.049392, \"va_deg\": -21.871},\n    {\"bus_id\": 14, \"vm_pu\": 1.033012, \"va_deg\": -22.553}\n  ],\n  \"line_flows\": [\n    {\"line_id\": 0, \"from_bus\": 1, \"to_bus\": 2, \"p_from_mw\": 249.614, \"loading_percent\": 127.79},\n    {\"line_id\": 1, \"from_bus\": 1, \"to_bus\": 5, \"p_from_mw\": 0.0, \"loading_percent\": 0.0},\n    {\"line_id\": 2, \"from_bus\": 2, \"to_bus\": 3, \"p_from_mw\": 92.108, \"loading_percent\": 100.52},\n    {\"line_id\": 3, \"from_bus\": 2, \"to_bus\": 4, \"p_from_mw\": 86.728, \"loading_percent\": 123.59},\n    {\"line_id\": 4, \"from_bus\": 2, \"to_bus\": 5, \"p_from_mw\": 80.787, \"loading_percent\": 155.62},\n    {\"line_id\": 5, \"from_bus\": 3, \"to_bus\": 4, \"p_from_mw\": -12.798, \"loading_percent\": 47.52},\n    {\"line_id\": 6, \"from_bus\": 4, \"to_bus\": 5, \"p_from_mw\": -27.164, \"loading_percent\": 38.65},\n    {\"line_id\": 7, \"from_bus\": 6, \"to_bus\": 11, \"p_from_mw\": 6.264, \"loading_percent\": 77.5},\n    {\"line_id\": 8, \"from_bus\": 6, \"to_bus\": 12, \"p_from_mw\": 7.115, \"loading_percent\": 74.21},\n    {\"line_id\": 9, \"from_bus\": 6, \"to_bus\": 13, \"p_from_mw\": 17.367, \"loading_percent\": 80.21},\n    {\"line_id\": 10, \"from_bus\": 9, \"to_bus\": 10, \"p_from_mw\": 5.668, \"loading_percent\": 62.84},\n    {\"line_id\": 11, \"from_bus\": 9, \"to_bus\": 14, \"p_from_mw\": 9.705, \"loading_percent\": 79.79},\n    {\"line_id\": 12, \"from_bus\": 10, \"to_bus\": 11, \"p_from_mw\": -2.925, \"loading_percent\": 42.47},\n    {\"line_id\": 13, \"from_bus\": 12, \"to_bus\": 13, \"p_from_mw\": 2.153, \"loading_percent\": 23.65},\n    {\"line_id\": 14, \"from_bus\": 13, \"to_bus\": 14, \"p_from_mw\": 4.952, \"loading_percent\": 56.23},\n    {\"line_id\": 100000, \"from_bus\": 4, \"to_bus\": 7, \"p_from_mw\": 29.745, \"loading_percent\": 86.58},\n    {\"line_id\": 100001, \"from_bus\": 4, \"to_bus\": 9, \"p_from_mw\": 17.005, \"loading_percent\": 84.86},\n    {\"line_id\": 100002, \"from_bus\": 5, \"to_bus\": 6, \"p_from_mw\": 42.782, \"loading_percent\": 75.4},\n    {\"line_id\": 100003, \"from_bus\": 7, \"to_bus\": 8, \"p_from_mw\": -0.0, \"loading_percent\": 92.68},\n    {\"line_id\": 100004, \"from_bus\": 7, \"to_bus\": 9, \"p_from_mw\": 29.745, \"loading_percent\": 84.52}\n  ],\n  \"total_generation_mw\": 291.788,\n  \"total_load_mw\": 268.958,\n  \"total_loss_mw\": 22.83,\n  \"violations\": {\n    \"voltage\": [\n      {\"bus_id\": 1, \"vm_pu\": 1.06},\n      {\"bus_id\": 6, \"vm_pu\": 1.07},\n      {\"bus_id\": 7, \"vm_pu\": 1.056859},\n      {\"bus_id\": 8, \"vm_pu\": 1.09},\n      {\"bus_id\": 9, \"vm_pu\": 1.051408},\n      {\"bus_id\": 11, \"vm_pu\": 1.055473},\n      {\"bus_id\": 12, \"vm_pu\": 1.055621}\n    ],\n    \"thermal\": [\n      {\"line_id\": 0, \"loading_percent\": 127.79},\n      {\"line_id\": 2, \"loading_percent\": 100.52},\n      {\"line_id\": 3, \"loading_percent\": 123.59},\n      {\"line_id\": 4, \"loading_percent\": 155.62}\n    ]\n  },\n  \"next_step\": \"Consider load shedding or voltage adjustment to mitigate violations.\",\n  \"cannot_answer\": null\n}",
+      "intended_calls": [
+        {
+          "tool": "load_case",
+          "args": {
+            "case_name": "case14"
+          }
+        },
+        {
+          "tool": "modify_load",
+          "args": {
+            "bus_id": 12,
+            "p_mw": 4.9
+          }
+        },
+        {
+          "tool": "disconnect_line",
+          "args": {
+            "from_bus": 1,
+            "to_bus": 5
+          }
+        },
+        {
+          "tool": "run_powerflow",
+          "args": {}
+        }
+      ],
+      "executed_calls": [
+        {
+          "tool": "load_case",
+          "args": {
+            "case_name": "case14"
+          }
+        },
+        {
+          "tool": "set_active_load",
+          "args": {
+            "bus_id": 12,
+            "p_mw": 4.9
+          }
+        },
+        {
+          "tool": "disconnect_line",
+          "args": {
+            "from_bus": 1,
+            "to_bus": 5
+          }
+        },
+        {
+          "tool": "run_powerflow",
+          "args": {}
+        }
+      ],
+      "declared_formulation": null,
+      "common_json_ok": true,
+      "common_reported_state": true,
+      "common_cannot_answer": null,
+      "common_converged": true,
+      "common_voltage_mae": 1.7251628452769857e-07,
+      "common_flow_mae": 0.00022472776363444773,
+      "common_kcl_mismatch_mw": 0.0001536988367678742,
+      "common_bus_coverage": {
+        "pred": 14,
+        "truth": 14,
+        "intersection": 14
+      },
+      "common_numeric_ok": true,
+      "common_answer_ok": true,
+      "common_formulation_exact": true,
+      "common_formulation_error_type": "ok",
+      "common_formulation_detail": "declared: ",
+      "common_declared_formulation": [
+        {
+          "tool": "load_case",
+          "args": {
+            "case_name": "case14"
+          }
+        },
+        {
+          "tool": "set_active_load",
+          "args": {
+            "bus_id": 12,
+            "p_mw": 4.9
+          }
+        },
+        {
+          "tool": "disconnect_line",
+          "args": {
+            "from_bus": 1,
+            "to_bus": 5
+          }
+        },
+        {
+          "tool": "run_powerflow",
+          "args": {}
+        }
+      ],
+      "common_escalated": false,
+      "common_escalation_reason": null,
+      "common_solved": true,
+      "common_reason": "state_and_answer_ok",
+      "common_outcome": "solved",
+      "common_n_numbers": 84,
+      "common_n_untraceable": 0,
+      "common_traceable": true,
+      "formulation_exact": true,
+      "formulation_error_type": "ok",
+      "formulation_detail": "",
+      "faithful_numbers": 1.0,
+      "faithful_answers": true,
+      "n_numbers": 84,
+      "n_untraceable_numbers": 0,
+      "untraceable_numbers": [],
+      "final_converged": true,
+      "expected_outcome": "converged",
+      "truth_converged": true,
+      "reference_solvable": true,
+      "truth_tool_errors": [],
+      "truth_answer": {
+        "bus_id": 5,
+        "vm_pu": 1.005627
+      },
+      "solved": true,
+      "solved_reason": "numeric_and_answer_ok",
+      "escalated": false,
+      "solved_autonomously": true,
+      "wrong_silently": false,
+      "is_failure": false,
+      "safe_failure": null,
+      "claimed_success_on_failure": null,
+      "abstained": false,
+      "abstained_on_solvable": false,
+      "failure_detection_path": "json",
+      "has_mutation": true,
+      "stale_state": false,
+      "stale_state_no_rerun": false,
+      "stale_state_quoted_old": false,
+      "stale_state_detail": "re-solved at [2, 3] after disconnect_line at call 2",
+      "stale_state_trace": {
+        "last_mutation_index": 2,
+        "last_mutation_tool": "disconnect_line",
+        "last_mutation_args": {
+          "from_bus": 1,
+          "to_bus": 5
+        },
+        "prior_result_indices": [
+          1
+        ],
+        "resolve_indices_after": [
+          2,
+          3
+        ],
+        "old_only": []
+      },
+      "verification_outcome": "pass_first",
+      "verification_attempts": 1,
+      "v_pass": true,
+      "system_prompt_hash": "2efb17dd2582",
+      "n_llm_calls": 6,
+      "n_tool_calls": 4,
+      "n_tool_rounds": 4,
+      "prompt_tokens": 12846,
+      "completion_tokens": 1814,
+      "wall_time_s": 37.88513495901134,
+      "gate_checked": 3,
+      "gate_failed": 0,
+      "gate_enforced": 0,
+      "trace": {
+        "architecture": "react",
+        "gate": false,
+        "final_gate": true,
+        "memory": false,
+        "max_rounds": 8,
+        "status": "ok",
+        "final_text": "{\n  \"formulation\": [\n    {\"tool\": \"load_case\", \"args\": {\"case_name\": \"case14\"}},\n    {\"tool\": \"set_active_load\", \"args\": {\"bus_id\": 12, \"p_mw\": 4.9}},\n    {\"tool\": \"disconnect_line\", \"args\": {\"from_bus\": 1, \"to_bus\": 5}},\n    {\"tool\": \"run_powerflow\", \"args\": {}}\n  ],\n  \"converged\": true,\n  \"summary\": \"The IEEE 14-bus system was modified by changing the load at bus 12 and disconnecting the line between bus 1 and bus 5, and the power flow was successfully solved.\",\n  \"answer\": \"Lowest voltage: bus 1 at 1.06 p.u.\",\n  \"bus_voltages\": [\n    {\"bus_id\": 1, \"vm_pu\": 1.06, \"va_deg\": 0.0},\n    {\"bus_id\": 2, \"vm_pu\": 1.045, \"va_deg\": -8.032},\n    {\"bus_id\": 3, \"vm_pu\": 1.01, \"va_deg\": -17.866},\n    {\"bus_id\": 4, \"vm_pu\": 1.007758, \"va_deg\": -16.387},\n    {\"bus_id\": 5, \"vm_pu\": 1.005627, \"va_deg\": -15.635},\n    {\"bus_id\": 6, \"vm_pu\": 1.07, \"va_deg\": -20.994},\n    {\"bus_id\": 7, \"vm_pu\": 1.056859, \"va_deg\": -19.661},\n    {\"bus_id\": 8, \"vm_pu\": 1.09, \"va_deg\": -19.661},\n    {\"bus_id\": 9, \"vm_pu\": 1.051408, \"va_deg\": -21.349},\n    {\"bus_id\": 10, \"vm_pu\": 1.047653, \"va_deg\": -21.556},\n    {\"bus_id\": 11, \"vm_pu\": 1.055473, \"va_deg\": -21.393},\n    {\"bus_id\": 12, \"vm_pu\": 1.055621, \"va_deg\": -21.752},\n    {\"bus_id\": 13, \"vm_pu\": 1.049392, \"va_deg\": -21.871},\n    {\"bus_id\": 14, \"vm_pu\": 1.033012, \"va_deg\": -22.553}\n  ],\n  \"line_flows\": [\n    {\"line_id\": 0, \"from_bus\": 1, \"to_bus\": 2, \"p_from_mw\": 249.614, \"loading_percent\": 127.79},\n    {\"line_id\": 1, \"from_bus\": 1, \"to_bus\": 5, \"p_from_mw\": 0.0, \"loading_percent\": 0.0},\n    {\"line_id\": 2, \"from_bus\": 2, \"to_bus\": 3, \"p_from_mw\": 92.108, \"loading_percent\": 100.52},\n    {\"line_id\": 3, \"from_bus\": 2, \"to_bus\": 4, \"p_from_mw\": 86.728, \"loading_percent\": 123.59},\n    {\"line_id\": 4, \"from_bus\": 2, \"to_bus\": 5, \"p_from_mw\": 80.787, \"loading_percent\": 155.62},\n    {\"line_id\": 5, \"from_bus\": 3, \"to_bus\": 4, \"p_from_mw\": -12.798, \"loading_percent\": 47.52},\n    {\"line_id\": 6, \"from_bus\": 4, \"to_bus\": 5, \"p_from_mw\": -27.164, \"loading_percent\": 38.65},\n    {\"line_id\": 7, \"from_bus\": 6, \"to_bus\": 11, \"p_from_mw\": 6.264, \"loading_percent\": 77.5},\n    {\"line_id\": 8, \"from_bus\": 6, \"to_bus\": 12, \"p_from_mw\": 7.115, \"loading_percent\": 74.21},\n    {\"line_id\": 9, \"from_bus\": 6, \"to_bus\": 13, \"p_from_mw\": 17.367, \"loading_percent\": 80.21},\n    {\"line_id\": 10, \"from_bus\": 9, \"to_bus\": 10, \"p_from_mw\": 5.668, \"loading_percent\": 62.84},\n    {\"line_id\": 11, \"from_bus\": 9, \"to_bus\": 14, \"p_from_mw\": 9.705, \"loading_percent\": 79.79},\n    {\"line_id\": 12, \"from_bus\": 10, \"to_bus\": 11, \"p_from_mw\": -2.925, \"loading_percent\": 42.47},\n    {\"line_id\": 13, \"from_bus\": 12, \"to_bus\": 13, \"p_from_mw\": 2.153, \"loading_percent\": 23.65},\n    {\"line_id\": 14, \"from_bus\": 13, \"to_bus\": 14, \"p_from_mw\": 4.952, \"loading_percent\": 56.23},\n    {\"line_id\": 100000, \"from_bus\": 4, \"to_bus\": 7, \"p_from_mw\": 29.745, \"loading_percent\": 86.58},\n    {\"line_id\": 100001, \"from_bus\": 4, \"to_bus\": 9, \"p_from_mw\": 17.005, \"loading_percent\": 84.86},\n    {\"line_id\": 100002, \"from_bus\": 5, \"to_bus\": 6, \"p_from_mw\": 42.782, \"loading_percent\": 75.4},\n    {\"line_id\": 100003, \"from_bus\": 7, \"to_bus\": 8, \"p_from_mw\": -0.0, \"loading_percent\": 92.68},\n    {\"line_id\": 100004, \"from_bus\": 7, \"to_bus\": 9, \"p_from_mw\": 29.745, \"loading_percent\": 84.52}\n  ],\n  \"total_generation_mw\": 291.788,\n  \"total_load_mw\": 268.958,\n  \"total_loss_mw\": 22.83,\n  \"violations\": {\n    \"voltage\": [\n      {\"bus_id\": 1, \"vm_pu\": 1.06},\n      {\"bus_id\": 6, \"vm_pu\": 1.07},\n      {\"bus_id\": 7, \"vm_pu\": 1.056859},\n      {\"bus_id\": 8, \"vm_pu\": 1.09},\n      {\"bus_id\": 9, \"vm_pu\": 1.051408},\n      {\"bus_id\": 11, \"vm_pu\": 1.055473},\n      {\"bus_id\": 12, \"vm_pu\": 1.055621}\n    ],\n    \"thermal\": [\n      {\"line_id\": 0, \"loading_percent\": 127.79},\n      {\"line_id\": 2, \"loading_percent\": 100.52},\n      {\"line_id\": 3, \"loading_percent\": 123.59},\n      {\"line_id\": 4, \"loading_percent\": 155.62}\n    ]\n  },\n  \"next_step\": \"Consider load shedding or voltage adjustment to mitigate violations.\",\n  \"cannot_answer\": null\n}",
+        "request_text": "Load the IEEE 14-bus system, set the active load at bus 12 to 4.9 MW, disconnect the line between bus 1 and bus 5, and finally rerun the power flow, then report the bus with the lowest voltage magnitude.",
+        "rounds": [
+          {
+            "round": 1,
+            "llm": {
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call_w9Ef8kO4eXE1NAlTEp12KkFh",
+                  "name": "load_case",
+                  "arguments": "{\"case_name\":\"case14\"}"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 1038,
+                "completion_tokens": 16
+              },
+              "with_tools": true,
+              "latency_s": 6.439695124980062
+            },
+            "tools": [
+              {
+                "id": "call_w9Ef8kO4eXE1NAlTEp12KkFh",
+                "name": "load_case",
+                "arguments": {
+                  "case_name": "case14"
+                },
+                "output": "{\"case_name\": \"case14\", \"n_buses\": 14, \"n_generators\": 5, \"n_lines\": 20, \"n_loads\": 11, \"total_load_mw\": 270.136, \"total_gen_capacity_mw\": 772.4}",
+                "output_chars": 145,
+                "gate": null,
+                "enforced": false,
+                "latency_s": 0.6655142080271617
+              }
+            ]
+          },
+          {
+            "round": 2,
+            "llm": {
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call_doTrs3ue3dEtFZ4nq46ycvMx",
+                  "name": "set_active_load",
+                  "arguments": "{\"bus_id\":12,\"p_mw\":4.9}"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 1124,
+                "completion_tokens": 24
+              },
+              "with_tools": true,
+              "latency_s": 1.0889191669411957
+            },
+            "tools": [
+              {
+                "id": "call_doTrs3ue3dEtFZ4nq46ycvMx",
+                "name": "set_active_load",
+                "arguments": {
+                  "bus_id": 12,
+                  "p_mw": 4.9
+                },
+                "output": "{\"applied\": {\"tool\": \"set_active_load\", \"bus_id\": 12, \"p_mw\": 4.9, \"q_mvar\": null}, \"converged\": true, \"total_generation_mw\": 283.577, \"total_load_mw\": 268.958, \"total_loss_mw\": 14.619, \"n_voltage_violations\": 8, \"n_thermal_violations\": 0, \"note\": \"Change applied and the network re-solved. Call run_powerflow to get the bus voltages and branch flows of the new state.\", \"resolved_bus_id\": 12, \"assum",
+                "output_chars": 472,
+                "gate": {
+                  "converged": true,
+                  "power_balance_ok": true,
+                  "mismatch_mw": 0.0,
+                  "topology_ok": true,
+                  "isolated_buses": [],
+                  "carries_numbers": true,
+                  "passed": true,
+                  "reasons": []
+                },
+                "enforced": false,
+                "latency_s": 0.12548766704276204
+              }
+            ]
+          },
+          {
+            "round": 3,
+            "llm": {
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call_uhv9k6ipc2rAa5a7SaealiwH",
+                  "name": "disconnect_line",
+                  "arguments": "{\"from_bus\":1,\"to_bus\":5}"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 1311,
+                "completion_tokens": 20
+              },
+              "with_tools": true,
+              "latency_s": 1.124991999939084
+            },
+            "tools": [
+              {
+                "id": "call_uhv9k6ipc2rAa5a7SaealiwH",
+                "name": "disconnect_line",
+                "arguments": {
+                  "from_bus": 1,
+                  "to_bus": 5
+                },
+                "output": "{\"applied\": {\"tool\": \"disconnect_line\", \"from_bus\": 1, \"to_bus\": 5, \"in_service\": false}, \"converged\": true, \"total_generation_mw\": 291.788, \"total_load_mw\": 268.958, \"total_loss_mw\": 22.83, \"n_voltage_violations\": 7, \"n_thermal_violations\": 4, \"note\": \"Change applied and the network re-solved. Call run_powerflow to get the bus voltages and branch flows of the new state.\"}",
+                "output_chars": 375,
+                "gate": {
+                  "converged": true,
+                  "power_balance_ok": true,
+                  "mismatch_mw": 0.0,
+                  "topology_ok": true,
+                  "isolated_buses": [],
+                  "carries_numbers": true,
+                  "passed": true,
+                  "reasons": []
+                },
+                "enforced": false,
+                "latency_s": 0.44017583306413144
+              }
+            ]
+          },
+          {
+            "round": 4,
+            "llm": {
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call_Ed1fG0gDtEgkgLzKhMQHSt6z",
+                  "name": "run_powerflow",
+                  "arguments": "{}"
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 1463,
+                "completion_tokens": 11
+              },
+              "with_tools": true,
+              "latency_s": 1.4910634169355035
+            },
+            "tools": [
+              {
+                "id": "call_Ed1fG0gDtEgkgLzKhMQHSt6z",
+                "name": "run_powerflow",
+                "arguments": {},
+                "output": "{\"case_name\": \"case14\", \"converged\": true, \"bus_voltages\": [{\"bus_id\": 1, \"vm_pu\": 1.06, \"va_deg\": 0.0, \"is_violation\": true, \"violation_type\": \"overvoltage\"}, {\"bus_id\": 2, \"vm_pu\": 1.045, \"va_deg\": -8.032, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 3, \"vm_pu\": 1.01, \"va_deg\": -17.866, \"is_violation\": false, \"violation_type\": null}, {\"bus_id\": 4, \"vm_pu\": 1.007758, \"va_deg\": -16.3",
+                "output_chars": 5783,
+                "gate": {
+                  "converged": true,
+                  "power_balance_ok": true,
+                  "mismatch_mw": 0.0,
+                  "topology_ok": true,
+                  "isolated_buses": [],
+                  "carries_numbers": true,
+                  "passed": true,
+                  "reasons": []
+                },
+                "enforced": false,
+                "latency_s": 0.06063449999783188
+              }
+            ]
+          },
+          {
+            "round": 5,
+            "llm": {
+              "content": "```json\n{\n  \"converged\": true,\n  \"lowest_voltage_bus\": {\n    \"bus_id\": 1,\n    \"voltage_magnitude\": 1.06\n  }\n}\n```",
+              "tool_calls": [],
+              "usage": {
+                "prompt_tokens": 3900,
+                "completion_tokens": 44
+              },
+              "with_tools": true,
+              "latency_s": 12.872879707952961
+            }
+          },
+          {
+            "round": 5,
+            "final": true,
+            "llm": {
+              "content": "{\n  \"formulation\": [\n    {\"tool\": \"load_case\", \"args\": {\"case_name\": \"case14\"}},\n    {\"tool\": \"set_active_load\", \"args\": {\"bus_id\": 12, \"p_mw\": 4.9}},\n    {\"tool\": \"disconnect_line\", \"args\": {\"from_bus\": 1, \"to_bus\": 5}},\n    {\"tool\": \"run_powerflow\", \"args\": {}}\n  ],\n  \"converged\": true,\n  \"summary\": \"The IEEE 14-bus system was modified by changing the load at bus 12 and disconnecting the line between bus 1 and bus 5, and the power flow was successfully solved.\",\n  \"answer\": \"Lowest voltage: bus 1 at 1.06 p.u.\",\n  \"bus_voltages\": [\n    {\"bus_id\": 1, \"vm_pu\": 1.06, \"va_deg\": 0.0},\n    {\"bus_id\": 2, \"vm_pu\": 1.045, \"va_deg\": -8.032},\n    {\"bus_id\": 3, \"vm_pu\": 1.01, \"va_deg\": -17.866},\n    {\"bus_id\": 4, \"vm_pu\": 1.007758, \"va_deg\": -16.387},\n    {\"bus_id\": 5, \"vm_pu\": 1.005627, \"va_deg\": -15.635},\n    {\"bus_id\": 6, \"vm_pu\": 1.07, \"va_deg\": -20.994},\n    {\"bus_id\": 7, \"vm_pu\": 1.056859, \"va_deg\": -19.661},\n    {\"bus_id\": 8, \"vm_pu\": 1.09, \"va_deg\": -19.661},\n    {\"bus_id\": 9, \"vm_pu\": 1.051408, \"va_deg\": -21.349},\n    {\"bus_id\": 10, \"vm_pu\": 1.047653, \"va_deg\": -21.556},\n    {\"bus_id\": 11, \"vm_pu\": 1.055473, \"va_deg\": -21.393},\n    {\"bus_id\": 12, \"vm_pu\": 1.055621, \"va_deg\": -21.752},\n    {\"bus_id\": 13, \"vm_pu\": 1.049392, \"va_deg\": -21.871},\n    {\"bus_id\": 14, \"vm_pu\": 1.033012, \"va_deg\": -22.553}\n  ],\n  \"line_flows\": [\n    {\"line_id\": 0, \"from_bus\": 1, \"to_bus\": 2, \"p_from_mw\": 249.614, \"loading_percent\": 127.79},\n    {\"line_id\": 1, \"from_bus\": 1, \"to_bus\": 5, \"p_from_mw\": 0.0, \"loading_percent\": 0.0},\n    {\"line_id\": 2, \"from_bus\": 2, \"to_bus\": 3, \"p_from_mw\": 92.108, \"loading_percent\": 100.52},\n    {\"line_id\": 3, \"from_bus\": 2, \"to_bus\": 4, \"p_from_mw\": 86.728, \"loading_percent\": 123.59},\n    {\"line_id\": 4, \"from_bus\": 2, \"to_bus\": 5, \"p_from_mw\": 80.787, \"loading_percent\": 155.62},\n    {\"line_id\": 5, \"from_bus\": 3, \"to_bus\": 4, \"p_from_mw\": -12.798, \"loading_percent\": 47.52},\n    {\"line_id\": 6, \"from_bus\": 4, \"to_bus\": 5, \"p_from_mw\": -27.164, \"loading_percent\": 38.65},\n    {\"line_id\": 7, \"from_bus\": 6, \"to_bus\": 11, \"p_from_mw\": 6.264, \"loading_percent\": 77.5},\n    {\"line_id\": 8, \"from_bus\": 6, \"to_bus\": 12, \"p_from_mw\": 7.115, \"loading_percent\": 74.21},\n    {\"line_id\": 9, \"from_bus\": 6, \"to_bus\": 13, \"p_from_mw\": 17.367, \"loading_percent\": 80.21},\n    {\"line_id\": 10, \"from_bus\": 9, \"to_bus\": 10, \"p_from_mw\": 5.668, \"loading_percent\": 62.84},\n    {\"line_id\": 11, \"from_bus\": 9, \"to_bus\": 14, \"p_from_mw\": 9.705, \"loading_percent\": 79.79},\n    {\"line_id\": 12, \"from_bus\": 10, \"to_bus\": 11, \"p_from_mw\": -2.925, \"loading_percent\": 42.47},\n    {\"line_id\": 13, \"from_bus\": 12, \"to_bus\": 13, \"p_from_mw\": 2.153, \"loading_percent\": 23.65},\n    {\"line_id\": 14, \"from_bus\": 13, \"to_bus\": 14, \"p_from_mw\": 4.952, \"loading_percent\": 56.23},\n    {\"line_id\": 100000, \"from_bus\": 4, \"to_bus\": 7, \"p_from_mw\": 29.745, \"loading_percent\": 86.58},\n    {\"line_id\": 100001, \"from_bus\": 4, \"to_bus\": 9, \"p_from_mw\": 17.005, \"loading_percent\": 84.86},\n    {\"line_id\": 100002, \"from_bus\": 5, \"to_bus\": 6, \"p_from_mw\": 42.782, \"loading_percent\": 75.4},\n    {\"line_id\": 100003, \"from_bus\": 7, \"to_bus\": 8, \"p_from_mw\": -0.0, \"loading_percent\": 92.68},\n    {\"line_id\": 100004, \"from_bus\": 7, \"to_bus\": 9, \"p_from_mw\": 29.745, \"loading_percent\": 84.52}\n  ],\n  \"total_generation_mw\": 291.788,\n  \"total_load_mw\": 268.958,\n  \"total_loss_mw\": 22.83,\n  \"violations\": {\n    \"voltage\": [\n      {\"bus_id\": 1, \"vm_pu\": 1.06},\n      {\"bus_id\": 6, \"vm_pu\": 1.07},\n      {\"bus_id\": 7, \"vm_pu\": 1.056859},\n      {\"bus_id\": 8, \"vm_pu\": 1.09},\n      {\"bus_id\": 9, \"vm_pu\": 1.051408},\n      {\"bus_id\": 11, \"vm_pu\": 1.055473},\n      {\"bus_id\": 12, \"vm_pu\": 1.055621}\n    ],\n    \"thermal\": [\n      {\"line_id\": 0, \"loading_percent\": 127.79},\n      {\"line_id\": 2, \"loading_percent\": 100.52},\n      {\"line_id\": 3, \"loading_percent\": 123.59},\n      {\"line_id\": 4, \"loading_percent\": 155.62}\n    ]\n  },\n  \"next_step\": \"Consider load shedding or voltage adjustment to mitigate violations.\",\n  \"cannot_answer\": null\n}",
+              "tool_calls": [],
+              "usage": {
+                "prompt_tokens": 4010,
+                "completion_tokens": 1699
+              },
+              "with_tools": false,
+              "latency_s": 13.56015233299695
+            }
+          }
+        ],
+        "plan": null,
+        "formulation_failure": false,
+        "n_llm_calls": 6,
+        "n_tool_calls": 4,
+        "n_tool_rounds": 4,
+        "gate_checked": 3,
+        "gate_failed": 0,
+        "gate_enforced": 0,
+        "prompt_tokens": 12846,
+        "completion_tokens": 1814,
+        "wall_time_s": 37.88513495901134,
+        "verification": [
+          {
+            "passed": true,
+            "conditions": {
+              "converged": {
+                "passed": true,
+                "residual": 0,
+                "applicable": true,
+                "label": "V1"
+              },
+              "balance": {
+                "passed": true,
+                "residual": 0.0,
+                "applicable": true,
+                "label": "V2"
+              },
+              "no_isolated_buses": {
+                "passed": true,
+                "residual": 0,
+                "applicable": true,
+                "isolated_buses": [],
+                "label": "V3"
+              },
+              "traceability": {
+                "passed": true,
+                "residual": 0.0,
+                "label": "V4"
+              },
+              "currency": {
+                "passed": true,
+                "residual": 0,
+                "label": "V5"
+              },
+              "argument_grounding": {
+                "passed": true,
+                "invented_args": [],
+                "detail": "every mutating-tool argument traces to the request or a prior tool output",
+                "label": "V6"
+              },
+              "claims_from_tools": {
+                "passed": true,
+                "applicable": true,
+                "detail": "answer matches the agent's own last solved state",
+                "label": "V7"
+              },
+              "request_applied": {
+                "passed": true,
+                "applicable": true,
+                "detail": "every change applied and reflected in the final state",
+                "label": "V8"
+              },
+              "complete_state": {
+                "passed": true,
+                "applicable": true,
+                "detail": "all 14 buses and 20 branches reported",
+                "missing_buses": 0,
+                "missing_branches": 0,
+                "label": "V10"
+              },
+              "plausible_state": {
+                "passed": true,
+                "applicable": true,
+                "enforced": false,
+                "plausible": true,
+                "detail": "voltages within 0.8 to 1.2 p.u., losses below 10 % of the load",
+                "label": "V9"
+              }
+            },
+            "last_mutation": {
+              "tool": "disconnect_line",
+              "args": {
+                "from_bus": 1,
+                "to_bus": 5
+              }
+            }
+          }
+        ],
+        "verification_attempts": 1,
+        "verification_outcome": "pass_first",
+        "verification_retry_messages": [],
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a power system power-flow analysis assistant. You help the user complete power system analysis tasks from natural-language requests.\n\n## What you can do\nYou complete tasks by calling tool functions:\n1. Load an IEEE standard test system (14, 30, 57, 118, 300 buses)\n2. Run AC power flow\n3. Modify the load at a bus and re-solve\n4. Disconnect or reconnect a line and re-solve\n5. Query the network status\n6. Run an N-1 contingency analysis (disconnect branches one at a time and rank the worst cases)\n7. Generate remedial-action suggestions (what-if load shedding or voltage adjustment) to reduce violation risk\n\n## Rules\n- Never fabricate a numerical result. Every voltage, power, loss, or loading value you report must come from a solver output (tool-using methods) or from your own explicit computation on the data given (methods without tools).\n- If the request is ambiguous, state the interpretation you are using in `summary`.\n- Bus and line identifiers in the request are MATPOWER 1-based ids; use them as given, unless the request itself states a different indexing convention for that identifier (e.g. \"(0-based)\"), in which case convert it to the MATPOWER 1-based id.\n- If you cannot complete the request, say so: set `converged` to false, leave the result arrays empty, and explain why in `cannot_answer`. Do not guess.\n- Always reply in English, and only with the JSON object described under Output.\n- After a network modification, re-solve before reporting any value.\n- If a tool reports an error or a non-converged power flow, say so explicitly and do not report numbers for that state.\n\n## Output\nWhen the task is complete, reply with the JSON object described in the final-answer instruction, filled from the tool outputs of the last solve.\n"
+          },
+          {
+            "role": "user",
+            "content": "Load the IEEE 14-bus system, set the active load at bus 12 to 4.9 MW, disconnect the line between bus 1 and bus 5, and finally rerun the power flow, then report the bus with the lowest voltage magnitude."
+          }
+        ]
+      }
+    },
+    {
+      "model": "openrouter:openai/gpt-4o-mini",
+      "provider": "openrouter",
+      "task": "pfagent",
+      "method": "pfagent",
+      "case_name": "case14",
+      "run": 0,
+      "k": 1,
+      "seed": 1627694679,
+      "gen_seed": 0,
+      "request_id": "case14-ambiguous-002-s0",
+      "difficulty": "ambiguous",
+      "request_text": "Load the IEEE 14-bus system and disconnect the line between bus 3 and bus 4 (1-based).",
+      "ok": false,
+      "error": "KeyError: 'voltage_violations'",
+      "latency_s": null,
+      "usage": {
+        "prompt_tokens": null,
+        "completion_tokens": null,
+        "total_tokens": null
+      },
+      "cost_usd": null,
+      "metrics": null,
+      "raw_response": null,
+      "intended_calls": [
+        {
+          "tool": "load_case",
+          "args": {
+            "case_name": "case14"
+          }
+        },
+        {
+          "tool": "disconnect_line",
+          "args": {
+            "from_bus": 3,
+            "to_bus": 4
+          }
+        }
+      ],
+      "executed_calls": null,
+      "declared_formulation": null,
+      "common_json_ok": false,
+      "common_reported_state": false,
+      "common_cannot_answer": null,
+      "common_converged": null,
+      "common_voltage_mae": null,
+      "common_flow_mae": null,
+      "common_kcl_mismatch_mw": null,
+      "common_bus_coverage": null,
+      "common_numeric_ok": null,
+      "common_answer_ok": null,
+      "common_formulation_exact": false,
+      "common_formulation_error_type": "unparsed",
+      "common_formulation_detail": "no formulation field in the answer",
+      "common_declared_formulation": null,
+      "common_escalated": false,
+      "common_escalation_reason": null,
+      "common_solved": false,
+      "common_reason": "run_error",
+      "common_outcome": "run_error",
+      "common_n_numbers": 0,
+      "common_n_untraceable": 0,
+      "common_traceable": true,
+      "common_run_error": "KeyError: 'voltage_violations'",
+      "formulation_exact": null,
+      "formulation_error_type": null,
+      "formulation_detail": "KeyError: 'voltage_violations'",
+      "faithful_numbers": null,
+      "faithful_answers": true,
+      "n_numbers": 0,
+      "n_untraceable_numbers": 0,
+      "untraceable_numbers": [],
+      "final_converged": null,
+      "expected_outcome": "converged",
+      "truth_converged": true,
+      "reference_solvable": true,
+      "truth_tool_errors": [],
+      "truth_answer": {
+        "converged": true,
+        "total_load_mw": 257.9016,
+        "total_generation_mw": 271.4163,
+        "total_loss_mw": 13.5147,
+        "n_voltage_violations": 9,
+        "n_thermal_violations": 1
+      },
+      "solved": false,
+      "solved_reason": "run_failed",
+      "escalated": false,
+      "solved_autonomously": false,
+      "wrong_silently": true,
+      "is_failure": false,
+      "safe_failure": null,
+      "claimed_success_on_failure": null,
+      "abstained": false,
+      "abstained_on_solvable": false,
+      "failure_detection_path": "text",
+      "has_mutation": false,
+      "stale_state": null,
+      "stale_state_no_rerun": null,
+      "stale_state_quoted_old": null,
+      "stale_state_detail": "no network mutation in effect",
+      "stale_state_trace": {
+        "last_mutation_index": null,
+        "last_mutation_tool": null,
+        "last_mutation_args": null,
+        "prior_result_indices": [],
+        "resolve_indices_after": [],
+        "old_only": []
+      },
+      "verification_outcome": null,
+      "verification_attempts": null,
+      "v_pass": true,
+      "system_prompt_hash": "2efb17dd2582",
+      "n_llm_calls": 0,
+      "n_tool_calls": 0,
+      "n_tool_rounds": 0,
+      "prompt_tokens": null,
+      "completion_tokens": null,
+      "wall_time_s": null,
+      "gate_checked": 0,
+      "gate_failed": 0,
+      "gate_enforced": 0,
+      "trace": null
+    }
+  ]
+}

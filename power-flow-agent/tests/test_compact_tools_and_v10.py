@@ -63,3 +63,20 @@ def test_run_errors_are_counted_apart():
     rows = [{"common_outcome": "solved"}, {"common_outcome": "wrong_unflagged"}, {"common_outcome": "run_error"}]
     agg = aggregate_common(rows)
     assert agg["common_n"] == 2 and agg["common_run_error_count"] == 1 and agg["common_solved_rate"] == 0.5
+
+
+def test_v11_formulation_must_match_the_trace():
+    d = build_default_dispatcher(ToolContext(session=SessionState(), solver_config=SolverConfig()))
+    lc = d.dispatch("load_case", {"case_name": "case14"}); dc = d.dispatch("disconnect_line", {"from_bus": 3, "to_bus": 4}); pf = d.dispatch("run_powerflow", {})
+    trace = {"rounds": [{"round": 1, "tools": [
+        {"name": "load_case", "arguments": {"case_name": "case14"}, "output": lc},
+        {"name": "disconnect_line", "arguments": {"from_bus": 3, "to_bus": 4}, "output": dc},
+        {"name": "run_powerflow", "arguments": {}, "output": pf}]}]}
+    state = json.loads(pf)
+    base = {"converged": True, "bus_voltages": state["bus_voltages"], "line_flows": state["line_flows"], "cannot_answer": None}
+    honest = dict(base, formulation=[{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "disconnect_line", "args": {"from_bus": 3, "to_bus": 4}}, {"tool": "run_powerflow", "args": {}}])
+    v = verify_final_answer(trace, json.dumps(honest), enforce_v6v7=True)
+    assert v["conditions"]["formulation_matches_trace"]["passed"] is True
+    hiding = dict(base, formulation=[{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_powerflow", "args": {}}])  # the disconnect is not declared
+    v = verify_final_answer(trace, json.dumps(hiding), enforce_v6v7=True)
+    assert v["conditions"]["formulation_matches_trace"]["passed"] is False and v["passed"] is False

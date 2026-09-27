@@ -1,0 +1,23 @@
+RUN 02  |  case300-multistep-001-s0  |  llm_only:structured  |  gpt-4o-mini  |  IEEE 300-bus  |  seed 0  |  difficulty multistep
+Request: Load the IEEE 300-bus system, set the active load at bus 215 to 38.1 MW, disconnect the line between bus 22 and bus 23, and finally rerun the power flow, then report the bus with the lowest voltage magnitude.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): { "formulation": [ {"tool": "load_case", "args": {"case_name": "case300"}}, {"tool": "set_active_load", "args": {"bus_id": 215, "p_mw": 38.1}}, {"tool": "disconnect_line", "args": {"from_bus": 22, "to...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 25531 in / 8641 out tokens, $0.0090, 64.4 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> modify_load(bus_id=215, p_mw=38.1) -> disconnect_line(from_bus=22, to_bus=23) -> run_powerflow()
+  declared: load_case(case_name="case300") -> set_active_load(bus_id=215, p_mw=38.1) -> disconnect_line(from_bus=22, to_bus=23) -> run_powerflow()   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 606, untraceable: 606 -> traceable answer: no
+  untraceable values: ['0.9345 p.u.', '1.0456', '0.0', '1.0345', '-2.0', '1.0250', '-4.0', '1.0200', '-6.0', '1.0150', '-8.0', '1.0100', '-10.0', '1.0050', '-12.0', '1.0000', '-14.0', '0.9950', '-16.0', '0.9900']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: incomplete_coverage
+  against the reference: voltage MAE 0.7645 p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case300-multistep-001-s0_run0.json

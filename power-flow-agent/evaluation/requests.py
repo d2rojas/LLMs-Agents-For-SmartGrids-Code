@@ -857,8 +857,8 @@ def _answer(query: dict[str, Any], pf: Optional[dict[str, Any]], n1_report: Opti
         "total_load_mw": round(float(pf["total_load_mw"]), 4),
         "total_generation_mw": round(float(pf["total_generation_mw"]), 4),
         "total_loss_mw": round(float(pf["total_loss_mw"]), 4),
-        "n_voltage_violations": len(pf["voltage_violations"]),
-        "n_thermal_violations": len(pf["thermal_violations"]),
+        "n_voltage_violations": len(pf.get("voltage_violations") or []),
+        "n_thermal_violations": len(pf.get("thermal_violations") or []),
     }
 
 
@@ -927,11 +927,11 @@ def compute_ground_truth(req: Request, *, k: int = 1) -> dict[str, Any]:
     violations: list[dict[str, Any]] = [
         {"type": str(v["violation_type"].value if hasattr(v["violation_type"], "value") else v["violation_type"]),
          "bus_id": int(v["bus_id"]), "vm_pu": _num(v["vm_pu"], 6)}
-        for v in final["voltage_violations"]
+        for v in (final.get("voltage_violations") or [])
     ] + [
         {"type": "thermal", "line_id": int(t["line_id"]), "from_bus": int(t["from_bus"]), "to_bus": int(t["to_bus"]),
          "loading_percent": _num(t["loading_percent"], 4)}
-        for t in final["thermal_violations"]
+        for t in (final.get("thermal_violations") or [])
     ]
     answer = _answer(req.query, final, n1_report, network_info)
     if outcome != "converged":
