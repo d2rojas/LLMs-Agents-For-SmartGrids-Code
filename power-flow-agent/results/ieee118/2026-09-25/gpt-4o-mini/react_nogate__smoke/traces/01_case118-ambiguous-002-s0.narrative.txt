@@ -1,0 +1,28 @@
+RUN 01  |  case118-ambiguous-002-s0  |  react_nogate  |  gpt-4o-mini  |  IEEE 118-bus  |  seed 0  |  difficulty ambiguous
+Request: Load the IEEE 118-bus system and disconnect the line between bus 64 and bus 65 (1-based).
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case118"); disconnect_line(from_bus=64, to_bus=65)   (1008 in / 52 out tokens, 1.0 s)
+       tool load_case -> case_name="case118", n_buses=118, n_lines=184, total_load_mw=4290.775
+       tool disconnect_line -> 
+
+[校验提示] 功率平衡误差超过阈值（发电 ≈ 负荷 + 损耗）。请检查网络是否出现孤岛、未建模元件或求解器设置。  [gate pass]
+  2. LLM replied without tool calls: ```json { "converged": true, "bus_voltages": [ {"bus_id": 1, "vm_pu": 0.955, "va_deg": 11.714, "is_violation": false, "violation_type": null}, {"bus_id": 2, "vm   (18424 in / 16384 out tokens, 257.5 s)
+  3. LLM wrote the final answer   (34874 in / 10190 out tokens, 72.7 s)
+  Totals: 3 LLM calls, 2 tool calls, 1 tool rounds, 54306 in / 26626 out tokens, $0.0241, 331.3 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case118") -> disconnect_line(from_bus=64, to_bus=65)
+  executed: load_case(case_name="case118") -> disconnect_line(from_bus=64, to_bus=65)
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 501, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1] after disconnect_line at call 1)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: incomplete_coverage
+  against the reference: voltage MAE n/a p.u., flow MAE 1.482 MW, KCL mismatch 0.0052 MW, power-balance error n/a
+  raw trace: case118-ambiguous-002-s0_run0.json

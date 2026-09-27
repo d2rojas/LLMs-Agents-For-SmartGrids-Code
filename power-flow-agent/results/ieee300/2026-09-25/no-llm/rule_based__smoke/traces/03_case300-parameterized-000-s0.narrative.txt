@@ -1,0 +1,28 @@
+RUN 03  |  case300-parameterized-000-s0  |  rule_based  |  no-llm  |  IEEE 300-bus  |  seed 0  |  difficulty parameterized
+Request: Load case300 and disconnect the line between bus 81 and bus 194.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 2-step plan: load_case(case_name="case300") -> disconnect_line(from_bus=81, to_bus=194)
+  2. parser called load_case(case_name="case300")
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=23794.41
+  3. parser called disconnect_line(from_bus=81, to_bus=194)
+       tool disconnect_line -> 
+
+[校验提示] 功率平衡误差超过阈值（发电 ≈ 负荷 + 损耗）。请检查网络是否出现孤岛、未建模元件或求解器设置。  [gate FAIL]
+  Totals: 0 LLM calls, 2 tool calls, 1 tool rounds, 0 in / 0 out tokens, $0.0000, 0.2 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> disconnect_line(from_bus=81, to_bus=194)
+  executed: load_case(case_name="case300") -> disconnect_line(from_bus=81, to_bus=194)
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 1393, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1] after disconnect_line at call 1)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 1.83e-07 p.u., flow MAE 2.54e-04 MW, KCL mismatch 2.02e-04 MW, power-balance error n/a
+  raw trace: case300-parameterized-000-s0_run0.json
