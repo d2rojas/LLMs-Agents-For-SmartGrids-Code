@@ -477,8 +477,16 @@ def run_agent_llm(
     run_id: Optional[str] = None,
     trace_dir: Optional[Path] = None,
     write_trace: bool = True,
+    gate: bool = True,
 ) -> AgentLLMResult:
     """Run the LLM agent with a CVXPY solver tool, behind the verification gate.
+
+    ``gate=False`` is the ReAct row of the paper's table: the same loop, the
+    same tool, the same round budget, and the first answer surfaced as written,
+    with nothing checking it. It exists so that the difference between that row
+    and the gated one is the gate and nothing else, which is the contrast the
+    solver-grounded design is measured by. Everything before the gate is shared
+    code, so the two rows cannot drift apart.
 
     Holds a multi-turn Chat Completions conversation. The LLM decides whether
     to call `solve_ev_schedule` based on the request type:
@@ -743,6 +751,43 @@ def run_agent_llm(
             float(np.sum(last_solve_result.unmet_energy_kwh)),
         )
         explanation = generate_explanation(facts)
+
+    if not gate:
+        # ReAct without verification: the answer goes out as the model wrote it.
+        # The schedule is checked against the problem posed only so that
+        # ``feasible`` means the same thing it means on the gated path; nothing
+        # is handed back to the model and nothing is declared.
+        check_result = validate(last_solve_result.schedule, posed_day, posed_site)
+        gate_row = {
+            "gate_passed": None,
+            "gate_action": "none",
+            "gate_attempts": 0,
+            "gate_declared_failure": False,
+            "gate_reason": "no gate: the answer is surfaced as written",
+        }
+        usage = recorder.finish(messages=messages, final_text=explanation, status="ok")
+        trace_path = recorder.write(trace_dir) if write_trace else None
+        _attach_gate_row(trace_path, gate_row)
+        return AgentLLMResult(
+            schedule=last_solve_result.schedule,
+            total_cost_usd=last_solve_result.total_cost_usd,
+            peak_load_kw=last_solve_result.peak_load_kw,
+            unmet_energy_kwh=float(np.sum(last_solve_result.unmet_energy_kwh)),
+            feasible=check_result.feasible,
+            explanation=explanation,
+            usage=usage,
+            model=spec.key,
+            trace_path=trace_path,
+            tool_called=True,
+            gate=None,
+            gate_row=gate_row,
+            gate_attempts=0,
+            declared_failure=False,
+            posed_day=posed_day,
+            posed_site=posed_site,
+            check_result=check_result,
+            tool_outputs=tool_outputs,
+        )
 
     gate_result, check_result = _verify(explanation)
     decision = decide(gate_result, attempt=1)

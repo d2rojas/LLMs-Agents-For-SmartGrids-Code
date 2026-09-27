@@ -711,3 +711,52 @@ def test_the_parser_asks_config_llm_for_its_key_and_says_which_one_is_missing(
         parse_nl_problem(_USER_TEXT, model=MODEL)
 
     assert "OPENROUTER_API_KEY" in str(excinfo.value)
+
+
+# --------------------------------------------------------------------------- no gate
+
+
+def test_without_the_gate_the_first_answer_goes_out_as_written(tmp_path: Path) -> None:
+    """The ReAct row: same loop, same tool, and an answer nobody checks.
+
+    The scripted answer quotes numbers the solver never returned. Behind the
+    gate that is an E3 failure and a retry; without it, it is the answer.
+    """
+    day, site, tou = tiny_problem()
+    wrong = "The schedule costs $99.00, peaks at 1.00 kW, and leaves 0.00 kWh unmet."
+    client = _FakeClient([_tool('{"penalty_unmet": 1000000}'), _text(wrong)])
+
+    result = run_agent_llm(
+        day, site, tou, model=MODEL, client=client, run_id="2019-06-15", trace_dir=tmp_path, gate=False
+    )
+
+    assert result.explanation == wrong
+    assert result.gate is None
+    assert result.gate_attempts == 0
+    assert result.declared_failure is False
+    assert result.tool_called is True
+    assert np.count_nonzero(result.schedule) > 0
+    assert result.total_cost_usd == pytest.approx(3.0)  # the solver's, whatever the prose says
+    # Two calls and not one more: no verdict was handed back to the model.
+    assert result.usage.n_llm_calls == 2
+    assert client.unused == 0
+
+    payload = read_trace(result.trace_path)
+    assert payload["gate"]["gate_passed"] is None
+    assert payload["gate"]["gate_action"] == "none"
+    assert payload["gate"] == result.gate_row
+
+
+def test_the_same_scripted_run_is_a_retry_behind_the_gate(tmp_path: Path) -> None:
+    """The control for the test above: with the gate on, the same answer is not accepted."""
+    day, site, tou = tiny_problem()
+    wrong = "The schedule costs $99.00, peaks at 1.00 kW, and leaves 0.00 kWh unmet."
+    client = _FakeClient([_tool('{"penalty_unmet": 1000000}'), _text(wrong), _text(grounded_answer(day, site, tou))])
+
+    result = run_agent_llm(
+        day, site, tou, model=MODEL, client=client, run_id="2019-06-15", trace_dir=tmp_path
+    )
+
+    assert result.gate is not None and result.gate.passed is True
+    assert result.gate_attempts == 2
+    assert result.usage.n_llm_calls == 3
