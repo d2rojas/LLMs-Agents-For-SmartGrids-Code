@@ -966,13 +966,117 @@ def tab_gate() -> str:
     return "".join(body)
 
 
+
+# The table the runs fill. Three groups, fixed for every case study on
+# 2026-09-21: the second and third are identical across cases; only the first
+# carries the metrics of this task. Rows: the six methods, one block per model.
+TABLE_MODELS: Tuple[str, ...] = ("gpt-4o-mini", "gpt-5.6-sol")
+TABLE_GROUPS: Tuple[Tuple[str, Tuple[Tuple[str, str], ...]], ...] = (
+    ("Task utility", (
+        ("form", "Formulation %"),
+        ("gap_solved", "Gap % (solved)"),
+        ("gap_all", "Gap % (all)"),
+        ("unmet_solved", "Unmet kWh (solved)"),
+        ("unmet_all", "Unmet kWh (all)"),
+    )),
+    ("Solver-grounded correctness", (
+        ("solved", "Solved %"),
+        ("escalated", "Escalated %"),
+        ("wrong", "Wrong-unflagged %"),
+        ("traceable", "Traceable %"),
+    )),
+    ("Cost and time", (
+        ("tokens", "Tokens / request"),
+        ("time", "Time (s) / request"),
+    )),
+)
+
+
+def _mean(xs: List[float]) -> Optional[float]:
+    return sum(xs) / len(xs) if xs else None
+
+
+def table_cells(rows: List[Dict[str, str]]) -> Dict[str, Optional[float]]:
+    """The eleven cells of one method on one model, from its summary.csv rows."""
+    n = len(rows)
+    if not n:
+        return {}
+    fl = lambda r, k: float(r[k]) if r.get(k) not in (None, "") else None
+    solved_rows = [r for r in rows if r.get("outcome") == "solved"]
+    form_rows = [r for r in rows if str(r.get("formulation_exact")).lower() in ("true", "false") and r.get("formulation_error_type") is not None]
+    form_scored = [r for r in rows if r.get("n_sessions_truth") not in (None, "")]
+    trace_rows = [r for r in rows if r.get("traceable") in ("pass", "fail")]
+    return {
+        "form": 100.0 * sum(1 for r in form_scored if str(r.get("formulation_exact")).lower() == "true") / len(form_scored) if form_scored else None,
+        "gap_solved": _mean([abs(fl(r, "gap_pct") or 0.0) for r in solved_rows if fl(r, "gap_pct") is not None]),
+        "gap_all": _mean([abs(fl(r, "gap_pct") or 0.0) for r in rows if fl(r, "gap_pct") is not None]),
+        "unmet_solved": _mean([fl(r, "unmet_kwh") or 0.0 for r in solved_rows if fl(r, "unmet_kwh") is not None]),
+        "unmet_all": _mean([fl(r, "unmet_kwh") or 0.0 for r in rows if fl(r, "unmet_kwh") is not None]),
+        "solved": 100.0 * len(solved_rows) / n,
+        "escalated": 100.0 * sum(1 for r in rows if r.get("outcome") == "escalated") / n,
+        "wrong": 100.0 * sum(1 for r in rows if r.get("outcome") == "wrong_unflagged") / n,
+        "traceable": 100.0 * sum(1 for r in trace_rows if r["traceable"] == "pass") / len(trace_rows) if trace_rows else None,
+        "tokens": _mean([(fl(r, "prompt_tokens") or 0.0) + (fl(r, "completion_tokens") or 0.0) for r in rows]),
+        "time": _mean([fl(r, "wall_time_s") or 0.0 for r in rows]),
+    }
+
+
+def expected_table() -> str:
+    """The table, its cells filled where a method has run on a model, dashes elsewhere."""
+    by_model: Dict[str, Dict[str, List[Dict[str, str]]]] = {}
+    for d in method_dirs():
+        hdr = read_header(d)["header"]
+        by_model.setdefault(hdr["model"], {}).setdefault(hdr["method"], read_summary(d))
+    head = "<tr><th rowspan='2'>Method</th>" + "".join(
+        f"<th class='g' colspan='{len(cols)}'>{E(g)}</th>" for g, cols in TABLE_GROUPS
+    ) + "</tr><tr>" + "".join(f"<th>{E(label)}</th>" for _g, cols in TABLE_GROUPS for _k, label in cols) + "</tr>"
+    body: List[str] = []
+    for model in TABLE_MODELS:
+        body.append(f"<tr><td colspan='{1 + sum(len(c) for _g, c in TABLE_GROUPS)}' style='background:#f6f8fb'><b>{E(model)}</b></td></tr>")
+        for r in ROWS:
+            cells = table_cells(by_model.get(model, {}).get(r["name"], [])) if r["name"] != "rule_based" else table_cells(by_model.get("no-llm", {}).get("rule_based", []))
+            tds = []
+            for _g, cols in TABLE_GROUPS:
+                for k, _label in cols:
+                    v = cells.get(k) if cells else None
+                    if v is None:
+                        tds.append("<td style='text-align:right;color:var(--muted)'>—</td>")
+                    elif k == "tokens":
+                        tds.append(f"<td style='text-align:right'>{v:,.0f}</td>")
+                    elif k in ("time",):
+                        tds.append(f"<td style='text-align:right'>{v:.1f}</td>")
+                    elif k.startswith("gap"):
+                        tds.append(f"<td style='text-align:right'>{v:.3f}</td>")
+                    else:
+                        tds.append(f"<td style='text-align:right'>{v:.1f}</td>")
+            body.append(f"<tr><td><b>{E(r['label'])}</b><div class='muted'><code>{E(r['name'])}</code></div></td>" + "".join(tds) + "</tr>")
+    return (
+        "<div class='tw'><table class='cmp'>" + head + "".join(body) + "</table></div>"
+        "<p class='muted' style='margin-top:8px'>Solved + Escalated + Wrong-unflagged = 100 on every row. "
+        "Formulation: share of requests whose sessions were all read within tolerance. "
+        "Gap: |cost − cost*| / cost*, in percent, over the solved requests and over all of them. "
+        "Unmet: kWh not delivered, over the solved requests and over all of them. "
+        "Traceable: share of answers whose every number appears in a tool output; not scored for the "
+        "no-tools methods. Tokens and time per request, every call. The parser row has no model and "
+        "sits in both blocks unchanged. A dash is a cell no run has filled.</p>"
+    )
+
+
 def tab_results() -> str:
     dirs = latest_run()
     if not dirs:
         return card("No runs yet", "<p>No results folder carries a summary.json.</p>")
     by_method = {read_header(d)["header"]["method"]: (d, read_summary(d), read_header(d)) for d in dirs}
     date = dirs[0].parts[-3]
-    body: List[str] = []
+    body: List[str] = [
+        card(
+            "The table",
+            "<p>The table the paper reports, with the columns fixed for every case study: the second and "
+            "third groups are identical across case studies, the first carries the metrics of this task. One "
+            "block per model. Cells fill as runs land; a dash is a cell no run has filled yet.</p>",
+            expected_table(),
+        )
+    ]
 
     # headline: the gated row against its target
     if "evagent" in by_method:
@@ -1053,6 +1157,61 @@ def tab_results() -> str:
     return "".join(body)
 
 
+
+def tab_traces() -> str:
+    """Every run, step by step: the narrative, and the transcript behind it, per method and request."""
+    dirs = latest_run()
+    by_method = {read_header(d)["header"]["method"]: d for d in dirs}
+    body: List[str] = [
+        card(
+            "What each method did, request by request",
+            "<p>Pick a method and a request. The narrative lists the steps the method took on that request, the "
+            "verdict of every term, and where the request ended up; the transcript underneath is the raw "
+            "exchange the narrative was written from: system prompt, request, every model message, every tool "
+            "call and its output, the gate's verdict, the final answer. Nothing here is summarized by a model.</p>"
+            "<div style='display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:6px'>"
+            "<label>Method <select id='trm'>"
+            + "".join(f"<option value='{E(r['name'])}'{' selected' if r['name'] in by_method and i == min(j for j, rr in enumerate(ROWS) if rr['name'] in by_method) else ''}>{E(r['label'])}{'' if r['name'] in by_method else ' (not run yet)'}</option>" for i, r in enumerate(ROWS))
+            + "</select></label><label>Request <select id='trq'></select></label></div>",
+        )
+    ]
+    panels: List[str] = []
+    options: Dict[str, List[Tuple[str, str]]] = {}
+    for r in ROWS:
+        name = r["name"]
+        d = by_method.get(name)
+        if d is None:
+            steps = "".join(f"<li>{E(t)}</li>" for t, _k in DIAGRAMS[name]["steps"])
+            panels.append(
+                f"<div class='card trp' data-trm='{E(name)}'><h2>{E(r['label'])}</h2>"
+                f"<p class='muted'>No run of this method is committed yet. Its steps, from the design:</p>"
+                f"<ol>{steps}</ol><p class='muted'>{E(DIAGRAMS[name].get('note', ''))}</p></div>"
+            )
+            options[name] = []
+            continue
+        opts: List[Tuple[str, str]] = []
+        for narr in sorted((d / "traces").glob("*.narrative.txt")):
+            stem = narr.name[: -len(".narrative.txt")]
+            transcript = narr.with_name(stem + ".transcript.txt")
+            first = narr.read_text(encoding="utf-8").splitlines()[0] if narr.exists() else stem
+            outcome = ""
+            for line in narr.read_text(encoding="utf-8").splitlines():
+                if line.startswith("OUTCOME:"):
+                    outcome = line.split()[1].lower().replace("_", ", ")
+            opts.append((stem, f"{stem[:2]} · {stem[3:].split('-s0')[0]} · {outcome}"))
+            panels.append(
+                f"<div class='card trp' data-trm='{E(name)}' data-trq='{E(stem)}'>"
+                f"<h2>{E(r['label'])} <span class='muted'>{E(stem)}</span></h2>"
+                f"<h3>Narrative</h3><pre>{E(narr.read_text(encoding='utf-8'))}</pre>"
+                f"<details><summary>transcript, {transcript.stat().st_size:,} characters</summary>"
+                f"<pre style='max-height:none'>{E(transcript.read_text(encoding='utf-8')) if transcript.exists() else ''}</pre></details></div>"
+            )
+        options[name] = opts
+    body.append("".join(panels))
+    body.append("<script>var TRQ=" + json.dumps(options) + ";</script>")
+    return "".join(body)
+
+
 def tab_analysis() -> str:
     """The report each method folder ends with, rendered. Written from the rows, never by a model."""
     from visuals.shell import markdown
@@ -1123,6 +1282,7 @@ GROUPS: Tuple[Tuple[str, Tuple[Tuple[str, str], ...]], ...] = (
     )),
     ("Results", (
         ("results", "Results"),
+        ("traces", "Traces"),
         ("analysis", "Analysis"),
         ("status", "Implementation"),
     )),
@@ -1136,6 +1296,7 @@ BUILDERS = {
     "tools": tab_tools,
     "gate": tab_gate,
     "results": tab_results,
+    "traces": tab_traces,
     "analysis": tab_analysis,
     "status": tab_status,
 }
@@ -1154,6 +1315,21 @@ SCRIPT = """
       u.style.display = u.dataset.scn===scn.value ? '' : 'none';});
   }
   scn.onchange=apply; mth.onchange=apply; apply();
+})();
+(function(){
+  var m=document.getElementById('trm'), q=document.getElementById('trq');
+  if(!m||!q||typeof TRQ==='undefined') return;
+  function fill(){
+    var opts=TRQ[m.value]||[];
+    q.innerHTML=opts.map(function(o){return "<option value='"+o[0]+"'>"+o[1]+"</option>";}).join('');
+    q.disabled=!opts.length; show();
+  }
+  function show(){
+    document.querySelectorAll('.trp').forEach(function(p){
+      var on=p.dataset.trm===m.value && (!p.dataset.trq || p.dataset.trq===q.value);
+      p.style.display=on?'':'none';});
+  }
+  m.onchange=fill; q.onchange=show; fill();
 })();
 """
 
