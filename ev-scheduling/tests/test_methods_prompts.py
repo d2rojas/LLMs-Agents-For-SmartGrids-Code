@@ -29,6 +29,7 @@ PINS = {
     "llm_only_cot/reasoning_section.txt": "fe8fb883c579aac43672e2a4ea1f7cd4c57ce23826ea575a88f878c86247a3bf",
     "llm_only_cot/system_suffix.txt": "8c6fbcecf3995dc1092b9557d15e06be58e780d643d4988617a80130406d448a",
     "llm_only_structured/system_suffix.txt": "7d71bcffb2f6462613d2fa57bf831cbee439b40cc759a5483ffd306f93d1f0ba",
+    "plan_act_nogate/plan_system_prompt.txt": "6a7627277fffda59a4932d39628646813572f2feb72686f2fe580c400de869bf",
 }
 
 
@@ -79,7 +80,11 @@ def test_the_two_prompting_methods_differ_by_one_text() -> None:
 
 
 def test_the_agent_methods_share_one_system_prompt() -> None:
-    """Plan-and-Act, ReAct and EVAgent differ by architecture, not by wording."""
+    """Plan-and-Act, ReAct and EVAgent differ by architecture, not by wording.
+
+    Plan-and-Act adds its planner text on top; the answer turn uses the same
+    system prompt as the other two.
+    """
     shared = "_shared/agent_system_prompt.txt"
     for name in ("plan_act_nogate", "react_nogate", "evagent"):
         assert shared in methods.prompt_files(name)

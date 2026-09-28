@@ -46,8 +46,8 @@ Arms
 not rows of the table; ``llm_only`` is the no-tools arm in two prompting strategies from ``methods/prompting/strategies.py``;
 ``evagent`` is the solver-grounded arm through ``methods/agent/run.py::run_agent_from_text``.
 ``react`` is ``evagent`` with the gate switched off, the same code path with one
-flag, so the two rows differ by the gate alone. ``plan_act`` is registered as
-pending: naming it is an error rather than a silently missing row.
+flag, so the two rows differ by the gate alone. ``plan_act`` shares the parse and
+the tool and plans every call before seeing any result.
 
 Usage (from ev-scheduling/):
     python -m evaluation.runner --dry-run --days 3
@@ -380,17 +380,25 @@ register_arm(
 register_arm(
     Arm(
         name="plan_act",
-        label="Plan-and-Act (pending)",
+        label="Plan-and-Act, no gate",
         uses_llm=True,
         has_gate=False,
         scores_formulation=True,
         grounded=True,
-        implemented=False,
-        pending_reason=(
-            "the Plan-and-Act row is waiting on the same scope decision as ReAct. Registered "
-            "here so naming it is an error rather than a silently absent row."
+        cost=CostModel(
+            n_calls=3,
+            completion_tokens_per_call=700,
+            context_resend_factor=1.5,
+            basis=(
+                "parse call, one planning call with no tools, and one answer call from the outputs; "
+                "the planner sees only the request, so less context is re-sent than in the loop"
+            ),
         ),
-        description="Registered, not implemented.",
+        description=(
+            "methods/agent/run.py::run_agent_from_text(architecture='plan_act'): the same parse, then "
+            "one planning call emits every solver call at once, the executor runs them with no model in "
+            "the loop, and one call writes the answer from the outputs. No gate."
+        ),
     )
 )
 
@@ -402,6 +410,7 @@ register_arm(
 DEFAULT_ARMS: Tuple[str, ...] = (
     "llm_only:structured",
     "llm_only:chain_of_thought",
+    "plan_act",
     "react",
     "evagent",
 )
@@ -1012,7 +1021,12 @@ def run_react_nogate(ctx: RunContext) -> ArmOutput:
     return _run_agent_arm(ctx, gate=False)
 
 
-def _run_agent_arm(ctx: RunContext, *, gate: bool) -> ArmOutput:
+def run_plan_act_nogate(ctx: RunContext) -> ArmOutput:
+    """The Plan-and-Act row: the same parse, a planned sequence of calls, no gate."""
+    return _run_agent_arm(ctx, gate=False, architecture="plan_act")
+
+
+def _run_agent_arm(ctx: RunContext, *, gate: bool, architecture: str = "react") -> ArmOutput:
     """One code path for the two agent rows, so they differ by ``gate`` alone.
 
     Raises:
@@ -1031,6 +1045,7 @@ def _run_agent_arm(ctx: RunContext, *, gate: bool) -> ArmOutput:
         trace_dir=ctx.trace_dir,
         write_trace=ctx.write_trace,
         gate=gate,
+        architecture=architecture,
     )
     client = ctx.client
     resolved = client.resolved_model(ctx.spec.key) if client is not None else ctx.spec.key
@@ -1072,6 +1087,7 @@ RUNNERS: Dict[str, Callable[[RunContext], ArmOutput]] = {
     "llm_only:chain_of_thought": run_llm_only,
     "evagent": run_evagent,
     "react": run_react_nogate,
+    "plan_act": run_plan_act_nogate,
 }
 
 

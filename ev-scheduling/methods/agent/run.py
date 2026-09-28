@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import numpy as np
 
-from methods.agent.llm_agent import AgentLLMResult, run_agent_llm
+from methods.agent.llm_agent import AgentLLMResult, run_agent_llm, run_agent_plan_act
 from config.llm import RunRecorder, RunUsage, parse_model_spec
 from config.site import SiteConfig, TOUConfig
 from solver.checker import CheckResult
@@ -247,11 +247,14 @@ def run_agent_from_text(
     trace_dir: Optional[Path] = None,
     write_trace: bool = True,
     gate: bool = True,
+    architecture: str = "react",
 ) -> Union[AgentResult, ClarificationResult]:
     """Run the full agent pipeline from a natural-language problem description.
 
     ``gate=False`` runs the same pipeline without the verification gate, which
-    is the ReAct row; see ``run_agent_llm``.
+    is the ReAct row; see ``run_agent_llm``. ``architecture="plan_act"`` runs
+    the Plan-and-Act row instead of the tool-calling loop, after the same parse;
+    it has no gate.
 
     This is the entry point for free-form user input, and the only one that
     exercises the extraction step the results table's formulation column scores.
@@ -329,20 +332,35 @@ def run_agent_from_text(
 
     day, site, tou = parsed_problem_to_day_site_tou(parse_result.problem)  # type: ignore[arg-type]
 
-    llm_result = run_agent_llm(
-        day,
-        site,
-        tou,
-        request=user_text,
-        max_tool_rounds=max(3, max_retries + 2),
-        model=model,
-        api_key=api_key,
-        client=client,
-        run_id=run_id,
-        trace_dir=trace_dir,
-        write_trace=write_trace,
-        gate=gate,
-    )
+    if architecture == "plan_act":
+        llm_result = run_agent_plan_act(
+            day,
+            site,
+            tou,
+            request=user_text,
+            max_plan_steps=max(3, max_retries + 2),
+            model=model,
+            api_key=api_key,
+            client=client,
+            run_id=run_id,
+            trace_dir=trace_dir,
+            write_trace=write_trace,
+        )
+    else:
+        llm_result = run_agent_llm(
+            day,
+            site,
+            tou,
+            request=user_text,
+            max_tool_rounds=max(3, max_retries + 2),
+            model=model,
+            api_key=api_key,
+            client=client,
+            run_id=run_id,
+            trace_dir=trace_dir,
+            write_trace=write_trace,
+            gate=gate,
+        )
 
     result = AgentResult.from_llm_result(
         llm_result,

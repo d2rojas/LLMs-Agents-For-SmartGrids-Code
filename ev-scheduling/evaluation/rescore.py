@@ -23,7 +23,7 @@ What is rebuilt, and from what
   answer and traceability terms are about the text.
 * **the schedule**: re-derived deterministically, per arm. ``optimum`` and
   ``charge_asap`` re-run their own rule. ``llm_only`` re-parses the stored reply
-  with ``methods.prompting.parse.parse_llm_schedule``. ``evagent`` and ``react`` read the parsed
+  with ``methods.prompting.parse.parse_llm_schedule``. ``evagent``, ``react`` and ``plan_act`` read the parsed
   problem out of its parse trace and re-solves it with CVXPY through the agent's
   own ``_execute_solve``, with the tool arguments the model sent, so a what-if
   is replayed rather than dropped. Re-solving is deterministic; calling a model
@@ -412,7 +412,7 @@ def rebuild_output(
         parse_success = bool(parse_result.success)
         sources["schedule"] = "reply_reparsed"
         sources["tool_outputs"] = "none"
-    elif arm_name in ("evagent", "react"):
+    elif arm_name in ("evagent", "react", "plan_act"):
         # The two agent rows leave the same artefacts: a parse trace and an
         # agent trace with the tool calls. Only the gate differs, and the gate
         # is read from the row, where a react row carries none.

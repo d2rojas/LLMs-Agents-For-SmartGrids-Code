@@ -855,3 +855,212 @@ def run_agent_llm(
         check_result=check_result,
         tool_outputs=tool_outputs,
     )
+
+
+# ---------------------------------------------------------------------------
+# Plan-and-Act (no gate)
+# ---------------------------------------------------------------------------
+
+def _plan_system_prompt() -> str:
+    """The planner's fixed text plus the tool catalogue, rendered from the schema.
+
+    The catalogue is generated from ``_SOLVE_TOOL`` so the planner sees exactly
+    the arguments the executor accepts; a hand-written copy would drift.
+    """
+    fn = _SOLVE_TOOL["function"]
+    props = fn.get("parameters", {}).get("properties", {})
+    lines = [f"- {fn['name']}: {fn['description']}", "  arguments:"]
+    for name, spec in props.items():
+        lines.append(f"    {name} ({spec.get('type', 'any')}): {spec.get('description', '')}")
+    return methods.read_text("plan_act_nogate/plan_system_prompt.txt") + "\n".join(lines)
+
+
+def _parse_plan(text: str) -> List[Dict[str, Any]]:
+    """The plan's steps out of the planner's reply, or an empty list.
+
+    Accepts the JSON object as written, or fenced in a code block. Anything
+    else is an empty plan, which the caller reports as such rather than
+    guessing a call the model did not make.
+    """
+    raw = (text or "").strip()
+    if raw.startswith("```"):
+        raw = raw.strip("`")
+        raw = raw[raw.find("{"):] if "{" in raw else raw
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        start, end = raw.find("{"), raw.rfind("}")
+        if start < 0 or end <= start:
+            return []
+        try:
+            payload = json.loads(raw[start : end + 1])
+        except json.JSONDecodeError:
+            return []
+    steps = payload.get("plan") if isinstance(payload, dict) else None
+    if not isinstance(steps, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for step in steps:
+        if isinstance(step, dict) and isinstance(step.get("tool"), str):
+            args = step.get("args") if isinstance(step.get("args"), dict) else {}
+            out.append({"tool": step["tool"], "args": args})
+    return out
+
+
+def run_agent_plan_act(
+    day: DaySessions,
+    site: SiteConfig,
+    tou: TOUConfig,
+    request: str = "Minimize energy cost for this day.",
+    *,
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+    max_plan_steps: int = 3,
+    client: Optional[Any] = None,
+    run_id: Optional[str] = None,
+    trace_dir: Optional[Path] = None,
+    write_trace: bool = True,
+) -> AgentLLMResult:
+    """Plan-and-Act with no gate: plan every call at once, execute, then answer.
+
+    Three model calls at most and no feedback between them: the planner emits
+    the whole sequence of solver calls before any result exists, the executor
+    runs them, and a final call writes the answer from the outputs. The row
+    isolates solver access through a plan: it has the same tool and the same
+    system prompt as the ReAct row, and differs from it in that the model never
+    sees a tool result before committing to the next call.
+
+    Args:
+        day, site, tou: The problem as parsed.
+        request: The user's request text.
+        model, api_key, client: As for ``run_agent_llm``.
+        max_plan_steps: Planned calls executed at most; the same round budget as
+            the other agent rows.
+        run_id, trace_dir, write_trace: Trace naming and placement.
+
+    Returns:
+        An ``AgentLLMResult`` with ``gate=None``: nothing verifies the answer.
+    """
+    spec: ModelSpec = parse_model_spec(model)
+    if client is None:
+        client = build_client(spec, api_key=api_key)
+    recorder = RunRecorder(spec=spec, arm="plan_act", run_id=run_id or "", request=request)
+
+    # -- plan: one call, no tools, no results to look at
+    plan_messages: List[Dict[str, Any]] = [
+        {"role": "system", "content": _plan_system_prompt()},
+        {"role": "user", "content": request},
+    ]
+    response = call_chat(client, recorder, model=spec.model, messages=plan_messages, temperature=0.0)
+    plan_text = (response.choices[0].message.content or "").strip()
+    plan = _parse_plan(plan_text)[:max_plan_steps]
+
+    messages: List[Dict[str, Any]] = [
+        {"role": "system", "content": _build_system_message()},
+        {"role": "user", "content": request},
+        {"role": "assistant", "content": plan_text},
+    ]
+
+    if not plan:
+        usage = recorder.finish(messages=messages, final_text=plan_text, status="no_plan")
+        trace_path = recorder.write(trace_dir) if write_trace else None
+        return AgentLLMResult(
+            schedule=np.zeros((len(day.sessions), day.n_steps), dtype=float),
+            total_cost_usd=0.0,
+            peak_load_kw=0.0,
+            unmet_energy_kwh=float(sum(s.energy_kwh for s in day.sessions)),
+            feasible=False,
+            explanation=plan_text,
+            usage=usage,
+            model=spec.key,
+            trace_path=trace_path,
+            tool_called=False,
+            posed_day=day,
+            posed_site=site,
+        )
+
+    # -- act: every planned call, in order, with no model in the loop
+    last_solve_result: Optional[SolveResult] = None
+    posed_day, posed_site = day, site
+    tool_outputs: List[Dict[str, Any]] = []
+    for k, step in enumerate(plan, start=1):
+        call_id = f"plan-{k}"
+        if step["tool"] != "solve_ev_schedule":
+            unknown = {"error": f"Unknown tool: {step['tool']}"}
+            recorder.record_tool_call(call_id=call_id, name=step["tool"], arguments=step["args"], output=unknown, latency_s=0.0)
+            messages.append({"role": "user", "content": f"Result of step {k} ({step['tool']}): {json.dumps(unknown)}"})
+            continue
+        t_tool = time.time()
+        solve_result, tool_result, posed_day, posed_site = _execute_solve(day, site, tou, step["args"])
+        last_solve_result = solve_result
+        tool_outputs.append(tool_result)
+        recorder.record_tool_call(
+            call_id=call_id, name="solve_ev_schedule", arguments=step["args"], output=tool_result,
+            latency_s=time.time() - t_tool,
+        )
+        messages.append({"role": "user", "content": f"Result of step {k} (solve_ev_schedule): {json.dumps(tool_result)}"})
+
+    if last_solve_result is None:
+        usage = recorder.finish(messages=messages, final_text=plan_text, status="no_tool_call")
+        trace_path = recorder.write(trace_dir) if write_trace else None
+        return AgentLLMResult(
+            schedule=np.zeros((len(day.sessions), day.n_steps), dtype=float),
+            total_cost_usd=0.0,
+            peak_load_kw=0.0,
+            unmet_energy_kwh=float(sum(s.energy_kwh for s in day.sessions)),
+            feasible=False,
+            explanation=plan_text,
+            usage=usage,
+            model=spec.key,
+            trace_path=trace_path,
+            tool_called=False,
+            posed_day=day,
+            posed_site=site,
+        )
+
+    # -- answer: one call, from the outputs, as written
+    messages.append({"role": "user", "content": "Every planned step has run. Answer the request from the results above."})
+    response = call_chat(client, recorder, model=spec.model, messages=messages, temperature=0.0)
+    explanation = (response.choices[0].message.content or "").strip()
+    if explanation:
+        messages.append({"role": "assistant", "content": explanation})
+    else:
+        facts = extract_facts(
+            last_solve_result.schedule,
+            last_solve_result.total_cost_usd,
+            last_solve_result.peak_load_kw,
+            float(np.sum(last_solve_result.unmet_energy_kwh)),
+        )
+        explanation = generate_explanation(facts)
+
+    check_result = validate(last_solve_result.schedule, posed_day, posed_site)
+    gate_row = {
+        "gate_passed": None,
+        "gate_action": "none",
+        "gate_attempts": 0,
+        "gate_declared_failure": False,
+        "gate_reason": "no gate: the answer is surfaced as written",
+    }
+    usage = recorder.finish(messages=messages, final_text=explanation, status="ok")
+    trace_path = recorder.write(trace_dir) if write_trace else None
+    _attach_gate_row(trace_path, gate_row)
+    return AgentLLMResult(
+        schedule=last_solve_result.schedule,
+        total_cost_usd=last_solve_result.total_cost_usd,
+        peak_load_kw=last_solve_result.peak_load_kw,
+        unmet_energy_kwh=float(np.sum(last_solve_result.unmet_energy_kwh)),
+        feasible=check_result.feasible,
+        explanation=explanation,
+        usage=usage,
+        model=spec.key,
+        trace_path=trace_path,
+        tool_called=True,
+        gate=None,
+        gate_row=gate_row,
+        gate_attempts=0,
+        declared_failure=False,
+        posed_day=posed_day,
+        posed_site=posed_site,
+        check_result=check_result,
+        tool_outputs=tool_outputs,
+    )

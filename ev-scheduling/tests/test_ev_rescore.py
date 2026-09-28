@@ -352,10 +352,10 @@ def test_a_row_that_cannot_be_rebuilt_becomes_a_failed_row(run_dir, tmp_path):
     failed = [r for r in result["rows"] if r["status"] == "rescore_failed"]
     assert failed
     # both agent rows are rebuilt from the parse trace, so both fail, and only they
-    assert {r["arm"] for r in failed} == {"evagent", "react"}
+    assert {r["arm"] for r in failed} == {"evagent", "react", "plan_act"}
     assert all("parse trace" in r["error"] for r in failed)
     # and the arms that did not depend on it are unaffected
-    assert all(r["status"] == "ok" for r in result["rows"] if r["arm"] not in ("evagent", "react"))
+    assert all(r["status"] == "ok" for r in result["rows"] if r["arm"] not in ("evagent", "react", "plan_act"))
 
 
 def test_the_cli_returns_non_zero_when_a_row_fails(run_dir, tmp_path, capsys):

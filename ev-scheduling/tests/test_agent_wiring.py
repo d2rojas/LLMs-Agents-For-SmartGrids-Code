@@ -26,7 +26,7 @@ import cvxpy as cp
 import numpy as np
 import pytest
 
-from methods.agent.llm_agent import BLOCKED_RETRY_ERROR, run_agent_llm
+from methods.agent.llm_agent import run_agent_plan_act, BLOCKED_RETRY_ERROR, run_agent_llm
 from methods.agent.run import AgentResult, ClarificationResult, run_agent, run_agent_from_text
 from methods.agent.validate.gate import verify_answer
 from config.site import SiteConfig, TOUConfig
@@ -760,3 +760,44 @@ def test_the_same_scripted_run_is_a_retry_behind_the_gate(tmp_path: Path) -> Non
     assert result.gate is not None and result.gate.passed is True
     assert result.gate_attempts == 2
     assert result.usage.n_llm_calls == 3
+
+
+# --------------------------------------------------------------------------- plan-and-act
+
+
+def test_plan_and_act_plans_everything_before_any_result_exists(tmp_path: Path) -> None:
+    """Three calls, no tools offered to the model, the plan executed as written."""
+    day, site, tou = tiny_problem()
+    plan = '{"plan": [{"tool": "solve_ev_schedule", "args": {"penalty_unmet": 1000000}}]}'
+    answer = grounded_answer(day, site, tou)
+    client = _FakeClient([_text(plan), _text(answer)])
+
+    result = run_agent_plan_act(
+        day, site, tou, model=MODEL, client=client, run_id="2019-06-15", trace_dir=tmp_path
+    )
+
+    assert result.explanation == answer
+    assert result.gate is None and result.gate_attempts == 0
+    assert result.tool_called is True
+    assert np.count_nonzero(result.schedule) > 0
+    assert result.total_cost_usd == pytest.approx(3.0)
+    assert result.usage.n_llm_calls == 2 and result.usage.n_tool_calls == 1
+    assert client.unused == 0
+    # the model was never offered a tool: both calls went out without a tools argument
+    assert all(not call.get("tools") for call in client.calls)
+    # the planned call is in the trace where the rescore reads tool calls from
+    payload = read_trace(result.trace_path)
+    calls = [c for r in payload["trace"]["rounds"] for c in r.get("tools", [])]
+    assert [c["name"] for c in calls] == ["solve_ev_schedule"]
+    assert payload["gate"]["gate_action"] == "none"
+
+
+def test_a_plan_that_is_not_json_executes_nothing(tmp_path: Path) -> None:
+    day, site, tou = tiny_problem()
+    client = _FakeClient([_text("I would first look at the cars and then decide.")])
+
+    result = run_agent_plan_act(day, site, tou, model=MODEL, client=client, run_id="x", trace_dir=tmp_path)
+
+    assert result.tool_called is False
+    assert np.count_nonzero(result.schedule) == 0
+    assert result.usage.n_llm_calls == 1 and client.unused == 0

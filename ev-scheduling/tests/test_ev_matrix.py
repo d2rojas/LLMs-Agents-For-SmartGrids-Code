@@ -128,8 +128,8 @@ class StubClient:
 
     It dispatches on the payload rather than on a fixed script, because the arms
     call it in different shapes: the no-tools arm sends one message pair, the
-    parse step asks for JSON, and the agent loop offers tools and then asks for
-    an explanation.
+    parse step asks for JSON, the planner asks for a JSON plan, and the agent
+    loop offers tools and then asks for an explanation.
 
     Attributes:
         resolved_model: The id the stub reports back, standing in for the
@@ -161,7 +161,10 @@ class StubClient:
         has_tools = bool(kwargs.get("tools"))
         has_tool_result = any(m.get("role") == "tool" for m in messages)
 
-        if "JSON" in text and "sessions" in text and not has_tools:
+        if '{"plan":' in text and not has_tools:
+            # the planner's turn: one solver call, planned before any result exists
+            message = _FakeMessage(content='{"plan": [{"tool": "solve_ev_schedule", "args": {}}]}')
+        elif "JSON" in text and "sessions" in text and not has_tools:
             message = _FakeMessage(content=self._parse_json(text))
         elif has_tools and not has_tool_result:
             message = _FakeMessage(
@@ -258,15 +261,18 @@ def test_default_arms_are_all_runnable():
         assert arm.name in matrix.RUNNERS
 
 
-@pytest.mark.parametrize("name", ["plan_act"])
-def test_pending_arms_refuse_rather_than_vanish(name):
-    """A pending arm is registered, so naming it is an error with a reason."""
-    assert name in matrix.ARMS
-    assert not matrix.ARMS[name].implemented
-    with pytest.raises(matrix.HarnessError) as excinfo:
-        matrix.resolve_arms([name])
-    assert "not implemented" in str(excinfo.value)
-    assert matrix.ARMS[name].pending_reason in str(excinfo.value)
+def test_a_pending_arm_would_refuse_rather_than_vanish():
+    """A registered arm that is not implemented is an error with a reason, never a missing row."""
+    arm = matrix.Arm(name="ghost", label="Ghost", uses_llm=True, has_gate=False, scores_formulation=False,
+                     grounded=False, implemented=False, pending_reason="a scope decision is open", description="x")
+    matrix.ARMS["ghost"] = arm
+    try:
+        with pytest.raises(matrix.HarnessError) as excinfo:
+            matrix.resolve_arms(["ghost"])
+        assert "not implemented" in str(excinfo.value)
+        assert arm.pending_reason in str(excinfo.value)
+    finally:
+        del matrix.ARMS["ghost"]
 
 
 def test_unknown_arm_refuses_and_lists_the_known_ones():
@@ -276,9 +282,10 @@ def test_unknown_arm_refuses_and_lists_the_known_ones():
     assert "evagent" in str(excinfo.value)
 
 
-def test_pending_arms_are_not_in_the_default_set():
-    """A scope decision that is open must not quietly add a row to the table."""
-    assert "plan_act" not in matrix.DEFAULT_ARMS
+def test_the_default_arms_are_the_implemented_rows_and_nothing_else():
+    """Every default arm runs, and the two free reference arms are not among them."""
+    assert all(matrix.ARMS[a].implemented for a in matrix.DEFAULT_ARMS)
+    assert "optimum" not in matrix.DEFAULT_ARMS and "charge_asap" not in matrix.DEFAULT_ARMS
 
 
 def test_react_is_evagent_with_the_gate_off():
