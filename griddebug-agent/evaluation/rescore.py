@@ -41,7 +41,7 @@ def rescore(dir_: Path) -> None:
     for r in rows:
         trace_p = dir_ / "raw" / "traces" / f"{r['request_id']}.json"
         trace = json.loads(trace_p.read_text(encoding="utf-8")) if trace_p.is_file() else {}
-        req = build_request(r["network"], r["scenario_id"])
+        req = build_request(r["network"], r["scenario_id"], int(r.get("variant") or 0))
         tool_log = trace.get("tool_log") or []
         run = MethodRun(method=r["method"], answer_text=r.get("answer_text") or "", answer=parse_answer(r.get("answer_text") or ""),
                         final_net=replay_final_net(req, tool_log), tool_log=tool_log, trace=trace, gate=r.get("gate"),

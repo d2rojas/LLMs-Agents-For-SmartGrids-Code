@@ -22,8 +22,10 @@ from config import NETWORKS, PROJECT_ROOT
 MANIFEST = PROJECT_ROOT / "data" / "scenarios" / "manifest.json"
 
 
-def entry_key(network: str, scenario_id: str) -> str:
-    return f"{network}-{scenario_id}"
+def entry_key(network: str, scenario_id: str, variant: int = 0) -> str:
+    from evaluation.scenarios import instance_id
+
+    return instance_id(network, scenario_id, variant)
 
 
 def build_manifest(networks: Optional[List[str]] = None) -> Dict[str, Any]:
@@ -33,7 +35,7 @@ def build_manifest(networks: Optional[List[str]] = None) -> Dict[str, Any]:
     entries = {}
     for r in reqs:
         entries[r.request_id] = {
-            "network": r.network, "scenario_id": r.scenario_id, "category": r.category,
+            "network": r.network, "scenario_id": r.scenario_id, "variant": r.variant, "category": r.category,
             "network_hash": r.network_hash, "initial_state": r.initial.label,
             "initial_n_new_violations": r.initial.n_new, "initial_islanded_load_buses": r.initial.islanded_load_buses,
             "injected": r.injected.as_dict(), "base_violations": sorted(f"{k}:{i}" for k, i in r.base_keys),
@@ -42,6 +44,7 @@ def build_manifest(networks: Optional[List[str]] = None) -> Dict[str, Any]:
         "frozen_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "pandapower": pp.__version__,
         "rating_rule": "line max_i_ka = 1.25 x base-case current, floor 5 % of the largest (solver/network.py)",
+        "instances_per_network": __import__("evaluation.scenarios", fromlist=["N_INSTANCES"]).N_INSTANCES,
         "limits": {"v_min_pu": 0.95, "v_max_pu": 1.05, "max_loading_percent": 100.0},
         "entries": entries,
     }

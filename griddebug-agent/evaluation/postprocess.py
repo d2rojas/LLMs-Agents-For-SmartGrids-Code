@@ -40,7 +40,7 @@ from config import NETWORK_LABELS  # noqa: E402
 from evaluation import scoring  # noqa: E402
 
 SUMMARY_COLUMNS = [
-    "nn", "request_id", "scenario_id", "category", "injected_fault_type", "initial_state", "initial_n_new",
+    "nn", "request_id", "scenario_id", "variant", "category", "injected_fault_type", "initial_state", "initial_n_new",
     "formulation_exact", "formulation_error_type", "formulation_detail",
     "outcome", "solved", "solved_reason", "escalated", "wrong_silently", "escalation_reason",
     "status", "claims_repaired", "final_converged", "final_secure", "final_n_new", "final_islanded",
@@ -67,7 +67,7 @@ def summary_row(nn: int, r: Dict[str, Any]) -> Dict[str, Any]:
     oc = r.get("common_outcome")
     g = r.get("gate") or {}
     return {
-        "nn": nn, "request_id": r["request_id"], "scenario_id": r["scenario_id"], "category": r["category"],
+        "nn": nn, "request_id": r["request_id"], "scenario_id": r["scenario_id"], "variant": r.get("variant", 0), "category": r["category"],
         "injected_fault_type": r.get("injected_fault_type"), "initial_state": r.get("initial_state"), "initial_n_new": r.get("initial_n_new"),
         "formulation_exact": r.get("common_formulation_exact"), "formulation_error_type": r.get("common_formulation_error_type"),
         "formulation_detail": r.get("common_formulation_detail"),
@@ -214,7 +214,7 @@ def render_report(header: Dict[str, Any], rows: List[Dict[str, Any]], agg: Dict[
     L += ["## Every scenario", "", "| nn | scenario | initial | outcome | diagnosis | final | actions | LLM/tool calls | tokens | why |", "|---|---|---|---|---|---|---:|---|---|---|"]
     for i, r in enumerate(rows, 1):
         final = "not converged" if not r.get("common_converged") else ("secure" if r.get("common_secure") else f"{r.get('common_n_new_violations')} new" + (f", islanded {r.get('common_islanded')}" if r.get("common_islanded") else ""))
-        L.append(f"| {i:02d} | {r['scenario_id']} | {r.get('initial_state')} ({r.get('initial_n_new')}) | {r.get('common_outcome')} | "
+        L.append(f"| {i:02d} | {r['scenario_id']}-v{r.get('variant', 0)} | {r.get('initial_state')} ({r.get('initial_n_new')}) | {r.get('common_outcome')} | "
                  f"{'ok' if r.get('common_formulation_exact') else r.get('common_formulation_error_type')} | {final} | {r.get('n_actions')} | "
                  f"{r.get('n_llm_calls')}/{r.get('n_tool_calls')} | {(r.get('prompt_tokens') or 0) + (r.get('completion_tokens') or 0)} | {r.get('common_reason')} |")
     L += ["", "Traces: `traces/NN_<request-id>.narrative.txt` (what happened), `.transcript.txt` (the raw exchange), `.json` (the trace)."]

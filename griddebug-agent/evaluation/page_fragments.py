@@ -27,7 +27,7 @@ sys.path.insert(0, str(PROJECT_ROOT.parent))  # so `visuals` is importable
 from visuals.shell import E, card, chip, diagram_row, kv, note, pipeline, prompt_block, table, verdict  # noqa: E402
 
 import methods  # noqa: E402
-from config import MAX_LLM_CALLS, MAX_LOADING_PERCENT, MAX_TOOL_CALLS, NETWORK_LABELS, NETWORKS, SCENARIO_TIMEOUT_S, V_MAX_PU, V_MIN_PU  # noqa: E402
+from config import ALL_NETWORKS, MAX_LLM_CALLS, MAX_LOADING_PERCENT, MAX_TOOL_CALLS, NETWORK_LABELS, NETWORKS, SCENARIO_TIMEOUT_S, V_MAX_PU, V_MIN_PU  # noqa: E402
 
 CASE_ID = "griddebug"
 CASE_TITLE = "GridDebug"
@@ -160,7 +160,7 @@ def tab_home() -> str:
                f"{verdict('solved')} + {verdict('escalated')} = 100 %, {verdict('wrong')} = 0.</p>")
         + "</div>",
         card("Identical for every method",
-             chip(f"{len(NETWORKS)} IEEE networks") + chip(f"{n_inst} scenario instances, frozen and hashed") + chip("one request template")
+             chip(f"{len(NETWORKS)} IEEE networks") + chip(f"{n_inst} instances of 13 fault classes, frozen and hashed") + chip("one request template")
              + chip("one evidence block") + chip("one tool catalogue") + chip(f"{MAX_LLM_CALLS} model calls, {MAX_TOOL_CALLS} tool calls, {SCENARIO_TIMEOUT_S:.0f} s per scenario")
              + chip("temperature 0") + chip("one answer contract") + chip("one scorer") + chip("every message kept in the trace")),
     ]
@@ -202,42 +202,74 @@ def tab_scenarios() -> str:
     if not m:
         return card("Scenarios", "<p class='muted'>No manifest frozen yet: run <code>run.py freeze-scenarios</code>.</p>")
     ent = m["entries"]
-    head = ["#", "scenario", "category", "injected fault"] + [NETWORK_LABELS[n] for n in NETWORKS]
+    head = ["#", "instance", "category", "injected fault"] + [NETWORK_LABELS[n] for n in NETWORKS]
     rows = []
-    for i, s in enumerate(S.SCENARIOS, 1):
-        cells = [f"<b>{i}</b>", f"<code>{E(s['id'])}</code><div class='muted'>{E(s['label'])}</div>", E(s["category"]), E(S.FAULT_TYPE_OF[s["id"]])]
+    for i, (sid, v) in enumerate(S.INSTANCES, 1):
+        nvar = S.VARIANTS_OF[sid]
+        name = f"<code>{E(sid)}</code>" + (f"<span class='muted'> · v{v}</span>" if nvar > 1 else "")
+        cells = [f"<b>{i}</b>", f"{name}<div class='muted'>{E(S.LABEL_OF[sid])}</div>", E(S.CATEGORY_OF[sid]), E(S.FAULT_TYPE_OF[sid])]
         for n in NETWORKS:
-            e = ent.get(f"{n}-{s['id']}")
+            e = ent.get(S.instance_id(n, sid, v))
             if e is None:
                 cells.append("<span class='muted'>—</span>")
                 continue
             st = e["initial_state"]
             k = {"not_converged": "bad", "islanded_load": "warn", "violations": "warn", "secure": "ok"}[st]
             extra = "" if e["initial_n_new_violations"] is None else f" {e['initial_n_new_violations']} new"
-            comps = ", ".join(f"{t} {v[:3]}{'…' if len(v) > 3 else ''}" for t, v in e["injected"]["components"].items())
+            comps = ", ".join(f"{t} {x[:3]}{'…' if len(x) > 3 else ''}" for t, x in e["injected"]["components"].items())
             cells.append(chip(st.replace("_", " ") + extra, k) + f"<div class='muted'>{E(comps)}</div>")
         rows.append(cells)
-    base = {n: len(ent[f"{n}-normal_operation"]["base_violations"]) for n in NETWORKS if f"{n}-normal_operation" in ent}
-    return "".join([
-        card("Thirteen fault injections on each network",
-             f"<p>The scenario set of the submitted paper, kept, with two things fixed. The two contingency scenarios now take the worst N-1 element "
-             f"out of service (they used to run the analysis and leave the network untouched), and every instance carries two labels: the category "
-             f"the generator set out to cause, and the state the solver measured on the injected network relative to the base. Frozen on "
-             f"{E(str(m.get('frozen_at_utc'))[:10])} with pandapower {E(m.get('pandapower'))}; each injected network has a content hash and a run refuses to "
-             f"start on an instance whose hash changed.</p>",
-             table(head, rows),
-             f"<p class='muted'>Base networks already violate the band at: " + ", ".join(f"{NETWORK_LABELS[n]} {k}" for n, k in base.items())
-             + " element(s). Those never count against a method.</p>"),
-        card("What the diagnosis is scored against",
-             "<p>The injected fault, not the symptom: the fault type of the generator and the components it changed. A load scaled by 20x is "
-             "<code>load_increase</code> on the loads, not <code>nonconvergence</code>; a line outage is the line that was switched out, not the lines that "
-             "overloaded because of it. An answer is exact when its fault type matches and it names at least one injected component.</p>",
-             table(["fault type", "scenarios"], [[f"<code>{E(ft)}</code>", E(", ".join(sid for sid, f in S.FAULT_TYPE_OF.items() if f == ft))] for ft in S.FAULT_TYPES if any(f == ft for f in S.FAULT_TYPE_OF.values())])),
-        card("Where a stress set would go",
-             "<p>The other case studies add a set of requests built to be unanswerable, so the escalation column measures something on ordinary days. "
-             "Here the ordinary set already contains scenarios no method can make secure with the catalogue (a line with near-zero impedance cannot be "
-             "restored by any action in it), so the escalation column has content without a separate set. A stress set is not planned.</p>"),
-    ])
+    base = {n: len(ent[S.instance_id(n, "normal_operation", 0)]["base_violations"]) for n in NETWORKS
+            if S.instance_id(n, "normal_operation", 0) in ent}
+    by_cat: Dict[str, int] = {}
+    for sid, _v in S.INSTANCES:
+        by_cat[S.CATEGORY_OF[sid]] = by_cat.get(S.CATEGORY_OF[sid], 0) + 1
+
+    body = [
+        card(
+            f"{S.N_INSTANCES} instances of {len(S.SCENARIOS)} fault classes, on each network",
+            f"<p>Thirteen classes, one per kind of fault, are the taxonomy of the submitted paper. Seven of them can place "
+            f"their fault at more than one point of the network, and each of those contributes two instances, so a run poses "
+            f"<b>{S.N_INSTANCES} instances per network</b>: "
+            + ", ".join(f"{k} {c}" for k, c in sorted(by_cat.items(), key=lambda kv: -kv[1]))
+            + f". Every method answers the same {S.N_INSTANCES}.</p>"
+            "<p>Two things were fixed with respect to the submitted set. The two contingency classes now take the worst N-1 "
+            "element out of service, where they used to run the analysis and leave the network untouched; and every instance "
+            "carries two labels, the category the generator set out to cause and the state the solver measured on the injected "
+            f"network relative to the base. Frozen on {E(str(m.get('frozen_at_utc'))[:10])} with pandapower {E(m.get('pandapower'))}; "
+            "each injected network has a content hash and a run refuses to start on an instance whose hash changed.</p>",
+            table(head, rows),
+            "<p class='muted'>Base networks already violate the band at: "
+            + ", ".join(f"{NETWORK_LABELS[n]} {k}" for n, k in base.items())
+            + " element(s). Those never count against a method.</p>",
+        ),
+        card(
+            "What a variant changes, and what it never changes",
+            "<p>A variant moves the fault, it does not make it harder. Each class ranks the places it could strike, by base "
+            "loading, by hop distance from the slack bus, or by how bad the outage is, and takes the variant-th of them. Two "
+            "instances of one class are therefore the same kind of fault at two different points, which is what separates a "
+            "method that handles line outages from one that memorized a line.</p>",
+            table(
+                ["class", "instances", "what the second instance moves"],
+                [[f"<code>{E(sid)}</code>", str(S.VARIANTS_OF[sid]),
+                  E(S.VARIES_BY[sid]) if sid in S.VARIES_BY else "<span class='muted'>one instance: a global perturbation "
+                  "(every load, every generator, the slack setpoint) or the control, where a second instance would be the same "
+                  "instance</span>"]
+                 for sid, _v in S.INSTANCES if _v == 0],
+                escape=False,
+            ),
+            note("The ranking is a property of the network, so variant 1 means the same thing on every system: the second "
+                 "worst place for that fault. Nothing is drawn at random and no seed is stored; the same code on the same "
+                 "pandapower version produces the same twenty instances, which is what the content hashes pin.", "info"),
+        ),
+        card(
+            "Where a stress set would go",
+            "<p>The other case studies add a set of requests built to be unanswerable, so the escalation column measures "
+            "something on ordinary days. Here the ordinary set already contains instances no method can make secure with the "
+            "catalogue, a line with near-zero impedance cannot be restored by any action in it, so the escalation column has "
+            "content without a separate set. A stress set is not planned.</p>"),
+    ]
+    return "".join(body)
 
 
 BLOCKS: Dict[str, Tuple[str, str, str]] = {
@@ -358,36 +390,74 @@ def tab_gate() -> str:
                  [verdict("escalated"), "the answer declares not_repaired or cannot_repair and lists what remains, or the budget ran out, or the gate rejected two attempts. Takes precedence"],
                  [verdict("wrong"), "a repair claim the solver contradicts, an unsupported number, or no answer with the contract, presented as valid"]])),
         card("The columns", "<p>Three groups, the same three in every case study.</p>", table(["group", "column", "what it measures", "why it is there"], crow)),
+        card(
+            "How the Diagnosis column is scored",
+            "<p>Against the injected fault, never against the symptom. A load scaled by twenty times is "
+            "<code>load_increase</code> on the loads, not <code>nonconvergence</code>; a line outage is the line that was "
+            "switched out, not the lines that overloaded because of it. An answer is exact when its <code>fault_type</code> "
+            "matches the injected one and it names at least one injected component; the normal case needs only the type.</p>",
+            table(["injected fault type", "the classes that inject it"],
+                  [[f"<code>{E(ft)}</code>", E(", ".join(sid for sid, f in _FAULT_TYPE_OF().items() if f == ft))]
+                   for ft in _FAULT_TYPES() if any(f == ft for f in _FAULT_TYPE_OF().values())]),
+            note("Diagnosis is scored on every instance and is deliberately not a term of Solved. A network can be made "
+                 "secure by curtailing loads without ever naming the line that was lost: the gate passes that answer and this "
+                 "column says the fault was not understood.", "warn"),
+        ),
     ])
+
+
+def _FAULT_TYPES():
+    from evaluation.scenarios import FAULT_TYPES
+
+    return FAULT_TYPES
+
+
+def _FAULT_TYPE_OF():
+    from evaluation.scenarios import FAULT_TYPE_OF
+
+    return FAULT_TYPE_OF
 
 
 def tab_plan() -> str:
     from config import load_pricing, parse_model_spec
     from evaluation.runner import estimate
+    from evaluation.scenarios import N_INSTANCES
 
+    ALL = ALL_NETWORKS
     pricing = load_pricing()
-    rows = []
-    for spec_s in ("openrouter:openai/gpt-4o-mini", "openrouter:openai/gpt-4o", "openrouter:openai/gpt-5.6-sol"):
+    rows, cost = [], {}
+    for spec_s in ("openrouter:openai/gpt-4o-mini", "openrouter:openai/gpt-5.6-sol"):
         spec = parse_model_spec(spec_s)
-        per_net = []
-        tot = 0.0
-        for n in NETWORKS:
-            s = sum((estimate(m, n, spec, 13, pricing) or 0.0) for m in methods.ORDER)
-            per_net.append(f"{s:.2f}")
-            tot += s
-        rows.append([f"<code>{E(spec.short)}</code>"] + per_net + [f"<b>{tot:.2f}</b>"])
+        per_net, tot, tot3 = [], 0.0, 0.0
+        for n in ALL:
+            v = sum((estimate(m, n, spec, N_INSTANCES, pricing) or 0.0) for m in methods.ORDER)
+            per_net.append(f"{v:.2f}")
+            cost[(spec.short, n)] = v
+            tot += v
+            if n in NETWORKS:
+                tot3 += v
+        cost[(spec.short, "three")] = tot3
+        cost[(spec.short, "five")] = tot
+        rows.append([f"<code>{E(spec.short)}</code>"] + per_net + [f"{tot3:.2f}", f"<b>{tot:.2f}</b>"])
     return "".join([
         card("Phases",
              table(["phase", "what", "estimated cost", "state"], [
-                 ["0", "layout, scenarios frozen, page, tests without a key", "0", chip("done", "ok")],
-                 ["smoke", "3 scenarios × IEEE-14 × the five model-backed methods, gpt-4o-mini", "≈ 0.15 USD", chip("awaiting go", "warn")],
-                 ["1", "39 scenarios × 6 methods, gpt-4o-mini", "≈ 1.7 USD", chip("after the smoke", "warn")],
-                 ["2", "gpt-5.6-sol, IEEE-14 first, the rest with a top-up", "≈ 5 + 15 USD", chip("after phase 1", "warn")]])),
-        card("Cost estimate per model, 13 scenarios × 6 methods",
-             "<p>From the April 2026 traces: about 15 model calls with a growing context on the loop rows, scaled by network size. "
-             "<code>run.py run --dry-run</code> prints the same estimate for any selection.</p>",
-             table(["model"] + [NETWORK_LABELS[n] for n in NETWORKS] + ["total USD"], rows)),
-        card("Budget per scenario", kv([("model calls", str(MAX_LLM_CALLS)), ("tool calls", str(MAX_TOOL_CALLS)), ("wall clock", f"{SCENARIO_TIMEOUT_S:.0f} s"),
+                 ["0", "layout, twenty instances frozen, pages, tests without a key", "0", chip("done", "ok")],
+                 ["smoke", "3 instances × IEEE-14 × 6 methods, gpt-4o-mini", "0.09 USD measured", chip("done 2026-09-27", "ok")],
+                 ["1", f"{N_INSTANCES} instances × 6 methods, gpt-4o-mini, on the systems Daniela picks",
+                  f"{cost[('gpt-4o-mini', 'three')]:.2f} USD on the three of the paper, {cost[('gpt-4o-mini', 'five')]:.2f} on all five",
+                  chip("awaiting her go", "warn")],
+                 ["2", "gpt-5.6-sol, IEEE-14 first, more only with a top-up",
+                  f"{cost[('gpt-5.6-sol', 'case14')]:.2f} USD for IEEE-14 alone", chip("after phase 1", "warn")]])),
+        card(f"Cost estimate per model, {N_INSTANCES} instances × 6 methods",
+             "<p>Scaled from the smoke test, which measured 0.09 USD for three IEEE-14 instances across the six methods. The "
+             "two loop rows carry almost all of it: a growing conversation over about fifteen model calls, and the tool "
+             "outputs grow with the network. <code>run.py run --dry-run</code> prints the same estimate for any selection.</p>",
+             table(["model"] + [NETWORK_LABELS[n] for n in ALL] + ["14+30+57", "all five"], rows),
+             note("The three systems of the submitted paper are IEEE-14, 30 and 57. IEEE-118 and IEEE-300 are the sizes R4.4 "
+                  "calls realistic and the ones the power-flow case study runs; all twenty instances build on them, and adding "
+                  "them costs about 3.9 USD more on the small model. Which systems the paper table carries is still open.", "info")),
+        card("Budget per instance", kv([("model calls", str(MAX_LLM_CALLS)), ("tool calls", str(MAX_TOOL_CALLS)), ("wall clock", f"{SCENARIO_TIMEOUT_S:.0f} s"),
                                         ("temperature", "0"), ("retry after the gate", "1, inside the same budget")])),
     ])
 

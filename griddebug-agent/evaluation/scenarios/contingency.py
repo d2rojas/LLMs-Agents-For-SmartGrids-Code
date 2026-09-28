@@ -22,8 +22,8 @@ class ContingencyFailureScenarios:
     """Factory for N-1 contingency scenarios."""
 
     @staticmethod
-    def all_scenarios(network_name: str = "case14") -> List[FailureScenario]:
-        return [LineContingencyOverload(network_name), TrafoContingencyVoltage(network_name)]
+    def all_scenarios(network_name: str = "case14", variant: int = 0) -> List[FailureScenario]:
+        return [LineContingencyOverload(network_name, variant), TrafoContingencyVoltage(network_name, variant)]
 
 
 def _score_outage(net: pp.pandapowerNet, element: str, idx: int) -> Optional[Tuple[int, float, float]]:
@@ -52,29 +52,33 @@ def _most_loaded_line(net: pp.pandapowerNet) -> Optional[int]:
         return None
 
 
-def _worst_outage(net: pp.pandapowerNet, element: str, prefer: str, exclude: Tuple[int, ...] = ()) -> Tuple[Optional[int], Dict[str, Any]]:
-    """The in-service element whose single outage is worst, among outages that still converge.
+def _rank_outages(net: pp.pandapowerNet, element: str, prefer: str, exclude: Tuple[int, ...] = ()) -> List[int]:
+    """In-service elements ranked by how bad their single outage is, worst first.
 
     ``prefer`` is ``"loading"`` for the line scenario (worst branch loading first)
     or ``"voltage"`` for the transformer scenario (worst voltage deviation first);
-    the violation count breaks ties in both.
+    the violation count breaks ties in both. Outages that do not converge are
+    ranked last: they are the non-convergence scenarios' job, not this one's.
     """
     df = getattr(net, element)
-    best: Optional[int] = None
-    best_key: Tuple[float, float] = (-1.0, -1.0)
-    scored: Dict[int, Any] = {}
+    scored: List[Tuple[Tuple[float, float], int]] = []
+    unconverged: List[int] = []
     for idx in df.index:
         if not bool(df.at[idx, "in_service"]) or int(idx) in exclude:
             continue
-        s = _score_outage(net, element, int(idx))
-        scored[int(idx)] = s
-        if s is None:
+        sc = _score_outage(net, element, int(idx))
+        if sc is None:
+            unconverged.append(int(idx))
             continue
-        nviol, loading, dev = s
+        nviol, loading, dev = sc
         key = (loading, float(nviol)) if prefer == "loading" else (dev, float(nviol))
-        if key > best_key:
-            best, best_key = int(idx), key
-    return best, {"scored": {k: (None if v is None else list(v)) for k, v in scored.items()}}
+        scored.append((key, int(idx)))
+    scored.sort(key=lambda t: (-t[0][0], -t[0][1], t[1]))
+    return [i for _k, i in scored] + unconverged
+
+
+def _pick(ranked: List[int], variant: int, fallback: int) -> int:
+    return ranked[variant % len(ranked)] if ranked else fallback
 
 
 class LineContingencyOverload(FailureScenario):
@@ -88,10 +92,11 @@ class LineContingencyOverload(FailureScenario):
 
     def apply(self) -> ScenarioResult:
         self.run_pf()
+        # topology_redirection takes the most loaded line; this scenario takes the
+        # variant-th worst N-1 line among the rest, so the two never coincide.
         most = _most_loaded_line(self.net)
-        worst, meta = _worst_outage(self.net, "line", "loading", exclude=(most,) if most is not None else ())
-        if worst is None:
-            worst = int(self.net.line.index[0])
+        ranked = _rank_outages(self.net, "line", "loading", exclude=(most,) if most is not None else ())
+        worst = _pick(ranked, self.variant, int(self.net.line.index[0]))
         self.net.line.at[worst, "in_service"] = False
         converged = self.run_pf()
         overloaded = self.net.res_line[self.net.res_line["loading_percent"] > 100].index.tolist() if converged else []
@@ -105,7 +110,7 @@ class LineContingencyOverload(FailureScenario):
             ],
             affected_components={"line": [worst] + [int(i) for i in overloaded]},
             known_fix="Restore the line, or relieve the overloaded corridor by redispatch or curtailment",
-            metadata={"outaged_line": worst, "converged": converged, "overloaded_lines": [int(i) for i in overloaded]},
+            metadata={"outaged_line": worst, "variant": self.variant, "converged": converged, "overloaded_lines": [int(i) for i in overloaded]},
         )
 
 
@@ -124,11 +129,10 @@ class TrafoContingencyVoltage(FailureScenario):
             # IEEE-30 as shipped by pandapower has no transformer table: fall back to the
             # second-worst line outage so the scenario still injects a contingency.
             most = _most_loaded_line(self.net)
-            other, _ = _worst_outage(self.net, "line", "loading", exclude=(most,) if most is not None else ())
-            excl = tuple(x for x in (most, other) if x is not None)
-            worst, _ = _worst_outage(self.net, "line", "voltage", exclude=excl)
-            if worst is None:
-                worst = int(self.net.line.index[-1])
+            used = _rank_outages(self.net, "line", "loading", exclude=(most,) if most is not None else ())[:2]
+            excl = tuple(x for x in ([most] + used) if x is not None)
+            ranked = _rank_outages(self.net, "line", "voltage", exclude=excl)
+            worst = _pick(ranked, self.variant, int(self.net.line.index[-1]))
             self.net.line.at[worst, "in_service"] = False
             converged = self.run_pf()
             violated = self.net.res_bus[(self.net.res_bus["vm_pu"] < 0.95) | (self.net.res_bus["vm_pu"] > 1.05)].index.tolist() if converged else []
@@ -139,11 +143,10 @@ class TrafoContingencyVoltage(FailureScenario):
                 root_causes=[f"Line {worst} taken out of service (no transformers in this network; worst voltage N-1 line outage)"],
                 affected_components={"line": [worst], "bus": [int(b) for b in violated]},
                 known_fix="Restore the branch or add voltage support at the affected buses",
-                metadata={"outaged_line": worst, "no_trafo": True, "converged": converged, "violated_buses": [int(b) for b in violated]},
+                metadata={"outaged_line": worst, "variant": self.variant, "no_trafo": True, "converged": converged, "violated_buses": [int(b) for b in violated]},
             )
-        worst, meta = _worst_outage(self.net, "trafo", "voltage")
-        if worst is None:
-            worst = int(self.net.trafo.index[0])
+        ranked = _rank_outages(self.net, "trafo", "voltage")
+        worst = _pick(ranked, self.variant, int(self.net.trafo.index[0]))
         self.net.trafo.at[worst, "in_service"] = False
         converged = self.run_pf()
         violated = self.net.res_bus[(self.net.res_bus["vm_pu"] < 0.95) | (self.net.res_bus["vm_pu"] > 1.05)].index.tolist() if converged else []
@@ -157,5 +160,5 @@ class TrafoContingencyVoltage(FailureScenario):
             ],
             affected_components={"trafo": [worst], "bus": [int(b) for b in violated]},
             known_fix="Restore the transformer or add voltage support at the affected buses",
-            metadata={"outaged_trafo": worst, "converged": converged, "violated_buses": [int(b) for b in violated]},
+            metadata={"outaged_trafo": worst, "variant": self.variant, "converged": converged, "violated_buses": [int(b) for b in violated]},
         )
