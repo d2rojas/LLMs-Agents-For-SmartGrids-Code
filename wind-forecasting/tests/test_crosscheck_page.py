@@ -34,4 +34,12 @@ def test_page_agrees_with_rows_and_aggregate() -> None:
         ["node", str(CHECK), str(PROJECT), str(PAGE), str(SPEC)],
         cwd=ROOT, capture_output=True, text=True,
     )
+    # A page older than the runs is not a disagreement, and reporting it as one
+    # sends whoever sees the red to look for a bug in code that is fine. Both the
+    # power-flow and the wind session hit exactly that while merging this, so the
+    # script says so with its own exit code and the suite turns it into an
+    # instruction. site/ is gitignored and per worktree, so a checkout that has
+    # not rebuilt keeps a stale page indefinitely.
+    if proc.returncode == 3:
+        pytest.skip(proc.stdout.strip())
     assert proc.returncode == 0, proc.stdout + proc.stderr
