@@ -24,7 +24,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT.parent))  # so `visuals` is importable
 
-from visuals.shell import E, card, chip, diagram_row, kv, note, pipeline, prompt_block, table, verdict  # noqa: E402
+from visuals.shell import (  # noqa: E402
+    DASH, GROUP_CORRECTNESS, GROUP_COST, GROUP_UTILITY, Count, E, NA, card, chip, comparison_table, counted,
+    clip, diagram_row, kv, note, pipeline, prompt_block, request_rows, table, verdict,
+)
 
 import methods  # noqa: E402
 from config import (  # noqa: E402
@@ -481,113 +484,164 @@ def tab_results() -> str:
         tag = h["header"].get("tag") or "main"
         by_set.setdefault(f"{h['header']['date']} · {tag}", {})[h["header"]["method"]] = (d, read_summary(d), h)
 
+    # Every rate is printed over the number of requests it was computed on, never
+    # on its own. The three outcomes share one denominator: the requests the
+    # method completed. A request the harness could not run at all is not
+    # evidence about the method, so it is excluded here and counted separately.
+    COMPLETED = "requests this method completed; a request that failed to run is not counted"
+    SCORED = "scenarios this method returned a valid series for at this horizon"
+
     def pct(rows: List[Dict[str, str]], kind: str) -> str:
+        if not rows:
+            return DASH
         k = sum(1 for r in rows if r.get("outcome") == kind)
-        return f"{100.0 * k / len(rows):.0f} <span class='muted'>({k}/{len(rows)})</span>" if rows else "—"
+        return counted(f"{100.0 * k / len(rows):.0f}", Count(k, len(rows), COMPLETED))
 
-    # The comparison table, laid out like every other case study's: the same three column groups,
-    # and one column per horizon instead of three numbers packed into a cell. A 48 h forecast is a
-    # different problem from a 3 h one, and reading them stacked in the same cell hid that.
-    # Model leads, so the rows of one model sit together and the table reads as one block per
-    # model rather than one per method. The ladder order is kept inside each model.
-    LEAD = ("Model", "Method", "n")
+    # The same three column groups as every other case study. Inside Task utility
+    # there is one pair of columns per horizon rather than three numbers in one
+    # cell: a 48 h forecast is a different problem from a 3 h one, and stacking
+    # them hid that. The per-horizon count now sits on the number it qualifies
+    # instead of in a column of its own, which is the same information in three
+    # fewer columns.
     GROUPS = (
-        ("Task utility", ["Form. %"] + [f"{h} h {c}" for h in HORIZONS_H for c in ("scored", "NMAE %", "Imp. %")]),
-        ("Solver-grounded correctness", ["Solved %", "Escalated %", "Wrong-unflagged %", "Traceable %"]),
-        ("Cost and time", ["Tokens", "Cost $", "Time s"]),
+        (GROUP_UTILITY, ["Form. %"] + [f"{h} h {c}" for h in HORIZONS_H for c in ("NMAE %", "Imp. %")]),
+        (GROUP_CORRECTNESS, ["Solved %", "Escalated %", "Wrong-unflagged %", "Traceable %"]),
+        (GROUP_COST, ["Tokens", "Cost $", "Time s"]),
     )
-    NCOL = sum(len(c) for _g, c in GROUPS)
-    head = ("<tr>" + "".join(f"<th rowspan='2'>{E(x)}</th>" for x in LEAD)
-            + "".join(f"<th class='g' colspan='{len(c)}'>{E(g)}</th>" for g, c in GROUPS) + "</tr>"
-            + "<tr>" + "".join(f"<th>{E(lab)}</th>" for _g, c in GROUPS for lab in c) + "</tr>")
-    R = lambda v: f"<td style='text-align:right'>{v}</td>"          # noqa: E731
-    DASH = "<td style='text-align:right;color:var(--muted)'>—</td>"
-
-    def model_of(row_name: str, per: Dict[str, Any]) -> str:
-        return per[row_name][0].parts[-2] if row_name in per else ""
 
     for set_name, per in by_set.items():
-        # no-llm first, then the language models; inside each, the ladder order of ROWS
-        models = sorted({model_of(r["name"], per) for r in ROWS if r["name"] in per},
-                        key=lambda m: (m != "no-llm", m))
-        ordered = [r for m in models for r in ROWS if model_of(r["name"], per) == m]
-        ordered += [r for r in ROWS if r["name"] not in per]
-        trs, shown = [], None
-        for row in ordered:
+        rows_out: List[Tuple[str, List[str], List[str]]] = []
+        for row in ROWS:
             if row["name"] not in per:
-                trs.append(f"<tr><td class='muted'>—</td><td><b>{E(row['label'])}</b></td>"
-                           f"<td colspan='{1 + NCOL}' class='muted'>not run</td></tr>")
                 continue
             d, rows, h = per[row["name"]]
             a = h["aggregate"]
             bh = a.get("by_horizon") or {}
-            num = lambda v, f="{:.2f}": DASH if v is None else R(f.format(v))  # noqa: E731
-            tds = [R(f"{a.get('form')}")]
+            cells: List[str] = [f"{a.get('form')}" if a.get("form") is not None else DASH]
             for hz in HORIZONS_H:
                 e = bh.get(str(hz)) or {}
-                # the count first, then the errors it produced: a row scored on 7 of 20 scenarios
-                # answered only what it found easy, so its NMAE is not comparable with a full row
-                tds += [R(f"{e.get('n_scored', 0)}/{e.get('n', 0)}") if e else DASH,
-                        num(e.get("nmae_pct")), num(e.get("improvement_pct"), "{:+.1f}")]
-            tds += [R(pct(rows, "solved")), R(pct(rows, "escalated")), R(pct(rows, "wrong_unflagged")),
-                    R(f"{a.get('trace')}") if a.get("trace") is not None else DASH]
-            tds += [R(f"{a.get('tokens'):,}") if a.get("tokens") is not None else DASH,
-                    num(a.get("cost"), "{:.3f}"), num(a.get("wall_time_mean_s"), "{:.0f}")]
-            model = d.parts[-2]
-            # the model is named once per block, so the eye groups the rows without a repeated cell
-            cell = f"<b>{E(model)}</b>" if model != shown else "<span class='muted'>&#8220;</span>"
-            shown = model
-            trs.append(f"<tr><td>{cell}</td>"
-                       f"<td><b>{E(row['label'])}</b><div class='muted'><code>{E(row['name'])}</code></div></td>"
-                       f"{R(len(rows))}" + "".join(tds) + "</tr>")
-        body.append(card(f"Run set {E(set_name)}",
-                         "<div class='tw'><table class='cmp'>" + head + "".join(trs) + "</table></div>",
-                         note("The three column groups are the same three in every case study of this site. Inside Task utility, read each "
-                              "horizon's <b>scored</b> column before its two error columns: it gives how many of the 20 scenarios the method "
-                              "returned a valid series for, and the NMAE and Imp. beside it are averages over exactly those. A method that "
-                              "answered 7 scenarios kept the ones it found easy, so its NMAE is not comparable with a method that answered all "
-                              "20, even when the number is smaller. A dash is not a missing measurement: it means the method returned no valid "
-                              "series at that horizon, so there was nothing to score, which is itself the result. NMAE is the error as a per "
-                              "cent of the 1500 kW installed capacity, and Imp. is the improvement over the protocol's reference model on the "
-                              "same points: 0 means no better than a model that costs nothing, negative means worse.", "info")))
+                n_sc, n_all = int(e.get("n_scored", 0) or 0), int(e.get("n", 0) or 0)
+                for value, fmt in ((e.get("nmae_pct"), "{:.2f}"), (e.get("improvement_pct"), "{:+.1f}")):
+                    if not e or value is None:
+                        # not a missing measurement: the method returned no valid
+                        # series at this horizon, so there was nothing to score
+                        cells.append(counted(DASH, Count(n_sc, n_all, SCORED)) if e else DASH)
+                    else:
+                        cells.append(counted(fmt.format(value), Count(n_sc, n_all, SCORED)))
+            cells += [pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged"),
+                      f"{a.get('trace')}" if a.get("trace") is not None else NA]
+            cells += [f"{a.get('tokens'):,}" if a.get("tokens") is not None else NA,
+                      f"{a.get('cost'):.3f}" if a.get("cost") is not None else NA,
+                      f"{a.get('wall_time_mean_s'):.0f}" if a.get("wall_time_mean_s") is not None else DASH]
+            label = (f"<b>{E(row['label'])}</b><div class='muted'><code>{E(row['name'])}</code></div>")
+            rows_out.append((d.parts[-2], [label, str(len(rows))], cells, str(d.relative_to(PROJECT_ROOT / "results"))))
+        missing = [r for r in ROWS if r["name"] not in per]
+        body.append(card(
+            f"Run set {E(set_name)}",
+            comparison_table(GROUPS, rows_out, lead=("Model", "Method", "n")),
+            (f"<p class='muted'>Not in this run set: {E(', '.join(r['label'] for r in missing))}.</p>" if missing else ""),
+            note("The three column groups are the same three in every case study of this site. Every rate carries, above it, "
+                 "the number of requests it was computed over: the three outcomes share the requests the method completed, and "
+                 "each horizon's NMAE and Imp. are averaged over the scenarios that method returned a valid series for at that "
+                 "horizon. A method that answered 7 of 20 kept the ones it found easy, so its NMAE is not comparable with a "
+                 "method that answered all 20, even when the number is smaller. A dash is not a missing measurement: it means "
+                 "the method returned no valid series there, which is itself the result. NMAE is the error as a per cent of the "
+                 "1500 kW installed capacity, and Imp. is the improvement over the protocol's reference model on the same "
+                 "points: 0 means no better than a model that costs nothing, negative means worse.", "info")))
+
+    body.append(request_section())
+
     det = []
     cols = [("nn", "nn"), ("instance_id", "scenario"), ("horizon_hours", "h"), ("question", "question"), ("outcome", "outcome"), ("solved_reason", "why"),
             ("formulation_exact", "form."), ("n_values", "values"), ("mae_kw", "MAE kW"), ("nmae_pct", "NMAE %"), ("improvement_pct", "Imp. %"), ("answer_ok", "answer"), ("source", "source"), ("gate_pass", "gate"),
             ("n_llm_calls", "llm"), ("n_tool_calls", "tools"), ("cost_usd", "cost $")]
     for d in dirs:
         rows = read_summary(d)
-        det.append(f"<details><summary>{E(d.parts[-3])} / {E(d.parts[-2])} / {E(d.name)} — every request</summary>"
+        det.append(f"<details><summary>{E(d.parts[-3])} / {E(d.parts[-2])} / {E(d.name)} — every request, every metric</summary>"
                    + table([l for _k, l in cols], [[verdict(r["outcome"]) if k == "outcome" else E(r.get(k, "")) for k, _l in cols] for r in rows]) + "</details>")
-    body.append(card("Request by request", *det))
+    body.append(card("Every metric of every request", *det))
     return "".join(body)
+
+
+def _traces_by_request() -> Tuple[str, Dict[str, Dict[str, Dict[str, Any]]]]:
+    """Every trace of the newest run set, indexed by request and then by method."""
+    dirs = method_dirs()
+    if not dirs:
+        return "", {}
+    latest = max(d.parts[-3] for d in dirs)
+    out: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    for d in dirs:
+        if d.parts[-3] != latest or "__" in d.name:
+            continue
+        for f in sorted((d / "traces").glob("*.json")):
+            # iCloud leaves copies called "<name> 2.json" beside the files the run
+            # wrote. They are older than the rescores, so a number taken out of one
+            # is a number that has already been withdrawn.
+            if " " in f.stem:
+                continue
+            out.setdefault(f.stem.split("_", 1)[-1], {})[d.name] = json.loads(f.read_text(encoding="utf-8"))
+    return latest, out
+
+
+def request_section() -> str:
+    """Every request of the newest run set, each unfolding into the six methods.
+
+    This is what puts the traces on the results page. A verdict in the table
+    above is a count of these rows, and the run behind any one of them is one
+    click away, with the prompt that method actually received and every step it
+    took, rather than in another section that has to be searched by hand.
+    """
+    latest, by_request = _traces_by_request()
+    if not by_request:
+        return ""
+    methods = [(r["name"], r["label"]) for r in ROWS]
+    requests: List[Dict[str, Any]] = []
+    for rid in sorted(by_request):
+        per = by_request[rid]
+        req = next((t.get("request") or {} for t in per.values() if t.get("request")), {})
+        cells: Dict[str, str] = {}
+        columns: List[Dict[str, Any]] = []
+        for row in ROWS:
+            t = per.get(row["name"])
+            if not t:
+                columns.append({"label": row["label"], "empty": "no run in this set"})
+                continue
+            sc = t.get("scored") or {}
+            oc = str(sc.get("common_outcome") or "")
+            form = ("exact" if sc.get("common_formulation_exact")
+                    else E(str(sc.get("common_formulation_error_type") or "not declared")))
+            nmae = sc.get("common_nmae_pct")
+            cells[row["name"]] = (verdict(oc) + f"<span class='why'>formulation {form}</span>"
+                                  + (f"<span class='why'>NMAE {nmae:.2f} %</span>" if nmae is not None else ""))
+            columns.append({
+                "label": row["label"], "model": t.get("model") or "", "verdict": oc,
+                "prompt": _example_prompt(t), "lines": _example_lines(t),
+                "footer": (f"{t.get('n_llm_calls')} model calls · {t.get('n_tool_calls')} tool calls · "
+                           f"{t.get('wall_time_s', 0):.0f} s<br><span class='muted'>formulation {form}</span>"),
+            })
+        requests.append({
+            "id": rid, "tag": f"{req.get('horizon_hours')} h · {req.get('question')}",
+            "text": req.get("text", ""), "cells": cells, "columns": columns,
+        })
+    return card(
+        "Every request, under each of the six methods",
+        f"<p>The runs of {E(latest)}, not re-scored here. Click a request to unfold the six methods side by side. "
+        "Each column opens with the prompt that method really received, split into the blocks it is built from with "
+        "the file each block comes from, and then lists what it did: <span class='k call'>call</span> a tool, "
+        "<span class='k tool'>tool</span> what came back, <span class='k gate'>gate</span> the verdict, "
+        "<span class='k retry'>retry</span> what was handed back, <span class='k final'>final</span> what was "
+        "surfaced. Click any line to expand it to the whole thing.</p>"
+        f"<p class='muted'>{len(requests)} requests, every one of them, not a chosen few. Grey in a prompt is the "
+        "part built at run time: the request, the history, the tool catalogue.</p>",
+        request_rows(requests, methods))
 
 
 # --------------------------------------------------------------- the six methods side by side
 
+# What is left of this case study's own stylesheet. The columns, the step log and
+# the prompt panel moved to visuals/shell.py when every case study got them, so
+# only the method selector of the Prompts section is still local.
 EXAMPLE_CSS = """
-.cols6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;align-items:start}
-@media(max-width:1400px){.cols6{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(max-width:900px){.cols6{grid-template-columns:1fr}}
-.col{background:#fff;border:1px solid var(--line);border-radius:10px;min-width:0;overflow:hidden}
-.col h4{margin:0;padding:8px 10px;border-bottom:1px solid var(--line);font-size:12.5px;background:#fafbfd}
-.col h4 .muted{font-weight:400}
-.log{font:11.5px/1.4 'JetBrains Mono',ui-monospace,Menlo,monospace}
-.ln{display:grid;grid-template-columns:46px 1fr;gap:6px;padding:4px 8px;border-bottom:1px solid #f0f2f5;cursor:pointer}
-.ln:hover{background:#f7f9fc}
-.ln .k{font-weight:600;font-size:10.5px}
-.ln .k.model{color:#2f5fd0}
-.ln .k.call{color:#2f5fd0}
-.ln .k.tool{color:#0f8f84}
-.ln .k.plan{color:#6d4fc4}
-.ln .k.gate{color:#c99a06}
-.ln .k.retry{color:#c99a06}
-.ln .k.final{color:#1f9d55}
-.ln .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ln.open .s{white-space:pre-wrap;overflow:visible;word-break:break-word}
-.pr{border-bottom:1px solid var(--line)}
-.pr summary{padding:6px 10px;font-size:12px;cursor:pointer}
-.pr pre{max-height:300px;overflow:auto;font-size:11px;margin:0 8px 8px}
-.vt{padding:6px 10px;border-top:1px solid var(--line);font-size:11.5px;background:#fafbfd}
 .ex{display:none}
 .ex.on{display:block}
 """
@@ -693,7 +747,13 @@ def _example_prompt(t: Dict[str, Any]) -> str:
             if kind:
                 parts.append(_block(kind, chunk, collapse=True))
             else:
-                parts.append(prompt_block("built at run time", f"<details><summary>show the {len(chunk):,} characters</summary><pre>{E(chunk)}</pre></details>",
+                # The run-time block of an llm_only prompt is a fortnight of
+                # ten-minute SCADA readings, seventy thousand characters of CSV.
+                # It is per-request, so it cannot be hoisted into the Prompts
+                # section, and embedding it whole for sixty requests under six
+                # methods was twelve of the fourteen megabytes of this page. The
+                # beginning and the end are kept, and the page says what it cut.
+                parts.append(prompt_block("built at run time", f"<details><summary>show the {len(chunk):,} characters</summary><pre>{clip(chunk)}</pre></details>",
                                           color="#94a3b8", source="evaluation/requests.py, solver/data.py, solver/tools.py", pre=False)
                              if len(chunk) > 1500 else
                              prompt_block("built at run time", chunk, color="#94a3b8", source="evaluation/requests.py, solver/data.py, solver/tools.py"))
@@ -773,8 +833,7 @@ def tab_traces() -> str:
     if not dirs:
         return card("Traces", "<p class='muted'>No run yet. Every run leaves <code>traces/NN_&lt;request-id&gt;.narrative.txt</code>, "
                               "<code>.transcript.txt</code> and <code>.png</code> next to its rows; this section shows them once they exist.</p>")
-    body = [examples_section(),
-            card("Every run end to end", "<p>The narrative of each request of every run set, as written by evaluation/postprocess.py from the "
+    body = [card("Every run end to end", "<p>The narrative of each request of every run set, as written by evaluation/postprocess.py from the "
                                           "trace: what the method did, the formulation verdict, the series and its error, the answer checks, the outcome. "
                                           "The transcript next to it in the results folder is the raw exchange, and the PNG the series against the target.</p>")]
     for d in dirs:
@@ -819,14 +878,6 @@ SCRIPT = """
   var mth=document.getElementById('mth'); if(!mth) return;
   function apply(){ document.querySelectorAll('.pm').forEach(function(p){ p.style.display = p.dataset.mth===mth.value ? '' : 'none'; }); }
   mth.onchange=apply; apply();
-})();
-(function(){
-  var sel=document.getElementById('exs');
-  if(sel){ sel.onchange=function(){ document.querySelectorAll('.ex').forEach(function(e){
-      e.classList.toggle('on', e.dataset.scn===sel.value); }); }; }
-  document.querySelectorAll('.ln').forEach(function(l){ l.onclick=function(){
-      if(!l.dataset.done){ l.querySelector('.s').textContent=l.dataset.full; l.dataset.done='1'; }
-      l.classList.toggle('open'); }; });
 })();
 """
 

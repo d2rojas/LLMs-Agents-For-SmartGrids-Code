@@ -1,0 +1,28 @@
+RUN 18  |  case118-plain-008-s0  |  react_nogate  |  gpt-4o-mini  |  IEEE 118-bus  |  seed 0  |  difficulty plain
+Request: Load case118 and set the active load at bus 1 to 51 MW.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case118"); set_active_load(bus_id=1, p_mw=51)   (1065 in / 54 out tokens, 1.6 s)
+       tool load_case -> case_name="case118", n_buses=118, n_lines=184, total_load_mw=4223.01
+       tool set_active_load -> converged=true, total_load_mw=4224.849, total_generation_mw=4356.873, total_loss_mw=131.864  [gate pass]
+  2. LLM called run_powerflow()   (1351 in / 11 out tokens, 0.9 s)
+       tool run_powerflow -> case_name="case118", converged=true, total_load_mw=4224.849, total_generation_mw=4356.873, total_loss_mw=131.864, bus_voltages[118], line_flows[184], voltage_violations[3], thermal_violations[0]  [gate pass]
+  3. LLM replied without tool calls: ```json { "converged": true, "bus_voltages": [ {"bus_id": 1, "vm_pu": 0.955, "va_deg": 10.07, "is_violation": false, "violation_type": null}, {"bus_id": 2, "vm_   (17264 in / 16123 out tokens, 117.6 s)
+  4. LLM wrote the final answer   (33453 in / 11422 out tokens, 86.6 s)
+  Totals: 4 LLM calls, 3 tool calls, 2 tool rounds, 53133 in / 27610 out tokens, $0.0245, 207.5 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case118") -> modify_load(bus_id=1, p_mw=51.0)
+  executed: load_case(case_name="case118") -> set_active_load(bus_id=1, p_mw=51) -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 628, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 1.37e-07 p.u., flow MAE 1.3085 MW, KCL mismatch 0.0113 MW, power-balance error n/a
+  raw trace: case118-plain-008-s0_run0.json

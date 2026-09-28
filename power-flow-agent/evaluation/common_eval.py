@@ -140,6 +140,16 @@ def score_common(
     if tr.get("status") == "cannot_parse" or (tr.get("architecture") == "rule_based" and "cannot parse" in text):
         reasons.append("cannot_parse")
     out["common_escalated"] = bool(reasons)
+    if out["common_escalated"] and not declared:
+        # Formulation is scored whenever the answer declares one, whatever the outcome: a method that
+        # says it cannot complete the request but still lists the operations it ran has stated a
+        # formulation, and that is measurable. It is left unscored only when there is nothing to
+        # compare, which is the gate's abstention text and an answer that parses to no formulation.
+        # Counting that absence as a formulation error would penalize the refusal twice, since it is
+        # already counted under Escalated (2026-09-28).
+        out["common_formulation_exact"] = None
+        out["common_formulation_error_type"] = None
+        out["common_formulation_detail"] = "not scored: the answer declares no formulation (it reports that the request could not be completed)"
     out["common_escalation_reason"] = ", ".join(reasons) if reasons else None
 
     # 5. traceability (tools only)
@@ -193,6 +203,12 @@ def score_common(
         out["common_escalated"] = False
         out["common_reason"] = "run_error"
         out["common_run_error"] = str(run_error)[:200]
+        # Nothing the method produced is scored on an API failure: the stored text is the error
+        # message, not an answer, so formulation and traceability have nothing to read.
+        out["common_formulation_exact"] = None
+        out["common_formulation_error_type"] = None
+        out["common_formulation_detail"] = "not scored: the request failed before the method answered"
+        out["common_traceable"] = None
     return out
 
 

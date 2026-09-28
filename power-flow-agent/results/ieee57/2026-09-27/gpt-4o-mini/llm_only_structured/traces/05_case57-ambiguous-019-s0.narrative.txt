@@ -1,0 +1,23 @@
+RUN 05  |  case57-ambiguous-019-s0  |  llm_only:structured  |  gpt-4o-mini  |  IEEE 57-bus  |  seed 0  |  difficulty ambiguous
+Request: Load case57 and run the power flow, then list every line whose loading is above 100 pct of rating.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): { "formulation": [ {"tool": "load_case", "args": {"case_name": "case57"}}, {"tool": "run_powerflow", "args": {}} ], "converged": true, "summary": "The power flow analysis was completed successfully fo...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 6676 in / 4958 out tokens, $0.0040, 50.2 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case57") -> run_powerflow()
+  declared: load_case(case_name="case57") -> run_powerflow()   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 316, untraceable: 316 -> traceable answer: no
+  untraceable values: ['156.9 MW', '98.5%', '20.5 MW', '109.0%', '19.5 MW', '98.5%', '54.0 MW', '221.3 MW', '24.0 MW', '19.9 MW', '67.2 MW', '43.6 MW', '62.1 MW', '11.1 MW', '11.1 MW', '11.1 MW', '11.1 MW', '11.1 MW', '11.1 MW', '11.1 MW']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: voltage_error
+  against the reference: voltage MAE 0.1113 p.u., flow MAE 32.3991 MW, KCL mismatch 28.6516 MW, power-balance error n/a
+  raw trace: case57-ambiguous-019-s0_run0.json

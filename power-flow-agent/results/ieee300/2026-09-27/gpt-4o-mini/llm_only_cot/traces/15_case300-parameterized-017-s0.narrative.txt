@@ -1,0 +1,23 @@
+RUN 15  |  case300-parameterized-017-s0  |  llm_only:cot  |  gpt-4o-mini  |  IEEE 300-bus  |  seed 0  |  difficulty parameterized
+Request: Load case300 and run an N-1 contingency analysis ranked by max violations and report the 8 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): 1. The request refers to the IEEE case300 test system. The buses involved are: - Slack bus: Bus 1 (as it is typically the first bus in such systems). - Load buses: All buses listed in the Load Data ta...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 25697 in / 953 out tokens, $0.0044, 7.9 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> run_n1_contingency(top_k=8, criteria="max_violations")
+  declared: load_case(case_name="case300") -> run_powerflow() -> run_n1_contingency(top_k=8, criteria="max_violations", max_candidates=0)   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 23, untraceable: 23 -> traceable answer: no
+  untraceable values: ['1.02', '0.0', '1.01', '5.0', '10.0', '0.99', '15.0', '0.98', '20.0', '150.0', '95.0', '120.0', '90.0', '100.0', '85.0', '2000.0', '1800.0', '200.0', '1.02', '1.01']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: incomplete_coverage
+  against the reference: voltage MAE 0.0186 p.u., flow MAE 103.7114 MW, KCL mismatch 1.309 MW, power-balance error n/a
+  raw trace: case300-parameterized-017-s0_run0.json

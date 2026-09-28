@@ -1,0 +1,45 @@
+RUN 03  |  case14-heavy_loading_undervoltage-v0  |  react_nogate  |  openrouter:openai/gpt-4o-mini  |  IEEE 14-bus
+Scenario: Heavy loading under-voltage (3x) (voltage); injected fault: load_increase {"load": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}
+Initial state: violations, 11 new violation(s)
+Request: The AC power flow on the IEEE 14-bus system (case14) converged with 11 new limit violation(s). Diagnose the cause and restore a secure operating point: the power flow converges, no in-service load is on an islanded bus, every bus voltage is within [0.95, 1.05] p.u., and no line or transformer is above 100 % loading, apart from the violations the base network already has. Use only the actions available. Report the diagnosis, the actions taken, and the final state.
+
+WHAT THE METHOD DID
+   1. get_gen_data({})
+       -> {"generators": [{"index": 0, "name": null, "bus": 1, "p_mw": 40.0, "vm_pu": 1.045, "sn_mva": null, "min_q_mvar": -40.0, "max_q_mvar": 50.0, "scaling": 1.0, "slack": false, "in_service": true, "slack_weight": 0.0, "type":… (1474 chars)
+   2. get_loading_profile({})
+       -> {"available": true, "lines": [{"line_index": 0, "loading_percent": 67.3}, {"line_index": 1, "loading_percent": 31.2}, {"line_index": 2, "loading_percent": 28.3}, {"line_index": 3, "loading_percent": 22.1}, {"line_index":… (935 chars)
+   3. get_bus_data({})
+       -> {"buses": [{"index": 0, "name": 1, "vn_kv": 135.0, "type": "b", "zone": 1.0, "in_service": true, "max_vm_pu": 1.06, "min_vm_pu": 0.94, "geo": "{\"coordinates\": [1.9673949894, -0.9610198739], \"type\": \"Point\"}"}, {"in… (2878 chars)
+   4. get_line_data({})
+       -> {"lines": [{"index": 0, "from_bus": 0, "to_bus": 1, "in_service": true, "length_km": 1.0, "max_i_ka": 3.106322282994911}, {"index": 1, "from_bus": 0, "to_bus": 4, "in_service": true, "length_km": 1.0, "max_i_ka": 3.10632… (1693 chars)
+   5. adjust_generation({"gen_index": 1, "p_mw_new": 100.0})
+       -> {"action": "adjust_generation", "success": true, "gen_type": "gen", "gen_index": 1, "old_state": {"p_mw": 0.0}, "new_state": {"p_mw": 100.0}}
+   6. adjust_generation({"gen_index": 2, "p_mw_new": 100.0})
+       -> {"action": "adjust_generation", "success": true, "gen_type": "gen", "gen_index": 2, "old_state": {"p_mw": 0.0}, "new_state": {"p_mw": 100.0}}
+   7. adjust_generation({"gen_index": 3, "p_mw_new": 100.0})
+       -> {"action": "adjust_generation", "success": true, "gen_type": "gen", "gen_index": 3, "old_state": {"p_mw": 0.0}, "new_state": {"p_mw": 100.0}}
+   8. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+   9. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [{"bus": 13, "vm_pu": 0.9107, "limit": 0.94, "kind": "under"}], "n_new_violations": 1, "pre_existing_in_base": {"n": 2, "buses": [5, 7]}, "no… (396 chars)
+  10. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 7, "loading_percent": 387.0, "from_bus": 5, "to_bus": 10}, {"element": "line", "index": 8, "loading_percent": 271.6, "from_bu… (1028 chars)
+  11. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  Totals: 5 LLM calls, 11 tool calls, 30110 in / 630 out tokens, 12.363 s
+
+DIAGNOSIS  (is the injected fault named?)
+  answer: generation_loss {"gen": [1, 2, 3]}   verdict: FAIL   answer generation_loss, injected load_increase
+
+STATE  (the harness's own power flow on the final network)
+  converged: True   secure: False   new violations: 9   islanded load: []
+  repaired: False   improved: True   feasible: True
+
+REPORTING
+  status claimed: not_repaired   final_state claimed: converged=True, new violations=1
+  numbers in the answer: 19, untraceable: 0 -> traceable: pass
+
+OUTCOME: ESCALATED   (escalated: declared not_repaired)
+
+SUMMARY WRITTEN BY THE METHOD
+  The network initially had insufficient generation to meet the load demand, resulting in voltage and line loading violations. After increasing the generation at three generators, the power flow converged, but violations remain at bus 13 and several lines. The network is not yet secure.

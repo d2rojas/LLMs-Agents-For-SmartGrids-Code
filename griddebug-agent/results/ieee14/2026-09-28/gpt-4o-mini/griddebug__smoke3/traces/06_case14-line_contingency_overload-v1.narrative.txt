@@ -1,0 +1,105 @@
+RUN 06  |  case14-line_contingency_overload-v1  |  griddebug  |  openrouter:openai/gpt-4o-mini  |  IEEE 14-bus
+Scenario: N-1 line contingency (contingency); injected fault: line_outage {"line": [8]}
+Initial state: violations, 2 new violation(s)
+Request: The AC power flow on the IEEE 14-bus system (case14) converged with 2 new limit violation(s). Diagnose the cause and restore a secure operating point: the power flow converges, no in-service load is on an islanded bus, every bus voltage is within [0.95, 1.05] p.u., and no line or transformer is above 100 % loading, apart from the violations the base network already has. Use only the actions available. Report the diagnosis, the actions taken, and the final state.
+
+WHAT THE METHOD DID
+   1. switch_element({"element_type": "line", "element_index": 9, "in_service": false})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 9, "old_in_service": true, "new_in_service": false}
+   2. switch_element({"element_type": "line", "element_index": 13, "in_service": false})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 13, "old_in_service": true, "new_in_service": false}
+   3. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+   4. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [], "n_new_violations": 0, "pre_existing_in_base": {"n": 4, "buses": [11, 12, 5, 7]}, "note": "Only new_violations count against the repair. … (344 chars)
+   5. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 7, "loading_percent": 192.8, "from_bus": 5, "to_bus": 10}, {"element": "line", "index": 11, "loading_percent": 271.0, "from_b… (674 chars)
+   6. find_disconnected_areas({})
+       -> {"disconnected_buses": [11], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13], "message": "1 bus(es) not connected to slack."}
+   7. switch_element({"element_type": "line", "element_index": 8, "in_service": true})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 8, "old_in_service": false, "new_in_service": true}
+   8. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+   9. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [], "n_new_violations": 0, "pre_existing_in_base": {"n": 3, "buses": [12, 5, 7]}, "note": "Only new_violations count against the repair. The … (340 chars)
+  10. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 7, "loading_percent": 179.2, "from_bus": 5, "to_bus": 10}, {"element": "line", "index": 11, "loading_percent": 270.9, "from_b… (674 chars)
+  11. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  12. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 7, "loading_percent": 179.2, "from_bus": 5, "to_bus": 10}, {"element": "line", "index": 11, "loading_percent": 270.9, "from_b… (674 chars)
+  13. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [], "n_new_violations": 0, "pre_existing_in_base": {"n": 3, "buses": [12, 5, 7]}, "note": "Only new_violations count against the repair. The … (340 chars)
+  14. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  15. switch_element({"element_type": "line", "element_index": 7, "in_service": false})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 7, "old_in_service": true, "new_in_service": false}
+  16. switch_element({"element_type": "line", "element_index": 11, "in_service": false})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 11, "old_in_service": true, "new_in_service": false}
+  17. switch_element({"element_type": "line", "element_index": 12, "in_service": false})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 12, "old_in_service": true, "new_in_service": false}
+  18. switch_element({"element_type": "line", "element_index": 14, "in_service": false})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 14, "old_in_service": true, "new_in_service": false}
+  19. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  20. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 10, "loading_percent": 127.6, "from_bus": 8, "to_bus": 9}], "n_new_overloads": 1, "pre_existing_in_base": {"n": 0, "elements"… (406 chars)
+  21. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [{"bus": 13, "vm_pu": 0.0, "limit": 0.94, "kind": "under"}], "n_new_violations": 1, "pre_existing_in_base": {"n": 6, "buses": [10, 12, 5, 6, … (407 chars)
+  22. find_disconnected_areas({})
+       -> {"disconnected_buses": [10, 12, 13], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11], "message": "3 bus(es) not connected to slack."}
+  23. switch_element({"element_type": "line", "element_index": 10, "in_service": true})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 10, "old_in_service": true, "new_in_service": true}
+  24. switch_element({"element_type": "line", "element_index": 12, "in_service": true})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 12, "old_in_service": false, "new_in_service": true}
+  25. switch_element({"element_type": "line", "element_index": 13, "in_service": true})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 13, "old_in_service": false, "new_in_service": true}
+  26. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  27. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 8, "loading_percent": 220.1, "from_bus": 5, "to_bus": 11}, {"element": "line", "index": 10, "loading_percent": 175.9, "from_b… (584 chars)
+  28. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [{"bus": 13, "vm_pu": 0.0, "limit": 0.94, "kind": "under"}], "n_new_violations": 1, "pre_existing_in_base": {"n": 3, "buses": [5, 6, 7]}, "no… (396 chars)
+  29. find_disconnected_areas({})
+       -> {"disconnected_buses": [13], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], "message": "1 bus(es) not connected to slack."}
+  30. switch_element({"element_type": "line", "element_index": 13, "in_service": false})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 13, "old_in_service": true, "new_in_service": false}
+  31. switch_element({"element_type": "line", "element_index": 10, "in_service": false})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 10, "old_in_service": true, "new_in_service": false}
+  32. switch_element({"element_type": "line", "element_index": 8, "in_service": false})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 8, "old_in_service": true, "new_in_service": false}
+  33. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  34. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [], "n_new_overloads": 0, "pre_existing_in_base": {"n": 0, "elements": []}, "note": "Only new_overloads count against the repair. The elements under pre_ex… (320 chars)
+  35. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [{"bus": 13, "vm_pu": 0.0, "limit": 0.94, "kind": "under"}], "n_new_violations": 1, "pre_existing_in_base": {"n": 8, "buses": [9, 10, 11, 12,… (414 chars)
+  36. find_disconnected_areas({})
+       -> {"disconnected_buses": [9, 10, 11, 12, 13], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8], "message": "5 bus(es) not connected to slack."}
+  37. switch_element({"element_type": "line", "element_index": 9, "in_service": true})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 9, "old_in_service": false, "new_in_service": true}
+  38. switch_element({"element_type": "line", "element_index": 10, "in_service": true})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 10, "old_in_service": false, "new_in_service": true}
+  39. switch_element({"element_type": "line", "element_index": 11, "in_service": true})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 11, "old_in_service": false, "new_in_service": true}
+  40. switch_element({"element_type": "line", "element_index": 12, "in_service": true})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 12, "old_in_service": true, "new_in_service": true}
+  Totals: 19 LLM calls, 40 tool calls, 100030 in / 2043 out tokens, 40.331 s, budget exhausted
+
+DIAGNOSIS  (is the injected fault named?)
+  answer: line_outage {"line": [9, 13]}   verdict: FAIL   type line_outage right; named [('line', 9), ('line', 13)], injected [('line', 8)]
+
+STATE  (the harness's own power flow on the final network)
+  converged: True   secure: False   new violations: 2   islanded load: [11]
+  repaired: False   improved: False   feasible: True
+
+REPORTING
+  status claimed: cannot_repair   final_state claimed: converged=None, new violations=None
+  numbers in the answer: 3, untraceable: 0 -> traceable: pass
+  gate: FAILED no_islanded_load, currency, consistent, actions_match_trace
+  harness wrote the answer: gate rejected no_islanded_load, currency, consistent, actions_match_trace
+
+OUTCOME: ESCALATED   (escalated: gate rejected no_islanded_load, currency, consistent, actions_match_trace, declared cannot_repair)
+
+SUMMARY WRITTEN BY THE METHOD
+  Declared failure: verification failed after the retry: no_islanded_load, currency, consistent, actions_match_trace

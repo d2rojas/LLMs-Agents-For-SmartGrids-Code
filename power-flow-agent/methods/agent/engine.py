@@ -305,6 +305,11 @@ class EngineConfig:
     memory: bool = True
     trace_output_chars: int = 400
     final_gate: bool = False
+    # Plan-and-Act replanning on failure (2026-09-28). main.tex: "Reasoning is invoked again only on
+    # failure, such as a solver not converging, at which point the agent revises the remaining plan
+    # and resumes." The code executed the whole plan blind and never revised it, so the paper
+    # described an architecture the benchmark did not run. 0 restores that older behaviour.
+    max_replans: int = 2
     # "v1" (default) is the original modify_load tool, byte-identical to every existing
     # run. "load_split" swaps it for set_active_load/set_load (methods.agent.tools.TOOLS_LOAD_SPLIT),
     # which drops modify_load's optional q_mvar argument -- validated offline against
@@ -858,6 +863,7 @@ def _plan_system_prompt(variant: str = "v1") -> str:
     return _read_method_text("plan_act_nogate/plan_system_prompt_prefix.txt") + tools_catalog_text(variant, with_enums=True)
 
 PLAN_SYSTEM_PROMPT_STRUCTURED = _read_method_text("plan_act_nogate/plan_system_prompt_structured.txt")
+REPLAN_INSTRUCTION = _read_method_text("plan_act_nogate/replan_instruction.txt")
 
 FINAL_ANSWER_INSTRUCTION = _read_method_text("_shared/final_answer_instruction.txt")
 
@@ -1326,11 +1332,10 @@ class LLMEngine:
 
         act_rec: Dict[str, Any] = {"round": 2, "phase": "act"}
         trace["rounds"].append(act_rec)
-        self._execute_tool_calls(synthetic_calls, messages, session, trace, act_rec)
-        trace["n_tool_rounds"] = 1
+        next_round = self._act_with_replanning(synthetic_calls, messages, session, trace, act_rec)
 
         # 3) Final call: write the answer from the outputs, no tools.
-        final_rec: Dict[str, Any] = {"round": 3, "phase": "answer", "final": True}
+        final_rec: Dict[str, Any] = {"round": next_round, "phase": "answer", "final": True}
         trace["rounds"].append(final_rec)
         messages.append({"role": "user", "content": FINAL_ANSWER_INSTRUCTION})
         try:
@@ -1341,4 +1346,166 @@ class LLMEngine:
         if not text:
             text = "The model returned no final answer text after executing the plan."
             return self._finish(text, session, trace, "empty_final")
-        return self._finish(text, session, trace, "ok")
+        if not self.config.final_gate:
+            return self._finish(text, session, trace, "ok")
+        return self._verify_answer_with_retry(text, messages, session, trace, next_round=next_round + 1)
+
+    # ---- Plan-and-Act: act, and revise the remaining plan when a step fails ----------------------
+
+    @staticmethod
+    def _step_failure(tool_rec: Dict[str, Any]) -> Optional[str]:
+        """Why this executed step failed, or None if it succeeded.
+
+        Two shapes count as failure, and only these two: the tool itself errored, and a power-flow
+        result the gate rejected (non-convergence, power imbalance, isolated buses). A tool that
+        simply reports nothing interesting has not failed.
+        """
+        verdict = tool_rec.get("gate")
+        if verdict is not None and not verdict.get("passed"):
+            return ",".join(verdict.get("reasons") or ["gate_failed"])
+        try:
+            obj = json.loads(tool_rec.get("output") or "")
+        except Exception:
+            return None
+        if isinstance(obj, dict) and obj.get("error"):
+            return str(obj["error"])[:120]
+        return None
+
+    def _act_with_replanning(
+        self,
+        calls: List[Dict[str, Any]],
+        messages: List[Dict[str, Any]],
+        session: SessionState,
+        trace: Dict[str, Any],
+        act_rec: Dict[str, Any],
+    ) -> int:
+        """Execute the plan one step at a time, revising what is left when a step fails.
+
+        Returns the next free round number. With ``max_replans = 0`` this executes the whole plan in
+        one segment and is byte-identical to the pre-2026-09-28 behaviour.
+        """
+        trace["n_replans"] = 0
+        trace["replan_reasons"] = []
+        if self.config.max_replans <= 0:
+            self._execute_tool_calls(calls, messages, session, trace, act_rec)
+            trace["n_tool_rounds"] = 1
+            return 3
+
+        round_no, rec, remaining = 2, act_rec, list(calls)
+        while remaining:
+            tools_before = len(rec.get("tools") or [])
+            for i, call in enumerate(remaining):
+                self._execute_tool_calls([call], messages, session, trace, rec)
+                reason = self._step_failure((rec.get("tools") or [])[-1])
+                if reason is None:
+                    continue
+                rest = remaining[i + 1 :]
+                if not rest or trace["n_replans"] >= self.config.max_replans:
+                    # Nothing left to revise, or the budget is spent: carry on to the answer with
+                    # what the tools produced. The gate, where a method has one, still judges it.
+                    remaining = []
+                    break
+                trace["n_replans"] += 1
+                trace["replan_reasons"].append({"step": tools_before + i + 1, "tool": call.get("name"), "reason": reason})
+                round_no += 1
+                replan_rec: Dict[str, Any] = {"round": round_no, "phase": "replan", "reason": reason}
+                trace["rounds"].append(replan_rec)
+                messages.append({"role": "user", "content": REPLAN_INSTRUCTION})
+                try:
+                    msg = self._call_llm(messages, with_tools=False, trace=trace, round_rec=replan_rec)
+                except _LLMCallError:
+                    remaining = []
+                    break
+                revised = parse_plan(msg.get("content"))
+                replan_rec["plan_raw"] = msg.get("content")
+                replan_rec["plan"] = revised
+                session.conversation_history.append({"role": "assistant", "content": msg.get("content")})
+                if not revised:
+                    # The model declined to plan around the failure, which is a legitimate answer to
+                    # a request that cannot be completed. Let it say so in the final call.
+                    remaining = []
+                    break
+                budget = self.config.max_tool_rounds - trace["n_tool_calls"]
+                revised = revised[: max(0, budget)]
+                new_calls = [
+                    {"id": f"replan{trace['n_replans']}_step_{j + 1}", "name": st["tool"], "arguments": json.dumps(st["args"], ensure_ascii=False)}
+                    for j, st in enumerate(revised)
+                ]
+                entry = self._assistant_entry({"content": msg.get("content"), "tool_calls": new_calls})
+                messages.append(entry)
+                round_no += 1
+                rec = {"round": round_no, "phase": "act"}
+                trace["rounds"].append(rec)
+                remaining = new_calls
+                break
+            else:
+                remaining = []
+        trace["n_tool_rounds"] = 1 + trace["n_replans"]
+        return round_no + 1
+
+    # ---- the task-level gate as a closing step, for architectures whose loop has ended -----------
+
+    def _verify_answer_with_retry(
+        self, final_text: str, messages: List[Dict[str, Any]], session: SessionState, trace: Dict[str, Any], *, next_round: int
+    ) -> str:
+        """Verify the final answer; on failure send the failed conditions back and take one corrected
+        answer; on a second failure escalate. During the retry the model may inspect the current state
+        (read-only tools) but not change the network, the same rule as PFAgent's own loop."""
+        attempts = 0
+        while True:
+            attempts += 1
+            verdict = verify_final_answer(
+                trace, final_text, request_text=trace.get("request_text"), enforce_v6v7=True,
+                enforce_complete_state=self.config.complete_state_gate,
+            )
+            trace["verification"].append(verdict)
+            if verdict["passed"]:
+                trace["verification_attempts"] = attempts
+                trace["verification_outcome"] = "pass_first" if attempts == 1 else "pass_retry"
+                trace["status"] = "ok"
+                return final_text
+            if attempts >= 2:
+                trace["verification_attempts"] = attempts
+                trace["verification_outcome"] = "abstained"
+                return self._finish(_verification_abstention_text(verdict), session, trace, "verification_failed")
+
+            retry_msg = _verification_retry_message(verdict)
+            trace["verification_retry_messages"].append(retry_msg)
+            session.conversation_history.append({"role": "user", "content": retry_msg})
+            messages.append({"role": "user", "content": retry_msg})
+            rec: Dict[str, Any] = {"round": next_round, "phase": "verification_retry"}
+            trace["rounds"].append(rec)
+            try:
+                msg = self._call_llm(messages, with_tools=True, trace=trace, round_rec=rec)
+            except _LLMCallError as e:
+                return self._finish(e.text, session, trace, "llm_error")
+            entry = self._assistant_entry(msg)
+            session.conversation_history.append(entry)
+            messages.append(entry)
+            calls = msg.get("tool_calls") or []
+            blocked = [tc.get("name") for tc in calls if tc.get("name") in _RETRY_BLOCKED_TOOLS]
+            if blocked:
+                trace["verification_attempts"] = attempts
+                trace["verification_outcome"] = "abstained_retry_mutation"
+                text = (
+                    _verification_abstention_text(verdict)
+                    + " The answer attempted to change the network instead of correcting the report "
+                    f"(blocked tool call(s): {', '.join(blocked)})."
+                )
+                return self._finish(text, session, trace, "verification_failed")
+            next_round += 1
+            if calls:
+                self._execute_tool_calls(calls, messages, session, trace, rec)
+                rec2: Dict[str, Any] = {"round": next_round, "phase": "answer", "final": True}
+                trace["rounds"].append(rec2)
+                messages.append({"role": "user", "content": FINAL_ANSWER_INSTRUCTION})
+                session.conversation_history.append({"role": "user", "content": FINAL_ANSWER_INSTRUCTION})
+                try:
+                    msg = self._call_llm(messages, with_tools=False, trace=trace, round_rec=rec2)
+                except _LLMCallError as e:
+                    return self._finish(e.text, session, trace, "llm_error")
+                entry = self._assistant_entry(msg)
+                session.conversation_history.append(entry)
+                messages.append(entry)
+                next_round += 1
+            final_text = (msg.get("content") or "").strip() or final_text

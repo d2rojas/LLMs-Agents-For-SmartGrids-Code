@@ -33,9 +33,14 @@ V_MAX_PU: float = 1.05
 MAX_LOADING_PERCENT: float = 100.0
 
 NETWORKS = ("case14", "case30", "case57")
+# Every system the harness can run. NETWORKS is what a run covers by default: the
+# three of the submitted paper. 118 and 300 are the largest standard cases and the
+# ones the power-flow case study uses; all twenty instances build on them too.
+ALL_NETWORKS = ("case14", "case30", "case57", "case118", "case300")
 NETWORK_LABELS = {"case14": "IEEE 14-bus", "case30": "IEEE 30-bus", "case57": "IEEE 57-bus",
-                  "case118": "IEEE 118-bus"}
-NETWORK_FOLDER = {"case14": "ieee14", "case30": "ieee30", "case57": "ieee57", "case118": "ieee118"}
+                  "case118": "IEEE 118-bus", "case300": "IEEE 300-bus"}
+NETWORK_FOLDER = {"case14": "ieee14", "case30": "ieee30", "case57": "ieee57", "case118": "ieee118",
+                  "case300": "ieee300"}
 
 # ---------------------------------------------------------------- budgets
 #

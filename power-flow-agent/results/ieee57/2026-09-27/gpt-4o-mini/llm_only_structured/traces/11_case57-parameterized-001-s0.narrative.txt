@@ -1,0 +1,23 @@
+RUN 11  |  case57-parameterized-001-s0  |  llm_only:structured  |  gpt-4o-mini  |  IEEE 57-bus  |  seed 0  |  difficulty parameterized
+Request: Load the IEEE 57-bus system and run an N-1 contingency analysis ranked by min voltage and report the 3 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): { "formulation": [ {"tool": "load_case", "args": {"case_name": "case57"}}, {"tool": "run_powerflow", "args": {}}, {"tool": "run_n1_contingency", "args": {"top_k": 3, "criteria": "min_voltage", "max_ca...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 6681 in / 1892 out tokens, $0.0021, 14.1 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case57") -> run_n1_contingency(top_k=3, criteria="min_voltage")
+  declared: load_case(case_name="case57") -> run_powerflow() -> run_n1_contingency(top_k=3, criteria="min_voltage", max_candidates=0)   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 123, untraceable: 123 -> traceable answer: no
+  untraceable values: ['0.9345 p.u.', '0.9350 p.u.', '0.9360 p.u.', '1.04', '0.0', '1.01', '0.0', '0.99', '0.0', '0.98', '0.0', '0.97', '0.0', '0.96', '0.0', '0.95', '0.0', '0.94', '0.0', '0.93']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: voltage_error
+  against the reference: voltage MAE 0.104 p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case57-parameterized-001-s0_run0.json

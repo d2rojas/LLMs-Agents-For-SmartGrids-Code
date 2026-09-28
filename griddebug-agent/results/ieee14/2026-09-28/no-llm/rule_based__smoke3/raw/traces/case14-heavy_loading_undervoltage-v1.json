@@ -1,0 +1,2679 @@
+{
+ "case_study": "griddebug",
+ "method": "rule_based",
+ "model": "none:rule_based",
+ "request_id": "case14-heavy_loading_undervoltage-v1",
+ "status": "ok",
+ "error": null,
+ "answer": "{\n  \"diagnosis\": {\n    \"fault_type\": \"voltage_setpoint\",\n    \"components\": {\n      \"ext_grid\": [\n        0\n      ]\n    },\n    \"explanation\": \"rule engine: overvoltage, line_overload, gen_at_q_limit\"\n  },\n  \"actions\": [\n    {\n      \"tool\": \"curtail_load\",\n      \"args\": {\n        \"load_index\": 6,\n        \"scale_factor\": 0.8\n      }\n    },\n    {\n      \"tool\": \"scale_all_loads\",\n      \"args\": {\n        \"factor\": 0.8\n      }\n    },\n    {\n      \"tool\": \"scale_all_loads\",\n      \"args\": {\n        \"factor\": 0.8\n      }\n    },\n    {\n      \"tool\": \"scale_all_loads\",\n      \"args\": {\n        \"factor\": 0.8\n      }\n    },\n    {\n      \"tool\": \"scale_all_loads\",\n      \"args\": {\n        \"factor\": 0.8\n      }\n    },\n    {\n      \"tool\": \"curtail_load\",\n      \"args\": {\n        \"load_index\": 10,\n        \"scale_factor\": 0.8\n      }\n    },\n    {\n      \"tool\": \"scale_all_loads\",\n      \"args\": {\n        \"factor\": 0.8\n      }\n    },\n    {\n      \"tool\": \"scale_all_loads\",\n      \"args\": {\n        \"factor\": 0.8\n      }\n    }\n  ],\n  \"final_state\": {\n    \"converged\": true,\n    \"n_new_violations\": 4,\n    \"islanded_load_buses\": []\n  },\n  \"status\": \"not_repaired\",\n  \"remaining_violations\": [\n    \"line 7 at 123.5 %\",\n    \"line 12 at 144.1 %\",\n    \"line 13 at 101.7 %\",\n    \"line 14 at 141.2 %\"\n  ],\n  \"summary\": \"Rules fired: overvoltage, line_overload, gen_at_q_limit. Actions applied: curtail_load, scale_all_loads. Violations remain; see remaining_violations.\"\n}",
+ "messages": [],
+ "rounds": [
+  {
+   "round": 1,
+   "role": "harness",
+   "llm": null,
+   "tools": [
+    {
+     "n": 1,
+     "name": "run_power_flow",
+     "kind": "simulation",
+     "args": {},
+     "output": {
+      "converged": true,
+      "message": "AC power flow (Newton-Raphson) converged."
+     },
+     "ok": true,
+     "latency_s": 0.0305
+    },
+    {
+     "n": 2,
+     "name": "check_voltage_violations",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "limits_pu": {
+       "min": 0.95,
+       "max": 1.05
+      },
+      "new_violations": [
+       {
+        "bus": 3,
+        "vm_pu": 0.9072,
+        "limit": 0.94,
+        "kind": "under"
+       },
+       {
+        "bus": 4,
+        "vm_pu": 0.9238,
+        "limit": 0.94,
+        "kind": "under"
+       },
+       {
+        "bus": 13,
+        "vm_pu": 0.7223,
+        "limit": 0.94,
+        "kind": "under"
+       }
+      ],
+      "n_new_violations": 3,
+      "pre_existing_in_base": {
+       "n": 6,
+       "buses": [
+        6,
+        8,
+        9,
+        10,
+        5,
+        7
+       ]
+      },
+      "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.0006
+    },
+    {
+     "n": 3,
+     "name": "check_overloads",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "threshold_percent": 100.0,
+      "new_overloads": [
+       {
+        "element": "line",
+        "index": 7,
+        "loading_percent": 895.5,
+        "from_bus": 5,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 8,
+        "loading_percent": 236.0,
+        "from_bus": 5,
+        "to_bus": 11
+       },
+       {
+        "element": "line",
+        "index": 9,
+        "loading_percent": 337.3,
+        "from_bus": 5,
+        "to_bus": 12
+       },
+       {
+        "element": "line",
+        "index": 10,
+        "loading_percent": 107.4,
+        "from_bus": 8,
+        "to_bus": 9
+       },
+       {
+        "element": "line",
+        "index": 11,
+        "loading_percent": 276.2,
+        "from_bus": 8,
+        "to_bus": 13
+       },
+       {
+        "element": "line",
+        "index": 12,
+        "loading_percent": 1310.3,
+        "from_bus": 9,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 13,
+        "loading_percent": 782.2,
+        "from_bus": 11,
+        "to_bus": 12
+       },
+       {
+        "element": "line",
+        "index": 14,
+        "loading_percent": 1096.6,
+        "from_bus": 12,
+        "to_bus": 13
+       }
+      ],
+      "n_new_overloads": 8,
+      "pre_existing_in_base": {
+       "n": 0,
+       "elements": []
+      },
+      "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.0007
+    },
+    {
+     "n": 4,
+     "name": "find_disconnected_areas",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "disconnected_buses": [],
+      "connected_buses": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13
+      ],
+      "message": "All buses connected."
+     },
+     "ok": true,
+     "latency_s": 0.0005
+    },
+    {
+     "n": 5,
+     "name": "curtail_load",
+     "kind": "action",
+     "args": {
+      "load_index": 6,
+      "scale_factor": 0.8
+     },
+     "output": {
+      "action": "curtail_load",
+      "success": true,
+      "load_index": 6,
+      "old_p_mw": 45.0,
+      "new_p_mw": 36.0,
+      "scale_factor": 0.8
+     },
+     "ok": true,
+     "latency_s": 0.0001
+    },
+    {
+     "n": 6,
+     "name": "run_power_flow",
+     "kind": "simulation",
+     "args": {},
+     "output": {
+      "converged": true,
+      "message": "AC power flow (Newton-Raphson) converged."
+     },
+     "ok": true,
+     "latency_s": 0.031
+    },
+    {
+     "n": 7,
+     "name": "check_voltage_violations",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "limits_pu": {
+       "min": 0.95,
+       "max": 1.05
+      },
+      "new_violations": [
+       {
+        "bus": 3,
+        "vm_pu": 0.9162,
+        "limit": 0.94,
+        "kind": "under"
+       },
+       {
+        "bus": 4,
+        "vm_pu": 0.9318,
+        "limit": 0.94,
+        "kind": "under"
+       },
+       {
+        "bus": 13,
+        "vm_pu": 0.7425,
+        "limit": 0.94,
+        "kind": "under"
+       }
+      ],
+      "n_new_violations": 3,
+      "pre_existing_in_base": {
+       "n": 6,
+       "buses": [
+        6,
+        8,
+        9,
+        10,
+        5,
+        7
+       ]
+      },
+      "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.0008
+    },
+    {
+     "n": 8,
+     "name": "check_overloads",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "threshold_percent": 100.0,
+      "new_overloads": [
+       {
+        "element": "line",
+        "index": 7,
+        "loading_percent": 815.6,
+        "from_bus": 5,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 8,
+        "loading_percent": 227.2,
+        "from_bus": 5,
+        "to_bus": 11
+       },
+       {
+        "element": "line",
+        "index": 9,
+        "loading_percent": 322.7,
+        "from_bus": 5,
+        "to_bus": 12
+       },
+       {
+        "element": "line",
+        "index": 11,
+        "loading_percent": 283.2,
+        "from_bus": 8,
+        "to_bus": 13
+       },
+       {
+        "element": "line",
+        "index": 12,
+        "loading_percent": 1161.5,
+        "from_bus": 9,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 13,
+        "loading_percent": 742.0,
+        "from_bus": 11,
+        "to_bus": 12
+       },
+       {
+        "element": "line",
+        "index": 14,
+        "loading_percent": 1038.5,
+        "from_bus": 12,
+        "to_bus": 13
+       }
+      ],
+      "n_new_overloads": 7,
+      "pre_existing_in_base": {
+       "n": 0,
+       "elements": []
+      },
+      "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.0007
+    },
+    {
+     "n": 9,
+     "name": "find_disconnected_areas",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "disconnected_buses": [],
+      "connected_buses": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13
+      ],
+      "message": "All buses connected."
+     },
+     "ok": true,
+     "latency_s": 0.0005
+    },
+    {
+     "n": 10,
+     "name": "scale_all_loads",
+     "kind": "action",
+     "args": {
+      "factor": 0.8,
+      "_step": 1
+     },
+     "output": {
+      "action": "scale_all_loads",
+      "success": true,
+      "factor": 0.8,
+      "old_total_p_mw": 477.6,
+      "new_total_p_mw": 382.08
+     },
+     "ok": true,
+     "latency_s": 0.0008
+    },
+    {
+     "n": 11,
+     "name": "run_power_flow",
+     "kind": "simulation",
+     "args": {},
+     "output": {
+      "converged": true,
+      "message": "AC power flow (Newton-Raphson) converged."
+     },
+     "ok": true,
+     "latency_s": 0.0393
+    },
+    {
+     "n": 12,
+     "name": "check_voltage_violations",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "limits_pu": {
+       "min": 0.95,
+       "max": 1.05
+      },
+      "new_violations": [
+       {
+        "bus": 13,
+        "vm_pu": 0.8567,
+        "limit": 0.94,
+        "kind": "under"
+       }
+      ],
+      "n_new_violations": 1,
+      "pre_existing_in_base": {
+       "n": 4,
+       "buses": [
+        8,
+        9,
+        5,
+        7
+       ]
+      },
+      "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.001
+    },
+    {
+     "n": 13,
+     "name": "check_overloads",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "threshold_percent": 100.0,
+      "new_overloads": [
+       {
+        "element": "line",
+        "index": 7,
+        "loading_percent": 552.6,
+        "from_bus": 5,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 8,
+        "loading_percent": 160.5,
+        "from_bus": 5,
+        "to_bus": 11
+       },
+       {
+        "element": "line",
+        "index": 9,
+        "loading_percent": 223.6,
+        "from_bus": 5,
+        "to_bus": 12
+       },
+       {
+        "element": "line",
+        "index": 11,
+        "loading_percent": 208.4,
+        "from_bus": 8,
+        "to_bus": 13
+       },
+       {
+        "element": "line",
+        "index": 12,
+        "loading_percent": 749.1,
+        "from_bus": 9,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 13,
+        "loading_percent": 498.5,
+        "from_bus": 11,
+        "to_bus": 12
+       },
+       {
+        "element": "line",
+        "index": 14,
+        "loading_percent": 695.9,
+        "from_bus": 12,
+        "to_bus": 13
+       }
+      ],
+      "n_new_overloads": 7,
+      "pre_existing_in_base": {
+       "n": 0,
+       "elements": []
+      },
+      "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.001
+    },
+    {
+     "n": 14,
+     "name": "find_disconnected_areas",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "disconnected_buses": [],
+      "connected_buses": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13
+      ],
+      "message": "All buses connected."
+     },
+     "ok": true,
+     "latency_s": 0.0006
+    },
+    {
+     "n": 15,
+     "name": "scale_all_loads",
+     "kind": "action",
+     "args": {
+      "factor": 0.8,
+      "_step": 2
+     },
+     "output": {
+      "action": "scale_all_loads",
+      "success": true,
+      "factor": 0.8,
+      "old_total_p_mw": 382.08,
+      "new_total_p_mw": 305.66
+     },
+     "ok": true,
+     "latency_s": 0.0004
+    },
+    {
+     "n": 16,
+     "name": "run_power_flow",
+     "kind": "simulation",
+     "args": {},
+     "output": {
+      "converged": true,
+      "message": "AC power flow (Newton-Raphson) converged."
+     },
+     "ok": true,
+     "latency_s": 0.0356
+    },
+    {
+     "n": 17,
+     "name": "check_voltage_violations",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "limits_pu": {
+       "min": 0.95,
+       "max": 1.05
+      },
+      "new_violations": [
+       {
+        "bus": 13,
+        "vm_pu": 0.9194,
+        "limit": 0.94,
+        "kind": "under"
+       }
+      ],
+      "n_new_violations": 1,
+      "pre_existing_in_base": {
+       "n": 2,
+       "buses": [
+        5,
+        7
+       ]
+      },
+      "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.0009
+    },
+    {
+     "n": 18,
+     "name": "check_overloads",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "threshold_percent": 100.0,
+      "new_overloads": [
+       {
+        "element": "line",
+        "index": 7,
+        "loading_percent": 400.4,
+        "from_bus": 5,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 8,
+        "loading_percent": 120.1,
+        "from_bus": 5,
+        "to_bus": 11
+       },
+       {
+        "element": "line",
+        "index": 9,
+        "loading_percent": 165.4,
+        "from_bus": 5,
+        "to_bus": 12
+       },
+       {
+        "element": "line",
+        "index": 11,
+        "loading_percent": 162.4,
+        "from_bus": 8,
+        "to_bus": 13
+       },
+       {
+        "element": "line",
+        "index": 12,
+        "loading_percent": 524.1,
+        "from_bus": 9,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 13,
+        "loading_percent": 361.7,
+        "from_bus": 11,
+        "to_bus": 12
+       },
+       {
+        "element": "line",
+        "index": 14,
+        "loading_percent": 504.4,
+        "from_bus": 12,
+        "to_bus": 13
+       }
+      ],
+      "n_new_overloads": 7,
+      "pre_existing_in_base": {
+       "n": 0,
+       "elements": []
+      },
+      "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.0008
+    },
+    {
+     "n": 19,
+     "name": "find_disconnected_areas",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "disconnected_buses": [],
+      "connected_buses": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13
+      ],
+      "message": "All buses connected."
+     },
+     "ok": true,
+     "latency_s": 0.0007
+    },
+    {
+     "n": 20,
+     "name": "scale_all_loads",
+     "kind": "action",
+     "args": {
+      "factor": 0.8,
+      "_step": 3
+     },
+     "output": {
+      "action": "scale_all_loads",
+      "success": true,
+      "factor": 0.8,
+      "old_total_p_mw": 305.66,
+      "new_total_p_mw": 244.53
+     },
+     "ok": true,
+     "latency_s": 0.0005
+    },
+    {
+     "n": 21,
+     "name": "run_power_flow",
+     "kind": "simulation",
+     "args": {},
+     "output": {
+      "converged": true,
+      "message": "AC power flow (Newton-Raphson) converged."
+     },
+     "ok": true,
+     "latency_s": 0.0478
+    },
+    {
+     "n": 22,
+     "name": "check_voltage_violations",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "limits_pu": {
+       "min": 0.95,
+       "max": 1.05
+      },
+      "new_violations": [],
+      "n_new_violations": 0,
+      "pre_existing_in_base": {
+       "n": 2,
+       "buses": [
+        5,
+        7
+       ]
+      },
+      "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.0006
+    },
+    {
+     "n": 23,
+     "name": "check_overloads",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "threshold_percent": 100.0,
+      "new_overloads": [
+       {
+        "element": "line",
+        "index": 7,
+        "loading_percent": 297.0,
+        "from_bus": 5,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 9,
+        "loading_percent": 125.2,
+        "from_bus": 5,
+        "to_bus": 12
+       },
+       {
+        "element": "line",
+        "index": 11,
+        "loading_percent": 129.4,
+        "from_bus": 8,
+        "to_bus": 13
+       },
+       {
+        "element": "line",
+        "index": 12,
+        "loading_percent": 377.1,
+        "from_bus": 9,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 13,
+        "loading_percent": 269.7,
+        "from_bus": 11,
+        "to_bus": 12
+       },
+       {
+        "element": "line",
+        "index": 14,
+        "loading_percent": 376.1,
+        "from_bus": 12,
+        "to_bus": 13
+       }
+      ],
+      "n_new_overloads": 6,
+      "pre_existing_in_base": {
+       "n": 0,
+       "elements": []
+      },
+      "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.0006
+    },
+    {
+     "n": 24,
+     "name": "find_disconnected_areas",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "disconnected_buses": [],
+      "connected_buses": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13
+      ],
+      "message": "All buses connected."
+     },
+     "ok": true,
+     "latency_s": 0.0004
+    },
+    {
+     "n": 25,
+     "name": "scale_all_loads",
+     "kind": "action",
+     "args": {
+      "factor": 0.8,
+      "_step": 4
+     },
+     "output": {
+      "action": "scale_all_loads",
+      "success": true,
+      "factor": 0.8,
+      "old_total_p_mw": 244.53,
+      "new_total_p_mw": 195.62
+     },
+     "ok": true,
+     "latency_s": 0.0003
+    },
+    {
+     "n": 26,
+     "name": "run_power_flow",
+     "kind": "simulation",
+     "args": {},
+     "output": {
+      "converged": true,
+      "message": "AC power flow (Newton-Raphson) converged."
+     },
+     "ok": true,
+     "latency_s": 0.059
+    },
+    {
+     "n": 27,
+     "name": "check_voltage_violations",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "limits_pu": {
+       "min": 0.95,
+       "max": 1.05
+      },
+      "new_violations": [],
+      "n_new_violations": 0,
+      "pre_existing_in_base": {
+       "n": 2,
+       "buses": [
+        5,
+        7
+       ]
+      },
+      "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.0015
+    },
+    {
+     "n": 28,
+     "name": "check_overloads",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "threshold_percent": 100.0,
+      "new_overloads": [
+       {
+        "element": "line",
+        "index": 7,
+        "loading_percent": 222.5,
+        "from_bus": 5,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 11,
+        "loading_percent": 104.8,
+        "from_bus": 8,
+        "to_bus": 13
+       },
+       {
+        "element": "line",
+        "index": 12,
+        "loading_percent": 274.6,
+        "from_bus": 9,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 13,
+        "loading_percent": 203.8,
+        "from_bus": 11,
+        "to_bus": 12
+       },
+       {
+        "element": "line",
+        "index": 14,
+        "loading_percent": 284.2,
+        "from_bus": 12,
+        "to_bus": 13
+       }
+      ],
+      "n_new_overloads": 5,
+      "pre_existing_in_base": {
+       "n": 0,
+       "elements": []
+      },
+      "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.0009
+    },
+    {
+     "n": 29,
+     "name": "find_disconnected_areas",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "disconnected_buses": [],
+      "connected_buses": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13
+      ],
+      "message": "All buses connected."
+     },
+     "ok": true,
+     "latency_s": 0.0007
+    },
+    {
+     "n": 30,
+     "name": "curtail_load",
+     "kind": "action",
+     "args": {
+      "load_index": 10,
+      "scale_factor": 0.8
+     },
+     "output": {
+      "action": "curtail_load",
+      "success": true,
+      "load_index": 10,
+      "old_p_mw": 30.52,
+      "new_p_mw": 24.41,
+      "scale_factor": 0.8
+     },
+     "ok": true,
+     "latency_s": 0.0001
+    },
+    {
+     "n": 31,
+     "name": "run_power_flow",
+     "kind": "simulation",
+     "args": {},
+     "output": {
+      "converged": true,
+      "message": "AC power flow (Newton-Raphson) converged."
+     },
+     "ok": true,
+     "latency_s": 0.0489
+    },
+    {
+     "n": 32,
+     "name": "check_voltage_violations",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "limits_pu": {
+       "min": 0.95,
+       "max": 1.05
+      },
+      "new_violations": [],
+      "n_new_violations": 0,
+      "pre_existing_in_base": {
+       "n": 2,
+       "buses": [
+        5,
+        7
+       ]
+      },
+      "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.0006
+    },
+    {
+     "n": 33,
+     "name": "check_overloads",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "threshold_percent": 100.0,
+      "new_overloads": [
+       {
+        "element": "line",
+        "index": 7,
+        "loading_percent": 216.9,
+        "from_bus": 5,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 12,
+        "loading_percent": 263.9,
+        "from_bus": 9,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 13,
+        "loading_percent": 175.9,
+        "from_bus": 11,
+        "to_bus": 12
+       },
+       {
+        "element": "line",
+        "index": 14,
+        "loading_percent": 243.6,
+        "from_bus": 12,
+        "to_bus": 13
+       }
+      ],
+      "n_new_overloads": 4,
+      "pre_existing_in_base": {
+       "n": 0,
+       "elements": []
+      },
+      "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.0006
+    },
+    {
+     "n": 34,
+     "name": "find_disconnected_areas",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "disconnected_buses": [],
+      "connected_buses": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13
+      ],
+      "message": "All buses connected."
+     },
+     "ok": true,
+     "latency_s": 0.0005
+    },
+    {
+     "n": 35,
+     "name": "scale_all_loads",
+     "kind": "action",
+     "args": {
+      "factor": 0.8,
+      "_step": 5
+     },
+     "output": {
+      "action": "scale_all_loads",
+      "success": true,
+      "factor": 0.8,
+      "old_total_p_mw": 189.52,
+      "new_total_p_mw": 151.62
+     },
+     "ok": true,
+     "latency_s": 0.0003
+    },
+    {
+     "n": 36,
+     "name": "run_power_flow",
+     "kind": "simulation",
+     "args": {},
+     "output": {
+      "converged": true,
+      "message": "AC power flow (Newton-Raphson) converged."
+     },
+     "ok": true,
+     "latency_s": 0.0539
+    },
+    {
+     "n": 37,
+     "name": "check_voltage_violations",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "limits_pu": {
+       "min": 0.95,
+       "max": 1.05
+      },
+      "new_violations": [],
+      "n_new_violations": 0,
+      "pre_existing_in_base": {
+       "n": 3,
+       "buses": [
+        5,
+        7,
+        11
+       ]
+      },
+      "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.0007
+    },
+    {
+     "n": 38,
+     "name": "check_overloads",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "threshold_percent": 100.0,
+      "new_overloads": [
+       {
+        "element": "line",
+        "index": 7,
+        "loading_percent": 163.5,
+        "from_bus": 5,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 12,
+        "loading_percent": 194.1,
+        "from_bus": 9,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 13,
+        "loading_percent": 133.7,
+        "from_bus": 11,
+        "to_bus": 12
+       },
+       {
+        "element": "line",
+        "index": 14,
+        "loading_percent": 185.2,
+        "from_bus": 12,
+        "to_bus": 13
+       }
+      ],
+      "n_new_overloads": 4,
+      "pre_existing_in_base": {
+       "n": 0,
+       "elements": []
+      },
+      "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.0011
+    },
+    {
+     "n": 39,
+     "name": "find_disconnected_areas",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "disconnected_buses": [],
+      "connected_buses": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13
+      ],
+      "message": "All buses connected."
+     },
+     "ok": true,
+     "latency_s": 0.0008
+    },
+    {
+     "n": 40,
+     "name": "scale_all_loads",
+     "kind": "action",
+     "args": {
+      "factor": 0.8,
+      "_step": 6
+     },
+     "output": {
+      "action": "scale_all_loads",
+      "success": true,
+      "factor": 0.8,
+      "old_total_p_mw": 151.62,
+      "new_total_p_mw": 121.29
+     },
+     "ok": true,
+     "latency_s": 0.0005
+    }
+   ]
+  }
+ ],
+ "n_llm_calls": 0,
+ "n_tool_calls": 40,
+ "prompt_tokens": 0,
+ "completion_tokens": 0,
+ "wall_time_s": 1.571,
+ "rules_fired": [
+  "overvoltage",
+  "line_overload",
+  "gen_at_q_limit"
+ ],
+ "harness_declared": null,
+ "system_prompt_hash": null,
+ "request": {
+  "request_id": "case14-heavy_loading_undervoltage-v1",
+  "network": "case14",
+  "scenario_id": "heavy_loading_undervoltage",
+  "variant": 1,
+  "category": "voltage",
+  "label": "Heavy loading under-voltage (3x)",
+  "text": "The AC power flow on the IEEE 14-bus system (case14) converged with 11 new limit violation(s). Diagnose the cause and restore a secure operating point: the power flow converges, no in-service load is on an islanded bus, every bus voltage is within [0.95, 1.05] p.u., and no line or transformer is above 100 % loading, apart from the violations the base network already has. Use only the actions available. Report the diagnosis, the actions taken, and the final state.",
+  "injected": {
+   "fault_type": "load_increase",
+   "components": {
+    "load": [
+     5,
+     6,
+     7,
+     10
+    ]
+   },
+   "description": "The loads at the 4 buses furthest from the slack bus scaled by 5.0\u00d7; Increased reactive power demand causes voltage drop",
+   "also_accepted": []
+  },
+  "initial_state": {
+   "converged": true,
+   "label": "violations",
+   "n_violations": 18,
+   "n_new_violations": 11,
+   "n_voltage": 10,
+   "n_thermal": 8,
+   "voltage": [
+    {
+     "bus": 0,
+     "vm_pu": 1.06,
+     "limit": 1.05,
+     "kind": "over"
+    },
+    {
+     "bus": 3,
+     "vm_pu": 0.9072,
+     "limit": 0.95,
+     "kind": "under"
+    },
+    {
+     "bus": 4,
+     "vm_pu": 0.9238,
+     "limit": 0.95,
+     "kind": "under"
+    },
+    {
+     "bus": 5,
+     "vm_pu": 1.07,
+     "limit": 1.05,
+     "kind": "over"
+    },
+    {
+     "bus": 6,
+     "vm_pu": 0.8879,
+     "limit": 0.95,
+     "kind": "under"
+    },
+    {
+     "bus": 7,
+     "vm_pu": 1.09,
+     "limit": 1.05,
+     "kind": "over"
+    },
+    {
+     "bus": 8,
+     "vm_pu": 0.7766,
+     "limit": 0.95,
+     "kind": "under"
+    },
+    {
+     "bus": 9,
+     "vm_pu": 0.7765,
+     "limit": 0.95,
+     "kind": "under"
+    },
+    {
+     "bus": 10,
+     "vm_pu": 0.897,
+     "limit": 0.95,
+     "kind": "under"
+    },
+    {
+     "bus": 13,
+     "vm_pu": 0.7223,
+     "limit": 0.95,
+     "kind": "under"
+    }
+   ],
+   "thermal": [
+    {
+     "element": "line",
+     "index": 7,
+     "loading_percent": 895.5
+    },
+    {
+     "element": "line",
+     "index": 8,
+     "loading_percent": 236.0
+    },
+    {
+     "element": "line",
+     "index": 9,
+     "loading_percent": 337.3
+    },
+    {
+     "element": "line",
+     "index": 10,
+     "loading_percent": 107.4
+    },
+    {
+     "element": "line",
+     "index": 11,
+     "loading_percent": 276.2
+    },
+    {
+     "element": "line",
+     "index": 12,
+     "loading_percent": 1310.3
+    },
+    {
+     "element": "line",
+     "index": 13,
+     "loading_percent": 782.2
+    },
+    {
+     "element": "line",
+     "index": 14,
+     "loading_percent": 1096.6
+    }
+   ],
+   "new": [
+    "bus:13",
+    "bus:3",
+    "bus:4",
+    "line:10",
+    "line:11",
+    "line:12",
+    "line:13",
+    "line:14",
+    "line:7",
+    "line:8",
+    "line:9"
+   ],
+   "islanded_load_buses": [],
+   "nan_buses": [],
+   "vm_min": 0.7223,
+   "vm_max": 1.09,
+   "max_loading": 1310.3,
+   "secure": false
+  },
+  "base_violations": [
+   "bus:0",
+   "bus:10",
+   "bus:11",
+   "bus:12",
+   "bus:5",
+   "bus:6",
+   "bus:7",
+   "bus:8",
+   "bus:9"
+  ],
+  "network_hash": "d74159f573c75ce9",
+  "base_load_mw": 259.0
+ },
+ "tool_log": [
+  {
+   "n": 1,
+   "name": "run_power_flow",
+   "kind": "simulation",
+   "args": {},
+   "output": {
+    "converged": true,
+    "message": "AC power flow (Newton-Raphson) converged."
+   },
+   "ok": true,
+   "latency_s": 0.0305
+  },
+  {
+   "n": 2,
+   "name": "check_voltage_violations",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "limits_pu": {
+     "min": 0.95,
+     "max": 1.05
+    },
+    "new_violations": [
+     {
+      "bus": 3,
+      "vm_pu": 0.9072,
+      "limit": 0.94,
+      "kind": "under"
+     },
+     {
+      "bus": 4,
+      "vm_pu": 0.9238,
+      "limit": 0.94,
+      "kind": "under"
+     },
+     {
+      "bus": 13,
+      "vm_pu": 0.7223,
+      "limit": 0.94,
+      "kind": "under"
+     }
+    ],
+    "n_new_violations": 3,
+    "pre_existing_in_base": {
+     "n": 6,
+     "buses": [
+      6,
+      8,
+      9,
+      10,
+      5,
+      7
+     ]
+    },
+    "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.0006
+  },
+  {
+   "n": 3,
+   "name": "check_overloads",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "threshold_percent": 100.0,
+    "new_overloads": [
+     {
+      "element": "line",
+      "index": 7,
+      "loading_percent": 895.5,
+      "from_bus": 5,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 8,
+      "loading_percent": 236.0,
+      "from_bus": 5,
+      "to_bus": 11
+     },
+     {
+      "element": "line",
+      "index": 9,
+      "loading_percent": 337.3,
+      "from_bus": 5,
+      "to_bus": 12
+     },
+     {
+      "element": "line",
+      "index": 10,
+      "loading_percent": 107.4,
+      "from_bus": 8,
+      "to_bus": 9
+     },
+     {
+      "element": "line",
+      "index": 11,
+      "loading_percent": 276.2,
+      "from_bus": 8,
+      "to_bus": 13
+     },
+     {
+      "element": "line",
+      "index": 12,
+      "loading_percent": 1310.3,
+      "from_bus": 9,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 13,
+      "loading_percent": 782.2,
+      "from_bus": 11,
+      "to_bus": 12
+     },
+     {
+      "element": "line",
+      "index": 14,
+      "loading_percent": 1096.6,
+      "from_bus": 12,
+      "to_bus": 13
+     }
+    ],
+    "n_new_overloads": 8,
+    "pre_existing_in_base": {
+     "n": 0,
+     "elements": []
+    },
+    "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.0007
+  },
+  {
+   "n": 4,
+   "name": "find_disconnected_areas",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "disconnected_buses": [],
+    "connected_buses": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13
+    ],
+    "message": "All buses connected."
+   },
+   "ok": true,
+   "latency_s": 0.0005
+  },
+  {
+   "n": 5,
+   "name": "curtail_load",
+   "kind": "action",
+   "args": {
+    "load_index": 6,
+    "scale_factor": 0.8
+   },
+   "output": {
+    "action": "curtail_load",
+    "success": true,
+    "load_index": 6,
+    "old_p_mw": 45.0,
+    "new_p_mw": 36.0,
+    "scale_factor": 0.8
+   },
+   "ok": true,
+   "latency_s": 0.0001
+  },
+  {
+   "n": 6,
+   "name": "run_power_flow",
+   "kind": "simulation",
+   "args": {},
+   "output": {
+    "converged": true,
+    "message": "AC power flow (Newton-Raphson) converged."
+   },
+   "ok": true,
+   "latency_s": 0.031
+  },
+  {
+   "n": 7,
+   "name": "check_voltage_violations",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "limits_pu": {
+     "min": 0.95,
+     "max": 1.05
+    },
+    "new_violations": [
+     {
+      "bus": 3,
+      "vm_pu": 0.9162,
+      "limit": 0.94,
+      "kind": "under"
+     },
+     {
+      "bus": 4,
+      "vm_pu": 0.9318,
+      "limit": 0.94,
+      "kind": "under"
+     },
+     {
+      "bus": 13,
+      "vm_pu": 0.7425,
+      "limit": 0.94,
+      "kind": "under"
+     }
+    ],
+    "n_new_violations": 3,
+    "pre_existing_in_base": {
+     "n": 6,
+     "buses": [
+      6,
+      8,
+      9,
+      10,
+      5,
+      7
+     ]
+    },
+    "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.0008
+  },
+  {
+   "n": 8,
+   "name": "check_overloads",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "threshold_percent": 100.0,
+    "new_overloads": [
+     {
+      "element": "line",
+      "index": 7,
+      "loading_percent": 815.6,
+      "from_bus": 5,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 8,
+      "loading_percent": 227.2,
+      "from_bus": 5,
+      "to_bus": 11
+     },
+     {
+      "element": "line",
+      "index": 9,
+      "loading_percent": 322.7,
+      "from_bus": 5,
+      "to_bus": 12
+     },
+     {
+      "element": "line",
+      "index": 11,
+      "loading_percent": 283.2,
+      "from_bus": 8,
+      "to_bus": 13
+     },
+     {
+      "element": "line",
+      "index": 12,
+      "loading_percent": 1161.5,
+      "from_bus": 9,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 13,
+      "loading_percent": 742.0,
+      "from_bus": 11,
+      "to_bus": 12
+     },
+     {
+      "element": "line",
+      "index": 14,
+      "loading_percent": 1038.5,
+      "from_bus": 12,
+      "to_bus": 13
+     }
+    ],
+    "n_new_overloads": 7,
+    "pre_existing_in_base": {
+     "n": 0,
+     "elements": []
+    },
+    "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.0007
+  },
+  {
+   "n": 9,
+   "name": "find_disconnected_areas",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "disconnected_buses": [],
+    "connected_buses": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13
+    ],
+    "message": "All buses connected."
+   },
+   "ok": true,
+   "latency_s": 0.0005
+  },
+  {
+   "n": 10,
+   "name": "scale_all_loads",
+   "kind": "action",
+   "args": {
+    "factor": 0.8,
+    "_step": 1
+   },
+   "output": {
+    "action": "scale_all_loads",
+    "success": true,
+    "factor": 0.8,
+    "old_total_p_mw": 477.6,
+    "new_total_p_mw": 382.08
+   },
+   "ok": true,
+   "latency_s": 0.0008
+  },
+  {
+   "n": 11,
+   "name": "run_power_flow",
+   "kind": "simulation",
+   "args": {},
+   "output": {
+    "converged": true,
+    "message": "AC power flow (Newton-Raphson) converged."
+   },
+   "ok": true,
+   "latency_s": 0.0393
+  },
+  {
+   "n": 12,
+   "name": "check_voltage_violations",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "limits_pu": {
+     "min": 0.95,
+     "max": 1.05
+    },
+    "new_violations": [
+     {
+      "bus": 13,
+      "vm_pu": 0.8567,
+      "limit": 0.94,
+      "kind": "under"
+     }
+    ],
+    "n_new_violations": 1,
+    "pre_existing_in_base": {
+     "n": 4,
+     "buses": [
+      8,
+      9,
+      5,
+      7
+     ]
+    },
+    "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.001
+  },
+  {
+   "n": 13,
+   "name": "check_overloads",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "threshold_percent": 100.0,
+    "new_overloads": [
+     {
+      "element": "line",
+      "index": 7,
+      "loading_percent": 552.6,
+      "from_bus": 5,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 8,
+      "loading_percent": 160.5,
+      "from_bus": 5,
+      "to_bus": 11
+     },
+     {
+      "element": "line",
+      "index": 9,
+      "loading_percent": 223.6,
+      "from_bus": 5,
+      "to_bus": 12
+     },
+     {
+      "element": "line",
+      "index": 11,
+      "loading_percent": 208.4,
+      "from_bus": 8,
+      "to_bus": 13
+     },
+     {
+      "element": "line",
+      "index": 12,
+      "loading_percent": 749.1,
+      "from_bus": 9,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 13,
+      "loading_percent": 498.5,
+      "from_bus": 11,
+      "to_bus": 12
+     },
+     {
+      "element": "line",
+      "index": 14,
+      "loading_percent": 695.9,
+      "from_bus": 12,
+      "to_bus": 13
+     }
+    ],
+    "n_new_overloads": 7,
+    "pre_existing_in_base": {
+     "n": 0,
+     "elements": []
+    },
+    "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.001
+  },
+  {
+   "n": 14,
+   "name": "find_disconnected_areas",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "disconnected_buses": [],
+    "connected_buses": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13
+    ],
+    "message": "All buses connected."
+   },
+   "ok": true,
+   "latency_s": 0.0006
+  },
+  {
+   "n": 15,
+   "name": "scale_all_loads",
+   "kind": "action",
+   "args": {
+    "factor": 0.8,
+    "_step": 2
+   },
+   "output": {
+    "action": "scale_all_loads",
+    "success": true,
+    "factor": 0.8,
+    "old_total_p_mw": 382.08,
+    "new_total_p_mw": 305.66
+   },
+   "ok": true,
+   "latency_s": 0.0004
+  },
+  {
+   "n": 16,
+   "name": "run_power_flow",
+   "kind": "simulation",
+   "args": {},
+   "output": {
+    "converged": true,
+    "message": "AC power flow (Newton-Raphson) converged."
+   },
+   "ok": true,
+   "latency_s": 0.0356
+  },
+  {
+   "n": 17,
+   "name": "check_voltage_violations",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "limits_pu": {
+     "min": 0.95,
+     "max": 1.05
+    },
+    "new_violations": [
+     {
+      "bus": 13,
+      "vm_pu": 0.9194,
+      "limit": 0.94,
+      "kind": "under"
+     }
+    ],
+    "n_new_violations": 1,
+    "pre_existing_in_base": {
+     "n": 2,
+     "buses": [
+      5,
+      7
+     ]
+    },
+    "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.0009
+  },
+  {
+   "n": 18,
+   "name": "check_overloads",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "threshold_percent": 100.0,
+    "new_overloads": [
+     {
+      "element": "line",
+      "index": 7,
+      "loading_percent": 400.4,
+      "from_bus": 5,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 8,
+      "loading_percent": 120.1,
+      "from_bus": 5,
+      "to_bus": 11
+     },
+     {
+      "element": "line",
+      "index": 9,
+      "loading_percent": 165.4,
+      "from_bus": 5,
+      "to_bus": 12
+     },
+     {
+      "element": "line",
+      "index": 11,
+      "loading_percent": 162.4,
+      "from_bus": 8,
+      "to_bus": 13
+     },
+     {
+      "element": "line",
+      "index": 12,
+      "loading_percent": 524.1,
+      "from_bus": 9,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 13,
+      "loading_percent": 361.7,
+      "from_bus": 11,
+      "to_bus": 12
+     },
+     {
+      "element": "line",
+      "index": 14,
+      "loading_percent": 504.4,
+      "from_bus": 12,
+      "to_bus": 13
+     }
+    ],
+    "n_new_overloads": 7,
+    "pre_existing_in_base": {
+     "n": 0,
+     "elements": []
+    },
+    "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.0008
+  },
+  {
+   "n": 19,
+   "name": "find_disconnected_areas",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "disconnected_buses": [],
+    "connected_buses": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13
+    ],
+    "message": "All buses connected."
+   },
+   "ok": true,
+   "latency_s": 0.0007
+  },
+  {
+   "n": 20,
+   "name": "scale_all_loads",
+   "kind": "action",
+   "args": {
+    "factor": 0.8,
+    "_step": 3
+   },
+   "output": {
+    "action": "scale_all_loads",
+    "success": true,
+    "factor": 0.8,
+    "old_total_p_mw": 305.66,
+    "new_total_p_mw": 244.53
+   },
+   "ok": true,
+   "latency_s": 0.0005
+  },
+  {
+   "n": 21,
+   "name": "run_power_flow",
+   "kind": "simulation",
+   "args": {},
+   "output": {
+    "converged": true,
+    "message": "AC power flow (Newton-Raphson) converged."
+   },
+   "ok": true,
+   "latency_s": 0.0478
+  },
+  {
+   "n": 22,
+   "name": "check_voltage_violations",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "limits_pu": {
+     "min": 0.95,
+     "max": 1.05
+    },
+    "new_violations": [],
+    "n_new_violations": 0,
+    "pre_existing_in_base": {
+     "n": 2,
+     "buses": [
+      5,
+      7
+     ]
+    },
+    "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.0006
+  },
+  {
+   "n": 23,
+   "name": "check_overloads",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "threshold_percent": 100.0,
+    "new_overloads": [
+     {
+      "element": "line",
+      "index": 7,
+      "loading_percent": 297.0,
+      "from_bus": 5,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 9,
+      "loading_percent": 125.2,
+      "from_bus": 5,
+      "to_bus": 12
+     },
+     {
+      "element": "line",
+      "index": 11,
+      "loading_percent": 129.4,
+      "from_bus": 8,
+      "to_bus": 13
+     },
+     {
+      "element": "line",
+      "index": 12,
+      "loading_percent": 377.1,
+      "from_bus": 9,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 13,
+      "loading_percent": 269.7,
+      "from_bus": 11,
+      "to_bus": 12
+     },
+     {
+      "element": "line",
+      "index": 14,
+      "loading_percent": 376.1,
+      "from_bus": 12,
+      "to_bus": 13
+     }
+    ],
+    "n_new_overloads": 6,
+    "pre_existing_in_base": {
+     "n": 0,
+     "elements": []
+    },
+    "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.0006
+  },
+  {
+   "n": 24,
+   "name": "find_disconnected_areas",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "disconnected_buses": [],
+    "connected_buses": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13
+    ],
+    "message": "All buses connected."
+   },
+   "ok": true,
+   "latency_s": 0.0004
+  },
+  {
+   "n": 25,
+   "name": "scale_all_loads",
+   "kind": "action",
+   "args": {
+    "factor": 0.8,
+    "_step": 4
+   },
+   "output": {
+    "action": "scale_all_loads",
+    "success": true,
+    "factor": 0.8,
+    "old_total_p_mw": 244.53,
+    "new_total_p_mw": 195.62
+   },
+   "ok": true,
+   "latency_s": 0.0003
+  },
+  {
+   "n": 26,
+   "name": "run_power_flow",
+   "kind": "simulation",
+   "args": {},
+   "output": {
+    "converged": true,
+    "message": "AC power flow (Newton-Raphson) converged."
+   },
+   "ok": true,
+   "latency_s": 0.059
+  },
+  {
+   "n": 27,
+   "name": "check_voltage_violations",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "limits_pu": {
+     "min": 0.95,
+     "max": 1.05
+    },
+    "new_violations": [],
+    "n_new_violations": 0,
+    "pre_existing_in_base": {
+     "n": 2,
+     "buses": [
+      5,
+      7
+     ]
+    },
+    "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.0015
+  },
+  {
+   "n": 28,
+   "name": "check_overloads",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "threshold_percent": 100.0,
+    "new_overloads": [
+     {
+      "element": "line",
+      "index": 7,
+      "loading_percent": 222.5,
+      "from_bus": 5,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 11,
+      "loading_percent": 104.8,
+      "from_bus": 8,
+      "to_bus": 13
+     },
+     {
+      "element": "line",
+      "index": 12,
+      "loading_percent": 274.6,
+      "from_bus": 9,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 13,
+      "loading_percent": 203.8,
+      "from_bus": 11,
+      "to_bus": 12
+     },
+     {
+      "element": "line",
+      "index": 14,
+      "loading_percent": 284.2,
+      "from_bus": 12,
+      "to_bus": 13
+     }
+    ],
+    "n_new_overloads": 5,
+    "pre_existing_in_base": {
+     "n": 0,
+     "elements": []
+    },
+    "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.0009
+  },
+  {
+   "n": 29,
+   "name": "find_disconnected_areas",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "disconnected_buses": [],
+    "connected_buses": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13
+    ],
+    "message": "All buses connected."
+   },
+   "ok": true,
+   "latency_s": 0.0007
+  },
+  {
+   "n": 30,
+   "name": "curtail_load",
+   "kind": "action",
+   "args": {
+    "load_index": 10,
+    "scale_factor": 0.8
+   },
+   "output": {
+    "action": "curtail_load",
+    "success": true,
+    "load_index": 10,
+    "old_p_mw": 30.52,
+    "new_p_mw": 24.41,
+    "scale_factor": 0.8
+   },
+   "ok": true,
+   "latency_s": 0.0001
+  },
+  {
+   "n": 31,
+   "name": "run_power_flow",
+   "kind": "simulation",
+   "args": {},
+   "output": {
+    "converged": true,
+    "message": "AC power flow (Newton-Raphson) converged."
+   },
+   "ok": true,
+   "latency_s": 0.0489
+  },
+  {
+   "n": 32,
+   "name": "check_voltage_violations",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "limits_pu": {
+     "min": 0.95,
+     "max": 1.05
+    },
+    "new_violations": [],
+    "n_new_violations": 0,
+    "pre_existing_in_base": {
+     "n": 2,
+     "buses": [
+      5,
+      7
+     ]
+    },
+    "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.0006
+  },
+  {
+   "n": 33,
+   "name": "check_overloads",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "threshold_percent": 100.0,
+    "new_overloads": [
+     {
+      "element": "line",
+      "index": 7,
+      "loading_percent": 216.9,
+      "from_bus": 5,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 12,
+      "loading_percent": 263.9,
+      "from_bus": 9,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 13,
+      "loading_percent": 175.9,
+      "from_bus": 11,
+      "to_bus": 12
+     },
+     {
+      "element": "line",
+      "index": 14,
+      "loading_percent": 243.6,
+      "from_bus": 12,
+      "to_bus": 13
+     }
+    ],
+    "n_new_overloads": 4,
+    "pre_existing_in_base": {
+     "n": 0,
+     "elements": []
+    },
+    "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.0006
+  },
+  {
+   "n": 34,
+   "name": "find_disconnected_areas",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "disconnected_buses": [],
+    "connected_buses": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13
+    ],
+    "message": "All buses connected."
+   },
+   "ok": true,
+   "latency_s": 0.0005
+  },
+  {
+   "n": 35,
+   "name": "scale_all_loads",
+   "kind": "action",
+   "args": {
+    "factor": 0.8,
+    "_step": 5
+   },
+   "output": {
+    "action": "scale_all_loads",
+    "success": true,
+    "factor": 0.8,
+    "old_total_p_mw": 189.52,
+    "new_total_p_mw": 151.62
+   },
+   "ok": true,
+   "latency_s": 0.0003
+  },
+  {
+   "n": 36,
+   "name": "run_power_flow",
+   "kind": "simulation",
+   "args": {},
+   "output": {
+    "converged": true,
+    "message": "AC power flow (Newton-Raphson) converged."
+   },
+   "ok": true,
+   "latency_s": 0.0539
+  },
+  {
+   "n": 37,
+   "name": "check_voltage_violations",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "limits_pu": {
+     "min": 0.95,
+     "max": 1.05
+    },
+    "new_violations": [],
+    "n_new_violations": 0,
+    "pre_existing_in_base": {
+     "n": 3,
+     "buses": [
+      5,
+      7,
+      11
+     ]
+    },
+    "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.0007
+  },
+  {
+   "n": 38,
+   "name": "check_overloads",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "threshold_percent": 100.0,
+    "new_overloads": [
+     {
+      "element": "line",
+      "index": 7,
+      "loading_percent": 163.5,
+      "from_bus": 5,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 12,
+      "loading_percent": 194.1,
+      "from_bus": 9,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 13,
+      "loading_percent": 133.7,
+      "from_bus": 11,
+      "to_bus": 12
+     },
+     {
+      "element": "line",
+      "index": 14,
+      "loading_percent": 185.2,
+      "from_bus": 12,
+      "to_bus": 13
+     }
+    ],
+    "n_new_overloads": 4,
+    "pre_existing_in_base": {
+     "n": 0,
+     "elements": []
+    },
+    "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.0011
+  },
+  {
+   "n": 39,
+   "name": "find_disconnected_areas",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "disconnected_buses": [],
+    "connected_buses": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13
+    ],
+    "message": "All buses connected."
+   },
+   "ok": true,
+   "latency_s": 0.0008
+  },
+  {
+   "n": 40,
+   "name": "scale_all_loads",
+   "kind": "action",
+   "args": {
+    "factor": 0.8,
+    "_step": 6
+   },
+   "output": {
+    "action": "scale_all_loads",
+    "success": true,
+    "factor": 0.8,
+    "old_total_p_mw": 151.62,
+    "new_total_p_mw": 121.29
+   },
+   "ok": true,
+   "latency_s": 0.0005
+  }
+ ],
+ "scored": {
+  "common_json_ok": true,
+  "common_status": "not_repaired",
+  "common_claims_repaired": false,
+  "common_declares_failure": true,
+  "common_converged": true,
+  "common_secure": false,
+  "common_islanded": [],
+  "common_n_violations": 12,
+  "common_n_new_violations": 4,
+  "common_load_served_mw": 121.29,
+  "common_load_served_pct": 46.8,
+  "common_repaired": false,
+  "common_improved": true,
+  "common_feasible": true,
+  "common_formulation_exact": false,
+  "common_formulation_error_type": "wrong_type",
+  "common_formulation_detail": "answer voltage_setpoint, injected load_increase",
+  "common_n_numbers": 8,
+  "common_n_untraceable": 4,
+  "common_traceable": false,
+  "common_escalated": true,
+  "common_escalation_reason": "declared not_repaired",
+  "common_escalation_kind": "budget exhausted",
+  "common_solved": false,
+  "common_reason": "escalated: declared not_repaired",
+  "common_outcome": "escalated",
+  "common_gate_passed": null,
+  "common_gate_failed": null
+ }
+}

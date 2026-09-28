@@ -2,8 +2,9 @@
 
 Offline: no API key, no LLM call, no network. Every "reply" here is written by
 the test in the format the prompt asks for, which is the point of the round-trip
-tests: a prompt is only useful if a reply that obeys it is readable by both
-``methods.prompting.parse.parse_llm_schedule`` (the schedule) and
+tests: a prompt is only useful if a reply that obeys it is readable by the three
+readers, ``methods.prompting.parse.read_reply`` (the schedule and the declared
+formulation), ``evaluation.formulation`` (the formulation term) and
 ``evaluation.requests.extract_answer`` (the answer to the question). An
 unextractable answer on a checkable request is scored as wrong, so the format has
 to survive extraction for every variant the benchmark can pose.
@@ -14,11 +15,16 @@ from datetime import date
 import numpy as np
 import pytest
 
+import json
+
+import methods
 from methods.prompting import strategies as st
-from methods.prompting.parse import parse_llm_schedule
+from methods.prompting.parse import read_reply
 from data.format.schema import DaySessions, Session
 from evaluation import requests as rq
+from evaluation.formulation import formulation_exact, problem_from_dict
 from evaluation.outcome import PASS, check_answer
+from evaluation.runner import llm_only_answer_text
 
 DT = 0.25
 N_STEPS = 96
@@ -203,11 +209,18 @@ def test_prompt_does_not_leak_the_structured_formulation(
     prompt = st.build_prompt_text(strategy, request_fixture)
     head = prompt[: prompt.index(request_fixture.text.strip())]
     tail = prompt[prompt.index(request_fixture.text.strip()) + len(request_fixture.text.strip()) :]
+    # The contract shows the schema with example values; the request's own
+    # values must not be among them, or the example would be a crib.
+    dt = request_fixture.day.dt_hours
     for outside in (head, tail):
         assert "arrival_idx" not in outside
-        assert "energy_kwh" not in outside
-        assert f"{request_fixture.site_cap_kw:.2f}" not in outside
-        assert str(request_fixture.peak_price) not in outside
+        for session in request_fixture.day.sessions:
+            assert f'"energy_kwh": {session.energy_kwh}' not in outside
+            assert f'"arrival_hour": {session.arrival_idx * dt}' not in outside
+            assert f'"departure_hour": {session.departure_idx * dt}' not in outside
+        assert f'"site_cap_kw": {request_fixture.site_cap_kw:.1f}' not in outside
+        assert f'"peak_price": {request_fixture.peak_price}' not in outside
+        assert f'"off_peak_price": {request_fixture.off_peak_price}' not in outside
 
 
 @pytest.mark.parametrize("strategy", ["structured", "chain_of_thought"])
@@ -219,6 +232,7 @@ def test_prompt_states_the_horizon_and_the_label_mapping(
     assert str(N_STEPS) in prompt
     assert f"{DT:.4f}" in prompt
     assert f"EV {len(request_fixture.day.sessions)}" in prompt
+    assert st._N_SESSIONS_TOKEN not in prompt
 
 
 def test_empty_request_text_is_rejected(request_fixture: rq.EVRequest) -> None:
@@ -243,14 +257,6 @@ def test_describe_covers_every_implemented_strategy() -> None:
 # --------------------------------------------------------------------------- round trip
 
 
-def _schedule_rows(schedule: np.ndarray) -> str:
-    """Render a schedule the way the prompt asks the model to write it."""
-    return "\n".join(
-        f"EV {i + 1}: " + " ".join(f"{v:.4f}" for v in row)
-        for i, row in enumerate(schedule)
-    )
-
-
 def _reference_schedule(request: rq.EVRequest) -> np.ndarray:
     """A feasible schedule for the day, used as the body of a simulated reply."""
     day = request.day
@@ -262,61 +268,121 @@ def _reference_schedule(request: rq.EVRequest) -> np.ndarray:
     return schedule
 
 
+def _contract_reply(request: rq.EVRequest, answer: object = "$4.20") -> str:
+    """Render the reply the way the output contract asks the model to write it."""
+    day = request.day
+    sessions, schedule = [], {}
+    for i, session in enumerate(day.sessions):
+        label = f"EV {i + 1}"
+        sessions.append(
+            {
+                "session_id": label,
+                "arrival_hour": session.arrival_idx * day.dt_hours,
+                "departure_hour": session.departure_idx * day.dt_hours,
+                "energy_kwh": session.energy_kwh,
+                "max_power_kw": session.max_power_kw,
+            }
+        )
+        power = _reference_schedule(request)[i, session.arrival_idx]
+        schedule[label] = [[session.arrival_idx * day.dt_hours, session.departure_idx * day.dt_hours, round(float(power), 4)]]
+    return json.dumps(
+        {
+            "formulation": {
+                "sessions": sessions,
+                "site_cap_kw": request.site_cap_kw,
+                "peak_price": request.peak_price,
+                "off_peak_price": request.off_peak_price,
+            },
+            "schedule": schedule,
+            "answer": answer,
+            "cannot_answer": None,
+        },
+        indent=1,
+    )
+
+
 @pytest.mark.parametrize("strategy", ["structured", "chain_of_thought"])
 def test_reply_in_the_prompted_format_parses_back(strategy: str) -> None:
     """A reply that obeys the output section round-trips with no repair at all."""
     request = _request()
     st.build_messages(strategy, request)  # the format under test
-    schedule = _reference_schedule(request)
-    reply = f"{_schedule_rows(schedule)}\n{st.ANSWER_PREFIX} $4.20\n"
-
-    result = parse_llm_schedule(reply, request.day)
-    assert result.success is True
-    assert result.repairs.changed is False
-    # The output section asks for four decimals, so a round trip can only recover
-    # the schedule to half of the last digit. Tighter than this would test the
-    # float printer, not the parser.
-    assert result.schedule == pytest.approx(schedule, abs=5e-5)
+    read = read_reply(_contract_reply(request), request.day)
+    assert read.format == "json"
+    assert read.schedule.success is True
+    assert read.schedule.repairs.changed is False
+    # Four decimals in the reply: a round trip recovers the schedule to half of
+    # the last digit and no better.
+    assert read.schedule.schedule == pytest.approx(_reference_schedule(request), abs=5e-5)
 
 
-def test_chain_of_thought_reasoning_does_not_break_the_schedule_parse() -> None:
-    """Plain-text reasoning before the rows is allowed and must be ignored."""
+def test_the_declared_formulation_is_scored_by_the_shared_function() -> None:
+    """The formulation field goes through evaluation.formulation like every method's."""
+    request = _request()
+    read = read_reply(_contract_reply(request), request.day)
+    problem = problem_from_dict(read.formulation)
+    assert problem is not None
+    verdict = formulation_exact(problem, request.day, dt_hours=request.day.dt_hours)
+    assert verdict.formulation_exact is True
+    assert verdict.n_sessions_exact == len(request.day.sessions)
+
+
+def test_a_misread_clock_in_the_formulation_is_caught() -> None:
+    """A quarter to eleven read as 11:15 is a wrong_field on that car, nothing else."""
+    request = _request()
+    reply = json.loads(_contract_reply(request))
+    reply["formulation"]["sessions"][0]["departure_hour"] += 0.5
+    read = read_reply(json.dumps(reply), request.day)
+    verdict = formulation_exact(problem_from_dict(read.formulation), request.day, dt_hours=request.day.dt_hours)
+    assert verdict.formulation_exact is False
+    assert verdict.formulation_error_type == "wrong_field"
+    assert verdict.n_sessions_exact == len(request.day.sessions) - 1
+
+
+def test_chain_of_thought_reasoning_does_not_break_the_reply_read() -> None:
+    """Plain-text reasoning before the object is allowed and must be ignored."""
+    request = _request()
+    reply = (
+        "Step 1: EV 1 arrives at 8.0 and leaves at 17.0, and needs 15 kWh.\n"
+        "Step 2: its window is 9 h long, so it needs about 1.67 kW on average {on average}.\n"
+        "Step 5: the site limit is never binding here.\n\n"
+        f"{_contract_reply(request)}\n"
+    )
+    read = read_reply(reply, request.day)
+    assert read.format == "json"
+    assert read.schedule.success is True
+    assert read.schedule.repairs.changed is False
+    assert read.schedule.schedule == pytest.approx(_reference_schedule(request), abs=5e-5)
+
+
+def test_a_reply_that_ignores_the_contract_is_still_read_as_rows() -> None:
+    """The matrix format of the runs before 2026-09-28 stays readable, for the rescore."""
     request = _request()
     schedule = _reference_schedule(request)
-    reply = (
-        "Step 1: EV 1 arrives at step 32 and leaves at step 68, and needs 15 kWh.\n"
-        "Step 2: its window is 36 steps long, so it needs about 1.67 kW on average.\n"
-        "Step 5: the site limit is never binding here.\n\n"
-        f"{_schedule_rows(schedule)}\n{st.ANSWER_PREFIX} $4.20\n"
-    )
-
-    result = parse_llm_schedule(reply, request.day)
-    assert result.success is True
-    assert result.repairs.changed is False
-    # The output section asks for four decimals, so a round trip can only recover
-    # the schedule to half of the last digit. Tighter than this would test the
-    # float printer, not the parser.
-    assert result.schedule == pytest.approx(schedule, abs=5e-5)
+    rows = "\n".join(f"EV {i + 1}: " + " ".join(f"{v:.4f}" for v in row) for i, row in enumerate(schedule))
+    read = read_reply(rows + "\nAnswer: $4.20\n", request.day)
+    assert read.format == "matrix"
+    assert read.formulation is None
+    assert read.schedule.success is True
+    assert read.schedule.schedule == pytest.approx(schedule, abs=5e-5)
+    assert llm_only_answer_text(read, rows + "\nAnswer: $4.20\n").endswith("Answer: $4.20\n")
 
 
-# One reply shape per checkable variant, phrased the way the output section asks.
-_ANSWER_REPLIES = {
-    "cost_question": "{p} $12.34",
-    "unmet_question": "{p} 4.50 kWh undelivered",
-    "served_share": "{p} 87.5 percent of the cars are fully served",
-    "feasible_yesno": "{p} yes",
-    "total_energy_requested": "{p} 44.25 kWh in total",
-    "cars_plugged_in_at": "{p} 3 cars are plugged in",
-    "largest_request_car": "{p} EV 2 needs the most energy",
-    "capacity_shortfall_cars": "{p} EV 2 and EV 3 cannot be fully served",
+# One answer per checkable variant, phrased the way the output section asks.
+_ANSWERS = {
+    "cost_question": "$12.34",
+    "unmet_question": "4.50 kWh undelivered",
+    "served_share": "87.5 percent of the requested energy is delivered",
+    "feasible_yesno": "yes",
+    "total_energy_requested": "44.25 kWh in total",
+    "cars_plugged_in_at": "3 cars are plugged in",
+    "largest_request_car": "EV 2 needs the most energy",
+    "capacity_shortfall_cars": "EV 2 and EV 3 cannot be fully served",
 }
 
 
-@pytest.mark.parametrize("variant,template", sorted(_ANSWER_REPLIES.items()))
-def test_answer_line_survives_extraction_for_every_variant(
-    variant: str, template: str
-) -> None:
-    """The prompted answer line is readable by evaluation.requests.extract_answer.
+@pytest.mark.parametrize("variant,answer", sorted(_ANSWERS.items()))
+def test_answer_field_survives_extraction_for_every_variant(variant: str, answer: str) -> None:
+    """The prompted answer shape is readable by evaluation.requests.extract_answer.
 
     None from the extractor is scored as wrong, so a shape the extractor cannot
     read would fail this row for reasons that have nothing to do with the model.
@@ -324,48 +390,113 @@ def test_answer_line_survives_extraction_for_every_variant(
     request = _request(variant=variant)
     assert request.variant == variant
     assert request.checkable is True
-
-    schedule = _reference_schedule(request)
-    answer_line = template.format(p=st.ANSWER_PREFIX)
-    reply = f"{_schedule_rows(schedule)}\n{answer_line}\n"
-
-    extracted = rq.extract_answer(reply, request)
-    assert extracted is not None, f"{variant}: {answer_line!r} did not extract"
+    reply = _contract_reply(request, answer=answer)
+    text = llm_only_answer_text(read_reply(reply, request.day), reply)
+    assert text == f"{st.ANSWER_PREFIX} {answer}"
+    assert rq.extract_answer(text, request) is not None, f"{variant}: {answer!r} did not extract"
 
 
-def test_answer_line_is_not_confused_by_the_schedule_numbers() -> None:
-    """96 numbers per row precede the answer; the answer line still wins."""
+def test_the_answer_is_not_confused_by_the_formulation_numbers() -> None:
+    """Dozens of numbers precede the answer in the reply; only the answer field is read."""
     request = _request(variant="cost_question")
-    schedule = _reference_schedule(request)
-    reply = f"{_schedule_rows(schedule)}\n{st.ANSWER_PREFIX} $12.34\n"
+    reply = _contract_reply(request, answer="$12.34")
+    text = llm_only_answer_text(read_reply(reply, request.day), reply)
+    assert rq.extract_answer(text, request) == pytest.approx(12.34)
 
-    assert rq.extract_answer(reply, request) == pytest.approx(12.34)
 
-
-def test_a_correct_answer_line_scores_as_pass() -> None:
+def test_a_correct_answer_scores_as_pass() -> None:
     """End to end: prompt, reply, extraction, outcome.check_answer."""
     request = _request(variant="cost_question")
     st.build_messages("structured", request)
-    schedule = _reference_schedule(request)
-    reply = f"{_schedule_rows(schedule)}\n{st.ANSWER_PREFIX} ${float(request.truth):.2f}\n"
-
-    verdict = check_answer(rq.request_answer(request, reply))
-    assert verdict.status == PASS
+    reply = _contract_reply(request, answer=f"${float(request.truth):.2f}")
+    text = llm_only_answer_text(read_reply(reply, request.day), reply)
+    assert check_answer(rq.request_answer(request, text)).status == PASS
 
 
-def test_a_missing_answer_line_is_a_failure_not_a_pass() -> None:
+def test_a_null_answer_on_a_question_is_a_failure_not_a_pass() -> None:
     """The trap the answer term exists to catch: a schedule with no answer."""
     request = _request(variant="cost_question")
-    reply = _schedule_rows(_reference_schedule(request))
+    reply = _contract_reply(request, answer=None)
+    text = llm_only_answer_text(read_reply(reply, request.day), reply)
+    assert text == ""
+    assert rq.extract_answer(text, request) is None
+    assert check_answer(rq.request_answer(request, text)).status != PASS
 
-    assert rq.extract_answer(reply, request) is None
-    assert check_answer(rq.request_answer(request, reply)).status != PASS
+
+def test_a_declared_inability_is_passed_on_as_such() -> None:
+    request = _request(variant="cost_question")
+    reply = json.dumps({"formulation": {"sessions": []}, "schedule": {}, "answer": None,
+                        "cannot_answer": "the request names a car with no departure time"})
+    read = read_reply(reply, request.day)
+    assert read.schedule.success is False
+    assert "cannot answer" in (read.schedule.error_message or "")
+    assert llm_only_answer_text(read, reply).startswith("I cannot answer")
 
 
-def test_state_variant_needs_no_answer_line() -> None:
-    """A prescription-only request asks nothing, and the prompt asks for nothing."""
+def test_state_variant_gets_the_same_contract() -> None:
+    """A prescription-only request asks nothing; the contract says answer is null then."""
     request = _request(variant="schedule_only")
     assert request.checkable is False
     prompt = st.build_prompt_text("structured", request)
-    assert st.ANSWER_PREFIX not in prompt
-    assert "schedule rows and nothing else" in prompt
+    assert "`answer` is null" in prompt
+    reply = _contract_reply(request, answer=None)
+    assert llm_only_answer_text(read_reply(reply, request.day), reply) == ""
+
+
+# --------------------------------------------------------------------------- the same rules for all
+
+
+def test_the_agent_rows_get_the_same_sections_as_the_no_tools_rows() -> None:
+    """Same skeleton, same order: role, system data, task, output requirements."""
+    request = _request()
+    agent = st.build_agent_user_message(request.text, request.day)
+    positions = [agent.index(h) for h in (st.ROLE_HEADING, st.CONTEXT_HEADING, st.TASK_HEADING, st.OUTPUT_HEADING)]
+    assert positions == sorted(positions)
+    # The system-data section is byte-identical: neither side is told a number
+    # the other has to read.
+    assert st._context_section(request.day) in agent
+    assert st._context_section(request.day) in st.build_prompt_text("structured", request)
+
+
+def test_the_agent_prompt_carries_no_scaffolding_the_others_lack() -> None:
+    """The defect this exists for, found on 2026-09-28.
+
+    The agent rows used to be sent a GOAL section with the objective and a
+    "serve at least 70 %" target, the constraints in index form, the whole
+    session table, and the solver's algorithm in three steps. The no-tools rows
+    were sent none of it, and a test above asserts they still are not. A row
+    that is handed the objective and the method is not comparable with one that
+    has to read both out of the request.
+    """
+    request = _request()
+    agent = st.build_agent_user_message(request.text, request.day)
+    for scaffolding in ("GOAL:", "ALGORITHM", "Step A", "arrival_idx", "energy_kwh", "CONSTRAINTS:"):
+        assert scaffolding not in agent, f"the agent prompt still carries {scaffolding!r}"
+    # and no session's ground-truth numbers outside the request text itself
+    head, _, tail = agent.partition(request.text.strip())
+    for outside in (head, tail):
+        for session in request.day.sessions:
+            assert f"{session.energy_kwh}" not in outside
+
+
+def test_every_method_is_held_to_the_same_answer_rule() -> None:
+    """One file states what answering the question means; both contracts use it."""
+    rule = methods.read_text("_shared/answer_rule.txt")
+    request = _request()
+    assert rule in st.build_prompt_text("structured", request)
+    assert rule in st.build_agent_user_message(request.text, request.day)
+    assert st._ANSWER_RULE_TOKEN not in st.build_agent_user_message(request.text, request.day)
+
+
+def test_the_agent_prompt_asks_for_the_answer_and_not_for_a_schedule() -> None:
+    """The one difference the architecture makes true: the solver holds the schedule."""
+    request = _request()
+    agent = st.build_agent_user_message(request.text, request.day)
+    assert "Answer:" in agent
+    assert "schedule rows" not in agent
+    assert '"schedule"' not in agent
+
+
+def test_an_empty_request_is_refused_on_the_agent_path_too() -> None:
+    with pytest.raises(ValueError, match="non-empty"):
+        st.build_agent_user_message("   ", _request().day)

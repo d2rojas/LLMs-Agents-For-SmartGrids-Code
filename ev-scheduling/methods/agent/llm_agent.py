@@ -55,7 +55,7 @@ from methods.agent.validate.gate import (
     verify_answer,
 )
 from methods.agent.validate.validate import validate
-from methods.prompting.prompt import build_prompt_for_agent
+from methods.prompting.strategies import build_agent_user_message
 from config.llm import (
     ModelSpec,
     RunRecorder,
@@ -553,9 +553,10 @@ def run_agent_llm(
 
     recorder = RunRecorder(spec=spec, arm="agent", run_id=run_id or "", request=request)
 
-    # Input = natural-language problem description + user request. Tool access is
+    # Input = the request text under the same sections every method is sent
+    # (methods/prompting/strategies.py::build_agent_user_message). Tool access is
     # via the tools parameter; the LLM calls solve_ev_schedule when it needs to.
-    user_content = build_prompt_for_agent(day, site, tou, request)
+    user_content = build_agent_user_message(request, day)
 
     messages: List[Dict[str, Any]] = [
         {"role": "system", "content": _build_system_message()},
@@ -721,7 +722,7 @@ def run_agent_llm(
         )
 
     def _verify(answer: str) -> tuple[GateResult, CheckResult]:
-        """Run the five conditions on one answer, against the problem posed."""
+        """Run the seven conditions on one answer, against the problem posed."""
         schedule = last_solve_result.schedule  # type: ignore[union-attr]
         checked = validate(schedule, posed_day, posed_site)
         prior_outputs, last_outputs = split_tool_outputs(tool_outputs)
@@ -736,6 +737,10 @@ def run_agent_llm(
                 request_text=request,
                 tou=tou,
                 check_result=checked,
+                # E7 reads the request back against the problem as extracted,
+                # before any what-if: a what-if changes what is solved, not what
+                # the request says.
+                read_back_day=day,
             ),
             checked,
         )
@@ -957,7 +962,7 @@ def run_agent_plan_act(
 
     messages: List[Dict[str, Any]] = [
         {"role": "system", "content": _build_system_message()},
-        {"role": "user", "content": request},
+        {"role": "user", "content": build_agent_user_message(request, day)},
         {"role": "assistant", "content": plan_text},
     ]
 

@@ -1,0 +1,24 @@
+RUN 10  |  case14-multistep-018-s0  |  llm_only:structured  |  gpt-5.6-sol  |  IEEE 14-bus  |  seed 0  |  difficulty multistep
+Request: Load the IEEE 14-bus system, disconnect the line between bus 4 and bus 5, then rerun the power flow, then list every line whose loading is above 90%.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): {"formulation":[{"tool":"load_case","args":{"case_name":"case14"}},{"tool":"run_powerflow","args":{}},{"tool":"disconnect_line","args":{"from_bus":4,"to_bus":5}}],"converged":false,"summary":"The requ...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 3108 in / 3712 out tokens, $0.0433, 56.1 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> disconnect_line(from_bus=4, to_bus=5) -> run_powerflow()
+  declared: load_case(case_name="case14") -> run_powerflow() -> disconnect_line(from_bus=4, to_bus=5)   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 5, untraceable: 5 -> traceable answer: no
+  untraceable values: ['0.0', '0.0', '0.0']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: ESCALATED TO A PERSON
+  computation correct (solved): no   reason: no_state_reported
+  escalation detected via: cannot_answer, abstention_json, declared_inability
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case14-multistep-018-s0_run0.json

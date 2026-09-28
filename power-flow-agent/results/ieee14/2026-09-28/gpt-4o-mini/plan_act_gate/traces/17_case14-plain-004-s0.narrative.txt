@@ -1,0 +1,47 @@
+RUN 17  |  case14-plain-004-s0  |  plan_act_gate  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty plain
+Request: Load case14 and run an N-1 contingency analysis and report the worst single outage.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 2-step plan: load_case(case_name="case14") -> run_n1_contingency(top_k=1, criteria="max_overload", max_candidates=0)
+  2. LLM replied without tool calls: {"plan":[{"tool":"load_case","args":{"case_name":"case14"}},{"tool":"run_n1_contingency","args":{"top_k":1,"criteria":"max_overload","max_candidates":0}}]}   (685 in / 46 out tokens, 1.7 s)
+  3. parser called load_case(case_name="case14")
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=261.993
+  4. parser called run_n1_contingency(top_k=1, criteria="max_overload", max_candidates=0)
+       tool run_n1_contingency -> N-1 completed over 20 branches. Worst outage: 2-3 (line), V violations=8 (delta=-1), thermal violations=5 (delta=5).
+  5. LLM wrote the final answer   (4809 in / 224 out tokens, 3.7 s)
+  6. LLM called run_powerflow()   (5590 in / 11 out tokens, 0.8 s)
+       tool run_powerflow -> case_name="case14", converged=true, total_load_mw=261.993, total_generation_mw=275.909, total_loss_mw=13.916, bus_voltages[14], line_flows[20], voltage_violations[9], thermal_violations[0]  [gate pass]
+  7. LLM wrote the final answer   (7949 in / 1600 out tokens, 18.3 s)
+  Totals: 4 LLM calls, 3 tool calls, 1 tool rounds, 19033 in / 1881 out tokens, $0.0040, 26.7 s
+  Status: verification_failed
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> run_n1_contingency()
+  executed: load_case(case_name="case14") -> run_n1_contingency(top_k=1, criteria="max_overload", max_candidates=0) -> run_powerflow()
+  verdict:  n/a (no tool calls in this method)
+
+VERIFICATION GATE  (task-level, on the final answer)
+  V1  converged              pass  residual 0
+  V2  balance                pass  residual 0
+  V3  no_isolated_buses      pass  residual 0
+  V4  traceability           pass  residual 0
+  V5  currency               pass  residual 0
+  V6  argument_grounding     pass  every mutating-tool argument traces to the request or a prior tool output
+  V7  claims_from_tools      pass  answer matches the agent's own last solved state
+  V8  request_applied        pass  no network change was made
+  V10 complete_state         pass  all 14 buses reported
+  V11 formulation_matches_trace FAIL  the declared operations differ from the ones run (missed_step: missing tools: ['run_n1_contingency'])
+  V9  plausible_state        pass  voltages within 0.8 to 1.2 p.u., losses below 10 % of the load
+  outcome: abstained after 2 attempt(s)
+
+REPORTING
+  numbers in the answer: 0, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: ESCALATED TO A PERSON
+  computation correct (solved): no   reason: formulation
+  escalation detected via: gate_abstained
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case14-plain-004-s0_run0.json

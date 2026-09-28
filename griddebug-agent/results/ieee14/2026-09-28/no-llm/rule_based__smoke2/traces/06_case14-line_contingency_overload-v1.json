@@ -1,0 +1,472 @@
+{
+ "case_study": "griddebug",
+ "method": "rule_based",
+ "model": "none:rule_based",
+ "request_id": "case14-line_contingency_overload-v1",
+ "status": "ok",
+ "error": null,
+ "answer": "{\n  \"diagnosis\": {\n    \"fault_type\": \"line_outage\",\n    \"components\": {\n      \"line\": [\n        8\n      ]\n    },\n    \"explanation\": \"rule engine: overvoltage, line_overload\"\n  },\n  \"actions\": [\n    {\n      \"tool\": \"switch_element\",\n      \"args\": {\n        \"element_type\": \"line\",\n        \"element_index\": 8,\n        \"in_service\": true\n      }\n    }\n  ],\n  \"final_state\": {\n    \"converged\": true,\n    \"n_new_violations\": 0,\n    \"islanded_load_buses\": []\n  },\n  \"status\": \"repaired\",\n  \"remaining_violations\": [],\n  \"summary\": \"Rules fired: overvoltage, line_overload. Actions applied: switch_element. The network is secure.\"\n}",
+ "messages": [],
+ "rounds": [
+  {
+   "round": 1,
+   "role": "harness",
+   "llm": null,
+   "tools": [
+    {
+     "n": 1,
+     "name": "run_power_flow",
+     "kind": "simulation",
+     "args": {},
+     "output": {
+      "converged": true,
+      "message": "AC power flow (Newton-Raphson) converged."
+     },
+     "ok": true,
+     "latency_s": 0.0516
+    },
+    {
+     "n": 2,
+     "name": "check_voltage_violations",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "v_min_pu_global": 0.95,
+      "v_max_pu_global": 1.05,
+      "undervoltage_buses": [],
+      "overvoltage_buses": [
+       {
+        "bus": 5,
+        "vm_pu": 1.07,
+        "limit": 1.06,
+        "in_base": true
+       },
+       {
+        "bus": 6,
+        "vm_pu": 1.061,
+        "limit": 1.06,
+        "in_base": true
+       },
+       {
+        "bus": 7,
+        "vm_pu": 1.09,
+        "limit": 1.06,
+        "in_base": true
+       }
+      ],
+      "total_violations": 3,
+      "converged": true,
+      "new_violations": 0,
+      "note": "in_base: the bus already violated its limit in the unmodified network; only new violations count"
+     },
+     "ok": true,
+     "latency_s": 0.004
+    },
+    {
+     "n": 3,
+     "name": "check_overloads",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "threshold_percent": 100.0,
+      "overloaded_lines": [
+       {
+        "line_index": 9,
+        "loading_percent": 110.4,
+        "from_bus": 5,
+        "to_bus": 12,
+        "in_base": false
+       },
+       {
+        "line_index": 13,
+        "loading_percent": 290.9,
+        "from_bus": 11,
+        "to_bus": 12,
+        "in_base": false
+       }
+      ],
+      "overloaded_trafos": [],
+      "converged": true,
+      "new_overloads": 2,
+      "note": "in_base: the branch already exceeded its rating in the unmodified network; only new overloads count"
+     },
+     "ok": true,
+     "latency_s": 0.0008
+    },
+    {
+     "n": 4,
+     "name": "find_disconnected_areas",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "disconnected_buses": [],
+      "connected_buses": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13
+      ],
+      "message": "All buses connected."
+     },
+     "ok": true,
+     "latency_s": 0.0011
+    },
+    {
+     "n": 5,
+     "name": "switch_element",
+     "kind": "action",
+     "args": {
+      "element_type": "line",
+      "element_index": 8,
+      "in_service": true
+     },
+     "output": {
+      "action": "switch_element",
+      "success": true,
+      "element_type": "line",
+      "element_index": 8,
+      "old_in_service": false,
+      "new_in_service": true
+     },
+     "ok": true,
+     "latency_s": 0.0001
+    },
+    {
+     "n": 6,
+     "name": "run_power_flow",
+     "kind": "simulation",
+     "args": {},
+     "output": {
+      "converged": true,
+      "message": "AC power flow (Newton-Raphson) converged."
+     },
+     "ok": true,
+     "latency_s": 0.1375
+    },
+    {
+     "n": 7,
+     "name": "run_power_flow",
+     "kind": "simulation",
+     "args": {},
+     "output": {
+      "converged": true,
+      "message": "AC power flow (Newton-Raphson) converged."
+     },
+     "ok": true,
+     "latency_s": 0.05
+    }
+   ]
+  }
+ ],
+ "n_llm_calls": 0,
+ "n_tool_calls": 7,
+ "prompt_tokens": 0,
+ "completion_tokens": 0,
+ "wall_time_s": 2.141,
+ "rules_fired": [
+  "overvoltage",
+  "line_overload"
+ ],
+ "harness_declared": null,
+ "system_prompt_hash": null,
+ "request": {
+  "request_id": "case14-line_contingency_overload-v1",
+  "network": "case14",
+  "scenario_id": "line_contingency_overload",
+  "variant": 1,
+  "category": "contingency",
+  "label": "N-1 line contingency",
+  "text": "The AC power flow on the IEEE 14-bus system (case14) converged with 2 new limit violation(s). Diagnose the cause and restore a secure operating point: the power flow converges, no in-service load is on an islanded bus, every bus voltage is within [0.95, 1.05] p.u., and no line or transformer is above 100 % loading, apart from the violations the base network already has. Use only the actions available. Report the diagnosis, the actions taken, and the final state.",
+  "injected": {
+   "fault_type": "line_outage",
+   "components": {
+    "line": [
+     8
+    ]
+   },
+   "description": "Line 8 taken out of service (worst N-1 line outage); Its flow is redirected through the remaining branches",
+   "also_accepted": []
+  },
+  "initial_state": {
+   "converged": true,
+   "label": "violations",
+   "n_violations": 9,
+   "n_new_violations": 2,
+   "n_voltage": 7,
+   "n_thermal": 2,
+   "voltage": [
+    {
+     "bus": 0,
+     "vm_pu": 1.06,
+     "limit": 1.05,
+     "kind": "over"
+    },
+    {
+     "bus": 5,
+     "vm_pu": 1.07,
+     "limit": 1.05,
+     "kind": "over"
+    },
+    {
+     "bus": 6,
+     "vm_pu": 1.061,
+     "limit": 1.05,
+     "kind": "over"
+    },
+    {
+     "bus": 7,
+     "vm_pu": 1.09,
+     "limit": 1.05,
+     "kind": "over"
+    },
+    {
+     "bus": 8,
+     "vm_pu": 1.0549,
+     "limit": 1.05,
+     "kind": "over"
+    },
+    {
+     "bus": 9,
+     "vm_pu": 1.0501,
+     "limit": 1.05,
+     "kind": "over"
+    },
+    {
+     "bus": 10,
+     "vm_pu": 1.0564,
+     "limit": 1.05,
+     "kind": "over"
+    }
+   ],
+   "thermal": [
+    {
+     "element": "line",
+     "index": 9,
+     "loading_percent": 110.4
+    },
+    {
+     "element": "line",
+     "index": 13,
+     "loading_percent": 290.9
+    }
+   ],
+   "new": [
+    "line:13",
+    "line:9"
+   ],
+   "islanded_load_buses": [],
+   "nan_buses": [],
+   "vm_min": 1.01,
+   "vm_max": 1.09,
+   "max_loading": 290.9,
+   "secure": false
+  },
+  "base_violations": [
+   "bus:0",
+   "bus:10",
+   "bus:11",
+   "bus:12",
+   "bus:5",
+   "bus:6",
+   "bus:7",
+   "bus:8",
+   "bus:9"
+  ],
+  "network_hash": "f5eac89bf7b1f06e",
+  "base_load_mw": 259.0
+ },
+ "tool_log": [
+  {
+   "n": 1,
+   "name": "run_power_flow",
+   "kind": "simulation",
+   "args": {},
+   "output": {
+    "converged": true,
+    "message": "AC power flow (Newton-Raphson) converged."
+   },
+   "ok": true,
+   "latency_s": 0.0516
+  },
+  {
+   "n": 2,
+   "name": "check_voltage_violations",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "v_min_pu_global": 0.95,
+    "v_max_pu_global": 1.05,
+    "undervoltage_buses": [],
+    "overvoltage_buses": [
+     {
+      "bus": 5,
+      "vm_pu": 1.07,
+      "limit": 1.06,
+      "in_base": true
+     },
+     {
+      "bus": 6,
+      "vm_pu": 1.061,
+      "limit": 1.06,
+      "in_base": true
+     },
+     {
+      "bus": 7,
+      "vm_pu": 1.09,
+      "limit": 1.06,
+      "in_base": true
+     }
+    ],
+    "total_violations": 3,
+    "converged": true,
+    "new_violations": 0,
+    "note": "in_base: the bus already violated its limit in the unmodified network; only new violations count"
+   },
+   "ok": true,
+   "latency_s": 0.004
+  },
+  {
+   "n": 3,
+   "name": "check_overloads",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "threshold_percent": 100.0,
+    "overloaded_lines": [
+     {
+      "line_index": 9,
+      "loading_percent": 110.4,
+      "from_bus": 5,
+      "to_bus": 12,
+      "in_base": false
+     },
+     {
+      "line_index": 13,
+      "loading_percent": 290.9,
+      "from_bus": 11,
+      "to_bus": 12,
+      "in_base": false
+     }
+    ],
+    "overloaded_trafos": [],
+    "converged": true,
+    "new_overloads": 2,
+    "note": "in_base: the branch already exceeded its rating in the unmodified network; only new overloads count"
+   },
+   "ok": true,
+   "latency_s": 0.0008
+  },
+  {
+   "n": 4,
+   "name": "find_disconnected_areas",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "disconnected_buses": [],
+    "connected_buses": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13
+    ],
+    "message": "All buses connected."
+   },
+   "ok": true,
+   "latency_s": 0.0011
+  },
+  {
+   "n": 5,
+   "name": "switch_element",
+   "kind": "action",
+   "args": {
+    "element_type": "line",
+    "element_index": 8,
+    "in_service": true
+   },
+   "output": {
+    "action": "switch_element",
+    "success": true,
+    "element_type": "line",
+    "element_index": 8,
+    "old_in_service": false,
+    "new_in_service": true
+   },
+   "ok": true,
+   "latency_s": 0.0001
+  },
+  {
+   "n": 6,
+   "name": "run_power_flow",
+   "kind": "simulation",
+   "args": {},
+   "output": {
+    "converged": true,
+    "message": "AC power flow (Newton-Raphson) converged."
+   },
+   "ok": true,
+   "latency_s": 0.1375
+  },
+  {
+   "n": 7,
+   "name": "run_power_flow",
+   "kind": "simulation",
+   "args": {},
+   "output": {
+    "converged": true,
+    "message": "AC power flow (Newton-Raphson) converged."
+   },
+   "ok": true,
+   "latency_s": 0.05
+  }
+ ],
+ "scored": {
+  "common_json_ok": true,
+  "common_status": "repaired",
+  "common_claims_repaired": true,
+  "common_declares_failure": false,
+  "common_converged": true,
+  "common_secure": true,
+  "common_islanded": [],
+  "common_n_violations": 9,
+  "common_n_new_violations": 0,
+  "common_load_served_mw": 259.0,
+  "common_load_served_pct": 100.0,
+  "common_repaired": true,
+  "common_improved": true,
+  "common_feasible": true,
+  "common_formulation_exact": true,
+  "common_formulation_error_type": "ok",
+  "common_formulation_detail": "line_outage, 1 injected component(s) named",
+  "common_n_numbers": 0,
+  "common_n_untraceable": 0,
+  "common_traceable": true,
+  "common_escalated": false,
+  "common_escalation_reason": null,
+  "common_escalation_kind": null,
+  "common_solved": true,
+  "common_reason": "secure, claimed, traceable, consistent",
+  "common_outcome": "solved",
+  "common_gate_passed": null,
+  "common_gate_failed": null
+ }
+}

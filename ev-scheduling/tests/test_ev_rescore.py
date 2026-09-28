@@ -184,11 +184,16 @@ def test_every_row_was_actually_rebuilt(rescored):
     sources = rescored["sources"]
     assert sources
     assert all(s["rescored"] for s in sources)
-    assert {s["schedule"] for s in sources if s.get("schedule")} == {
+    assert {s["schedule"] for s in sources if s.get("schedule")} <= {
         "rule_rerun",
-        "reply_reparsed",
+        "reply_reparsed_as_json",
         "resolved_from_parse_trace",
+        "declared_failure_no_schedule",
     }
+    # Every rebuild path the run exercised is represented.
+    assert {"rule_rerun", "reply_reparsed_as_json"} <= {s["schedule"] for s in sources if s.get("schedule")}
+    # and the no-tools rows now carry a declared problem, read back from the reply
+    assert {s.get("parsed_problem") for s in sources if str(s.get("arm", "")).startswith("llm_only")} == {"reply"}
     assert all(s["cost_usd_matches"] for s in sources)
 
 
@@ -197,9 +202,31 @@ def test_the_agent_schedule_is_re_solved_not_copied(run_dir, rescored):
     agent_sources = [s for s in rescored["sources"] if s["arm"] == "evagent"]
     assert agent_sources
     for source in agent_sources:
-        assert source["schedule"] == "resolved_from_parse_trace"
+        assert source["schedule"] in ("resolved_from_parse_trace", "declared_failure_no_schedule")
         assert source["parsed_problem"] == "parse_trace"
         assert source["tool_outputs"] == "agent_trace"
+    assert any(s["schedule"] == "resolved_from_parse_trace" for s in agent_sources)
+
+
+def test_a_declared_failure_is_rescored_on_what_was_surfaced(run_dir, rescored):
+    """A day the gate refused carries no schedule, in the run and in the rescore.
+
+    Re-solving its parse would rebuild the schedule the system deliberately did
+    not stand behind, and score the day on it. Before E7 no stored run had a
+    declared failure, so the two paths had never disagreed; with E7 a misread
+    request produces one, and the disagreement would have shown up as a rescore
+    that silently improves escalated days.
+    """
+    rows, _requests, _meta = ev_rescore.load_run(run_dir)
+    declared = [r for r in rows if r["arm"] == "evagent" and r.get("gate_declared_failure")]
+    if not declared:
+        pytest.skip("no declared failure in this run")
+    sources = {
+        s["request_id"]: s for s in rescored["sources"] if s["arm"] == "evagent"
+    }
+    for row in declared:
+        assert sources[row["request_id"]]["schedule"] == "declared_failure_no_schedule"
+        assert row["cost_usd"] == pytest.approx(0.0)
 
 
 def test_a_formulation_verdict_is_recomputed_from_the_parse_trace(run_dir):

@@ -82,7 +82,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from methods.agent.run import AgentResult, ClarificationResult, run_agent_from_text  # noqa: E402
 from methods.agent.validate.gate import CONDITION_LABELS, CONDITION_ORDER  # noqa: E402
 from methods.prompting import strategies as prompt_strategies  # noqa: E402
-from methods.prompting.parse import REPAIR_KINDS, parse_llm_schedule  # noqa: E402
+from methods.prompting.parse import REPAIR_KINDS, ReplyParse, parse_llm_schedule, read_reply  # noqa: E402
 from config.llm import (  # noqa: E402
     ModelSpec,
     RunRecorder,
@@ -95,7 +95,7 @@ from config.llm import (  # noqa: E402
 )
 from solver.checker import check  # noqa: E402
 from data.benchmark import store  # noqa: E402
-from evaluation.formulation import formulation_exact  # noqa: E402
+from evaluation.formulation import formulation_exact, problem_from_dict  # noqa: E402
 from evaluation.metrics import (  # noqa: E402
     UNMET_TOL_KWH,
     charge_asap_schedule,
@@ -306,19 +306,22 @@ register_arm(
         label="LLM-only, structured prompting",
         uses_llm=True,
         has_gate=False,
-        scores_formulation=False,
+        scores_formulation=True,
         grounded=False,
         strategy="structured",
         cost=CostModel(
             n_calls=1,
-            completion_tokens_per_call=2200,
+            completion_tokens_per_call=4000,
             context_resend_factor=1.0,
             basis=(
                 "one call; prompt measured offline from methods/prompting/strategies.py::build_messages; "
-                "completion assumed 2200 tokens, about n_sessions x n_steps numbers at 4 decimals"
+                "completion assumed 4000 tokens, about 55 per car for the declared problem and the segments"
             ),
         ),
-        description="No tools. The schedule and the answer are generated as text.",
+        description=(
+            "No tools. One JSON reply with the formulation the model read, the schedule as charging "
+            "segments, and the answer."
+        ),
     )
 )
 
@@ -328,16 +331,16 @@ register_arm(
         label="LLM-only, chain-of-thought prompting",
         uses_llm=True,
         has_gate=False,
-        scores_formulation=False,
+        scores_formulation=True,
         grounded=False,
         strategy="chain_of_thought",
         cost=CostModel(
             n_calls=1,
-            completion_tokens_per_call=3200,
+            completion_tokens_per_call=5000,
             context_resend_factor=1.0,
             basis=(
-                "one call; prompt measured offline; completion assumed 3200 tokens, the "
-                "structured arm's schedule plus the reasoning the strategy asks for"
+                "one call; prompt measured offline; completion assumed 5000 tokens, the "
+                "structured arm's JSON object plus the reasoning the strategy asks for"
             ),
         ),
         description="Same input and budget as the structured arm, plus a reasoning section.",
@@ -359,8 +362,8 @@ register_arm(
             basis=(
                 "parse call, one tool-calling round, one explanation turn, and one gate retry "
                 "budgeted; prompt measured offline from the parse system prompt and "
-                "methods/prompting/prompt.py::build_prompt_for_agent; the conversation is re-sent every "
-                "turn, so prompt tokens are doubled"
+                "methods/prompting/strategies.py::build_agent_user_message; the conversation is "
+                "re-sent every turn, so prompt tokens are doubled"
             ),
         ),
         description=(
@@ -1007,7 +1010,8 @@ def run_llm_only(ctx: RunContext) -> ArmOutput:
         raise HarnessError(f"the {ctx.spec.provider} API returned no choices")
 
     reply = choices[0].message.content or ""
-    parse_result = parse_llm_schedule(reply, request.day)
+    read = read_reply(reply, request.day)
+    parse_result = read.schedule
     usage = recorder.finish(
         messages=list(messages) + [{"role": "assistant", "content": reply}],
         final_text=reply,
@@ -1017,8 +1021,9 @@ def run_llm_only(ctx: RunContext) -> ArmOutput:
     trace_path = recorder.write(ctx.trace_dir) if ctx.write_trace else None
     return ArmOutput(
         schedule=np.asarray(parse_result.schedule, dtype=float),
-        answer_text=reply,
+        answer_text=llm_only_answer_text(read, reply),
         tool_outputs=[],
+        parsed_problem=problem_from_dict(read.formulation, n_steps=request.day.n_steps, dt_hours=request.day.dt_hours),
         usage=usage,
         model_resolved=client.resolved_model(ctx.spec.key),
         prompt_hash=client.prompt_hash(),
@@ -1026,8 +1031,33 @@ def run_llm_only(ctx: RunContext) -> ArmOutput:
         trace_path=trace_path,
         repairs=parse_result.repairs.to_dict(),
         parse_success=bool(parse_result.success),
-        notes=parse_result.error_message or "",
+        notes="; ".join(n for n in (f"reply read as {read.format}", parse_result.error_message) if n),
     )
+
+
+def llm_only_answer_text(read: ReplyParse, reply: str) -> str:
+    """The text the answer term reads for a no-tools row.
+
+    A reply in the contract's JSON puts its answer in one field, so that field
+    is what ``extract_answer`` is given, behind the ``Answer:`` literal it
+    anchors on; the reply itself stays in the trace. A declared inability is
+    passed on as such. A reply that is not the contract's object is read whole,
+    as every reply was before 2026-09-28.
+
+    Args:
+        read: The reply as ``read_reply`` read it.
+        reply: The reply, verbatim.
+
+    Returns:
+        The answer text to score.
+    """
+    if read.format != "json":
+        return reply
+    if read.answer is not None:
+        return f"{prompt_strategies.ANSWER_PREFIX} {read.answer}"
+    if read.cannot_answer:
+        return f"I cannot answer this request: {read.cannot_answer}"
+    return ""
 
 
 def run_rule_based(ctx: RunContext) -> ArmOutput:
@@ -1302,6 +1332,7 @@ def score_row(
         optimum.cost_usd,
         unmet_kwh=unmet_kwh,
         unmet_star_kwh=optimum.unmet_kwh,
+        n_sessions=len(day.sessions),
     )
 
     formulation = None
@@ -1624,13 +1655,13 @@ def measure_prompt_tokens(arm: Arm, request: EVRequest) -> Tuple[int, str]:
         messages = prompt_strategies.build_messages(arm.strategy, request)
         total = sum(estimate_tokens(m["content"]) for m in messages)
         return total, f"methods/prompting/strategies.py::build_messages({arm.strategy!r})"
-    from methods.prompting.prompt import build_prompt_for_agent
+    from methods.prompting.strategies import build_agent_user_message
 
     site, tou = build_site_tou(request)
-    text = build_prompt_for_agent(request.day, site, tou, request.text)
+    text = build_agent_user_message(request.text, request.day)
     total = estimate_tokens(text) + estimate_tokens(request.text) + AGENT_FIXED_PROMPT_TOKENS
     return total, (
-        "methods/prompting/prompt.py::build_prompt_for_agent + the request text + "
+        "methods/prompting/strategies.py::build_agent_user_message + "
         f"{AGENT_FIXED_PROMPT_TOKENS} tokens for the system prompts and the tool schema"
     )
 

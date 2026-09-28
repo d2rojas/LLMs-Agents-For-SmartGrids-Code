@@ -1,4 +1,4 @@
-"""Verification gate: six conditions, one retry, then a declared failure.
+"""Verification gate: seven conditions, one retry, then a declared failure.
 
 What this is for
 ----------------
@@ -15,7 +15,7 @@ never got a second chance, and never declared a failure, so the case study could
 not tell a verified agent from an unverified one and could not report how many
 days a person has to take over.
 
-The six conditions
+The seven conditions
 ------------------
 Each is evaluated and reported separately, never collapsed into one boolean, so
 a supplementary table can list them (see ``CONDITION_DESCRIPTIONS``).
@@ -33,12 +33,36 @@ E5        ``schedule_consistency``   The schedule the answer describes is the sc
                                      tool returned.
 E6        ``shortfall_declared``     A material shortfall in the tool output is stated in
                                      the answer.
+E7        ``problem_read_back``      Every parameter the model extracted is the one the
+                                     request states.
 ========  =========================  ====================================================
 
 E1-E2 are the EV counterpart of V1-V3 (convergence, balance, no isolated bus):
 they ask whether the trusted tool produced a state that can actually be run. E3
 and E4 are V4 and V5 and are delegated to ``evaluation/traceability.py``, which
 already implements both; nothing is reimplemented here.
+
+E7 exists because of what the run of 2026-09-28 measured, and it is the only
+condition that looks outside the solve. The other six ask whether the answer
+follows from the problem the model posed. None of them can ask whether that
+problem is the one the request describes, and on that run it usually was not:
+EVAgent misread 85 of 894 cars, on 19 of the 20 days a misread car made the
+schedule violate the real day's constraints, and the gate accepted all twenty and
+escalated none. Fifty-eight of the fifty-nine thirty-minute errors came from one
+phrase, "a quarter to", read as a quarter past the hour before. The deterministic
+parser reads the same 894 sessions without a single error, so the information is
+unambiguous in the text and the gate was simply not looking at it.
+
+E7 looks at it: the same bounded grammar reads the request, and every parameter
+the model declared is compared with what that grammar found. It abstains rather
+than accuses when the grammar cannot read a clause, because a phrasing outside a
+deliberately small grammar is not evidence that the model is wrong.
+
+A failure of E7 cannot be repaired inside the loop: the problem comes from the
+parse turn, which has already happened, and the retry is forbidden from changing
+it. So E7 sends the day to the declared failure, which is the point. A misread
+request should leave the system saying it cannot stand behind its reading, not
+producing a confident schedule for a day that does not exist.
 
 E5 has no power-flow counterpart and is the one condition this case study adds.
 In power flow the answer and the verified object are the same thing: one network
@@ -164,9 +188,10 @@ CONDITION_ORDER: Tuple[str, ...] = (
     "currency",
     "schedule_consistency",
     "shortfall_declared",
+    "problem_read_back",
 )
 
-# Paper/notes labels for the five conditions, the EV counterpart of
+# Paper/notes labels for the seven conditions, the EV counterpart of
 # ``llm.engine.CONDITION_LABELS`` (V1-V5). Use these wherever a condition is
 # named for a human reader; the keys above are what code reads.
 CONDITION_LABELS: Dict[str, str] = {
@@ -176,6 +201,7 @@ CONDITION_LABELS: Dict[str, str] = {
     "currency": "E4",
     "schedule_consistency": "E5",
     "shortfall_declared": "E6",
+    "problem_read_back": "E7",
 }
 
 # One line per condition, for the supplementary table.
@@ -186,6 +212,10 @@ CONDITION_DESCRIPTIONS: Dict[str, str] = {
     "currency": "no number comes only from a solve earlier than the last one",
     "schedule_consistency": "the schedule the answer describes is the schedule the tool returned",
     "shortfall_declared": "a material shortfall in the tool output is stated in the answer",
+    "problem_read_back": (
+        "every parameter the model extracted is the one the request states, as read back by the "
+        "deterministic grammar"
+    ),
 }
 
 # Per-condition status. ``not_applicable`` never fails the gate and is kept
@@ -756,6 +786,88 @@ def _check_shortfall_declared(
 # --------------------------------------------------------------------------- gate
 
 
+def _check_problem_read_back(
+    day: Optional[DaySessions],
+    request_text: Optional[str],
+) -> Condition:
+    """E7: is the problem that was solved the problem the request describes?
+
+    The request is read again by ``methods/deterministic/rule_based.py``, the
+    bounded grammar the conventional row uses, and every session parameter the
+    model extracted is compared with what that grammar found: arrival and
+    departure exactly, energy and plug limit within one per cent.
+
+    The condition abstains in three cases, and abstaining never fails the gate:
+    no request text to read, a clause the grammar cannot parse, and a day with no
+    sessions on either side. The grammar is deliberately small, so a phrasing it
+    does not cover is a limit of the reader and not evidence against the model.
+
+    Args:
+        day: The problem the model extracted, before any what-if override. A
+            what-if legitimately changes what is solved; it does not change what
+            the request says, so the comparison is against the untouched parse.
+        request_text: The request, verbatim.
+
+    Returns:
+        The condition. ``residual`` is the number of sessions that disagree.
+    """
+    name = "problem_read_back"
+    if not request_text or not str(request_text).strip():
+        return _condition(name, NOT_APPLICABLE, None, "no request text to read the problem back from")
+    if day is None or not day.sessions:
+        return _condition(name, NOT_APPLICABLE, None, "no extracted sessions to read back")
+
+    from evaluation.formulation import formulation_exact
+    from methods.agent.parse.parse import parsed_problem_to_day_site_tou
+    from methods.deterministic.rule_based import CannotParse, parse_request
+
+    try:
+        read = parse_request(str(request_text))
+    except CannotParse as exc:
+        return _condition(
+            name,
+            NOT_APPLICABLE,
+            None,
+            "the request is outside the grammar that reads it back "
+            f"({exc.why}), so the extraction is not contradicted here",
+        )
+    try:
+        rule_day, _site, _tou = parsed_problem_to_day_site_tou(read.problem)
+    except Exception:  # a grammar result the converter cannot shape is not evidence
+        return _condition(name, NOT_APPLICABLE, None, "the read-back could not be put in the solver's shape")
+
+    result = formulation_exact(day, rule_day, dt_hours=day.dt_hours)
+    if result.formulation_exact:
+        return _condition(
+            name, PASS, 0.0,
+            f"every parameter of all {result.n_truth} cars matches the request as read back",
+        )
+
+    wrong = [c for c in result.sessions if not c.exact]
+    shown = []
+    for check_ in wrong[:3]:
+        bad = [f for f in check_.fields if not f.exact] or None
+        if bad is None:
+            shown.append(f"{check_.session_id}: {check_.error_type}")
+            continue
+        f = bad[0]
+        if f.name in ("arrival_idx", "departure_idx"):
+            got = "" if f.parsed_value is None else f"{f.parsed_value * day.dt_hours:.2f} h"
+            want = f"{(f.truth_value or 0) * day.dt_hours:.2f} h"
+            shown.append(f"{check_.session_id} {f.name.replace('_idx', '')}: extracted {got}, the request says {want}")
+        else:
+            shown.append(
+                f"{check_.session_id} {f.name}: extracted {f.parsed_value}, the request says {f.truth_value}"
+            )
+    more = f", and {len(wrong) - 3} more" if len(wrong) > 3 else ""
+    return _condition(
+        name,
+        FAIL,
+        float(len(wrong)),
+        f"the problem solved is not the problem the request describes: {'; '.join(shown)}{more}",
+    )
+
+
 def verify_answer(
     answer_text: Optional[str],
     *,
@@ -768,8 +880,9 @@ def verify_answer(
     tou: Optional[TOUConfig] = None,
     check_result: Optional[CheckResult] = None,
     tol: Optional[float] = None,
+    read_back_day: Optional[DaySessions] = None,
 ) -> GateResult:
-    """Run the six conditions on one answer and its evidence.
+    """Run the seven conditions on one answer and its evidence.
 
     Every condition is evaluated, even after one fails, so the retry message can
     name all of them at once and a stored row can report each separately.
@@ -796,6 +909,9 @@ def verify_answer(
         check_result: A CheckResult already computed for this schedule and day.
             Pass it to avoid checking twice; otherwise the gate runs the checker.
         tol: Checker tolerance override, passed through to ``solver.checker``.
+        read_back_day: The problem the model extracted, before any what-if
+            override, for E7. Defaults to ``day``, which is right whenever no
+            what-if was applied.
 
     Returns:
         GateResult with one Condition per key in CONDITION_ORDER.
@@ -819,6 +935,9 @@ def verify_answer(
         "currency": _check_currency(trace),
         "schedule_consistency": _check_schedule_consistency(schedule, check_result, tool_outputs, day, tou),
         "shortfall_declared": _check_shortfall_declared(answer_text, day, tool_outputs, check_result),
+        "problem_read_back": _check_problem_read_back(
+            read_back_day if read_back_day is not None else day, request_text
+        ),
     }
 
     failed = [c for c in conditions.values() if c.status == FAIL]

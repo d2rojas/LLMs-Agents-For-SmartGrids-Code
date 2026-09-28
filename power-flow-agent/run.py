@@ -33,6 +33,7 @@ import os
 import re
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -225,7 +226,7 @@ def cmd_postprocess(args: argparse.Namespace) -> int:
     from evaluation.postprocess import postprocess
 
     for d in args.run_dirs:
-        postprocess(Path(d), method=args.method, model=args.model, case=args.case, condition=args.condition)
+        postprocess(Path(d), method=args.method, model=args.model, case=args.case, condition=args.condition, figures=not args.no_figures)
     build_index()
     return 0
 
@@ -243,6 +244,12 @@ def _fmt(v: Any, digits: int = 1) -> str:
     if isinstance(v, float):
         return f"{v:.{digits}f}"
     return str(v)
+
+
+def _majority(hashes: set, rows: List[Dict[str, Any]]) -> Any:
+    """The scorer version most rows carry; the rest are the ones to re-run."""
+    counts = Counter(r["evaluator_hash"] for r in rows)
+    return counts.most_common(1)[0][0] if counts else None
 
 
 def build_index(results: Path = RESULTS) -> Path:
@@ -267,10 +274,21 @@ def build_index(results: Path = RESULTS) -> Path:
             "tokens": (a.get("prompt_tokens_mean") or 0) + (a.get("completion_tokens_mean") or 0) if a.get("prompt_tokens_mean") is not None else None,
             "cost": a.get("cost_usd_total"), "tool_variant": cfg.get("tool_variant") or h.get("tool_variant"),
             "role": cfg.get("role_in_paper") or ("" if cfg.get("kind") == "run" else ""), "kind": cfg.get("kind", ""),
+            "evaluator_hash": h.get("evaluator_hash"),
             "path": d.relative_to(results).as_posix(),
         })
     rows.sort(key=lambda r: (r["case"], r["date"], r["model"], r["dir"]), reverse=True)
     out: List[str] = ["# Results index", "", f"Generated {_dt.datetime.now().strftime('%Y-%m-%d %H:%M')} by `run.py index`. One line per run directory, newest first. Counts are runs; Form. and Trace. are percentages. Open the folder for `REPORT.md`, `summary.csv` and `traces/`.", ""]
+    # Rows compare only if the same rules scored them. Say so when they do, and name the offenders
+    # when they do not, so a mixed tree cannot be read as one experiment (2026-09-28).
+    hashes = {r["evaluator_hash"] for r in rows}
+    if len(hashes) == 1 and None not in hashes:
+        out += [f"All {len(rows)} runs were scored by the same evaluator (`evaluator_hash` {hashes.pop()}), so every row is comparable.", ""]
+    else:
+        stale = sorted(r["path"] for r in rows if r["evaluator_hash"] != _majority(hashes, rows))
+        out += ["**Warning: this tree mixes scorer versions, so the rows are not comparable.** "
+                f"`evaluator_hash` values present: {', '.join(sorted(str(x) for x in hashes))}. "
+                f"Re-run `evaluation/postprocess.py` on: {', '.join(stale) if stale else 'the odd folders'}.", ""]
     for case in sorted({r["case"] for r in rows}, key=lambda c: (len(c), c)):
         out += [f"## {case}", "", "| date | model | method | cond. | tools | n | solved | escalated | wrong unflagged | Form. % | Trace. % | tokens/run | cost $ | in the paper | folder |", "|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|"]
         for r in [x for x in rows if x["case"] == case]:
@@ -355,6 +373,7 @@ def build_parser() -> argparse.ArgumentParser:
     pp.add_argument("--model", default=None)
     pp.add_argument("--case", default=None)
     pp.add_argument("--condition", default=None, choices=["normal", "stress"])
+    pp.add_argument("--no-figures", action="store_true", help="skip the per-run PNGs and overview.png (slow on the large systems)")
     pp.set_defaults(func=cmd_postprocess)
 
     sub.add_parser("index", help="rebuild results/INDEX.md").set_defaults(func=cmd_index)

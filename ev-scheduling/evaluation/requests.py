@@ -11,7 +11,7 @@ Why the module exists
 ---------------------
 The benchmark used to hand the agent an already-structured ``DaySessions`` *and*
 a session table inside the prompt (``scripts/run_agent_vs_baseline.py`` and
-``methods/prompting/prompt.py::build_prompt_for_agent``), so no formulation step existed
+``methods/prompting/prompt.py::build_prompt_for_agent``, removed 2026-09-28), so no formulation step existed
 anywhere on the evaluated path and ``evaluation/formulation.py`` had nothing to
 score. The rigid ``_build_nl_request`` helper in that script emits one HH:MM
 template for every car, which tests a regex, not an extraction. The text here

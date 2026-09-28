@@ -1,0 +1,43 @@
+RUN 05  |  case14-line_contingency_overload-v0  |  plan_act_nogate  |  openrouter:openai/gpt-4o-mini  |  IEEE 14-bus
+Scenario: N-1 line contingency (contingency); injected fault: line_outage {"line": [9]}
+Initial state: violations, 5 new violation(s)
+Request: The AC power flow on the IEEE 14-bus system (case14) converged with 5 new limit violation(s). Diagnose the cause and restore a secure operating point: the power flow converges, no in-service load is on an islanded bus, every bus voltage is within [0.95, 1.05] p.u., and no line or transformer is above 100 % loading, apart from the violations the base network already has. Use only the actions available. Report the diagnosis, the actions taken, and the final state.
+
+WHAT THE METHOD DID
+   1. curtail_load({"load_index": 1, "scale_factor": 0.5})
+       -> {"action": "curtail_load", "success": true, "load_index": 1, "old_p_mw": 94.2, "new_p_mw": 47.1, "scale_factor": 0.5}
+   2. curtail_load({"load_index": 2, "scale_factor": 0.5})
+       -> {"action": "curtail_load", "success": true, "load_index": 2, "old_p_mw": 47.8, "new_p_mw": 23.9, "scale_factor": 0.5}
+   3. curtail_load({"load_index": 5, "scale_factor": 0.5})
+       -> {"action": "curtail_load", "success": true, "load_index": 5, "old_p_mw": 29.5, "new_p_mw": 14.75, "scale_factor": 0.5}
+   4. adjust_generation({"gen_index": 1, "gen_type": "gen", "p_mw_new": 40.0, "vm_pu_new": 1.0})
+       -> {"action": "adjust_generation", "success": true, "gen_type": "gen", "gen_index": 1, "old_state": {"p_mw": 0.0, "vm_pu": 1.01}, "new_state": {"p_mw": 40.0, "vm_pu": 1.0}}
+   5. add_shunt_compensation({"bus_index": 5, "q_mvar": -10.0})
+       -> {"action": "add_shunt_compensation", "success": true, "bus_index": 5, "q_mvar_added": -10.0, "message": "Added -10.0 Mvar inductive shunt at bus 5"}
+   6. add_shunt_compensation({"bus_index": 7, "q_mvar": -10.0})
+       -> {"action": "add_shunt_compensation", "success": true, "bus_index": 7, "q_mvar_added": -10.0, "message": "Added -10.0 Mvar inductive shunt at bus 7"}
+   7. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+   8. check_voltage_violations({"v_min": 0.95, "v_max": 1.05})
+       -> {"v_min_pu_global": 0.95, "v_max_pu_global": 1.05, "undervoltage_buses": [], "overvoltage_buses": [{"bus": 5, "vm_pu": 1.07, "limit": 1.06, "in_base": true}, {"bus": 6, "vm_pu": 1.0656, "limit": 1.06, "in_base": true}, {… (510 chars)
+   9. check_overloads({"threshold_percent": 100})
+       -> {"threshold_percent": 100.0, "overloaded_lines": [{"line_index": 8, "loading_percent": 180.4, "from_bus": 5, "to_bus": 11, "in_base": false}, {"line_index": 10, "loading_percent": 100.2, "from_bus": 8, "to_bus": 9, "in_b… (596 chars)
+  10. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  Totals: 2 LLM calls, 10 tool calls, 5683 in / 806 out tokens, 16.58 s
+
+DIAGNOSIS  (is the injected fault named?)
+  answer: none {"line": [8, 10, 11, 13], "bus": [5, 6, 7, 8]}   verdict: FAIL   answer none, injected line_outage
+
+STATE  (the harness's own power flow on the final network)
+  converged: True   secure: False   new violations: 4   islanded load: []
+  repaired: False   improved: True   feasible: True
+
+REPORTING
+  status claimed: not_repaired   final_state claimed: converged=True, new violations=4
+  numbers in the answer: 8, untraceable: 0 -> traceable: pass
+
+OUTCOME: ESCALATED   (escalated: declared not_repaired)
+
+SUMMARY WRITTEN BY THE METHOD
+  The network experienced new line overloads and bus over-voltage issues after adjustments. Despite the power flow converging, there are still violations present, indicating the network is not secure.

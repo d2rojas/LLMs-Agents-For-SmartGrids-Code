@@ -1,0 +1,23 @@
+RUN 20  |  case118-plain-016-s0  |  llm_only:structured  |  gpt-4o-mini  |  IEEE 118-bus  |  seed 0  |  difficulty plain
+Request: Load case118 and run an N-1 contingency analysis and report the worst single outage.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): { "formulation": [ {"tool": "load_case", "args": {"case_name": "case118"}}, {"tool": "run_powerflow", "args": {}}, {"tool": "run_n1_contingency", "args": {"top_k": 1, "criteria": "max_overload", "max_...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 14049 in / 10787 out tokens, $0.0086, 70 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case118") -> run_n1_contingency()
+  declared: load_case(case_name="case118") -> run_powerflow() -> run_n1_contingency(top_k=1, criteria="max_overload", max_candidates=0)   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 591, untraceable: 591 -> traceable answer: no
+  untraceable values: ['120.5%', '1.02', '0.0', '1.01', '0.5', '1.03', '0.0', '1.02', '0.0', '1.01', '0.0', '0.0', '1.01', '0.0', '0.0', '0.0', '0.0', '0.0', '0.0', '0.0']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: voltage_error
+  against the reference: voltage MAE 0.0235 p.u., flow MAE 46.7643 MW, KCL mismatch 51.0397 MW, power-balance error n/a
+  raw trace: case118-plain-016-s0_run0.json

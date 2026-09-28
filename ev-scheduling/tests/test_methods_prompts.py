@@ -21,14 +21,18 @@ import methods
 # sha256 of each text as ``methods.read_text`` returns it, i.e. with the final
 # newline removed and nothing else touched.
 PINS = {
+    "_shared/agent_output_contract.txt": "f39d049df51bd88bd39193b625d2f983b159dd4865272b9e379c3b9a5364311a",
+    "_shared/agent_role.txt": "b342344bcbc8f997ef092adf9d8b105b88d2213b116000938bbd48dc389ffe40",
     "_shared/agent_system_prompt.txt": "37d182fa4fd939f5ccf2a80b1115e122c2f5feb023cca4da236b1c58cb3e4326",
+    "_shared/answer_rule.txt": "d79d01ab98691423410fda80c1401ea3eb26430c21ecdf5e16b513e89ac05d09",
+    "_shared/llm_only_output_contract.txt": "348e921ffde4e02114996385116b6325a1860daf2719776a9813af73afcb4f05",
     "_shared/llm_only_role.txt": "a4b5ca74dfbc00f047605340a40cc9d9e66d8a7b980bafb72b6169dafe17fea4",
-    "_shared/llm_only_system_prompt.txt": "a83b7b4f1f2aa5224ceee724daa42a5f1ff5c01dfbebe33dc76b0f1e799acae2",
-    "_shared/parse_extraction_system.txt": "dfce05de41373d7e769727b24aa01f950ef37480f491a06b4ce2ef43e924e726",
+    "_shared/llm_only_system_prompt.txt": "b10e66600ef56ea50f7f24a4259bd811ef61a41d7d0213f6dc971f1a411d978a",
+    "_shared/parse_extraction_system.txt": "c6d0f98682f0d0ecab579952259072c0e757a8d291b4990e629f262eb741c458",
     "_shared/parse_inference_system.txt": "8d326d4f23a4b5a3477a02a3781ce48d26c65ffa4b4246cc3474afbf024b495e",
-    "llm_only_cot/reasoning_section.txt": "fe8fb883c579aac43672e2a4ea1f7cd4c57ce23826ea575a88f878c86247a3bf",
-    "llm_only_cot/system_suffix.txt": "8c6fbcecf3995dc1092b9557d15e06be58e780d643d4988617a80130406d448a",
-    "llm_only_structured/system_suffix.txt": "7d71bcffb2f6462613d2fa57bf831cbee439b40cc759a5483ffd306f93d1f0ba",
+    "llm_only_cot/reasoning_section.txt": "9e800ca719659a45c33d92e4dfa768675e7f2a0f4d119c2d095137aa5867e486",
+    "llm_only_cot/system_suffix.txt": "c18c3e486ff6beca491961ee4af90bd1f3512e56b8b46788579a35fbea6c0709",
+    "llm_only_structured/system_suffix.txt": "7914b0e72bd9517221342aa49d08b17b59393528b54e90c0d7c52a4d4b912063",
     "plan_act_nogate/plan_system_prompt.txt": "6a7627277fffda59a4932d39628646813572f2feb72686f2fe580c400de869bf",
 }
 
@@ -77,17 +81,58 @@ def test_the_two_prompting_methods_differ_by_one_text() -> None:
     removed = structured - cot
     assert added == {"llm_only_cot/reasoning_section.txt", "llm_only_cot/system_suffix.txt"}
     assert removed == {"llm_only_structured/system_suffix.txt"}
+    # and the answer contract is the one file, shared
+    assert "_shared/llm_only_output_contract.txt" in structured & cot
 
 
 def test_the_agent_methods_share_one_system_prompt() -> None:
     """Plan-and-Act, ReAct and EVAgent differ by architecture, not by wording.
 
-    Plan-and-Act adds its planner text on top; the answer turn uses the same
-    system prompt as the other two.
+    Plan-and-Act adds its planner text on top; every other text is the same.
     """
-    shared = "_shared/agent_system_prompt.txt"
+    shared = {
+        "_shared/agent_system_prompt.txt",
+        "_shared/agent_role.txt",
+        "_shared/agent_output_contract.txt",
+        "_shared/answer_rule.txt",
+        "_shared/parse_extraction_system.txt",
+        "_shared/parse_inference_system.txt",
+    }
     for name in ("plan_act_nogate", "react_nogate", "evagent"):
-        assert shared in methods.prompt_files(name)
+        assert shared <= set(methods.prompt_files(name))
+    assert set(methods.prompt_files("plan_act_nogate")) - shared == {
+        "plan_act_nogate/plan_system_prompt.txt"
+    }
+    assert set(methods.prompt_files("react_nogate")) == set(methods.prompt_files("evagent"))
+
+
+def test_every_method_that_answers_is_held_to_one_answer_rule() -> None:
+    """The rule about what the answer must say is one file, used by all five.
+
+    Five of the six rows send a prompt; the sixth has none. If a row could be
+    held to a different rule about what counts as answering the question, the
+    answer term of Solved would not be one measurement, and the table's rows
+    would not be comparable on it.
+    """
+    rule = "_shared/answer_rule.txt"
+    for name in ("llm_only_structured", "llm_only_cot", "plan_act_nogate", "react_nogate", "evagent"):
+        assert rule in methods.prompt_files(name), name
+    assert rule not in methods.prompt_files("rule_based")
+
+
+def test_the_parse_prompt_states_no_value_of_its_own() -> None:
+    """The extraction prompt must not supply the benchmark's own numbers.
+
+    It used to give 50.0 kW, 0.45 and 0.12 $/kWh with the 4pm-9pm window, and
+    7.0 kW per plug, as defaults. Eighteen of the twenty frozen days state a
+    50 kW cap and all twenty state those two prices, so a model that never read
+    those sentences would have got them right anyway, and Formulation would have
+    been measuring the prompt. Every field is null in the schema now.
+    """
+    text = methods.read_text("_shared/parse_extraction_system.txt")
+    for crib in ("50.0", "0.45", "0.12", "7.0 (Level 2", "default 7.0"):
+        assert crib not in text, f"the parse prompt supplies {crib!r}"
+    assert "do not supply one from what is usual" in text
 
 
 def test_read_text_keeps_leading_whitespace() -> None:

@@ -15,11 +15,11 @@ class VoltageViolationScenarios:
     """Factory for voltage violation scenarios."""
 
     @staticmethod
-    def all_scenarios(network_name: str = "case14") -> list[FailureScenario]:
+    def all_scenarios(network_name: str = "case14", variant: int = 0) -> list[FailureScenario]:
         return [
-            HeavyLoadingUnderVoltage(network_name),
-            ExcessGenerationOverVoltage(network_name),
-            ReactiveImbalance(network_name),
+            HeavyLoadingUnderVoltage(network_name, variant),
+            ExcessGenerationOverVoltage(network_name, variant),
+            ReactiveImbalance(network_name, variant),
         ]
 
 
@@ -40,9 +40,23 @@ class HeavyLoadingUnderVoltage(FailureScenario):
             f"solver convergence range."
         )
 
+    LOCAL_SCALE_FACTOR = 5.0
+
     def apply(self) -> ScenarioResult:
-        self.net.load["p_mw"] *= self.SCALE_FACTOR
-        self.net.load["q_mvar"] *= self.SCALE_FACTOR
+        # variant 0: every load grows. variant 1: only the loads on the half of the
+        # network furthest from the slack bus, harder, and a local repair fixes it.
+        if self.variant % 2 == 0:
+            scaled_buses = [int(b) for b in self.net.load["bus"].unique()]
+            factor = self.SCALE_FACTOR
+            self.net.load["p_mw"] *= factor
+            self.net.load["q_mvar"] *= factor
+        else:
+            far = self.buses_by_distance_from_slack()
+            scaled_buses = sorted(set(far[: max(1, len(far) // 2)]) & {int(b) for b in self.net.load["bus"]})
+            factor = self.LOCAL_SCALE_FACTOR
+            mask = self.net.load["bus"].isin(scaled_buses)
+            self.net.load.loc[mask, "p_mw"] *= factor
+            self.net.load.loc[mask, "q_mvar"] *= factor
 
         # Run PF to find the affected buses
         converged = self.run_pf()
@@ -57,12 +71,13 @@ class HeavyLoadingUnderVoltage(FailureScenario):
             network_name=self.network_name,
             failure_type="voltage",
             root_causes=[
-                f"All loads scaled by {self.SCALE_FACTOR}×",
+                (f"All loads scaled by {factor}×" if self.variant % 2 == 0
+                 else f"The loads at the {len(scaled_buses)} buses furthest from the slack bus scaled by {factor}×"),
                 "Increased reactive power demand causes voltage drop",
                 "Buses far from generation experience under-voltage",
             ],
             affected_components={
-                "load": self.net.load.index.tolist(),
+                "load": [int(i) for i in self.net.load.index if int(self.net.load.at[i, "bus"]) in scaled_buses],
                 "bus": violated,
             },
             known_fix=(
@@ -70,7 +85,9 @@ class HeavyLoadingUnderVoltage(FailureScenario):
                 "buses, or reduce loading to normal levels"
             ),
             metadata={
-                "scale_factor": self.SCALE_FACTOR,
+                "scale_factor": factor,
+                "variant": self.variant,
+                "scaled_buses": scaled_buses,
                 "converged": converged,
                 "violated_buses": violated,
             },
@@ -156,13 +173,14 @@ class ReactiveImbalance(FailureScenario):
             f"compensation, causing voltage depression."
         )
 
+    N_BUSES = 3
+
     def apply(self) -> ScenarioResult:
-        # Pick buses far from the slack bus
-        slack_bus = int(self.net.ext_grid["bus"].iloc[0])
-        remote_buses = [
-            int(b) for b in self.net.bus.index
-            if b != slack_bus
-        ][-3:]  # Last 3 buses (typically farthest)
+        # variant: which three buses. Ranked by hop distance from the slack bus,
+        # furthest first, so variant 0 is the worst place to put the demand.
+        far = self.buses_by_distance_from_slack()
+        start = (self.variant * self.N_BUSES) % max(1, len(far))
+        remote_buses = far[start : start + self.N_BUSES] or far[: self.N_BUSES]
 
         for bus in remote_buses:
             pp.create_load(self.net, bus=bus, p_mw=0, q_mvar=self.Q_INJECTION_MVAR,
@@ -191,6 +209,7 @@ class ReactiveImbalance(FailureScenario):
             ),
             metadata={
                 "q_injection_mvar": self.Q_INJECTION_MVAR,
+                "variant": self.variant,
                 "target_buses": remote_buses,
                 "converged": converged,
                 "violated_buses": violated,

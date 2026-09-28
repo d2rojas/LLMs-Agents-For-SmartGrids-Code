@@ -33,6 +33,16 @@ from config import MAX_COMPLETION_TOKENS
 
 BUDGET_NOTE = "Tool budget exhausted. Write the final JSON answer now from what you have; do not call tools."
 
+# Tool calls left when the loop tells the model to start closing. Enough for run_power_flow
+# and the three checks, with one to spare. Two of the gated row's six escalations in the
+# smoke of 2026-09-28 were budget running out on an action, with nothing left to verify it;
+# the warning is identical for the gated and the ungated row, so it cannot separate them.
+BUDGET_WARNING_AT = 5
+BUDGET_WARNING = (
+    "Tool budget: {left} of {total} calls left. Spend what remains on run_power_flow and the checks, then write the "
+    "final JSON answer from what they return."
+)
+
 
 def _final_answer_call(client: Any, rec: Recorder, conversation: List[Dict[str, Any]], spec_model: str, temperature: float) -> str:
     conversation.append({"role": "user", "content": BUDGET_NOTE})
@@ -60,6 +70,7 @@ def run_react(ctx: Context, *, gate: bool) -> MethodRun:
     error: Optional[str] = None
     attempts = 0
     gate_history: List[Dict[str, Any]] = []
+    warned = False
     t_start = time.time()
 
     try:
@@ -83,6 +94,10 @@ def run_react(ctx: Context, *, gate: bool) -> MethodRun:
                         entry = dispatcher.log[-1]
                     rec.record_tool(entry)
                     conversation.append({"role": "tool", "tool_call_id": tc["id"], "content": json.dumps(out, default=str)})
+                left = (ctx.max_tool_calls - dispatcher.n_calls) if ctx.max_tool_calls else None
+                if left is not None and 0 < left <= BUDGET_WARNING_AT and not warned:
+                    warned = True
+                    conversation.append({"role": "user", "content": BUDGET_WARNING.format(left=left, total=ctx.max_tool_calls)})
                 if dispatcher.exhausted and rec.n_llm_calls < ctx.max_llm_calls:
                     # one more call, without tools, for the answer
                     answer_text = _final_answer_call(ctx.client, rec, conversation, ctx.spec.model, ctx.temperature)

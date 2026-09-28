@@ -242,6 +242,9 @@ ARCH_METHODS: dict[str, dict[str, Any]] = {
     "react_nogate": {"architecture": "react", "gate": False, "memory": False},
     "plan_act": {"architecture": "plan_act", "gate": True, "memory": False},
     "plan_act_nogate": {"architecture": "plan_act", "gate": False, "memory": False},
+    # Ablation (2026-09-28): the same task-level gate PFAgent runs, placed on the planner instead of
+    # the ReAct loop. Asks whether the gate's value depends on the architecture under it.
+    "plan_act_gate": {"architecture": "plan_act", "gate": False, "memory": False, "final_gate": True},
     # PFAgent = ReAct with no in-loop observation gate, plus the task-level final-answer
     # verification V(x,c,z,y) (methods.agent.engine.verify_final_answer). "pfagent_obsgate" keeps
     # the old (pre-V) behaviour reachable under its own name, for the already-reported
@@ -456,13 +459,79 @@ def _extract_first_json_object(text: str) -> Optional[dict[str, Any]]:
 # ---------------------------------------------------------------------------- legacy tasks
 
 
+def _formulation_array(text: str) -> Optional[list[Any]]:
+    """The value of a top-level ``"formulation": [...]`` in text that does not parse as JSON, read by
+    bracket matching from the key and closed off if the text ends inside it."""
+    i = text.find('"formulation"')
+    if i < 0:
+        return None
+    j = text.find("[", i)
+    if j < 0:
+        return None
+    depth = 0
+    in_str = False
+    esc = False
+    for k in range(j, len(text)):
+        c = text[k]
+        if in_str:
+            if esc:
+                esc = False
+            elif c == "\\":
+                esc = True
+            elif c == '"':
+                in_str = False
+            continue
+        if c == '"':
+            in_str = True
+        elif c == "[":
+            depth += 1
+        elif c == "]":
+            depth -= 1
+            if depth == 0:
+                try:
+                    v = json.loads(text[j:k + 1])
+                    return v if isinstance(v, list) else None
+                except Exception:
+                    return None
+    # the text ends inside the array: keep the complete objects written so far
+    frag = text[j:]
+    out: list[Any] = []
+    depth = 0
+    in_str = False
+    esc = False
+    start = None
+    for k, c in enumerate(frag):
+        if in_str:
+            if esc: esc = False
+            elif c == "\\": esc = True
+            elif c == '"': in_str = False
+            continue
+        if c == '"': in_str = True
+        elif c == "{":
+            if depth == 0: start = k
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0 and start is not None:
+                try:
+                    out.append(json.loads(frag[start:k + 1]))
+                except Exception:
+                    pass
+                start = None
+    return out or None
+
+
 def declared_formulation(raw_text: str) -> Optional[list[dict[str, Any]]]:
     """The ``formulation`` list a no-tools answer declares (2026-09-23 prompt), normalized to
     ``[{"tool", "args"}]``; None when the JSON has no such field."""
     obj = _extract_first_json_object(raw_text or "")
-    if not isinstance(obj, dict):
-        return None
-    decl = obj.get("formulation")
+    decl = obj.get("formulation") if isinstance(obj, dict) else None
+    if decl is None:
+        # The answer object may be cut off before it closes: on the 300-bus system the state alone
+        # exceeds what a small model can emit, so the JSON is truncated and no longer parses, and the
+        # declaration is lost with it even though `formulation` is the first field written. Recover
+        # that array on its own. Applies to every method, since any of them can be truncated.
+        decl = _formulation_array(raw_text or "")
     if decl is None:
         return None
     if isinstance(decl, dict):

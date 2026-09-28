@@ -1,0 +1,23 @@
+RUN 02  |  case30-ambiguous-007-s0  |  llm_only:structured  |  gpt-4o-mini  |  IEEE 30-bus  |  seed 0  |  difficulty ambiguous
+Request: Load the 30-bus test case (case30) and disconnect the line between bus 8 and bus 28 (1-based).
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): { "formulation": [ {"tool": "load_case", "args": {"case_name": "case30"}}, {"tool": "disconnect_line", "args": {"from_bus": 8, "to_bus": 28}}, {"tool": "run_powerflow", "args": {}} ], "converged": tru...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 4105 in / 2666 out tokens, $0.0022, 31.5 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case30") -> disconnect_line(from_bus=8, to_bus=28)
+  declared: load_case(case_name="case30") -> disconnect_line(from_bus=8, to_bus=28) -> run_powerflow()   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 144, untraceable: 144 -> traceable answer: no
+  untraceable values: ['139.8 MW', '139.5 MW', '0.3 MW', '0.0', '1.01', '-1.5', '1.02', '-2.0', '1.03', '-3.0', '1.01', '-1.0', '0.0', '1.02', '-2.5', '1.01', '-1.5', '0.0', '1.01', '-1.0']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: voltage_error
+  against the reference: voltage MAE 0.0236 p.u., flow MAE 9.1565 MW, KCL mismatch 16.394 MW, power-balance error n/a
+  raw trace: case30-ambiguous-007-s0_run0.json
