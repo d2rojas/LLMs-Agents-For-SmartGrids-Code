@@ -1,0 +1,43 @@
+RUN 01  |  case14-disconnected_subnetwork-v0  |  rule_based  |  none:rule_based  |  IEEE 14-bus
+Scenario: Disconnected sub-network (nonconvergence); injected fault: islanding {"bus": [1], "line": [0, 2, 3, 4]}
+Initial state: islanded_load, 7 new violation(s)
+Request: The AC power flow on the IEEE 14-bus system (case14) converged, but 1 bus(es) with load are islanded and 7 new limit violation(s) appeared. Diagnose the cause and restore a secure operating point: the power flow converges, no in-service load is on an islanded bus, every bus voltage is within [0.95, 1.05] p.u., and no line or transformer is above 100 % loading, apart from the violations the base network already has. Use only the actions available. Report the diagnosis, the actions taken, and the final state.
+
+WHAT THE METHOD DID
+   1. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+   2. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [{"bus": 1, "vm_pu": 0.0, "limit": 0.94, "kind": "under"}, {"bus": 4, "vm_pu": 0.9258, "limit": 0.94, "kind": "under"}], "n_new_violations": … (453 chars)
+   3. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 7, "loading_percent": 170.2, "from_bus": 5, "to_bus": 10}, {"element": "line", "index": 9, "loading_percent": 100.2, "from_bu… (763 chars)
+   4. find_disconnected_areas({})
+       -> {"disconnected_buses": [1], "connected_buses": [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "1 bus(es) not connected to slack."}
+   5. switch_element({"element_type": "line", "element_index": 0, "in_service": true})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 0, "old_in_service": false, "new_in_service": true, "islanded_load_buses_after": [], "note": "This switching left no load stranded."}
+   6. switch_element({"element_type": "line", "element_index": 2, "in_service": true})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 2, "old_in_service": false, "new_in_service": true, "islanded_load_buses_after": [], "note": "This switching left no load stranded."}
+   7. switch_element({"element_type": "line", "element_index": 3, "in_service": true})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 3, "old_in_service": false, "new_in_service": true, "islanded_load_buses_after": [], "note": "This switching left no load stranded."}
+   8. switch_element({"element_type": "line", "element_index": 4, "in_service": true})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 4, "old_in_service": false, "new_in_service": true, "islanded_load_buses_after": [], "note": "This switching left no load stranded."}
+   9. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  10. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  Totals: 0 LLM calls, 10 tool calls, 0 in / 0 out tokens, 0.51 s
+
+DIAGNOSIS  (is the injected fault named?)
+  answer: islanding {"bus": [1], "line": [0, 2, 3, 4]}   verdict: PASS   islanding, 5 injected component(s) named
+
+STATE  (the harness's own power flow on the final network)
+  converged: True   secure: True   new violations: 0   islanded load: []
+  repaired: True   improved: True   feasible: True
+
+REPORTING
+  status claimed: repaired   final_state claimed: converged=True, new violations=0
+  numbers in the answer: 0, untraceable: 0 -> traceable: pass
+
+OUTCOME: SOLVED   (secure, claimed, traceable, consistent)
+
+SUMMARY WRITTEN BY THE METHOD
+  Rules fired: overvoltage, line_overload, gen_at_q_limit. Actions applied: switch_element. The network is secure.

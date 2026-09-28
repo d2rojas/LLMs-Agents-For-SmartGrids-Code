@@ -40,11 +40,11 @@ from config import NETWORK_LABELS  # noqa: E402
 from evaluation import scoring  # noqa: E402
 
 SUMMARY_COLUMNS = [
-    "nn", "request_id", "scenario_id", "category", "injected_fault_type", "initial_state", "initial_n_new",
+    "nn", "request_id", "scenario_id", "variant", "category", "injected_fault_type", "initial_state", "initial_n_new",
     "formulation_exact", "formulation_error_type", "formulation_detail",
-    "outcome", "solved", "solved_reason", "escalated", "wrong_silently", "escalation_reason",
+    "outcome", "solved", "solved_reason", "escalated", "wrong_silently", "escalation_reason", "escalation_kind",
     "status", "claims_repaired", "final_converged", "final_secure", "final_n_new", "final_islanded",
-    "repaired", "improved", "feasible",
+    "repaired", "improved", "feasible", "load_served_pct", "load_served_mw",
     "gate_pass", "gate_failed", "traceable", "n_numbers", "n_untraceable_numbers",
     "n_actions", "n_llm_calls", "n_tool_calls", "prompt_tokens", "completion_tokens", "cost_usd", "wall_time_s",
     "budget_exhausted", "error",
@@ -67,16 +67,18 @@ def summary_row(nn: int, r: Dict[str, Any]) -> Dict[str, Any]:
     oc = r.get("common_outcome")
     g = r.get("gate") or {}
     return {
-        "nn": nn, "request_id": r["request_id"], "scenario_id": r["scenario_id"], "category": r["category"],
+        "nn": nn, "request_id": r["request_id"], "scenario_id": r["scenario_id"], "variant": r.get("variant", 0), "category": r["category"],
         "injected_fault_type": r.get("injected_fault_type"), "initial_state": r.get("initial_state"), "initial_n_new": r.get("initial_n_new"),
         "formulation_exact": r.get("common_formulation_exact"), "formulation_error_type": r.get("common_formulation_error_type"),
         "formulation_detail": r.get("common_formulation_detail"),
         "outcome": oc, "solved": oc == "solved", "solved_reason": r.get("common_reason"), "escalated": oc == "escalated",
         "wrong_silently": oc == "wrong_unflagged", "escalation_reason": r.get("common_escalation_reason"),
+        "escalation_kind": r.get("common_escalation_kind"),
         "status": r.get("common_status"), "claims_repaired": r.get("common_claims_repaired"),
         "final_converged": r.get("common_converged"), "final_secure": r.get("common_secure"), "final_n_new": r.get("common_n_new_violations"),
         "final_islanded": r.get("common_islanded"),
         "repaired": r.get("common_repaired"), "improved": r.get("common_improved"), "feasible": r.get("common_feasible"),
+        "load_served_pct": r.get("common_load_served_pct"), "load_served_mw": r.get("common_load_served_mw"),
         "gate_pass": g.get("passed") if g else "", "gate_failed": ",".join(g.get("failed") or []) if g else "",
         "traceable": r.get("common_traceable"), "n_numbers": r.get("common_n_numbers"), "n_untraceable_numbers": r.get("common_n_untraceable"),
         "n_actions": r.get("n_actions"), "n_llm_calls": r.get("n_llm_calls"), "n_tool_calls": r.get("n_tool_calls"),
@@ -185,10 +187,12 @@ def render_report(header: Dict[str, Any], rows: List[Dict[str, Any]], agg: Dict[
           f"| Task utility | Repaired (secure final network) | {agg.get('common_repaired_count')}/{n} ({agg.get('common_repaired_rate')}%) |",
           f"| Task utility | Improved | {agg.get('common_improved_count')}/{n} ({agg.get('common_improved_rate')}%) |",
           f"| Task utility | New violations, before -> after (scenarios converged at both ends, n={agg.get('violations_comparable_n')}) | {agg.get('violations_initial_new')} -> {agg.get('violations_final_new')} |",
+          f"| Task utility | Load served, mean / worst | {agg.get('load_served_pct_mean')} % / {agg.get('load_served_pct_min')} % of the base network's demand (a scenario that still carries the injected load increase counts as 100, not more) |",
+          f"| Solver-grounded correctness | Solved autonomously | {agg.get('common_solved_count')}/{n} ({agg.get('common_solved_rate')}%) |",
+          f"| Solver-grounded correctness | Escalated to a person | {agg.get('common_escalated_count')}/{n} ({agg.get('common_escalated_rate')}%) |",
+          f"| Solver-grounded correctness | Wrong, unflagged | {agg.get('common_wrong_count')}/{n} ({agg.get('common_wrong_rate')}%) |",
           f"| Solver-grounded correctness | Feasible (final power flow converges) | {agg.get('common_feasible_count')}/{n} ({agg.get('common_feasible_rate')}%) |",
           f"| Solver-grounded correctness | Traceable answers | {agg.get('common_traceable_count')}/{n} ({agg.get('common_traceable_rate')}%) |",
-          f"| Solver-grounded correctness | Wrong, unflagged | {agg.get('common_wrong_count')}/{n} ({agg.get('common_wrong_rate')}%) |",
-          f"| Cost and operation | Escalated | {agg.get('common_escalated_count')}/{n} ({agg.get('common_escalated_rate')}%) |",
           f"| Cost and operation | LLM calls / tool calls, mean | {agg.get('n_llm_calls_mean')} / {agg.get('n_tool_calls_mean')} |",
           f"| Cost and operation | Prompt / completion tokens, mean | {agg.get('prompt_tokens_mean')} / {agg.get('completion_tokens_mean')} |",
           f"| Cost and operation | Cost, total | ${agg.get('cost_usd_total', 0):.4f} |",
@@ -203,18 +207,30 @@ def render_report(header: Dict[str, Any], rows: List[Dict[str, Any]], agg: Dict[
             L.append(f"| {g} | {len(rs)} | {sum(1 for r in rs if r.get('common_outcome') == 'solved')} | {sum(1 for r in rs if r.get('common_outcome') == 'escalated')} | "
                      f"{sum(1 for r in rs if r.get('common_outcome') == 'wrong_unflagged')} | {sum(1 for r in rs if r.get('common_repaired'))} | {sum(1 for r in rs if r.get('common_formulation_exact'))} |")
         L.append("")
+    esc = [r for r in rows if r.get("common_outcome") == "escalated"]
+    if esc:
+        kinds = Counter(r.get("common_escalation_kind") or "unlabelled" for r in esc)
+        L += ["## Why it escalated", "",
+              "An escalation after a real improvement is not the same as a refusal, and one caused by the budget ending "
+              "on an action is not the same as either. The column counts them together because a person still has to act; "
+              "this table says which kind they were.", "",
+              "| kind | count |", "|---|---:|"]
+        for k, c in kinds.most_common():
+            L.append(f"| {k} | {c} |")
+        L.append("")
     for oc, title in (("wrong_unflagged", "Wrong and unflagged"), ("escalated", "Escalated")):
         sel = [r for r in rows if r.get("common_outcome") == oc]
         L += [f"## {title} ({len(sel)})", ""]
         if not sel:
             L.append("none")
         for r in sel:
-            L.append(f"- `{names.get(r['request_id'], r['request_id'])}` {r['scenario_id']}: {r.get('common_reason')}")
+            L.append(f"- `{names.get(r['request_id'], r['request_id'])}` {r['scenario_id']}: {r.get('common_reason')}"
+                     + (f" — {r['common_escalation_kind']}" if r.get("common_escalation_kind") else ""))
         L.append("")
     L += ["## Every scenario", "", "| nn | scenario | initial | outcome | diagnosis | final | actions | LLM/tool calls | tokens | why |", "|---|---|---|---|---|---|---:|---|---|---|"]
     for i, r in enumerate(rows, 1):
         final = "not converged" if not r.get("common_converged") else ("secure" if r.get("common_secure") else f"{r.get('common_n_new_violations')} new" + (f", islanded {r.get('common_islanded')}" if r.get("common_islanded") else ""))
-        L.append(f"| {i:02d} | {r['scenario_id']} | {r.get('initial_state')} ({r.get('initial_n_new')}) | {r.get('common_outcome')} | "
+        L.append(f"| {i:02d} | {r['scenario_id']}-v{r.get('variant', 0)} | {r.get('initial_state')} ({r.get('initial_n_new')}) | {r.get('common_outcome')} | "
                  f"{'ok' if r.get('common_formulation_exact') else r.get('common_formulation_error_type')} | {final} | {r.get('n_actions')} | "
                  f"{r.get('n_llm_calls')}/{r.get('n_tool_calls')} | {(r.get('prompt_tokens') or 0) + (r.get('completion_tokens') or 0)} | {r.get('common_reason')} |")
     L += ["", "Traces: `traces/NN_<request-id>.narrative.txt` (what happened), `.transcript.txt` (the raw exchange), `.json` (the trace)."]

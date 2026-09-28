@@ -11,6 +11,11 @@ be read next to a row of the power-flow one.
                   never a term of Solved)
     state         the harness's own power flow on the final network: converged,
                   islanded load, violations beyond the base network
+    load served  the active demand still in service, against the base network's demand.
+                 A network with every load curtailed is secure, and the smoke test showed a
+                 method reaching that state; without this column the table would call it a
+                 repair. It is reported beside Repaired, never gated: how much load a repair
+                 may shed is an operator's judgement, not a threshold the harness can set.
     repaired / improved / feasible   the paper's three definitions, on the harness state
     traceable     every number in the answer appears in a tool output or the evidence
     escalated     the answer declares not_repaired or cannot_repair, or the harness
@@ -31,15 +36,16 @@ from evaluation.scenarios import Injected
 from methods.agent.gate import traceability
 from methods.answer import Answer
 from methods.common import MethodRun
-from solver.violations import Key, State, observe
+from solver.violations import Key, State, observe, served_load_mw
 
 FIELDS = [
     "common_json_ok", "common_status", "common_claims_repaired", "common_declares_failure",
     "common_converged", "common_secure", "common_islanded", "common_n_violations", "common_n_new_violations",
+    "common_load_served_mw", "common_load_served_pct",
     "common_repaired", "common_improved", "common_feasible",
     "common_formulation_exact", "common_formulation_error_type", "common_formulation_detail",
     "common_n_numbers", "common_n_untraceable", "common_traceable",
-    "common_escalated", "common_escalation_reason", "common_solved", "common_reason", "common_outcome",
+    "common_escalated", "common_escalation_reason", "common_escalation_kind", "common_solved", "common_reason", "common_outcome",
     "common_gate_passed", "common_gate_failed",
 ]
 
@@ -55,6 +61,7 @@ _ALIASES = {
     "line_outage": {"line_outage", "line_out", "line_disconnected"},
     "trafo_outage": {"trafo_outage", "transformer_outage", "trafo_out"},
     "none": {"none", "normal", "no_fault"},
+    "generation_excess": {"generation_excess", "excess_generation", "overgeneration"},
 }
 
 
@@ -62,7 +69,9 @@ def score_diagnosis(answer: Answer, injected: Injected) -> Dict[str, Any]:
     """Exact when the fault type matches and at least one injected component is named (none needs no component)."""
     if not answer.json_ok or answer.fault_type is None:
         return {"exact": False, "error_type": "no_diagnosis", "detail": "the answer carries no diagnosis"}
-    accepted = _ALIASES.get(injected.fault_type, {injected.fault_type})
+    accepted = set(_ALIASES.get(injected.fault_type, {injected.fault_type}))
+    for extra in injected.also_accepted:  # a fault with more than one correct name
+        accepted |= set(_ALIASES.get(extra, {extra}))
     type_ok = answer.fault_type in accepted
     if injected.fault_type == "none":
         exact = type_ok
@@ -78,7 +87,8 @@ def score_diagnosis(answer: Answer, injected: Injected) -> Dict[str, Any]:
     return {"exact": True, "error_type": "ok", "detail": f"{injected.fault_type}, {len(overlap)} injected component(s) named"}
 
 
-def score_run(run: MethodRun, *, injected: Injected, initial: State, base_keys: FrozenSet[Key], evidence_text: str, request_text: str) -> Dict[str, Any]:
+def score_run(run: MethodRun, *, injected: Injected, initial: State, base_keys: FrozenSet[Key], evidence_text: str,
+              request_text: str, base_load_mw: Optional[float] = None) -> Dict[str, Any]:
     out: Dict[str, Any] = {k: None for k in FIELDS}
     a = run.answer
     final = observe(run.final_net, base_keys)
@@ -92,6 +102,9 @@ def score_run(run: MethodRun, *, injected: Injected, initial: State, base_keys: 
     out["common_islanded"] = list(final.islanded_load_buses)
     out["common_n_violations"] = final.n_violations
     out["common_n_new_violations"] = final.n_new
+    served = served_load_mw(run.final_net)
+    out["common_load_served_mw"] = round(served, 2)
+    out["common_load_served_pct"] = round(100.0 * served / base_load_mw, 1) if base_load_mw else None
 
     # the paper's three definitions, on the harness state and relative to the base network
     out["common_feasible"] = bool(final.converged)
@@ -138,6 +151,21 @@ def score_run(run: MethodRun, *, injected: Injected, initial: State, base_keys: 
         return out
 
     if out["common_escalated"]:
+        # what kind of escalation: the column counts them all the same, the report does not
+        gate_failed = list((run.gate or {}).get("failed") or [])
+        if "currency" in gate_failed and run.budget_exhausted:
+            kind = "budget ended on an action, nothing verified it"
+        elif gate_failed:
+            kind = "the gate rejected the answer: " + ", ".join(gate_failed)
+        elif run.budget_exhausted:
+            kind = "budget exhausted"
+        elif out["common_improved"]:
+            kind = "declared, after improving the network"
+        elif out["common_feasible"]:
+            kind = "declared, network no better than it started"
+        else:
+            kind = "declared, network still without a solution"
+        out["common_escalation_kind"] = kind
         out["common_solved"] = False
         out["common_reason"] = "escalated: " + out["common_escalation_reason"]
         out["common_outcome"] = "escalated"
@@ -160,6 +188,11 @@ def score_run(run: MethodRun, *, injected: Injected, initial: State, base_keys: 
     out["common_reason"] = reason
     out["common_outcome"] = "solved" if solved else "wrong_unflagged"
     return out
+
+
+def _ls_rows(rs):
+    """The rows that carry a load-served number at all."""
+    return [r for r in rs if r.get("common_load_served_pct") is not None]
 
 
 def aggregate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -194,6 +227,11 @@ def aggregate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "common_traceable_count": cnt("common_traceable", True), "common_traceable_rate": rate(cnt("common_traceable", True)),
         "violations_initial_new": sum(int(r["initial_n_new"]) for r in conv_both), "violations_final_new": sum(int(r["common_n_new_violations"]) for r in conv_both),
         "violations_comparable_n": len(conv_both),
+        # Capped at 100: serving more than the base network's demand means the injected load
+        # increase is still connected, which is a failure to repair, not extra load served.
+        # The uncapped per-scenario value stays in summary.csv.
+        "load_served_pct_mean": (round(sum(min(float(r["common_load_served_pct"]), 100.0) for r in _ls_rows(rs)) / len(_ls_rows(rs)), 2) if _ls_rows(rs) else None),
+        "load_served_pct_min": (min((min(float(r["common_load_served_pct"]), 100.0) for r in _ls_rows(rs)), default=None)),
         "n_llm_calls_mean": mean("n_llm_calls"), "n_tool_calls_mean": mean("n_tool_calls"),
         "prompt_tokens_mean": mean("prompt_tokens"), "completion_tokens_mean": mean("completion_tokens"),
         "tokens_total": int(sum(float(r.get("prompt_tokens") or 0) + float(r.get("completion_tokens") or 0) for r in rs)),

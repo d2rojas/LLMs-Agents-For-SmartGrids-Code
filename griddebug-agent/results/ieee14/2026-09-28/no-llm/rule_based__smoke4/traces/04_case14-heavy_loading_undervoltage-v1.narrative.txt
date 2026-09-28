@@ -1,0 +1,103 @@
+RUN 04  |  case14-heavy_loading_undervoltage-v1  |  rule_based  |  none:rule_based  |  IEEE 14-bus
+Scenario: Heavy loading under-voltage (3x) (voltage); injected fault: load_increase {"load": [5, 6, 7, 10]}
+Initial state: violations, 11 new violation(s)
+Request: The AC power flow on the IEEE 14-bus system (case14) converged with 11 new limit violation(s). Diagnose the cause and restore a secure operating point: the power flow converges, no in-service load is on an islanded bus, every bus voltage is within [0.95, 1.05] p.u., and no line or transformer is above 100 % loading, apart from the violations the base network already has. Use only the actions available. Report the diagnosis, the actions taken, and the final state.
+
+WHAT THE METHOD DID
+   1. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+   2. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [{"bus": 3, "vm_pu": 0.9072, "limit": 0.94, "kind": "under"}, {"bus": 4, "vm_pu": 0.9238, "limit": 0.94, "kind": "under"}, {"bus": 13, "vm_pu… (531 chars)
+   3. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 7, "loading_percent": 895.5, "from_bus": 5, "to_bus": 10}, {"element": "line", "index": 8, "loading_percent": 236.0, "from_bu… (1030 chars)
+   4. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+   5. curtail_load({"load_index": 6, "scale_factor": 0.8})
+       -> {"action": "curtail_load", "success": true, "load_index": 6, "old_p_mw": 45.0, "new_p_mw": 36.0, "scale_factor": 0.8}
+   6. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+   7. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [{"bus": 3, "vm_pu": 0.9162, "limit": 0.94, "kind": "under"}, {"bus": 4, "vm_pu": 0.9318, "limit": 0.94, "kind": "under"}, {"bus": 13, "vm_pu… (531 chars)
+   8. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 7, "loading_percent": 815.6, "from_bus": 5, "to_bus": 10}, {"element": "line", "index": 8, "loading_percent": 227.2, "from_bu… (942 chars)
+   9. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  10. scale_all_loads({"factor": 0.8, "_step": 1})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.8, "old_total_p_mw": 477.6, "new_total_p_mw": 382.08}
+  11. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  12. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [{"bus": 13, "vm_pu": 0.8567, "limit": 0.94, "kind": "under"}], "n_new_violations": 1, "pre_existing_in_base": {"n": 4, "buses": [8, 9, 5, 7]… (402 chars)
+  13. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 7, "loading_percent": 552.6, "from_bus": 5, "to_bus": 10}, {"element": "line", "index": 8, "loading_percent": 160.5, "from_bu… (940 chars)
+  14. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  15. scale_all_loads({"factor": 0.8, "_step": 2})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.8, "old_total_p_mw": 382.08, "new_total_p_mw": 305.66}
+  16. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  17. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [{"bus": 13, "vm_pu": 0.9194, "limit": 0.94, "kind": "under"}], "n_new_violations": 1, "pre_existing_in_base": {"n": 2, "buses": [5, 7]}, "no… (396 chars)
+  18. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 7, "loading_percent": 400.4, "from_bus": 5, "to_bus": 10}, {"element": "line", "index": 8, "loading_percent": 120.1, "from_bu… (940 chars)
+  19. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  20. scale_all_loads({"factor": 0.8, "_step": 3})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.8, "old_total_p_mw": 305.66, "new_total_p_mw": 244.53}
+  21. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  22. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [], "n_new_violations": 0, "pre_existing_in_base": {"n": 2, "buses": [5, 7]}, "note": "Only new_violations count against the repair. The buse… (336 chars)
+  23. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 7, "loading_percent": 297.0, "from_bus": 5, "to_bus": 10}, {"element": "line", "index": 9, "loading_percent": 125.2, "from_bu… (852 chars)
+  24. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  25. scale_all_loads({"factor": 0.8, "_step": 4})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.8, "old_total_p_mw": 244.53, "new_total_p_mw": 195.62}
+  26. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  27. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [], "n_new_violations": 0, "pre_existing_in_base": {"n": 2, "buses": [5, 7]}, "note": "Only new_violations count against the repair. The buse… (336 chars)
+  28. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 7, "loading_percent": 222.5, "from_bus": 5, "to_bus": 10}, {"element": "line", "index": 11, "loading_percent": 104.8, "from_b… (764 chars)
+  29. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  30. curtail_load({"load_index": 10, "scale_factor": 0.8})
+       -> {"action": "curtail_load", "success": true, "load_index": 10, "old_p_mw": 30.52, "new_p_mw": 24.41, "scale_factor": 0.8}
+  31. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  32. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [], "n_new_violations": 0, "pre_existing_in_base": {"n": 2, "buses": [5, 7]}, "note": "Only new_violations count against the repair. The buse… (336 chars)
+  33. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 7, "loading_percent": 216.9, "from_bus": 5, "to_bus": 10}, {"element": "line", "index": 12, "loading_percent": 263.9, "from_b… (675 chars)
+  34. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  35. scale_all_loads({"factor": 0.8, "_step": 5})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.8, "old_total_p_mw": 189.52, "new_total_p_mw": 151.62}
+  36. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  37. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [], "n_new_violations": 0, "pre_existing_in_base": {"n": 3, "buses": [5, 7, 11]}, "note": "Only new_violations count against the repair. The … (340 chars)
+  38. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 7, "loading_percent": 163.5, "from_bus": 5, "to_bus": 10}, {"element": "line", "index": 12, "loading_percent": 194.1, "from_b… (675 chars)
+  39. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  40. scale_all_loads({"factor": 0.8, "_step": 6})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.8, "old_total_p_mw": 151.62, "new_total_p_mw": 121.29}
+  Totals: 0 LLM calls, 40 tool calls, 0 in / 0 out tokens, 0.418 s, budget exhausted
+
+DIAGNOSIS  (is the injected fault named?)
+  answer: voltage_setpoint {"ext_grid": [0]}   verdict: FAIL   answer voltage_setpoint, injected load_increase
+
+STATE  (the harness's own power flow on the final network)
+  converged: True   secure: False   new violations: 4   islanded load: []
+  repaired: False   improved: True   feasible: True
+
+REPORTING
+  status claimed: not_repaired   final_state claimed: converged=True, new violations=4
+  numbers in the answer: 8, untraceable: 4 -> traceable: FAIL
+
+OUTCOME: ESCALATED   (escalated: declared not_repaired)
+
+SUMMARY WRITTEN BY THE METHOD
+  Rules fired: overvoltage, line_overload, gen_at_q_limit. Actions applied: curtail_load, scale_all_loads. Violations remain; see remaining_violations.

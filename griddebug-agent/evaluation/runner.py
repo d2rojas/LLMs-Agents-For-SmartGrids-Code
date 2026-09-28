@@ -37,7 +37,7 @@ from config import (  # noqa: E402
 )
 from evaluation import scoring  # noqa: E402
 from evaluation.requests import Request, build_request, fresh_network  # noqa: E402
-from evaluation.scenarios import SCENARIO_IDS, manifest as M  # noqa: E402
+from evaluation.scenarios import INSTANCES, N_INSTANCES, SCENARIO_IDS, manifest as M  # noqa: E402
 from methods.common import Context, MethodRun  # noqa: E402
 
 RESULTS = PROJECT_ROOT / "results"
@@ -48,7 +48,7 @@ TOKENS_GUESS = {
     "rule_based": (0, 0), "llm_only_structured": (4500, 700), "llm_only_cot": (4700, 1400),
     "plan_act_nogate": (9000, 1200), "react_nogate": (100000, 2500), "griddebug": (110000, 2800),
 }
-NETWORK_FACTOR = {"case14": 0.8, "case30": 1.0, "case57": 1.5, "case118": 2.5}
+NETWORK_FACTOR = {"case14": 0.8, "case30": 1.0, "case57": 1.3, "case118": 2.0, "case300": 3.3}
 
 
 def git_commit() -> str:
@@ -81,13 +81,13 @@ def run_method(method: str, ctx: Context) -> MethodRun:
 
 def row_for(req: Request, run: MethodRun, spec: ModelSpec, pricing: Dict[str, Any]) -> Dict[str, Any]:
     scored = scoring.score_run(run, injected=req.injected, initial=req.initial, base_keys=req.base_keys,
-                               evidence_text=req.evidence_text, request_text=req.text)
+                               evidence_text=req.evidence_text, request_text=req.text, base_load_mw=req.base_load_mw)
     cost = price_usd(spec, run.prompt_tokens, run.completion_tokens, pricing) if spec.uses_llm else 0.0
     tools_by_kind: Dict[str, int] = {}
     for e in run.tool_log:
         tools_by_kind[e.get("kind", "?")] = tools_by_kind.get(e.get("kind", "?"), 0) + 1
     return {
-        "request_id": req.request_id, "network": req.network, "scenario_id": req.scenario_id, "category": req.category,
+        "request_id": req.request_id, "network": req.network, "scenario_id": req.scenario_id, "variant": req.variant, "category": req.category,
         "label": req.label, "method": run.method, "model": spec.key,
         "injected_fault_type": req.injected.fault_type, "injected_components": req.injected.components,
         "initial_state": req.initial.label, "initial_converged": req.initial.converged, "initial_n_new": req.initial.n_new,
@@ -121,7 +121,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--method", action="append", help="one of the six methods; repeatable; default all six")
     ap.add_argument("--model", default=DEFAULT_MODEL_SPEC, help="provider:model (rule_based always runs with no model)")
     ap.add_argument("--network", action="append", help="case14, case30, case57; repeatable; default all three")
-    ap.add_argument("--scenario", action="append", help="scenario id; repeatable; default all thirteen")
+    ap.add_argument("--scenario", action="append", help="fault class id; repeatable; every variant of it runs; default all thirteen classes (20 instances)")
     ap.add_argument("--tag", help="suffix on the method folder (a smoke test is not the paper set)")
     ap.add_argument("--date", default=_dt.date.today().isoformat())
     ap.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE)
@@ -138,6 +138,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         methods.card(m)  # unknown method is an error before anything runs
     networks = args.network or list(NETWORKS)
     scenario_ids = args.scenario or list(SCENARIO_IDS)
+    for sid in scenario_ids:
+        if sid not in SCENARIO_IDS:
+            raise SystemExit(f"unknown scenario class {sid!r}; known: {', '.join(SCENARIO_IDS)}")
+    instances = [(sid, v) for sid, v in INSTANCES if sid in set(scenario_ids)]
     spec = parse_model_spec(args.model)
     pricing = load_pricing()
 
@@ -147,13 +151,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     for net in networks:
         for m in method_names:
             s = ModelSpec("none", "rule_based") if m == "rule_based" else spec
-            est = estimate(m, net, s, len(scenario_ids), pricing)
+            est = estimate(m, net, s, len(instances), pricing)
             if est is None:
                 priced = False
             else:
                 total += est
             plan.append((net, m, s, est, out_dir_for(net, s, m, args.date, args.tag)))
-    print(f"plan: {len(networks)} network(s) x {len(method_names)} method(s) x {len(scenario_ids)} scenario(s) = {len(plan) * len(scenario_ids)} runs")
+    print(f"plan: {len(networks)} network(s) x {len(method_names)} method(s) x {len(instances)} instance(s) "
+          f"({len(set(sid for sid, _ in instances))} fault classes) = {len(plan) * len(instances)} runs")
     for net, m, s, est, out in plan:
         print(f"  {net:8s} {m:22s} {s.key:36s} est {'n/a' if est is None else f'{est:7.3f} USD'}  -> {out.relative_to(PROJECT_ROOT)}")
     print(f"estimated cost: {total:.2f} USD" + ("" if priced else " (some models not in pricing.json)"))
@@ -167,8 +172,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     for net_name in networks:
         requests = []
-        for sid in scenario_ids:
-            req = build_request(net_name, sid)
+        for sid, variant in instances:
+            req = build_request(net_name, sid, variant)
             if manifest is not None:
                 M.check(req, manifest)
             requests.append(req)
@@ -187,7 +192,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             config = {
                 "kind": "run", "date": args.date, "model": s.key, "model_short": s.short, "method": m,
                 "method_runner_name": methods.card(m)["runner_name"], "case": net_name, "condition": "normal",
-                "n": len(requests), "scenarios": scenario_ids, "temperature": args.temperature,
+                "n": len(requests), "scenarios": scenario_ids, "instances": [f"{a}-v{b}" for a, b in instances],
+                "instances_per_network": N_INSTANCES, "temperature": args.temperature,
                 "max_llm_calls": args.max_llm_calls, "max_tool_calls": args.max_tool_calls, "timeout_s": args.timeout_s,
                 "tag": args.tag, "system_prompt_hash": None, "prompt_files": methods.card(m).get("prompt_files", []),
                 "command": command, "git_commit": commit, "pandapower": __import__("pandapower").__version__,
@@ -201,7 +207,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             for i, req in enumerate(requests, 1):
                 if req.request_id in existing:
                     rows.append(existing[req.request_id])
-                    print(f"  [{i:2d}/{len(requests)}] {req.scenario_id:30s} kept from the previous run")
+                    print(f"  [{i:2d}/{len(requests)}] {req.scenario_id + '-v' + str(req.variant):33s} kept from the previous run")
                     continue
                 t0 = time.time()
                 ctx = Context(request_id=req.request_id, text=req.text, evidence_text=req.evidence_text, net=fresh_network(req),
@@ -225,7 +231,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 rows.append(row)
                 with rows_path.open("a", encoding="utf-8") as fh:
                     fh.write(json.dumps(row, default=str) + "\n")
-                msg = (f"  [{i:2d}/{len(requests)}] {req.scenario_id:30s} {row['common_outcome']:15s} "
+                msg = (f"  [{i:2d}/{len(requests)}] {req.scenario_id + '-v' + str(req.variant):33s} {row['common_outcome']:15s} "
                        f"diag={'ok' if row['common_formulation_exact'] else row['common_formulation_error_type']:16s} "
                        f"llm={row['n_llm_calls']:2d} tools={row['n_tool_calls']:2d} ${row['cost_usd'] or 0:.4f} {time.time() - t0:5.0f}s"
                        + (f" ERROR {row['error']}" if row["error"] else ""))

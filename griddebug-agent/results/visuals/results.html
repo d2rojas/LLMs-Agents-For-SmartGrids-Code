@@ -12,7 +12,7 @@ th.g{text-align:center;background:#eef2fb}
 </style></head><body>
 <header><h1>GridDebugAgent · Results</h1><label>Run set <select id='set'></select></label><label>System <select id='sys'></select></label><label>Model <select id='model'></select></label><span class='muted' id='status'></span></header>
 <main>
-<div class='card'><h2>The table, as the paper prints it</h2><p class='muted'>One row per method, computed from the per-scenario lines (summary.csv) of the selected runs. Task utility, solver-grounded correctness, cost and operation. Percentages are over the n scenarios of the run set. Violations are new violations (beyond the base network) before and after, summed over the scenarios that converged at both ends; tokens and time are means per scenario.</p><div id='table'></div></div>
+<div class='card'><h2>The table, as the paper prints it</h2><p class='muted'>One row per method, computed from the per-scenario lines (summary.csv) of the selected runs. Task utility, solver-grounded correctness, cost and operation. Percentages are over the n scenarios of the run set. Violations are new violations (beyond the base network) before and after, summed over the scenarios that converged at both ends; tokens and time are means per scenario, cost is the total for the run. Solved, Escalated and Wrong unflagged are the three exclusive outcomes and add up to 100 %. Load served is measured against the base network's demand; a scenario that still carries the injected load increase counts as 100, not more.</p><div id='table'></div></div>
 <div class='card'><h2>Every scenario, under each method</h2><p class='muted'>The verdict of each run, its diagnosis check, the final state the harness measured, and a link to the real trace in the viewer.</p><div id='scen'></div></div>
 </main>
 <script>
@@ -28,14 +28,16 @@ function runsOf(){const set=$('#set').value,sys=$('#sys').value,model=$('#model'
 async function rowsFor(r){if(!ROWS[r.path]){ROWS[r.path]=parseCSV(await (await fetch('../'+r.path+'/summary.csv')).text());}return ROWS[r.path];}
 function outcome(x){return x.outcome||'run_error';}
 async function render(){const runs=runsOf();const byM={};for(const r of runs){byM[r.method]=r;}
- let h="<table><tr><th></th><th class='g' colspan='5'>Task utility</th><th class='g' colspan='3'>Solver-grounded correctness</th><th class='g' colspan='3'>Cost and operation</th><th></th></tr><tr><th>Method</th><th>Diagnosis exact %</th><th>Repaired %</th><th>Improved %</th><th>New violations<br><span class='muted'>before → after</span></th><th>Solved %</th><th>Feasible %</th><th>Traceable %</th><th>Wrong unflagged %</th><th>Escalated %</th><th>LLM / tool calls</th><th>Tokens</th><th>n</th></tr>";
+ let h="<table><tr><th></th><th class='g' colspan='5'>Task utility</th><th class='g' colspan='5'>Solver-grounded correctness</th><th class='g' colspan='4'>Cost and operation</th><th></th></tr><tr><th>Method</th><th>Diagnosis exact %</th><th>Repaired %</th><th>Improved %</th><th>Load served %<br><span class='muted'>mean / worst, of base</span></th><th>New violations<br><span class='muted'>before → after</span></th><th>Solved %</th><th>Escalated %</th><th>Wrong unflagged %</th><th>Feasible %</th><th>Traceable %</th><th>LLM / tool calls</th><th>Tokens</th><th>Cost $</th><th>Time s</th><th>n</th></tr>";
  const scen={};
- for(const [key,label] of METHODS){const r=byM[key];if(!r){h+=`<tr><td>${label}</td><td colspan='12' class='muted' style='text-align:left'>no run in this set</td></tr>`;continue;}
+ for(const [key,label] of METHODS){const r=byM[key];if(!r){h+=`<tr><td>${label}</td><td colspan='15' class='muted' style='text-align:left'>no run in this set</td></tr>`;continue;}
   const all=await rowsFor(r);const errs=all.filter(x=>outcome(x)==='run_error');const rows=all.filter(x=>outcome(x)!=='run_error');const n=rows.length||1;
   const pct=k=>100*rows.filter(x=>outcome(x)===k).length/n;const rate=k=>100*rows.filter(x=>T(x[k])).length/n;
   const both=rows.filter(x=>num(x.initial_n_new)!=null&&num(x.final_n_new)!=null);const vb=both.reduce((s,x)=>s+num(x.initial_n_new),0),va=both.reduce((s,x)=>s+num(x.final_n_new),0);
   const tok=r.model==='no-llm'?null:mean(rows.map(x=>(num(x.prompt_tokens)||0)+(num(x.completion_tokens)||0)));const lc=mean(rows.map(x=>num(x.n_llm_calls)||0)),tc=mean(rows.map(x=>num(x.n_tool_calls)||0));
-  h+=`<tr><td><b>${label}</b><br><span class='muted'>${r.model} · ${r.date}</span></td><td>${fmtP(rate('formulation_exact'))}</td><td>${fmtP(rate('repaired'))}</td><td>${fmtP(rate('improved'))}</td><td>${vb} → ${va} <span class='muted'>(n=${both.length})</span></td><td>${fmtP(pct('solved'))}</td><td>${fmtP(rate('feasible'))}</td><td>${fmtP(rate('traceable'))}</td><td>${fmtP(pct('wrong_unflagged'))}</td><td>${fmtP(pct('escalated'))}</td><td>${lc.toFixed(1)} / ${tc.toFixed(1)}</td><td>${tok==null?'–':Math.round(tok)}</td><td>${rows.length}${errs.length?`<br><span class='pill run_error'>${errs.length} run error${errs.length>1?'s':''}</span>`:''}</td></tr>`;
+  const ls=rows.map(x=>num(x.load_served_pct)).filter(v=>v!=null).map(v=>Math.min(v,100));const lsm=mean(ls),lsw=ls.length?Math.min(...ls):null;
+  const usd=rows.reduce((s2,x)=>s2+(num(x.cost_usd)||0),0);const wall=mean(rows.map(x=>num(x.wall_time_s)||0));
+  h+=`<tr><td><b>${label}</b><br><span class='muted'>${r.model} · ${r.date}</span></td><td>${fmtP(rate('formulation_exact'))}</td><td>${fmtP(rate('repaired'))}</td><td>${fmtP(rate('improved'))}</td><td>${fmtP(lsm)} <span class='muted'>/ ${fmtP(lsw)}</span></td><td>${vb} → ${va} <span class='muted'>(n=${both.length})</span></td><td>${fmtP(pct('solved'))}</td><td>${fmtP(pct('escalated'))}</td><td>${fmtP(pct('wrong_unflagged'))}</td><td>${fmtP(rate('feasible'))}</td><td>${fmtP(rate('traceable'))}</td><td>${lc.toFixed(1)} / ${tc.toFixed(1)}</td><td>${tok==null?'–':Math.round(tok)}</td><td>${usd?usd.toFixed(4):'–'}</td><td>${wall==null?'–':wall.toFixed(1)}</td><td>${rows.length}${errs.length?`<br><span class='pill run_error'>${errs.length} run error${errs.length>1?'s':''}</span>`:''}</td></tr>`;
   all.forEach(x=>{(scen[x.request_id]=scen[x.request_id]||{sid:x.scenario_id,cat:x.category,init:x.initial_state,initn:x.initial_n_new,fault:x.injected_fault_type,cells:{}}).cells[key]={run:r,row:x};});}
  h+="</table>";$('#table').innerHTML=h;
  let s="<table class='sc'><tr><th style='text-align:left'>scenario</th>"+METHODS.map(m=>`<th style='text-align:left'>${m[1]}</th>`).join('')+"</tr>";
@@ -47,8 +49,9 @@ async function render(){const runs=runsOf();const byM={};for(const r of runs){by
  s+="</table>";$('#scen').innerHTML=s;
  $('#status').textContent=`${runs.length} runs`;}
 async function init(){INDEX=await (await fetch('../INDEX.json?t='+Date.now())).json();
- const sets=[...new Set(INDEX.runs.filter(r=>r.kind==='run').map(r=>tagOf(r)||'main'))].sort((a,b)=>(a==='main'?-1:b==='main'?1:a.localeCompare(b)));
- setOptions($('#set'),sets.map(k=>[k,k==='main'?'main (the paper runs)':k]));if(sets.includes('main'))$('#set').value='main';
+ const runsAll=INDEX.runs.filter(r=>r.kind==='run');const newest={};for(const r of runsAll){const t=tagOf(r)||'main';if(!newest[t]||r.date>newest[t])newest[t]=r.date;}
+ const sets=[...new Set(runsAll.map(r=>tagOf(r)||'main'))].sort((a,b)=>(a==='main'?-1:b==='main'?1:(newest[b]||'').localeCompare(newest[a]||'')||b.localeCompare(a,undefined,{numeric:true})));
+ setOptions($('#set'),sets.map(k=>[k,k==='main'?'main (the paper runs)':k]));$('#set').value=sets.includes('main')?'main':sets[0];
  function refill(){const rs=INDEX.runs.filter(r=>r.kind==='run'&&(tagOf(r)||'main')===$('#set').value);const cases=[...new Set(rs.map(r=>r.case))].sort((a,b)=>parseInt(a.slice(4))-parseInt(b.slice(4)));setOptions($('#sys'),cases.map(c=>[c,SYS[c]||c]),true);const models=[...new Set(rs.map(r=>r.model).filter(m=>m!=='no-llm'))];setOptions($('#model'),[['all','all models'],...models.map(m=>[m,m])],true);if(models.length===1)$('#model').value=models[0];}
  refill();$('#set').onchange=()=>{refill();render();};$('#sys').onchange=render;$('#model').onchange=render;render();}
 init();
