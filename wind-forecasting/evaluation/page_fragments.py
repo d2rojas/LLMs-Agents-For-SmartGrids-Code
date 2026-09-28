@@ -562,12 +562,166 @@ def tab_results() -> str:
     return "".join(body)
 
 
+# --------------------------------------------------------------- the six methods side by side
+
+EXAMPLE_CSS = """
+.cols6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;align-items:start}
+@media(max-width:1400px){.cols6{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:900px){.cols6{grid-template-columns:1fr}}
+.col{background:#fff;border:1px solid var(--line);border-radius:10px;min-width:0;overflow:hidden}
+.col h4{margin:0;padding:8px 10px;border-bottom:1px solid var(--line);font-size:12.5px;background:#fafbfd}
+.col h4 .muted{font-weight:400}
+.log{font:11.5px/1.4 'JetBrains Mono',ui-monospace,Menlo,monospace}
+.ln{display:grid;grid-template-columns:46px 1fr;gap:6px;padding:4px 8px;border-bottom:1px solid #f0f2f5;cursor:pointer}
+.ln:hover{background:#f7f9fc}
+.ln .k{font-weight:600;font-size:10.5px}
+.ln .k.model{color:#2f5fd0}
+.ln .k.call{color:#2f5fd0}
+.ln .k.tool{color:#0f8f84}
+.ln .k.plan{color:#6d4fc4}
+.ln .k.gate{color:#c99a06}
+.ln .k.retry{color:#c99a06}
+.ln .k.final{color:#1f9d55}
+.ln .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ln.open .s{white-space:pre-wrap;overflow:visible;word-break:break-word}
+.pr{border-bottom:1px solid var(--line)}
+.pr summary{padding:6px 10px;font-size:12px;cursor:pointer}
+.pr pre{max-height:300px;overflow:auto;font-size:11px;margin:0 8px 8px}
+.vt{padding:6px 10px;border-top:1px solid var(--line);font-size:11.5px;background:#fafbfd}
+.ex{display:none}
+.ex.on{display:block}
+"""
+
+
+def _short(text: str, n: int = 150) -> str:
+    return " ".join(str(text).split())[:n]
+
+
+def _example_lines(t: Dict[str, Any]) -> List[Tuple[str, str, str]]:
+    """One line per step of a run: what it called, what came back, what the gate said, what went out."""
+    out: List[Tuple[str, str, str]] = []
+    msgs = t.get("messages") or []
+    if not msgs:  # the parser writes no conversation; its steps are its tool calls
+        for c in t.get("tool_log") or []:
+            out.append(("tool", f"{c.get('name')}({_short(json.dumps(c.get('args') or {}), 60)})",
+                        json.dumps(c.get("output"), indent=1)[:4000]))
+        out.append(("final", _short(t.get("answer") or ""), str(t.get("answer") or "")[:6000]))
+        return out
+    for m in msgs:
+        role = m.get("role")
+        if role in ("system", "user"):
+            continue  # both live in the prompt panel above, identical for every request of a method
+        if role == "assistant" and m.get("tool_calls"):
+            for c in m["tool_calls"]:
+                f = c.get("function") or {}
+                out.append(("call", f"{f.get('name')}({_short(f.get('arguments') or '', 70)})",
+                            f"{f.get('name')}\n{f.get('arguments')}"))
+        elif role == "assistant" and m.get("content"):
+            out.append(("final" if m is msgs[-1] else "model", _short(m["content"]), str(m["content"])[:6000]))
+        elif role == "tool":
+            body = str(m.get("content") or "")
+            out.append(("tool", _short(body, 120), body[:4000]))
+        elif role == "plan":
+            out.append(("plan", _short(m.get("content") or ""), str(m.get("content") or "")[:6000]))
+    g = t.get("gate") or {}
+    if g:
+        cond = g.get("conditions") or {}
+        failed = [k for k, v in cond.items() if not v.get("passed")]
+        detail = "\n".join(f"{k}: {'pass' if v.get('passed') else 'FAIL'} — {v.get('detail')}" for k, v in cond.items())
+        out.append(("gate", ("passed all five conditions" if not failed else "rejected: " + ", ".join(failed)), detail))
+    for h in (t.get("gate_history") or [])[1:]:
+        out.append(("retry", "handed back to the model, it tried again", json.dumps(h, indent=1)[:4000]))
+    return out
+
+
+def _example_prompt(t: Dict[str, Any]) -> str:
+    msgs = t.get("messages") or []
+    sysm = next((m["content"] for m in msgs if m.get("role") == "system"), None)
+    usr = next((m["content"] for m in msgs if m.get("role") == "user"), None)
+    if sysm is None and usr is None:
+        return ("<p class='muted' style='padding:0 10px 8px'>No prompt. This row is a parser: it reads the request with a "
+                "regular expression, calls the forecaster and fills the same answer object. It is here to show what the "
+                "task costs without a model.</p>")
+    parts = []
+    if sysm:
+        parts.append(f"<div class='muted' style='padding:2px 10px'>system prompt · hash {E(str(t.get('system_prompt_hash')))}</div><pre>{E(sysm)}</pre>")
+    if usr:
+        parts.append(f"<div class='muted' style='padding:2px 10px'>user message</div><pre>{E(usr)}</pre>")
+    return "".join(parts)
+
+
+def examples_section() -> str:
+    """The same request under each of the six methods, prompt and steps, side by side."""
+    dirs = method_dirs()
+    if not dirs:
+        return ""
+    latest = max(d.parts[-3] for d in dirs)
+    by_method: Dict[str, Path] = {}
+    for d in dirs:
+        if d.parts[-3] == latest and "__" not in d.name:
+            by_method[d.name] = d
+    if not by_method:
+        return ""
+
+    def trace_of(d: Path, rid: str) -> Optional[Dict[str, Any]]:
+        for f in sorted((d / "traces").glob("*.json")):
+            if " " in f.stem.split("_", 1)[-1]:
+                continue  # an iCloud copy, never the file we wrote
+            if f.stem.split("_", 1)[-1] == rid:
+                return json.loads(f.read_text(encoding="utf-8"))
+        return None
+
+    # one request per horizon, all from the same scenario, so the columns differ by method and nothing else
+    rids: List[Tuple[str, str]] = []
+    any_dir = next(iter(by_method.values()))
+    for f in sorted((any_dir / "traces").glob("*.json")):
+        rid = f.stem.split("_", 1)[-1]
+        if " " in rid:
+            continue
+        t = json.loads(f.read_text(encoding="utf-8"))
+        r = t.get("request") or {}
+        if r.get("instance_id") and rids and r["instance_id"] != rids[0][1].split("|")[0]:
+            continue
+        rids.append((rid, f"{r.get('instance_id')}|{r.get('horizon_hours')} h · question: {r.get('question')}"))
+        if len(rids) == len(HORIZONS_H):
+            break
+
+    opts = "".join(f"<option value='{E(rid)}'>{E(lab.split('|')[1])}</option>" for rid, lab in rids)
+    out = [card("The same request under each of the six methods",
+                "<p>Real runs of " + E(latest) + " on " + E(next(iter(by_method.values())).parts[-2]) +
+                ", not re-scored here. One scenario, the three horizons, every method side by side. Each column opens with the "
+                "prompt that method received and then lists what it did: <span class='k call'>call</span> a tool, "
+                "<span class='k tool'>tool</span> what came back, <span class='k gate'>gate</span> the verdict, "
+                "<span class='k final'>final</span> what was surfaced. Click any line to expand it.</p>"
+                "<p><label>Request <select id='exs'>" + opts + "</select></label></p>")]
+    for n, (rid, _lab) in enumerate(rids):
+        cols = []
+        for row in ROWS:
+            d = by_method.get(row["name"])
+            t = trace_of(d, rid) if d else None
+            if not t:
+                cols.append(f"<div class='col'><h4>{E(row['label'])}</h4><p class='muted' style='padding:8px 10px'>no run</p></div>")
+                continue
+            lines = "".join(f"<div class='ln' data-full='{E(full)}'><span class='k {k}'>{k}</span><span class='s'>{E(short)}</span></div>"
+                            for k, short, full in _example_lines(t))
+            sc = t.get("scored") or {}
+            cols.append(f"<div class='col'><h4>{E(row['label'])}<br><span class='muted'>{E(t.get('model') or '')}</span></h4>"
+                        f"<details class='pr'><summary>the prompt this method received</summary>{_example_prompt(t)}</details>"
+                        f"<div class='log'>{lines}</div>"
+                        f"<div class='vt'>{t.get('n_llm_calls')} model calls · {t.get('n_tool_calls')} tool calls · "
+                        f"{t.get('wall_time_s', 0):.0f} s<br><span class='muted'>formulation "
+                        f"{'exact' if sc.get('common_formulation_exact') else E(str(sc.get('common_formulation_error_type') or 'not declared'))}</span></div></div>")
+        out.append(f"<div class='ex{' on' if n == 0 else ''}' data-scn='{E(rid)}'><div class='cols6'>" + "".join(cols) + "</div></div>")
+    return "".join(out)
+
+
 def tab_traces() -> str:
     dirs = method_dirs()
     if not dirs:
         return card("Traces", "<p class='muted'>No run yet. Every run leaves <code>traces/NN_&lt;request-id&gt;.narrative.txt</code>, "
                               "<code>.transcript.txt</code> and <code>.png</code> next to its rows; this section shows them once they exist.</p>")
-    body = [card("Every run end to end", "<p>The narrative of each request of every run set, as written by evaluation/postprocess.py from the "
+    body = [examples_section(),
+            card("Every run end to end", "<p>The narrative of each request of every run set, as written by evaluation/postprocess.py from the "
                                           "trace: what the method did, the formulation verdict, the series and its error, the answer checks, the outcome. "
                                           "The transcript next to it in the results folder is the raw exchange, and the PNG the series against the target.</p>")]
     for d in dirs:
@@ -613,6 +767,14 @@ SCRIPT = """
   function apply(){ document.querySelectorAll('.pm').forEach(function(p){ p.style.display = p.dataset.mth===mth.value ? '' : 'none'; }); }
   mth.onchange=apply; apply();
 })();
+(function(){
+  var sel=document.getElementById('exs');
+  if(sel){ sel.onchange=function(){ document.querySelectorAll('.ex').forEach(function(e){
+      e.classList.toggle('on', e.dataset.scn===sel.value); }); }; }
+  document.querySelectorAll('.ln').forEach(function(l){ l.onclick=function(){
+      if(!l.dataset.done){ l.querySelector('.s').textContent=l.dataset.full; l.dataset.done='1'; }
+      l.classList.toggle('open'); }; });
+})();
 """
 
 
@@ -627,6 +789,7 @@ def payload() -> Dict[str, Any]:
         "groups": [[label, [list(e) for e in entries]] for label, entries in GROUPS],
         "tabs": {key: BUILDERS[key]() for _l, entries in GROUPS for key, _t in entries},
         "script": SCRIPT,
+        "css": EXAMPLE_CSS,
     }
 
 
