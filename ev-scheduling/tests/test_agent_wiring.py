@@ -221,7 +221,9 @@ def test_a_verified_answer_is_surfaced_and_the_verdict_says_so(tmp_path: Path) -
     assert gate_row == result.gate_row
     assert gate_row["gate_passed"] is True
     assert gate_row["gate_action"] == "accept"
-    assert [c["label"] for c in gate_row["conditions"].values()] == ["E1", "E2", "E3", "E4", "E5", "E6"]
+    assert [c["label"] for c in gate_row["conditions"].values()] == [
+        "E1", "E2", "E3", "E4", "E5", "E6", "E7",
+    ]
     assert gate_row["conditions"]["traceable"]["status"] == "pass"
     assert gate_row["gate_E1_solver_optimal"] == "pass"
 

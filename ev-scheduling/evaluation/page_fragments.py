@@ -72,10 +72,10 @@ DIAGRAMS: Dict[str, Dict[str, Any]] = {
     },
     "evagent": {
         "steps": [("request", "input"), ("LLM decides a tool call", "llm"), ("solver executes it", "solver"),
-                  ("gate E1-E6", "gate")],
+                  ("gate E1-E7", "gate")],
         "loop": 2,
         "branch": ("report", "escalate"),
-        "note": "Up to three rounds, then six conditions on the answer. A request it cannot verify leaves as an "
+        "note": "Up to three rounds, then seven conditions on the answer. A request it cannot verify leaves as an "
                 "escalation rather than as a number.",
     },
 }
@@ -158,7 +158,7 @@ ROWS: Tuple[Dict[str, str], ...] = (
         "arm": "evagent",
         "llm": "yes",
         "tools": "the solver, through function calling",
-        "gate": "six conditions on the answer",
+        "gate": "seven conditions on the answer",
         "isolates": "the verification gate, and nothing else. Same tool, same round budget and same days as ReAct, "
         "so any difference between the two rows is the gate.",
     },
@@ -287,7 +287,7 @@ def tab_overview() -> str:
                     ("Request", "free text: the cars, the tariff, the question"),
                     ("Formulate", "aᵢ, dᵢ, Eᵢ, p̄ᵢ for every session"),
                     ("Compute", "the LP, or the model writing kW by hand"),
-                    ("Verify", "six conditions on the answer (gated method only)"),
+                    ("Verify", "seven conditions on the answer (gated method only)"),
                     ("Report", "the schedule, or the answer asked for"),
                 ],
                 loop=(3, 1, "one retry, then escalate"),
@@ -899,7 +899,7 @@ def tab_prompts() -> str:
     sees = {"rule_based": "no model", "llm_only_structured": "no tool", "llm_only_cot": "no tool",
             "plan_act_nogate": "no: plans every call first, sees outputs only when writing the answer",
             "react_nogate": "yes, after every call", "evagent": "yes, after every call"}
-    gate_of = {"evagent": "E1–E6 on the final answer, one retry, then escalate"}
+    gate_of = {"evagent": "E1–E7 on the final answer, one retry, then escalate"}
     cmp_rows = []
     for c in methods.cards():
         name, arm = c["folder"], A.get(c["runner_name"])
