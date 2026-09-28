@@ -461,32 +461,139 @@ def tab_methods() -> str:
     return "".join(body)
 
 
+
+def day_figure(day: Any, date: str, cap_kw: float = 50.0) -> str:
+    """One day as a picture: every session's window as a bar, the peak tariff shaded.
+
+    Returned as a data URI so the page stays one file. Drawn with matplotlib
+    from the frozen day, so what is shown is what a method is asked about.
+    """
+    import base64
+    import io
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    sessions = list(day.sessions)
+    n = len(sessions)
+    dt = day.dt_hours
+    order = sorted(range(n), key=lambda i: (sessions[i].arrival_idx, sessions[i].departure_idx))
+    fig, (ax, ax2) = plt.subplots(
+        2, 1, figsize=(7.2, 1.6 + 0.075 * n + 1.3), dpi=110, sharex=True,
+        gridspec_kw={"height_ratios": [max(2.0, 0.075 * n), 1.1]},
+    )
+    energies = np.array([s.energy_kwh for s in sessions])
+    emax = float(energies.max()) if n else 1.0
+    for row, i in enumerate(order):
+        sess = sessions[i]
+        a, d = sess.arrival_idx * dt, sess.departure_idx * dt
+        hours = max(d - a, dt)
+        short = sess.energy_kwh > sess.max_power_kw * hours + 1e-9
+        shade = 0.25 + 0.75 * (sess.energy_kwh / emax if emax else 0.0)
+        ax.barh(row, d - a, left=a, height=0.8,
+                color=("#d53f3f" if short else (0.18, 0.37, 0.82, shade)), edgecolor="none")
+        ax.text(d + 0.15, row, f"EV {i + 1} · {sess.energy_kwh:.1f} kWh", va="center", fontsize=5.5, color="#475569")
+    ax.axvspan(16, 21, color="#c99a06", alpha=0.10, lw=0)
+    ax.set_yticks([])
+    ax.set_ylim(-0.8, max(n, 1) - 0.2)
+    ax.invert_yaxis()
+    ax.set_title(f"{date}: {n} sessions, {energies.sum():.0f} kWh requested", fontsize=9, loc="left")
+    for sp in ("top", "right", "left"):
+        ax.spines[sp].set_visible(False)
+    # concurrency and the uncontrolled draw against the cap
+    steps = np.arange(day.n_steps)
+    plugged = np.zeros(day.n_steps)
+    draw = np.zeros(day.n_steps)
+    for sess in sessions:
+        plugged[sess.arrival_idx:sess.departure_idx] += 1
+        draw[sess.arrival_idx:sess.departure_idx] += sess.max_power_kw
+    ax2.fill_between(steps * dt, draw, step="post", color="#0f8f84", alpha=0.25, lw=0)
+    ax2.step(steps * dt, draw, where="post", color="#0f8f84", lw=1.0, label="every plugged car at full power, kW")
+    ax2.axhline(cap_kw, color="#d53f3f", lw=1.0, ls="--", label=f"site cap {cap_kw:g} kW")
+    ax2.axvspan(16, 21, color="#c99a06", alpha=0.10, lw=0)
+    ax2.set_xlim(0, 24)
+    ax2.set_xticks(range(0, 25, 3))
+    ax2.set_xlabel("hour of day", fontsize=7)
+    ax2.tick_params(labelsize=7)
+    ax2.legend(fontsize=6, loc="upper left", frameon=False)
+    for sp in ("top", "right"):
+        ax2.spines[sp].set_visible(False)
+    fig.tight_layout(h_pad=0.4)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png")
+    plt.close(fig)
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def frozen_days_loaded() -> List[Tuple[str, Any]]:
+    """(date, DaySessions) for every frozen day, from the committed copy."""
+    import datetime as _dt
+
+    from data.loader.loader import load_sessions
+
+    out: List[Tuple[str, Any]] = []
+    for d in frozen_days():
+        try:
+            date = _dt.date.fromisoformat(str(d["date"]))
+            out.append((str(d["date"]), load_sessions("caltech", date, source="cache")))
+        except Exception:
+            continue
+    return out
+
+
+def run_requests() -> List[Dict[str, Any]]:
+    """The request list of the newest run, one per day, as it was asked."""
+    for d in latest_run():
+        f = d / "requests.jsonl"
+        if f.exists():
+            return [json.loads(line) for line in f.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return []
+
+
 def tab_scenarios() -> str:
     import evaluation.requests as R
     import evaluation.stress as S
 
     days = frozen_days()
     total = sum(int(d.get("record_count", 0)) for d in days)
-    body = [
+    loaded = dict(frozen_days_loaded())
+    day_rows = []
+    for d in days:
+        date = str(d.get("date"))
+        pic = ""
+        if date in loaded:
+            n_short = sum(
+                1 for sess in loaded[date].sessions
+                if sess.energy_kwh > sess.max_power_kw * (sess.departure_idx - sess.arrival_idx) * loaded[date].dt_hours + 1e-9
+            )
+            requested = sum(sess.energy_kwh for sess in loaded[date].sessions)
+            pic = (
+                f"<details><summary>see the day</summary>"
+                f"<img src='{day_figure(loaded[date], date, R.SITE_CAP_KW)}' style='max-width:760px;width:100%'>"
+                f"<p class='muted'>Each bar is one car, from arrival to departure; darker means more energy asked "
+                f"for; red means the car asks for more than its own plug can deliver in that window ({n_short} "
+                f"here). Shaded band: the peak tariff, 16:00 to 21:00. Below: what every plugged-in car would draw "
+                f"at full power, against the {R.SITE_CAP_KW:g} kW cap. {requested:.0f} kWh requested in all.</p>"
+                f"</details>"
+            )
+        day_rows.append([
+            E(date), E(d.get("record_count")),
+            f"<span class='muted'>{E(str(d.get('fetched_at_utc'))[:10])}</span>",
+            f"<span class='muted'><code>{E(str(d.get('content_hash'))[:23])}…</code></span>",
+            pic,
+        ])
+    body: List[str] = [
         card(
             "The days",
             f"<p>{len(days)} days of real charging sessions from the ACN-Data portal, a public record of a "
             f"workplace charging site, {total:,} session records in all. They are downloaded once, frozen into the "
             "repository with a content hash each, and never fetched again: the benchmark reproduces with no "
             "credentials and no network, and a day file edited after freezing fails its hash check when it "
-            "loads.</p>",
-            table(
-                ["date", "sessions", "frozen", "content hash"],
-                [
-                    [
-                        E(d.get("date")),
-                        E(d.get("record_count")),
-                        f"<span class='muted'>{E(str(d.get('fetched_at_utc'))[:10])}</span>",
-                        f"<span class='muted'><code>{E(str(d.get('content_hash'))[:23])}…</code></span>",
-                    ]
-                    for d in days
-                ],
-            ),
+            "loads. Open a day to see it.</p>",
+            table(["date", "sessions", "frozen", "content hash", ""], day_rows),
         )
     ]
 
@@ -533,6 +640,33 @@ def tab_scenarios() -> str:
         )
     )
 
+    reqs = run_requests()
+    if reqs:
+        req_rows = []
+        for i, q in enumerate(sorted(reqs, key=lambda x: x["id"]), start=1):
+            text = q.get("text", "")
+            last = text.strip().splitlines()[-1] if text.strip() else ""
+            truth = q.get("truth")
+            truth_s = (
+                f"schedule; optimum ${truth.get('cost_usd', 0):,.2f}, {truth.get('unmet_kwh', 0):,.2f} kWh unmet"
+                if isinstance(truth, dict) else E(", ".join(truth) if isinstance(truth, list) else str(truth))
+            )
+            req_rows.append([
+                f"{i:02d}", E(q.get("date")), E(len(q.get("day", {}).get("sessions", []))),
+                f"<code>{E(q.get('variant'))}</code>", E(last), truth_s,
+                f"<details><summary>full request</summary><pre>{E(text)}</pre></details>",
+            ])
+        body.append(
+            card(
+                f"The {len(reqs)} requests of the run",
+                "<p>These are the questions actually asked, one per day, in the run every method is scored on. "
+                "The first part of each request is the day itself, the cars and the tariff in free text; the "
+                "last sentence is the question, and it is what the answer is scored against. The variant column "
+                "names which of the ten question kinds it is.</p>",
+                table(["#", "day", "cars", "variant", "the question, as asked", "what counts as correct", ""], req_rows),
+            )
+        )
+
     examples = example_requests()
     rows = []
     for v in R.VARIANTS:
@@ -567,7 +701,7 @@ def tab_scenarios() -> str:
 
     body.append(
         card(
-            "The requests: what each variant asks, and what counts as correct",
+            "The ten question kinds",
             "<p>Every day gets one request. Ten variants share the days in rotation, so the same "
             "twenty days pose ten different questions. Every variant describes the same thing first, "
             "the cars and the tariff, in free text: times spelled out, energies in Wh or kWh, power in "
@@ -756,6 +890,74 @@ def tab_prompts() -> str:
             f"<label>Method <select id='mth'>{mth_options}</select></label></div>",
         )
     ]
+
+    # side by side: what separates the six, in one table, before the blocks
+    A = arms()
+    sees = {"rule_based": "no model", "llm_only_structured": "no tool", "llm_only_cot": "no tool",
+            "plan_act_nogate": "no: plans every call first, sees outputs only when writing the answer",
+            "react_nogate": "yes, after every call", "evagent": "yes, after every call"}
+    gate_of = {"evagent": "E1–E6 on the final answer, one retry, then escalate"}
+    cmp_rows = []
+    for c in methods.cards():
+        name, arm = c["folder"], A.get(c["runner_name"])
+        n_calls = getattr(getattr(arm, "cost", None), "n_calls", 0) if arm else 0
+        steps = DIAGRAMS[name]["steps"]
+        blocks = [BLOCKS[k][1] for k in (
+            ["sys_llm", "sys_suffix", "u_role", "u_data", "u_task"] + (["u_reason"] if name == "llm_only_cot" else []) + ["u_out"]
+            if c["kind"] == "llm_only" else
+            (["sys_parse", "sys_infer", "sys_agent", "tools", "u_task"] if name != "plan_act_nogate"
+             else ["sys_parse", "sys_infer", "sys_agent", "tools", "u_task"])
+        )] if c.get("prompt_files") else []
+        sys_hash = ""
+        if c["kind"] == "llm_only":
+            base = methods.read_text("_shared/llm_only_system_prompt.txt") + methods.read_text(f"{name}/system_suffix.txt")
+            sys_hash = _sha(base)
+        elif c.get("prompt_files"):
+            sys_hash = _sha(methods.read_text("_shared/agent_system_prompt.txt"))
+        cmp_rows.append([
+            f"<b>{E(c['folder'])}</b>",
+            "no" if not c["uses_llm"] else str(n_calls),
+            {"rule_based": "1, direct", "llm_only_structured": "0", "llm_only_cot": "0",
+             "plan_act_nogate": "as planned, up to 3", "react_nogate": "up to 3", "evagent": "up to 3 (+ retry)"}[name],
+            E(sees[name]),
+            E(gate_of.get(name, "none")),
+            f"{len(steps)}: " + E(" → ".join(t for t, _k in steps)),
+            E(", ".join(blocks)) if blocks else "<span class='muted'>none</span>",
+            f"<code>{E(sys_hash)}</code>" if sys_hash else "<span class='muted'>—</span>",
+        ])
+    body.append(
+        card(
+            "Side by side",
+            "<p>What separates the six, in one table. Reading down: a model appears, then a reasoning section, "
+            "then the tool, then feedback from the tool, then verification. Every other setting is held.</p>",
+            table(
+                ["method", "model calls / request", "tool calls / request", "sees tool outputs before answering",
+                 "gate", "steps", "prompt blocks", "system prompt sha"],
+                cmp_rows,
+            ),
+        )
+    )
+    # composition: the files each method is built from, shared ones marked
+    comp_rows = []
+    for c in methods.cards():
+        files = c.get("prompt_files", [])
+        comp_rows.append([
+            f"<b>{E(c['folder'])}</b><div class='muted'>{E(c['runner_name'])}</div>",
+            "".join(
+                f"<div><code>{E(r)}</code>" + (" <span class='chip'>shared</span>" if r.startswith("_shared/") else "") + "</div>"
+                for r in files
+            ) or "<span class='muted'>none. No language model, no prompt.</span>",
+            "<ul style='margin:0;padding-left:16px'>" + "".join(f"<li>{E(d)}</li>" for d in c.get("dynamic_parts", [])) + "</ul>"
+            if c.get("dynamic_parts") else "<span class='muted'>nothing</span>",
+        ])
+    body.append(
+        card(
+            "What each prompt is built from",
+            "<p>Every fixed sentence is a file under <code>methods/</code>, pinned by hash; what the code builds "
+            "at run time is listed beside it. Two methods that share a file send the same words.</p>",
+            table(["method", "texts, in order", "built at run time"], comp_rows),
+        )
+    )
 
     for c in methods.cards():
         name = c["folder"]
