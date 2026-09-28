@@ -152,6 +152,22 @@ border-top:1px solid var(--line);border-right:1px solid var(--line);border-botto
 
 .md h2{font-size:16px;margin:14px 0 6px}.md h3{font-size:14px;margin:12px 0 6px}.md h4{font-size:13px;margin:10px 0 4px}
 .md p{margin:0 0 9px}.md ul,.md ol{margin:6px 0;padding-left:20px}.md table{margin:6px 0 10px}.md pre{max-height:none}
+/* the same request under each method: one column per method, a step log inside */
+.cols6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;align-items:start}
+@media(max-width:1300px){.cols6{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:820px){.cols6{grid-template-columns:1fr}}
+.col{background:#fff;border:1px solid var(--line);border-radius:10px;min-width:0;overflow:hidden}
+.col h4{margin:0;padding:8px 10px;border-bottom:1px solid var(--line);font-size:12.5px;background:#fafbfd;
+display:flex;justify-content:space-between;gap:6px;align-items:center}
+.log{font:11.5px/1.4 "JetBrains Mono",ui-monospace,Menlo,monospace}
+.ln{display:grid;grid-template-columns:44px 1fr;gap:6px;padding:4px 8px;border-bottom:1px solid #f0f2f5;cursor:pointer}
+.ln:hover{background:#f7f9fc}.ln .k{font-weight:600;font-size:10.5px}
+.ln .k.model{color:var(--acc)}.ln .k.solver{color:#0f8f84}.ln .k.plan{color:#6d4fc4}.ln .k.gate{color:#c99a06}
+.ln .k.final{color:var(--acc)}.ln .k.status{color:var(--muted)}
+.ln .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ln.open .s{white-space:pre-wrap;overflow:visible;word-break:break-word}
+.vt{padding:8px 10px;border-top:1px solid var(--line);font-size:11.5px;background:#fbfcfe}
+.ex{display:none}.ex.on{display:block}
 .math{background:#fafbfd;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:8px 0;
 font:14px/1.9 "JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;overflow-x:auto}
 .math .lbl{color:var(--muted);font-size:11.5px;font-family:Inter,sans-serif;display:block;margin-top:8px}
@@ -517,6 +533,10 @@ document.querySelectorAll('aside a.sub').forEach(a=>a.onclick=e=>{
 function fromHash(){var k=(location.hash||'').slice(1);
   if(k&&document.getElementById('tab-'+k)){show(k);}else{show(FIRST);}}
 window.addEventListener('hashchange',fromHash);
+document.querySelectorAll('.ln').forEach(function(l){l.onclick=function(){
+  var o=l.classList.toggle('open'); var sp=l.querySelector('.s');
+  if(!l.dataset.short) l.dataset.short=sp.textContent;
+  sp.textContent=o?(l.dataset.full||l.dataset.short):l.dataset.short;};});
 var b=document.getElementById('burger');
 if(b) b.onclick=()=>document.getElementById('side').classList.toggle('open');
 fromHash();

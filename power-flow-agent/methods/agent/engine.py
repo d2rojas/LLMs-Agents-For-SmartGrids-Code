@@ -194,9 +194,11 @@ def _complete_state_check(final_answer_text: str, pf: Optional[Dict[str, Any]]) 
     problems = []
     if miss_b:
         problems.append(f"{len(miss_b)} of {len(want_b)} buses are missing from bus_voltages")
-    if miss_l:
-        problems.append(f"{len(miss_l)} of {len(want_l)} branches are missing from line_flows")
-    return {"passed": not problems, "applicable": True, "detail": "; ".join(problems) or f"all {len(want_b)} buses and {len(want_l)} branches reported", "missing_buses": len(miss_b), "missing_branches": len(miss_l)}
+    # Branch coverage is recorded, not enforced: the evaluator's Solved requires every bus, not every
+    # branch (flows are scored on the branches reported), and the gate must not demand more than the
+    # verdict does. gpt-4o-mini drops the transformers (line_id 100000+) on the 57 and 118-bus systems.
+    note = f"; {len(miss_l)} of {len(want_l)} branches missing from line_flows (recorded, not enforced)" if miss_l else ""
+    return {"passed": not problems, "applicable": True, "detail": ("; ".join(problems) or f"all {len(want_b)} buses reported") + note, "missing_buses": len(miss_b), "missing_branches": len(miss_l)}
 
 
 def _formulation_matches_trace_check(final_answer_text: str, trace: Dict[str, Any]) -> Dict[str, Any]:

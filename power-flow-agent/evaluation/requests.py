@@ -835,10 +835,12 @@ def _answer(query: dict[str, Any], pf: Optional[dict[str, Any]], n1_report: Opti
         return {"bus_id": int(worst["bus_id"]), "vm_pu": round(float(worst["vm_pu"]), 6)}
     if kind == "overloads_above":
         thr = float(query["threshold_percent"])
+        # threshold on the loading as every method reads it from the tool output (2 decimals,
+        # methods/agent/tools.py ROUND_DECIMALS): a branch at 80.004 % is "80.0" to all of them
         lines = [
             {"line_id": int(l["line_id"]), "from_bus": int(l["from_bus"]), "to_bus": int(l["to_bus"]),
-             "loading_percent": round(float(l["loading_percent"]), 4)}
-            for l in pf["line_flows"] if float(l["loading_percent"]) > thr
+             "loading_percent": round(float(l["loading_percent"]), 2)}
+            for l in pf["line_flows"] if round(float(l["loading_percent"]), 2) > thr
         ]
         return {"threshold_percent": thr, "lines": lines}
     if kind == "n1_worst_outage":

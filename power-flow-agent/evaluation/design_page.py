@@ -145,7 +145,7 @@ EXAMPLE_MODEL = "gpt-4o-mini"
 
 
 def smoke_runs() -> Dict[str, Dict[str, str]]:
-    """{case: {runner: relative run dir}} of the latest ``__smoke`` run of each method on EXAMPLE_MODEL."""
+    """{case: {runner: relative run dir}} of the latest untagged (paper) run of each method on EXAMPLE_MODEL."""
     out: Dict[str, Dict[str, str]] = {}
     for c in CASES:
         base = RESULTS / CASE_FOLDER[c]
@@ -154,17 +154,24 @@ def smoke_runs() -> Dict[str, Dict[str, str]]:
         for r in ROWS:
             m = methods.get_method(r["runner"])
             model_dir = "no-llm" if not m.uses_llm else EXAMPLE_MODEL
-            hits = sorted(base.glob(f"*/{model_dir}/{m.folder}__smoke"))
+            hits = sorted(base.glob(f"*/{model_dir}/{m.folder}"))
             if hits:
                 out.setdefault(c, {})[r["runner"]] = str(hits[-1].relative_to(RESULTS))
     return out
 
 
 def run_request_ids(rel: str) -> List[str]:
+    """Three example requests of a run: the first parameterized, multistep and ambiguous ones."""
     try:
-        return [x["request_id"] for x in json.loads((RESULTS / rel / "raw" / "report.rescored.json").read_text(encoding="utf-8"))["runs"]]
+        ids = [x["request_id"] for x in json.loads((RESULTS / rel / "raw" / "report.rescored.json").read_text(encoding="utf-8"))["runs"]]
     except Exception:
         return []
+    out = []
+    for kind in ("parameterized", "multistep", "ambiguous"):
+        first = next((i for i in sorted(ids) if f"-{kind}-" in i), None)
+        if first:
+            out.append(first)
+    return out
 
 
 
@@ -282,7 +289,7 @@ def examples_section(reqs_by_case: Dict[str, Any], nets_by_case: Dict[str, Any])
                 if rid not in ids:
                     ids.append(rid)
         scen[c] = [(rid, next((f"{r.difficulty} · {r.text}" for r in reqs_by_case[c] if r.id == rid), rid)) for rid in ids]
-    out = ["<div class='card'><h2>The same request under each method, step by step</h2><p class='muted'><b>Real runs of this design, not scored here.</b> The smoke test: three hard requests per system (one parameterized, one multistep, one ambiguous), every method, on " + E(EXAMPLE_MODEL) + ". Each column is the log of what the method said, what it called and what the solver returned; click a line to expand it, and open the prompt it received. The verdicts of these runs are on the results pages, where scores belong.</p>"
+    out = ["<div class='card'><h2>The same request under each method, step by step</h2><p class='muted'><b>Real runs of this design, not scored here.</b> Three of the twenty requests per system (the first parameterized, multistep and ambiguous ones), every method, on " + E(EXAMPLE_MODEL) + ". Each column is the log of what the method said, what it called and what the solver returned; click a line to expand it, and open the prompt it received. The verdicts of these runs are on the results pages, where scores belong.</p>"
            "<p><label>System <select id='exc'>" + "".join(f"<option value='{c}'>{E(CASE_LABEL[c])}</option>" for c in CASES) + "</select></label> <label>Scenario <select id='exs'></select></label></p></div>",
            "<script>const EXS=" + json.dumps({c: [[rid, lab] for rid, lab in v] for c, v in scen.items()}) + ";</script>"]
     for c in CASES:
@@ -298,7 +305,7 @@ def examples_section(reqs_by_case: Dict[str, Any], nets_by_case: Dict[str, Any])
                 out.append(f"<div class='col'><h4>{E(r['label'])}</h4><details class='pr'><summary>prompt sent to this method for this scenario</summary><div class='prb'>{prompt_for(r['runner'], rid, reqs_by_case[c], nets_by_case[c], c)}</div><div class='muted' style='padding:4px 10px'>{'This run stored exactly these messages.' if stored else 'Shown as this design sends it; this run stored the request and the prompt hash (' + E(str(row.get('system_prompt_hash'))) + ').'}</div></details><div class='log'>" + "".join(f"<div class='ln' data-full='{E(full)}'><span class='k {k}'>{k}</span><span class='s'>{E(short)}</span></div>" for k, short, full in lines) + f"</div><div class='vt'>{row.get('n_llm_calls')} model calls, {row.get('n_tool_calls')} solver calls<br><span class='muted'>from {E(rel)}</span></div></div>")
             out.append("</div></div>")
     if not runs:
-        out.append("<div class='card muted'>No smoke run found yet under results/&lt;system&gt;/&lt;date&gt;/" + E(EXAMPLE_MODEL) + "/&lt;method&gt;__smoke.</div>")
+        out.append("<div class='card muted'>No run found yet under results/&lt;system&gt;/&lt;date&gt;/" + E(EXAMPLE_MODEL) + "/&lt;method&gt;.</div>")
     return "".join(out)
 
 

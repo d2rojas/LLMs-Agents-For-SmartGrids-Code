@@ -163,6 +163,12 @@ def _extract_totals(net: object) -> tuple[float, float, float]:
         total_loss += float(net.res_trafo["pl_mw"].sum())
     if hasattr(net, "res_trafo3w") and len(net.res_trafo3w) > 0 and "pl_mw" in net.res_trafo3w.columns:
         total_loss += float(net.res_trafo3w["pl_mw"].sum())
+    # Impedance branches (66 of them on the 300-bus case) and shunts also dissipate active power;
+    # without them generation = load + losses missed by 39 MW on case300 and every V2 check failed.
+    if hasattr(net, "res_impedance") and len(net.res_impedance) > 0 and "pl_mw" in net.res_impedance.columns:
+        total_loss += float(net.res_impedance["pl_mw"].sum())
+    if hasattr(net, "res_shunt") and len(net.res_shunt) > 0 and "p_mw" in net.res_shunt.columns:
+        total_loss += float(net.res_shunt["p_mw"].sum())
 
     return float(total_gen), float(total_load), float(total_loss)
 

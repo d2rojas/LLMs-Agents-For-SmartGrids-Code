@@ -1264,6 +1264,130 @@ def expected_table() -> str:
     )
 
 
+
+def _short(x: Any, n: int = 150) -> str:
+    return " ".join(str(x).split())[:n]
+
+
+def step_lines(trace: Optional[Dict[str, Any]], row: Dict[str, str]) -> List[Tuple[str, str, str]]:
+    """(kind, short, full) log lines of one run, from its raw trace and its summary row.
+
+    Kinds are the ones every case study uses: plan, model, solver, gate, final,
+    status. The lines are what the method did, in order, as the trace recorded
+    it; nothing is summarized by a model.
+    """
+    L: List[Tuple[str, str, str]] = []
+    if trace is None:
+        ans = row.get("request_text", "")
+        L.append(("status", "no model: computed from the parsed day", ""))
+        return L
+    msgs = trace.get("messages") or []
+    tool_outputs: List[Any] = []
+    for rd in ((trace.get("trace") or {}).get("rounds") or []):
+        for t in rd.get("tools") or []:
+            tool_outputs.append(t)
+    ti = 0
+    for m in msgs:
+        role = m.get("role")
+        if role == "assistant":
+            calls = m.get("tool_calls") or []
+            if calls:
+                names = []
+                for c in calls:
+                    fn = c.get("function", {}) if isinstance(c, dict) else {}
+                    names.append(f"{fn.get('name', '?')}({fn.get('arguments', '')})")
+                L.append(("model", "calls → " + "; ".join(names), "\n".join(names)))
+                for c in calls:
+                    fn = c.get("function", {}) if isinstance(c, dict) else {}
+                    out = tool_outputs[ti]["output"] if ti < len(tool_outputs) else ""
+                    ti += 1
+                    out_s = out if isinstance(out, str) else json.dumps(out)
+                    try:
+                        o = json.loads(out_s) if isinstance(out_s, str) else out
+                        brief = f"cost ${o.get('total_cost_usd')} · peak {o.get('peak_load_kw')} kW · unmet {o.get('total_unmet_kwh')} kWh · {o.get('solver_status', '')}"
+                    except Exception:
+                        brief = _short(out_s)
+                    L.append(("solver", f"{fn.get('name', '?')} → {brief}", out_s))
+            elif m.get("content"):
+                text = str(m["content"])
+                if text.strip().startswith("{") and '"plan"' in text:
+                    L.append(("plan", "plan: " + _short(text), text))
+                else:
+                    L.append(("model", "text: " + _short(text), text))
+        elif role == "user" and str(m.get("content", "")).startswith("Result of step"):
+            # plan-and-act feeds results back as user turns
+            text = str(m["content"])
+            L.append(("solver", _short(text), text))
+        elif role == "user" and ("verification" in str(m.get("content", "")).lower() or "retry" in str(m.get("content", "")).lower()) and L:
+            L.append(("gate", "retry message: " + _short(m["content"]), str(m["content"])))
+    gate = trace.get("gate") or {}
+    if gate and gate.get("gate_passed") is not None:
+        conds = []
+        for k in sorted(gate):
+            if k.startswith("gate_E") and not k.endswith("_residual"):
+                v = str(gate[k])
+                conds.append(f"{k[5:7]}{'✓' if v == 'pass' else ('·' if v in ('not_applicable', 'n/a', 'None') else '✗')}")
+        L.append(("gate", f"gate: {'PASS' if str(gate.get('gate_passed')).lower() == 'true' else 'FAIL'} · " + " ".join(conds) + f" · {gate.get('gate_action', '')}",
+                  "\n".join(f"{k}: {gate[k]}" for k in sorted(gate))))
+    elif gate:
+        L.append(("gate", "no gate: answer surfaced as written", ""))
+    ans = trace.get("answer") or ""
+    if ans:
+        L.append(("final", _short(ans), str(ans)))
+    L.append(("status", f"{row.get('outcome', '')}: {row.get('solved_reason', '')}", row.get("solved_reason", "")))
+    return L
+
+
+def same_request_section() -> str:
+    """The same request under each method, one column per method, as the traces recorded it."""
+    dirs = latest_run()
+    by_method = {read_header(d)["header"]["method"]: d for d in dirs}
+    reqs = run_requests()
+    if not dirs or not reqs:
+        return ""
+    ids = [q["id"] for q in sorted(reqs, key=lambda x: x["id"])]
+    labels = {q["id"]: f"{q.get('date')} · {q.get('variant')} · " + (q.get("text", "").strip().splitlines()[-1][:90] if q.get("text") else "")
+              for q in reqs}
+    out = [
+        "<div class='card'><h2>The same request under each method, step by step</h2>"
+        "<p class='muted'>One column per method. Each column is the log of what the method did on that request: "
+        "what it wrote, what it called, what the solver returned, what the gate decided, the answer, and where "
+        "the request ended up. Click a line to expand it. The counts at the foot are model calls and tool calls, "
+        "from the trace.</p>"
+        "<p><label>Request <select id='exq'>" + "".join(f"<option value='{E(i)}'>{E(labels[i])}</option>" for i in ids) + "</select></label></p></div>"
+    ]
+    for n, rid in enumerate(ids):
+        out.append(f"<div class='ex{' on' if n == 0 else ''}' data-exq='{E(rid)}'><div class='cols6'>")
+        for r in ROWS:
+            d = by_method.get(r["name"])
+            if d is None:
+                out.append(f"<div class='col'><h4>{E(r['label'])}</h4><p class='muted' style='padding:8px 10px'>no run</p></div>")
+                continue
+            summ = {x["request_id"]: x for x in read_summary(d)}
+            row = summ.get(rid)
+            if row is None:
+                out.append(f"<div class='col'><h4>{E(r['label'])}</h4><p class='muted' style='padding:8px 10px'>not in this run</p></div>")
+                continue
+            stem = f"{int(row['nn']):02d}_{rid}"
+            tpath = d / "traces" / f"{stem}.json"
+            trace = None
+            if tpath.exists():
+                try:
+                    payload = json.loads(tpath.read_text(encoding="utf-8"))
+                    trace = payload if "messages" in payload else None
+                except ValueError:
+                    trace = None
+            lines = step_lines(trace, row)
+            out.append(
+                f"<div class='col'><h4>{E(r['label'])}{verdict(row.get('outcome', ''))}</h4><div class='log'>"
+                + "".join(f"<div class='ln' data-full='{E(full)}'><span class='k {k}'>{k}</span><span class='s'>{E(short)}</span></div>" for k, short, full in lines)
+                + f"</div><div class='vt'>{E(row.get('n_llm_calls', '0') or '0')} model calls, {E(row.get('n_tool_calls', '0') or '0')} tool calls · "
+                f"{E(row.get('prompt_tokens', '0') or '0')} in / {E(row.get('completion_tokens', '0') or '0')} out tokens</div></div>"
+            )
+        out.append("</div></div>")
+    return "".join(out)
+
+
 def tab_results() -> str:
     dirs = latest_run()
     if not dirs:
@@ -1279,6 +1403,7 @@ def tab_results() -> str:
             expected_table(),
         )
     ]
+    body.append(same_request_section())
 
     # headline: the gated row against its target
     if "evagent" in by_method:
@@ -1360,6 +1485,87 @@ def tab_results() -> str:
 
 
 
+
+# Block kinds of a rendered conversation, on top of the prompt blocks: what the
+# model said, what the tool returned, what the gate decided, what went out.
+CONV_BLOCKS: Dict[str, Tuple[str, str]] = {
+    "assistant": ("#2f5fd0", "model · message"),
+    "assistant_call": ("#2f5fd0", "model · tool call"),
+    "tool": ("#0f8f84", "tool · output"),
+    "plan": ("#6d4fc4", "model · plan"),
+    "result": ("#0f8f84", "executor · result of a planned step"),
+    "gate": ("#c99a06", "gate · verdict"),
+    "retry": ("#c99a06", "gate · message handed back to the model"),
+    "final": ("#1f9d55", "final answer, as surfaced"),
+}
+
+
+def _pretty_json(text: Any) -> str:
+    try:
+        return json.dumps(json.loads(text) if isinstance(text, str) else text, indent=2)
+    except (ValueError, TypeError):
+        return str(text)
+
+
+def render_conversation(trace: Dict[str, Any], row: Dict[str, str]) -> str:
+    """One run as the blocks of its exchange, in order, each colored by what it is."""
+    out: List[str] = []
+    msgs = trace.get("messages") or []
+    for m in msgs:
+        role, content = m.get("role"), m.get("content")
+        if role == "system":
+            out.append(prompt_block("system", str(content or ""), color=BLOCKS["sys_llm"][0] if "no tools" in str(content) else BLOCKS["sys_agent"][0],
+                                    source="methods/_shared/" + ("llm_only_system_prompt.txt (+ suffix)" if "no tools" in str(content) else "agent_system_prompt.txt")))
+        elif role == "user":
+            text = str(content or "")
+            if text.startswith("Result of step"):
+                out.append(prompt_block(CONV_BLOCKS["result"][1], text, color=CONV_BLOCKS["result"][0], source="methods/agent/llm_agent.py::run_agent_plan_act"))
+            elif "## " in text:
+                for kind, part in _split_user_message(text):
+                    colour, label, source = BLOCKS[kind]
+                    out.append(prompt_block(label, part, color=colour, source=source))
+            elif "verification" in text.lower() or "retry" in text.lower() or "condition" in text.lower():
+                out.append(prompt_block(CONV_BLOCKS["retry"][1], text, color=CONV_BLOCKS["retry"][0], source="methods/agent/validate/gate.py::decide"))
+            else:
+                out.append(prompt_block(BLOCKS["u_task"][1], text, color=BLOCKS["u_task"][0], source=BLOCKS["u_task"][2]))
+        elif role == "assistant":
+            calls = m.get("tool_calls") or []
+            if calls:
+                body = "\n\n".join(
+                    f"{(c.get('function') or {}).get('name', '?')}({_pretty_json((c.get('function') or {}).get('arguments', '{}'))})"
+                    for c in calls if isinstance(c, dict)
+                )
+                out.append(prompt_block(CONV_BLOCKS["assistant_call"][1], body, color=CONV_BLOCKS["assistant_call"][0], source="the model's turn"))
+            elif content:
+                text = str(content)
+                kind = "plan" if text.strip().startswith("{") and '"plan"' in text else "assistant"
+                out.append(prompt_block(CONV_BLOCKS[kind][1], text if kind != "plan" else _pretty_json(text),
+                                        color=CONV_BLOCKS[kind][0], source="the model's turn"))
+        elif role == "tool":
+            out.append(prompt_block(CONV_BLOCKS["tool"][1], _pretty_json(content), color=CONV_BLOCKS["tool"][0], source="solve_ev_schedule → solver/solver.py"))
+    gate = trace.get("gate") or {}
+    if gate:
+        if gate.get("gate_passed") is None:
+            out.append(prompt_block(CONV_BLOCKS["gate"][1], "no gate: the answer is surfaced as written", color=CONV_BLOCKS["gate"][0], source="methods/agent/llm_agent.py"))
+        else:
+            rows = []
+            for k in sorted(gate):
+                if k.startswith("gate_E") and not k.endswith("_residual"):
+                    v = str(gate[k])
+                    mark = "✓ pass" if v == "pass" else ("· not applicable" if v in ("not_applicable", "n/a", "None") else "✗ FAIL")
+                    rows.append(f"{k[5:7]}  {k[8:]:24s} {mark}   residual: {gate.get(k + '_residual', '')}")
+            verdict_line = f"verdict: {'PASS' if str(gate.get('gate_passed')).lower() == 'true' else 'FAIL'} · action: {gate.get('gate_action', '')} · attempts: {gate.get('gate_attempts', '')}"
+            out.append(prompt_block(CONV_BLOCKS["gate"][1], verdict_line + "\n" + "\n".join(rows) + (f"\n{gate.get('gate_reason', '')}" if gate.get("gate_reason") else ""),
+                                    color=CONV_BLOCKS["gate"][0], source="methods/agent/validate/gate.py"))
+    if trace.get("answer"):
+        out.append(prompt_block(CONV_BLOCKS["final"][1], str(trace["answer"]), color=CONV_BLOCKS["final"][0], source="what the operator receives"))
+    u = trace.get("usage") or {}
+    out.append(f"<p class='muted'>{u.get('n_llm_calls', 0)} model calls · {u.get('n_tool_calls', 0)} tool calls · "
+               f"{u.get('prompt_tokens', 0)} in / {u.get('completion_tokens', 0)} out tokens · {u.get('wall_time_s', 0)} s · "
+               f"outcome <b>{E(row.get('outcome', ''))}</b>: {E(row.get('solved_reason', ''))}</p>")
+    return "".join(out)
+
+
 def tab_traces() -> str:
     """Every run, step by step: the narrative, and the transcript behind it, per method and request."""
     dirs = latest_run()
@@ -1367,10 +1573,11 @@ def tab_traces() -> str:
     body: List[str] = [
         card(
             "What each method did, request by request",
-            "<p>Pick a method and a request. The narrative lists the steps the method took on that request, the "
-            "verdict of every term, and where the request ended up; the transcript underneath is the raw "
-            "exchange the narrative was written from: system prompt, request, every model message, every tool "
-            "call and its output, the gate's verdict, the final answer. Nothing here is summarized by a model.</p>"
+            "<p>Pick a method and a request. The exchange is shown block by block, in the order it happened and "
+            "in the colors of the Prompts section: the system prompt, the request split into its sections, every "
+            "model message, every tool call and what the solver returned, the gate's verdict condition by "
+            "condition, and the answer as it went out. The narrative and the raw transcript are underneath, "
+            "folded. Nothing here is summarized by a model.</p>"
             "<div style='display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:6px'>"
             "<label>Method <select id='trm'>"
             + "".join(f"<option value='{E(r['name'])}'{' selected' if r['name'] in by_method and i == min(j for j, rr in enumerate(ROWS) if rr['name'] in by_method) else ''}>{E(r['label'])}{'' if r['name'] in by_method else ' (not run yet)'}</option>" for i, r in enumerate(ROWS))
@@ -1401,11 +1608,22 @@ def tab_traces() -> str:
                 if line.startswith("OUTCOME:"):
                     outcome = line.split()[1].lower().replace("_", ", ")
             opts.append((stem, f"{stem[:2]} · {stem[3:].split('-s0')[0]} · {outcome}"))
+            summ_row = next((x for x in read_summary(d) if x.get("request_id") == stem[3:]), {})
+            tjson = narr.with_name(stem + ".json")
+            trace = None
+            if tjson.exists():
+                try:
+                    payload = json.loads(tjson.read_text(encoding="utf-8"))
+                    trace = payload if "messages" in payload else None
+                except ValueError:
+                    trace = None
+            conv = render_conversation(trace, summ_row) if trace else "<p class='muted'>No model exchange: this method computes from the parsed day.</p>"
             panels.append(
                 f"<div class='card trp' data-trm='{E(name)}' data-trq='{E(stem)}'>"
                 f"<h2>{E(r['label'])} <span class='muted'>{E(stem)}</span></h2>"
-                f"<h3>Narrative</h3><pre>{E(narr.read_text(encoding='utf-8'))}</pre>"
-                f"<details><summary>transcript, {transcript.stat().st_size:,} characters</summary>"
+                f"<h3>The exchange, block by block</h3>{conv}"
+                f"<details><summary>the narrative: steps and verdicts, as text</summary><pre>{E(narr.read_text(encoding='utf-8'))}</pre></details>"
+                f"<details><summary>the raw transcript, {transcript.stat().st_size:,} characters</summary>"
                 f"<pre style='max-height:none'>{E(transcript.read_text(encoding='utf-8')) if transcript.exists() else ''}</pre></details></div>"
             )
         options[name] = opts
@@ -1517,6 +1735,11 @@ SCRIPT = """
       u.style.display = u.dataset.scn===scn.value ? '' : 'none';});
   }
   scn.onchange=apply; mth.onchange=apply; apply();
+})();
+(function(){
+  var q=document.getElementById('exq'); if(!q) return;
+  function show(){document.querySelectorAll('.ex').forEach(function(x){x.classList.toggle('on', x.dataset.exq===q.value);});}
+  q.onchange=show; show();
 })();
 (function(){
   var m=document.getElementById('trm'), q=document.getElementById('trq');
