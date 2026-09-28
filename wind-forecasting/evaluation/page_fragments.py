@@ -473,6 +473,17 @@ def tab_plan() -> str:
     ])
 
 
+def _seconds(v: Optional[float]) -> str:
+    """Seconds, with enough precision to keep the row that costs almost none.
+
+    The parser answers in 0.03 s and the agents in twenty-odd, so a whole-second
+    format writes the baseline as 0 and throws away the largest ratio in the
+    table. Sub-second values keep two decimals; the rest stay whole."""
+    if v is None:
+        return DASH
+    return f"{v:.2f}" if v < 1 else f"{v:.0f}"
+
+
 def tab_results() -> str:
     dirs = method_dirs()
     if not dirs:
@@ -532,7 +543,7 @@ def tab_results() -> str:
                       f"{a.get('trace')}" if a.get("trace") is not None else NA]
             cells += [f"{a.get('tokens'):,}" if a.get("tokens") is not None else NA,
                       f"{a.get('cost'):.3f}" if a.get("cost") is not None else NA,
-                      f"{a.get('wall_time_mean_s'):.0f}" if a.get("wall_time_mean_s") is not None else DASH]
+                      _seconds(a.get("wall_time_mean_s"))]
             label = (f"<b>{E(row['label'])}</b><div class='muted'><code>{E(row['name'])}</code></div>")
             rows_out.append((d.parts[-2], [label, str(len(rows))], cells, str(d.relative_to(PROJECT_ROOT / "results"))))
         missing = [r for r in ROWS if r["name"] not in per]
