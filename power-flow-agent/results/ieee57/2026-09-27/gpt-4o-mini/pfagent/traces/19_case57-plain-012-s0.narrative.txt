@@ -1,0 +1,46 @@
+RUN 19  |  case57-plain-012-s0  |  pfagent  |  gpt-4o-mini  |  IEEE 57-bus  |  seed 0  |  difficulty plain
+Request: Load the 57-bus test case (case57) and run the AC power flow.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case57")   (1067 in / 16 out tokens, 0.9 s)
+       tool load_case -> case_name="case57", n_buses=57, n_lines=80, total_load_mw=1271.261
+  2. LLM called run_powerflow()   (1155 in / 11 out tokens, 0.9 s)
+       tool run_powerflow -> case_name="case57", converged=true, total_load_mw=1271.261, total_generation_mw=1304.917, total_loss_mw=33.656, bus_voltages[57], line_flows[80], voltage_violations[40], thermal_violations[5]  [gate pass]
+  3. LLM replied without tool calls: { "converged": true, "bus_voltages": [ {"bus_id": 1, "vm_pu": 1.04, "va_deg": 0.0, "is_violation": false, "violation_type": null}, {"bus_id": 2, "vm_pu": 1.01,    (10521 in / 8476 out tokens, 60.1 s)
+  4. LLM wrote the final answer   (19063 in / 5292 out tokens, 36.5 s)
+  5. LLM called run_powerflow()   (25096 in / 11 out tokens, 1.1 s)
+       tool run_powerflow -> case_name="case57", converged=true, total_load_mw=1271.261, total_generation_mw=1304.917, total_loss_mw=33.656, bus_voltages[57], line_flows[80], voltage_violations[40], thermal_violations[5]  [gate pass]
+  6. LLM replied without tool calls: { "formulation": [ {"tool": "load_case", "args": {"case_name": "case57"}}, {"tool": "run_powerflow", "args": {}} ], "converged": true, "summary": "The 57-bus te   (34462 in / 5293 out tokens, 38.9 s)
+  Totals: 6 LLM calls, 3 tool calls, 3 tool rounds, 91364 in / 19099 out tokens, $0.0252, 139.1 s
+  Status: verification_failed
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case57") -> run_powerflow()
+  executed: load_case(case_name="case57") -> run_powerflow() -> run_powerflow()
+  verdict:  n/a (no tool calls in this method)
+
+VERIFICATION GATE  (task-level, on the final answer)
+  V1  converged              pass  residual 0
+  V2  balance                pass  residual 0
+  V3  no_isolated_buses      pass  residual 0
+  V4  traceability           pass  residual 0
+  V5  currency               pass  residual 0
+  V6  argument_grounding     pass  every mutating-tool argument traces to the request or a prior tool output
+  V7  claims_from_tools      pass  answer matches the agent's own last solved state
+  V8  request_applied        pass  no network change was made
+  V10 complete_state         FAIL  15 of 78 branches are missing from line_flows
+  V11 formulation_matches_trace pass  the declared operations are the ones the trace shows
+  V9  plausible_state        pass  voltages span 0.736 to 1.040 p.u.
+  outcome: abstained after 2 attempt(s)
+
+REPORTING
+  numbers in the answer: 0, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: ESCALATED TO A PERSON
+  computation correct (solved): no   reason: formulation
+  escalation detected via: gate_abstained
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case57-plain-012-s0_run0.json

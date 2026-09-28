@@ -1,0 +1,53 @@
+RUN 03  |  case300-ambiguous-011-s0  |  pfagent  |  gpt-4o-mini  |  IEEE 300-bus  |  seed 0  |  difficulty ambiguous
+Request: Load case300 and set the active load at bus 123 to 102,200 kw.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case300"); set_active_load(bus_id=123, p_mw=102.2)   (1067 in / 56 out tokens, 1.9 s)
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=23949.498
+       tool set_active_load -> converged=true, total_load_mw=23967.936, total_generation_mw=24542.65, total_loss_mw=530.768  [gate FAIL]
+  2. LLM called run_powerflow()   (1355 in / 11 out tokens, 0.9 s)
+       tool run_powerflow -> 
+
+[Check] The active-power balance does not close (generation should equal load plus losses). Look for islanded buses, unmodelled elements or solver settings before trusting these numbers.  [gate FAIL]
+  3. LLM replied without tool calls: ```json { "converged": true, "bus_voltages": [ {"bus_id": 1, "vm_pu": 1.029675, "va_deg": -25.278, "is_violation": false, "violation_type": null}, {"bus_id": 2,   (40719 in / 16384 out tokens, 124.3 s)
+  4. LLM wrote the final answer   (57169 in / 13596 out tokens, 119.7 s)
+  5. LLM called get_status()   (71535 in / 10 out tokens, 2.5 s)
+       tool get_status -> {"active_case": "case300", "network_info": {"case_name": "case300", "n_buses": 300, "n_generators": 69, "n_lines": 345, "n_loads": 193, "total_load_mw": 23967.936, "total_gen_capacity_mw": 32678.435}, "has_last_result": ...
+  6. LLM called run_powerflow()   (71713 in / 11 out tokens, 1.1 s)
+       tool run_powerflow -> 
+
+[Check] The active-power balance does not close (generation should equal load plus losses). Look for islanded buses, unmodelled elements or solver settings before trusting these numbers.  [gate FAIL]
+  7. LLM replied without tool calls: { "formulation": [ {"tool": "load_case", "args": {"case_name": "case300"}}, {"tool": "set_active_load", "args": {"bus_id": 123, "p_mw": 102.2}}, {"tool": "run_p   (111077 in / 9526 out tokens, 93.0 s)
+  Totals: 7 LLM calls, 5 tool calls, 4 tool rounds, 354635 in / 39594 out tokens, $0.0770, 344.2 s
+  Status: verification_failed
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> modify_load(bus_id=123, p_mw=102.2)
+  executed: load_case(case_name="case300") -> set_active_load(bus_id=123, p_mw=102.2) -> run_powerflow() -> get_status() -> run_powerflow()
+  verdict:  n/a (no tool calls in this method)
+
+VERIFICATION GATE  (task-level, on the final answer)
+  V1  converged              pass  residual 0
+  V2  balance                FAIL  residual 43.946
+  V3  no_isolated_buses      pass  residual 0
+  V4  traceability           pass  residual 0
+  V5  currency               pass  residual 0
+  V6  argument_grounding     pass  every mutating-tool argument traces to the request or a prior tool output
+  V7  claims_from_tools      pass  answer matches the agent's own last solved state
+  V8  request_applied        pass  every change applied and reflected in the final state
+  V10 complete_state         FAIL  167 of 300 buses are missing from bus_voltages; 343 of 343 branches are missing from line_flows
+  V11 formulation_matches_trace pass  the declared operations are the ones the trace shows
+  V9  plausible_state        pass  voltages within 0.8 to 1.2 p.u., losses below 10 % of the load
+  outcome: abstained after 2 attempt(s)
+
+REPORTING
+  numbers in the answer: 1, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: ESCALATED TO A PERSON
+  computation correct (solved): no   reason: formulation
+  escalation detected via: gate_abstained
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case300-ambiguous-011-s0_run0.json

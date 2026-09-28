@@ -1,0 +1,26 @@
+RUN 19  |  case300-plain-012-s0  |  rule_based  |  no-llm  |  IEEE 300-bus  |  seed 0  |  difficulty plain
+Request: Load the 300-bus test case (case300).
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 1-step plan: load_case(case_name="case300")
+  2. parser called load_case(case_name="case300")
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=23928.503
+  3. parser called run_powerflow()
+       tool run_powerflow -> case_name="case300", converged=true, total_load_mw=23928.503, total_generation_mw=24375.062, total_loss_mw=446.559, bus_voltages[300], line_flows[345], voltage_violations[69], thermal_violations[21]  [gate pass]
+  Totals: 0 LLM calls, 2 tool calls, 1 tool rounds, 0 in / 0 out tokens, $0.0000, 0.4 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300")
+  executed: load_case(case_name="case300") -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 1389, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_ok
+  against the reference: voltage MAE 1.97e-07 p.u., flow MAE 2.43e-04 MW, KCL mismatch 1.73e-04 MW, power-balance error n/a
+  raw trace: case300-plain-012-s0_run0.json

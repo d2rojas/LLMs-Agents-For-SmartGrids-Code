@@ -1,0 +1,47 @@
+RUN 14  |  case57-parameterized-013-s0  |  pfagent  |  gpt-4o-mini  |  IEEE 57-bus  |  seed 0  |  difficulty parameterized
+Request: Load case57 and set the active load at bus 19 to 1.9 MW.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case57"); set_active_load(bus_id=19, p_mw=1.9)   (1067 in / 56 out tokens, 1.3 s)
+       tool load_case -> case_name="case57", n_buses=57, n_lines=80, total_load_mw=1277.379
+       tool set_active_load -> converged=true, total_load_mw=1275.778, total_generation_mw=1307.342, total_loss_mw=31.564  [gate pass]
+  2. LLM called run_powerflow()   (1355 in / 11 out tokens, 1.0 s)
+       tool run_powerflow -> case_name="case57", converged=true, total_load_mw=1275.778, total_generation_mw=1307.342, total_loss_mw=31.564, bus_voltages[57], line_flows[80], voltage_violations[40], thermal_violations[6]  [gate pass]
+  3. LLM replied without tool calls: ```json { "converged": true, "bus_voltages": [ {"bus_id": 1, "vm_pu": 1.04, "va_deg": 0.0, "is_violation": false, "violation_type": null}, {"bus_id": 2, "vm_pu"   (10780 in / 8540 out tokens, 57.7 s)
+  4. LLM wrote the final answer   (19386 in / 5326 out tokens, 37.6 s)
+  5. LLM called run_powerflow()   (25453 in / 11 out tokens, 1.2 s)
+       tool run_powerflow -> case_name="case57", converged=true, total_load_mw=1275.778, total_generation_mw=1307.342, total_loss_mw=31.564, bus_voltages[57], line_flows[80], voltage_violations[40], thermal_violations[6]  [gate pass]
+  6. LLM replied without tool calls: { "formulation": [ {"tool": "load_case", "args": {"case_name": "case57"}}, {"tool": "set_active_load", "args": {"bus_id": 19, "p_mw": 1.9}}, {"tool": "run_power   (34878 in / 5327 out tokens, 38.1 s)
+  Totals: 6 LLM calls, 4 tool calls, 3 tool rounds, 92919 in / 19271 out tokens, $0.0255, 137.4 s
+  Status: verification_failed
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case57") -> modify_load(bus_id=19, p_mw=1.9)
+  executed: load_case(case_name="case57") -> set_active_load(bus_id=19, p_mw=1.9) -> run_powerflow() -> run_powerflow()
+  verdict:  n/a (no tool calls in this method)
+
+VERIFICATION GATE  (task-level, on the final answer)
+  V1  converged              pass  residual 0
+  V2  balance                pass  residual 0
+  V3  no_isolated_buses      pass  residual 0
+  V4  traceability           pass  residual 0
+  V5  currency               pass  residual 0
+  V6  argument_grounding     pass  every mutating-tool argument traces to the request or a prior tool output
+  V7  claims_from_tools      pass  answer matches the agent's own last solved state
+  V8  request_applied        pass  every change applied and reflected in the final state
+  V10 complete_state         FAIL  15 of 78 branches are missing from line_flows
+  V11 formulation_matches_trace pass  the declared operations are the ones the trace shows
+  V9  plausible_state        pass  voltages span 0.728 to 1.040 p.u.
+  outcome: abstained after 2 attempt(s)
+
+REPORTING
+  numbers in the answer: 0, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: ESCALATED TO A PERSON
+  computation correct (solved): no   reason: formulation
+  escalation detected via: gate_abstained
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case57-parameterized-013-s0_run0.json

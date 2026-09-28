@@ -1,6 +1,6 @@
 # rule_based on IEEE 30-bus with no-llm
 
-Generated 2026-09-27 16:32 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-28 00:28 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -41,8 +41,7 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 
 | group | metric | value |
 |---|---|---|
-| Task utility | Formulation exact | 17/20 (85.0%) |
-| Task utility | Formulation error types | missed_step: 2, wrong_id: 1 |
+| Task utility | Formulation exact | 17/17 (100.0%) |
 | Task utility | Voltage MAE, all runs | 1.99e-07 p.u. |
 | Task utility | Voltage MAE, formulation-exact runs | 1.99e-07 p.u. |
 | Task utility | Flow MAE, all runs | 2.37e-04 MW |
@@ -56,7 +55,7 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 | Cost and time | LLM calls / tool calls, mean | 0 / 2.8 |
 | Cost and time | Prompt / completion tokens, mean | 0 / 0 |
 | Cost and time | Cost, total | $0.0000 |
-| Cost and time | Wall time, mean | 0.6 s |
+| Cost and time | Wall time, mean | 1.1 s |
 
 ### Cross-check against the runner's own scoreboard
 
@@ -82,15 +81,9 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 ## Escalated (3)
 
-- `case30-ambiguous-011-s0` detected via cannot_answer, abstention_json, declared_inability, cannot_parse; formulation missed_step; the formulation declared in the answer omits load_case, set_active_load / modify_load, which the request needs  ([narrative](traces/03_case30-ambiguous-011-s0.narrative.txt), [transcript](traces/03_case30-ambiguous-011-s0.transcript.txt))
-- `case30-ambiguous-019-s0` detected via cannot_answer, abstention_json; formulation wrong_id; declared: disconnect_line: from_bus intended 8 != executed 7; disconnect_line: to_bus intended 28 != executed 27  ([narrative](traces/05_case30-ambiguous-019-s0.narrative.txt), [transcript](traces/05_case30-ambiguous-019-s0.transcript.txt))
-- `case30-multistep-002-s0` detected via cannot_answer, abstention_json, declared_inability, cannot_parse; formulation missed_step; the formulation declared in the answer omits load_case, disconnect_line, disconnect_line, run_n1_contingency, which the request needs  ([narrative](traces/06_case30-multistep-002-s0.narrative.txt), [transcript](traces/06_case30-multistep-002-s0.transcript.txt))
-
-## Formulation not exact (3)
-
-- `case30-ambiguous-011-s0` missed_step: the formulation declared in the answer omits load_case, set_active_load / modify_load, which the request needs  ([narrative](traces/03_case30-ambiguous-011-s0.narrative.txt), [transcript](traces/03_case30-ambiguous-011-s0.transcript.txt))
-- `case30-ambiguous-019-s0` wrong_id: declared: disconnect_line: from_bus intended 8 != executed 7; disconnect_line: to_bus intended 28 != executed 27  ([narrative](traces/05_case30-ambiguous-019-s0.narrative.txt), [transcript](traces/05_case30-ambiguous-019-s0.transcript.txt))
-- `case30-multistep-002-s0` missed_step: the formulation declared in the answer omits load_case, disconnect_line, disconnect_line, run_n1_contingency, which the request needs  ([narrative](traces/06_case30-multistep-002-s0.narrative.txt), [transcript](traces/06_case30-multistep-002-s0.transcript.txt))
+- `case30-ambiguous-011-s0` detected via cannot_answer, abstention_json, declared_inability, cannot_parse; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/03_case30-ambiguous-011-s0.narrative.txt), [transcript](traces/03_case30-ambiguous-011-s0.transcript.txt))
+- `case30-ambiguous-019-s0` detected via cannot_answer, abstention_json; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/05_case30-ambiguous-019-s0.narrative.txt), [transcript](traces/05_case30-ambiguous-019-s0.transcript.txt))
+- `case30-multistep-002-s0` detected via cannot_answer, abstention_json, declared_inability, cannot_parse; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/06_case30-multistep-002-s0.narrative.txt), [transcript](traces/06_case30-multistep-002-s0.transcript.txt))
 
 ## Untraceable numbers in the answer (2)
 

@@ -225,7 +225,7 @@ def cmd_postprocess(args: argparse.Namespace) -> int:
     from evaluation.postprocess import postprocess
 
     for d in args.run_dirs:
-        postprocess(Path(d), method=args.method, model=args.model, case=args.case, condition=args.condition)
+        postprocess(Path(d), method=args.method, model=args.model, case=args.case, condition=args.condition, figures=not args.no_figures)
     build_index()
     return 0
 
@@ -355,6 +355,7 @@ def build_parser() -> argparse.ArgumentParser:
     pp.add_argument("--model", default=None)
     pp.add_argument("--case", default=None)
     pp.add_argument("--condition", default=None, choices=["normal", "stress"])
+    pp.add_argument("--no-figures", action="store_true", help="skip the per-run PNGs and overview.png (slow on the large systems)")
     pp.set_defaults(func=cmd_postprocess)
 
     sub.add_parser("index", help="rebuild results/INDEX.md").set_defaults(func=cmd_index)

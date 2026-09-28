@@ -1,0 +1,29 @@
+RUN 16  |  case300-plain-000-s0  |  react_nogate  |  gpt-4o-mini  |  IEEE 300-bus  |  seed 0  |  difficulty plain
+Request: Load case300 and run the power flow, then report the bus with the lowest voltage magnitude.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case300")   (1067 in / 16 out tokens, 1.5 s)
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=23794.41
+  2. LLM called run_powerflow()   (1155 in / 11 out tokens, 1.0 s)
+       tool run_powerflow -> 
+
+[Check] The active-power balance does not close (generation should equal load plus losses). Look for islanded buses, unmodelled elements or solver settings before trusting these numbers.  [gate FAIL]
+  3. LLM replied without tool calls: ```json { "converged": true, "lowest_voltage_bus": { "bus_id": 201, "voltage_magnitude": 0.900826 } } ```   (38438 in / 45 out tokens, 2.1 s)
+  4. LLM wrote the final answer   (38549 in / 2326 out tokens, 16.3 s)
+  Totals: 4 LLM calls, 2 tool calls, 2 tool rounds, 79209 in / 2398 out tokens, $0.0133, 21.1 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> run_powerflow()
+  executed: load_case(case_name="case300") -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 153, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: incomplete_coverage
+  against the reference: voltage MAE 2.17e-07 p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case300-plain-000-s0_run0.json

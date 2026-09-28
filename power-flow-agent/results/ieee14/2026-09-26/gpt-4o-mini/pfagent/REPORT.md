@@ -1,6 +1,6 @@
 # pfagent on IEEE 14-bus with gpt-4o-mini
 
-Generated 2026-09-27 16:20 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-28 00:23 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -41,8 +41,7 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 
 | group | metric | value |
 |---|---|---|
-| Task utility | Formulation exact | 18/20 (90.0%) |
-| Task utility | Formulation error types | unparsed: 2 |
+| Task utility | Formulation exact | 18/18 (100.0%) |
 | Task utility | Voltage MAE, all runs | 1.11e-06 p.u. |
 | Task utility | Voltage MAE, formulation-exact runs | 1.11e-06 p.u. |
 | Task utility | Flow MAE, all runs | 2.40e-04 MW |
@@ -82,13 +81,8 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 ## Escalated (2)
 
-- `case14-multistep-018-s0` detected via gate_abstained; formulation unparsed; no formulation field in the answer  ([narrative](traces/10_case14-multistep-018-s0.narrative.txt), [transcript](traces/10_case14-multistep-018-s0.transcript.txt))
-- `case14-plain-012-s0` detected via gate_abstained; formulation unparsed; no formulation field in the answer  ([narrative](traces/19_case14-plain-012-s0.narrative.txt), [transcript](traces/19_case14-plain-012-s0.transcript.txt))
-
-## Formulation not exact (2)
-
-- `case14-multistep-018-s0` unparsed: no formulation field in the answer  ([narrative](traces/10_case14-multistep-018-s0.narrative.txt), [transcript](traces/10_case14-multistep-018-s0.transcript.txt))
-- `case14-plain-012-s0` unparsed: no formulation field in the answer  ([narrative](traces/19_case14-plain-012-s0.narrative.txt), [transcript](traces/19_case14-plain-012-s0.transcript.txt))
+- `case14-multistep-018-s0` detected via gate_abstained; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/10_case14-multistep-018-s0.narrative.txt), [transcript](traces/10_case14-multistep-018-s0.transcript.txt))
+- `case14-plain-012-s0` detected via gate_abstained; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/19_case14-plain-012-s0.narrative.txt), [transcript](traces/19_case14-plain-012-s0.transcript.txt))
 
 ## Files
 

@@ -115,3 +115,21 @@ def test_an_extra_solve_is_not_a_formulation_difference():
     ans = {"formulation": [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_n1_contingency", "args": {"top_k": 1, "criteria": "max_violations"}}], "converged": True, "bus_voltages": state["bus_voltages"], "line_flows": state["line_flows"], "cannot_answer": None}
     v = verify_final_answer(trace, json.dumps(ans), enforce_v6v7=True)
     assert v["conditions"]["formulation_matches_trace"]["passed"] is True
+
+
+def test_plan_act_can_carry_the_gate_and_retries_once():
+    """The ablation arm plan_act_gate: plan, execute, answer, verify; a failed answer goes back once."""
+    import json as _json
+    from methods.agent.engine import EngineConfig, LLMEngine
+    from solver.schemas import SessionState as _SS
+    from tests.test_engine_modes import ScriptedClient, ScriptedTools, _resp
+
+    tools = ScriptedTools()
+    plan = _json.dumps({"plan": [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_powerflow", "args": {}}]})
+    bad = _json.dumps({"formulation": [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_powerflow", "args": {}}], "converged": True, "bus_voltages": [], "line_flows": [], "cannot_answer": None})
+    client = ScriptedClient([_resp(content=plan), _resp(content=bad), _resp(content=bad)])
+    engine = LLMEngine(client=client, dispatcher=tools.dispatcher(), config=EngineConfig(model="fake", architecture="plan_act", gate=False, final_gate=True))
+    text, trace = engine.run_with_trace("run case14", _SS())
+    assert trace["verification_outcome"] == "abstained" and trace["verification_attempts"] == 2
+    assert len(trace["verification_retry_messages"]) == 1
+    assert "No numerical result is reported" in text
