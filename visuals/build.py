@@ -16,7 +16,11 @@ argument of its ``evaluation.page_fragments`` module:
       "note":   "20 Caltech ACN days",          small text, top right
       "groups": [["Design", [["overview", "Overview"], ...]], ...],
       "tabs":   {"overview": "<div class=...>", ...},
-      "script": "…"                             optional, page-specific JS
+      "script": "…",                            optional, page-specific JS
+      "pages":  {"viewer.html": "/abs/path/viewer.html"},   optional, files copied to site/<id>/
+      "links":  {"traces": {"href": "viewer.html", "label": "Trace viewer"}}
+                                                optional: a section served by one of those
+                                                pages instead of a tab (same tab, own chrome)
     }
 
 Usage (from the repository root):
@@ -153,11 +157,17 @@ def nav_for(current: Optional[str], built: Dict[str, Dict[str, Any]]) -> List[Di
     for case in CASES:
         p = built.get(case["id"])
         own = {k: t for _g, entries in (p or {}).get("groups", []) for k, t in entries}
-        entries: List[Tuple[str, str]] = []
+        links = (p or {}).get("links", {})
+        entries: List[Tuple[str, ...]] = []
         if case["id"] == current:
             # Every section, in the shared order, under the case study's own
-            # label when it has one. Same list on every page, always.
-            entries = [(key, own.get(key, label)) for key, label, _purpose in SECTIONS]
+            # label when it has one. Same list on every page, always. A section
+            # the case study serves as a page of its own becomes a link to it.
+            for key, label, _purpose in SECTIONS:
+                if key in links:
+                    entries.append((key, links[key].get("label", own.get(key, label)), f"{case['id']}/{links[key]['href']}"))
+                else:
+                    entries.append((key, own.get(key, label)))
         out.append({
             "title": case["title"],
             "subtitle": case["subtitle"],
@@ -189,7 +199,10 @@ def render(payload: Dict[str, Any], built: Dict[str, Dict[str, Any]]) -> str:
     tabs = payload.get("tabs", {})
     labels = {k: t for _g, entries in payload.get("groups", []) for k, t in entries}
     body: List[str] = []
+    links = payload.get("links", {})
     for n, (key, label, purpose) in enumerate(SECTIONS):
+        if key in links:
+            continue  # served by a page of its own; the sidebar links to it
         content = tabs.get(key) or placeholder(payload["title"], key, labels.get(key, label), purpose)
         body.append(shell.tab(key, content, on=(n == 0)))
     extra = payload.get("script", "")
@@ -328,6 +341,13 @@ def build(only: Optional[str] = None, python: str = PYTHON) -> List[Path]:
         out = SITE / f"{case_id}.html"
         out.write_text(render(p, pages), encoding="utf-8")
         written.append(out)
+        # pages a case study serves as its own (a trace viewer too large to
+        # embed) are copied next to it, under site/<id>/, and linked from the sidebar
+        for name, src in (p.get("pages") or {}).items():
+            dest = SITE / case_id / name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(Path(src).read_bytes())
+            written.append(dest)
     index = SITE / "index.html"
     index.write_text(landing(built), encoding="utf-8")
     written.append(index)

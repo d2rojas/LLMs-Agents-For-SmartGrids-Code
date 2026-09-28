@@ -545,8 +545,9 @@ def page(
         note_text: Small right-aligned text in the top bar.
         nav: One entry per case study, in order, each a dict with ``title``,
             ``subtitle``, ``href``, ``current`` (bool), ``available`` (bool)
-            and ``entries`` as [(tab key, tab label), ...]. Entries are
-            rendered only for the current one.
+            and ``entries`` as [(tab key, tab label), ...]; an entry with a
+            third element, an href, is rendered as a link to that page instead
+            of a tab. Entries are rendered only for the current one.
         tabs_html: The concatenated output of ``tab()`` for the current entry.
         extra_css: Page-specific rules appended to the shared stylesheet.
 
@@ -573,7 +574,14 @@ def page(
         else:
             side.append(f"<a class='{cls}' href='{E(case['href'])}'>{head}</a>")
         if current:
-            for key, text in case.get("entries", ()):
+            for entry in case.get("entries", ()):
+                key, text = entry[0], entry[1]
+                href = entry[2] if len(entry) > 2 and entry[2] else ""
+                if href:
+                    # a section that is a page of its own (a trace viewer too large to
+                    # embed): a plain link, same tab, no tab body on this page
+                    side.append(f"<a class='sub ext' href='{E(href)}'>{E(text)} ↗</a>")
+                    continue
                 first = first or key
                 side.append(f"<a class='sub' data-t='{E(key)}' href='#{E(key)}'>{E(text)}</a>")
 
