@@ -51,7 +51,7 @@ async function render(){const runs=runsOf();const byM={};for(const r of runs){by
   s+="</tr>";}
  s+="</table>";$('#scen').innerHTML=s;
  $('#status').textContent=`${runs.length} runs · index ${INDEX.generated}`;}
-async function init(){INDEX=await (await fetch('../INDEX.json')).json();
+async function init(){INDEX=await (await fetch('../INDEX.json?t='+Date.now())).json();
  const sets=[...new Set(INDEX.runs.filter(r=>r.kind==='run').map(r=>tagOf(r)||'main'))].sort((a,b)=>(a==='main'?-1:b==='main'?1:a.localeCompare(b)));
  setOptions($('#set'),sets.map(k=>[k,k==='main'?'main (the paper runs)':k]));if(sets.includes('main'))$('#set').value='main';
  function refill(){const rs=INDEX.runs.filter(r=>r.kind==='run'&&(tagOf(r)||'main')===$('#set').value);const cases=[...new Set(rs.map(r=>r.case))].sort((a,b)=>parseInt(a.slice(4))-parseInt(b.slice(4)));setOptions($('#sys'),cases.map(c=>[c,SYS[c]||c]),true);const models=[...new Set(rs.map(r=>r.model).filter(m=>m!=='no-llm'))];setOptions($('#model'),[['all','all models'],...models.map(m=>[m,m])],true);if(models.length===1)$('#model').value=models[0];}
