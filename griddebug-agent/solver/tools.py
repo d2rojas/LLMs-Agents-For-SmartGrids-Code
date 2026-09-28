@@ -212,6 +212,17 @@ class ToolDispatcher:
                 "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were "
                         "already outside their limits in the unmodified network and are not yours to fix.",
             }
+        if name == "switch_element" and isinstance(out, dict) and out.get("success"):
+            from solver.violations import islanded_load_buses
+
+            stranded = islanded_load_buses(self.net)
+            out = dict(out)
+            out["islanded_load_buses_after"] = stranded
+            out["note"] = ("This switching left no load stranded." if not stranded else
+                           f"This switching leaves load on bus(es) {stranded} with no path to a slack bus. "
+                           "Load on an islanded bus is not served, and a network with stranded load is not repaired, "
+                           "even when no limit is violated any more.")
+            return out
         if name == "check_overloads":
             new_o, base_o = [], []
             for key, el, idk in (("overloaded_lines", "line", "line_index"), ("overloaded_trafos", "trafo", "trafo_index")):

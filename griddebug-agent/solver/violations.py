@@ -177,11 +177,20 @@ def observe(net: pp.pandapowerNet, base_keys: Optional[FrozenSet[Key]] = None, *
 
 
 def served_load_mw(net: pp.pandapowerNet) -> float:
-    """Active demand still in service, in MW. The denominator of the load-served column."""
+    """Active demand actually served, in MW: in service and connected to a slack bus.
+
+    Load sitting on an islanded bus is in service and is not being served. Counting it
+    said "100 % of the demand is met" about a network whose repair had stranded five
+    buses, which is the opposite of what the column is for.
+    """
     df = getattr(net, "load", None)
     if df is None or not len(df):
         return 0.0
-    return float(df.loc[df["in_service"], "p_mw"].sum())
+    stranded = set(islanded_load_buses(net))
+    rows = df.loc[df["in_service"]]
+    if stranded:
+        rows = rows[~rows["bus"].astype(int).isin(stranded)]
+    return float(rows["p_mw"].sum())
 
 
 def base_violation_keys(net: pp.pandapowerNet) -> FrozenSet[Key]:
