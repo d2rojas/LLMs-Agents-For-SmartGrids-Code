@@ -45,7 +45,7 @@ FIELDS = [
     "common_repaired", "common_improved", "common_feasible",
     "common_formulation_exact", "common_formulation_error_type", "common_formulation_detail",
     "common_n_numbers", "common_n_untraceable", "common_traceable",
-    "common_escalated", "common_escalation_reason", "common_solved", "common_reason", "common_outcome",
+    "common_escalated", "common_escalation_reason", "common_escalation_kind", "common_solved", "common_reason", "common_outcome",
     "common_gate_passed", "common_gate_failed",
 ]
 
@@ -61,6 +61,7 @@ _ALIASES = {
     "line_outage": {"line_outage", "line_out", "line_disconnected"},
     "trafo_outage": {"trafo_outage", "transformer_outage", "trafo_out"},
     "none": {"none", "normal", "no_fault"},
+    "generation_excess": {"generation_excess", "excess_generation", "overgeneration"},
 }
 
 
@@ -68,7 +69,9 @@ def score_diagnosis(answer: Answer, injected: Injected) -> Dict[str, Any]:
     """Exact when the fault type matches and at least one injected component is named (none needs no component)."""
     if not answer.json_ok or answer.fault_type is None:
         return {"exact": False, "error_type": "no_diagnosis", "detail": "the answer carries no diagnosis"}
-    accepted = _ALIASES.get(injected.fault_type, {injected.fault_type})
+    accepted = set(_ALIASES.get(injected.fault_type, {injected.fault_type}))
+    for extra in injected.also_accepted:  # a fault with more than one correct name
+        accepted |= set(_ALIASES.get(extra, {extra}))
     type_ok = answer.fault_type in accepted
     if injected.fault_type == "none":
         exact = type_ok
@@ -148,6 +151,21 @@ def score_run(run: MethodRun, *, injected: Injected, initial: State, base_keys: 
         return out
 
     if out["common_escalated"]:
+        # what kind of escalation: the column counts them all the same, the report does not
+        gate_failed = list((run.gate or {}).get("failed") or [])
+        if "currency" in gate_failed and run.budget_exhausted:
+            kind = "budget ended on an action, nothing verified it"
+        elif gate_failed:
+            kind = "the gate rejected the answer: " + ", ".join(gate_failed)
+        elif run.budget_exhausted:
+            kind = "budget exhausted"
+        elif out["common_improved"]:
+            kind = "declared, after improving the network"
+        elif out["common_feasible"]:
+            kind = "declared, network no better than it started"
+        else:
+            kind = "declared, network still without a solution"
+        out["common_escalation_kind"] = kind
         out["common_solved"] = False
         out["common_reason"] = "escalated: " + out["common_escalation_reason"]
         out["common_outcome"] = "escalated"

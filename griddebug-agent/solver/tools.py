@@ -182,25 +182,53 @@ class ToolDispatcher:
         return out
 
     def _annotate(self, name: str, out: Any) -> Any:
-        """Mark base-network violations in the check outputs and count the new ones."""
-        if not isinstance(out, dict) or not self.base_keys:
+        """Make the check tools report what the task counts, and nothing louder than that.
+
+        The repair target is relative to the base network: a bus or branch that was already
+        outside its limits before the fault is not the method's job, and the request says so.
+        The tools used to answer with a ``total_violations`` that included those, and the
+        smoke test of 2026-09-28 showed the consequence: on the healthy control network
+        gpt-4o-mini read "3 violations", curtailed loads and moved generators for twenty
+        calls, and left the network worse than it found it. A tool whose headline number
+        contradicts the task is a defect of the harness, not a failure of the model.
+
+        So the new-and-counting ones come first, the pre-existing ones are summarized as
+        context, and no field carries a total that mixes the two.
+        """
+        if not isinstance(out, dict) or "error" in out:
             return out
         if name == "check_voltage_violations":
-            new = 0
-            for key in ("undervoltage_buses", "overvoltage_buses"):
+            new_v, base_v = [], []
+            for key, kind in (("undervoltage_buses", "under"), ("overvoltage_buses", "over")):
                 for v in out.get(key, []) or []:
-                    v["in_base"] = ("bus", int(v["bus"])) in self.base_keys
-                    new += 0 if v["in_base"] else 1
-            out["new_violations"] = new
-            out["note"] = "in_base: the bus already violated its limit in the unmodified network; only new violations count"
-        elif name == "check_overloads":
-            new = 0
+                    rec = {"bus": int(v["bus"]), "vm_pu": v.get("vm_pu"), "limit": v.get("limit"), "kind": kind}
+                    (base_v if ("bus", int(v["bus"])) in self.base_keys else new_v).append(rec)
+            return {
+                "converged": out.get("converged"),
+                "limits_pu": {"min": out.get("v_min_pu_global"), "max": out.get("v_max_pu_global")},
+                "new_violations": new_v,
+                "n_new_violations": len(new_v),
+                "pre_existing_in_base": {"n": len(base_v), "buses": [v["bus"] for v in base_v]},
+                "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were "
+                        "already outside their limits in the unmodified network and are not yours to fix.",
+            }
+        if name == "check_overloads":
+            new_o, base_o = [], []
             for key, el, idk in (("overloaded_lines", "line", "line_index"), ("overloaded_trafos", "trafo", "trafo_index")):
                 for v in out.get(key, []) or []:
-                    v["in_base"] = (el, int(v[idk])) in self.base_keys
-                    new += 0 if v["in_base"] else 1
-            out["new_overloads"] = new
-            out["note"] = "in_base: the branch already exceeded its rating in the unmodified network; only new overloads count"
+                    rec = {"element": el, "index": int(v[idk]), "loading_percent": v.get("loading_percent")}
+                    if el == "line":
+                        rec["from_bus"], rec["to_bus"] = v.get("from_bus"), v.get("to_bus")
+                    (base_o if (el, int(v[idk])) in self.base_keys else new_o).append(rec)
+            return {
+                "converged": out.get("converged"),
+                "threshold_percent": out.get("threshold_percent"),
+                "new_overloads": new_o,
+                "n_new_overloads": len(new_o),
+                "pre_existing_in_base": {"n": len(base_o), "elements": [f"{v['element']} {v['index']}" for v in base_o]},
+                "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were "
+                        "already above their rating in the unmodified network and are not yours to fix.",
+            }
         return out
 
     # what the gate asks the log

@@ -4,6 +4,18 @@ One line per method folder, newest first. `python run.py index` rebuilds this.
 
 | case | date | model | method | n | solved | escalated | wrong | diagnosis % | trace % | repaired | tokens | cost $ | kind | path |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ieee14 | 2026-09-28 | no-llm | rule_based__smoke2 | 7 | 5 | 2 | 0 | 42.9 | 85.7 | 5 | 0 | 0.0 | run | `ieee14/2026-09-28/no-llm/rule_based__smoke2` |
+| ieee14 | 2026-09-28 | no-llm | rule_based__smoke3 | 7 | 5 | 2 | 0 | 42.9 | 85.7 | 5 | 0 | 0.0 | run | `ieee14/2026-09-28/no-llm/rule_based__smoke3` |
+| ieee14 | 2026-09-28 | gpt-4o-mini | react_nogate__smoke2 | 7 | 0 | 7 | 0 | 14.3 | 100.0 | 1 | 588272 | 0.1 | run | `ieee14/2026-09-28/gpt-4o-mini/react_nogate__smoke2` |
+| ieee14 | 2026-09-28 | gpt-4o-mini | react_nogate__smoke3 | 7 | 2 | 5 | 0 | 28.6 | 100.0 | 2 | 499849 | 0.1 | run | `ieee14/2026-09-28/gpt-4o-mini/react_nogate__smoke3` |
+| ieee14 | 2026-09-28 | gpt-4o-mini | plan_act_nogate__smoke2 | 7 | 0 | 7 | 0 | 42.9 | 100.0 | 0 | 43486 | 0.0 | run | `ieee14/2026-09-28/gpt-4o-mini/plan_act_nogate__smoke2` |
+| ieee14 | 2026-09-28 | gpt-4o-mini | plan_act_nogate__smoke3 | 7 | 1 | 6 | 0 | 57.1 | 85.7 | 1 | 41178 | 0.0 | run | `ieee14/2026-09-28/gpt-4o-mini/plan_act_nogate__smoke3` |
+| ieee14 | 2026-09-28 | gpt-4o-mini | llm_only_structured__smoke2 | 7 | 1 | 0 | 6 | 42.9 | 57.1 | 1 | 19758 | 0.0 | run | `ieee14/2026-09-28/gpt-4o-mini/llm_only_structured__smoke2` |
+| ieee14 | 2026-09-28 | gpt-4o-mini | llm_only_structured__smoke3 | 7 | 1 | 1 | 5 | 28.6 | 42.9 | 1 | 20162 | 0.0 | run | `ieee14/2026-09-28/gpt-4o-mini/llm_only_structured__smoke3` |
+| ieee14 | 2026-09-28 | gpt-4o-mini | llm_only_cot__smoke2 | 7 | 0 | 1 | 6 | 14.3 | 100.0 | 0 | 22806 | 0.0 | run | `ieee14/2026-09-28/gpt-4o-mini/llm_only_cot__smoke2` |
+| ieee14 | 2026-09-28 | gpt-4o-mini | llm_only_cot__smoke3 | 7 | 1 | 1 | 5 | 28.6 | 100.0 | 1 | 23073 | 0.0 | run | `ieee14/2026-09-28/gpt-4o-mini/llm_only_cot__smoke3` |
+| ieee14 | 2026-09-28 | gpt-4o-mini | griddebug__smoke2 | 7 | 0 | 7 | 0 | 14.3 | 100.0 | 0 | 709735 | 0.1 | run | `ieee14/2026-09-28/gpt-4o-mini/griddebug__smoke2` |
+| ieee14 | 2026-09-28 | gpt-4o-mini | griddebug__smoke3 | 7 | 1 | 6 | 0 | 0.0 | 100.0 | 1 | 662924 | 0.1 | run | `ieee14/2026-09-28/gpt-4o-mini/griddebug__smoke3` |
 | ieee14 | 2026-09-27 | no-llm | rule_based__smoke | 3 | 2 | 1 | 0 | 33.3 | 100.0 | 2 | 0 | 0.0 | run | `ieee14/2026-09-27/no-llm/rule_based__smoke` |
 | ieee14 | 2026-09-27 | gpt-4o-mini | react_nogate__smoke | 3 | 0 | 3 | 0 | 0.0 | 100.0 | 0 | 264491 | 0.0 | run | `ieee14/2026-09-27/gpt-4o-mini/react_nogate__smoke` |
 | ieee14 | 2026-09-27 | gpt-4o-mini | plan_act_nogate__smoke | 3 | 0 | 3 | 0 | 66.7 | 66.7 | 0 | 17329 | 0.0 | run | `ieee14/2026-09-27/gpt-4o-mini/plan_act_nogate__smoke` |

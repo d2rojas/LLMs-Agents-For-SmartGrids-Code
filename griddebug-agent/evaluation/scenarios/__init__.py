@@ -123,9 +123,19 @@ def instance_id(network: str, scenario_id: str, variant: int) -> str:
 # The injected fault, as a type the diagnosis is scored against. One type per
 # scenario generator; the components come from the generator's own record.
 FAULT_TYPES = (
-    "none", "load_increase", "generation_loss", "impedance_fault", "islanding",
-    "voltage_setpoint", "reactive_load", "limit_derating", "line_outage", "trafo_outage",
+    "none", "load_increase", "generation_loss", "generation_excess", "impedance_fault",
+    "islanding", "voltage_setpoint", "reactive_load", "limit_derating", "line_outage",
+    "trafo_outage",
 )
+
+# Scenarios whose injected fault has more than one correct name, because the generator
+# changes more than one thing. Scoring the diagnosis against a single label there would
+# mark a right answer wrong.
+ALSO_ACCEPTED: Dict[str, Tuple[str, ...]] = {
+    # gens x3, loads x0.3 and the slack setpoint raised: "the setpoint is too high" and
+    # "there is too much generation for the load" are both the fault that was injected.
+    "excess_generation_overvoltage": ("generation_excess",),
+}
 FAULT_TYPE_OF = {
     "normal_operation": "none",
     "extreme_load_scaling": "load_increase",
@@ -150,9 +160,11 @@ class Injected:
     fault_type: str
     components: Dict[str, List[int]] = field(default_factory=dict)  # {"line": [7], "load": [0, 1, ...]}
     description: str = ""
+    also_accepted: Tuple[str, ...] = ()  # other correct names for this same injected fault
 
     def as_dict(self) -> Dict[str, Any]:
-        return {"fault_type": self.fault_type, "components": self.components, "description": self.description}
+        return {"fault_type": self.fault_type, "components": self.components,
+                "description": self.description, "also_accepted": list(self.also_accepted)}
 
 
 def _injected(scenario_id: str, truth: ScenarioResult) -> Injected:
@@ -185,7 +197,8 @@ def _injected(scenario_id: str, truth: ScenarioResult) -> Injected:
         comp = {"line": [int(m["outaged_line"])]} if m.get("no_trafo") else {"trafo": [int(m["outaged_trafo"])]}
         if m.get("no_trafo"):
             ft = "line_outage"
-    return Injected(fault_type=ft, components=comp, description="; ".join(truth.root_causes[:2]))
+    return Injected(fault_type=ft, components=comp, description="; ".join(truth.root_causes[:2]),
+                    also_accepted=ALSO_ACCEPTED.get(scenario_id, ()))
 
 
 def build(network: str, scenario_id: str, variant: int = 0) -> Tuple[pp.pandapowerNet, ScenarioResult, Injected]:
@@ -206,6 +219,6 @@ def build(network: str, scenario_id: str, variant: int = 0) -> Tuple[pp.pandapow
 
 __all__ = [
     "SCENARIOS", "SCENARIO_IDS", "CATEGORY_OF", "LABEL_OF", "FAULT_TYPES", "FAULT_TYPE_OF",
-    "VARIANTS_OF", "VARIES_BY", "POSED_ONCE", "INSTANCES", "N_INSTANCES", "instance_id",
+    "VARIANTS_OF", "VARIES_BY", "POSED_ONCE", "ALSO_ACCEPTED", "INSTANCES", "N_INSTANCES", "instance_id",
     "Injected", "FailureScenario", "ScenarioResult", "build",
 ]

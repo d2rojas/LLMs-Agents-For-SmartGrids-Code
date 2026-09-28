@@ -42,7 +42,7 @@ from evaluation import scoring  # noqa: E402
 SUMMARY_COLUMNS = [
     "nn", "request_id", "scenario_id", "variant", "category", "injected_fault_type", "initial_state", "initial_n_new",
     "formulation_exact", "formulation_error_type", "formulation_detail",
-    "outcome", "solved", "solved_reason", "escalated", "wrong_silently", "escalation_reason",
+    "outcome", "solved", "solved_reason", "escalated", "wrong_silently", "escalation_reason", "escalation_kind",
     "status", "claims_repaired", "final_converged", "final_secure", "final_n_new", "final_islanded",
     "repaired", "improved", "feasible", "load_served_pct", "load_served_mw",
     "gate_pass", "gate_failed", "traceable", "n_numbers", "n_untraceable_numbers",
@@ -73,6 +73,7 @@ def summary_row(nn: int, r: Dict[str, Any]) -> Dict[str, Any]:
         "formulation_detail": r.get("common_formulation_detail"),
         "outcome": oc, "solved": oc == "solved", "solved_reason": r.get("common_reason"), "escalated": oc == "escalated",
         "wrong_silently": oc == "wrong_unflagged", "escalation_reason": r.get("common_escalation_reason"),
+        "escalation_kind": r.get("common_escalation_kind"),
         "status": r.get("common_status"), "claims_repaired": r.get("common_claims_repaired"),
         "final_converged": r.get("common_converged"), "final_secure": r.get("common_secure"), "final_n_new": r.get("common_n_new_violations"),
         "final_islanded": r.get("common_islanded"),
@@ -205,13 +206,25 @@ def render_report(header: Dict[str, Any], rows: List[Dict[str, Any]], agg: Dict[
             L.append(f"| {g} | {len(rs)} | {sum(1 for r in rs if r.get('common_outcome') == 'solved')} | {sum(1 for r in rs if r.get('common_outcome') == 'escalated')} | "
                      f"{sum(1 for r in rs if r.get('common_outcome') == 'wrong_unflagged')} | {sum(1 for r in rs if r.get('common_repaired'))} | {sum(1 for r in rs if r.get('common_formulation_exact'))} |")
         L.append("")
+    esc = [r for r in rows if r.get("common_outcome") == "escalated"]
+    if esc:
+        kinds = Counter(r.get("common_escalation_kind") or "unlabelled" for r in esc)
+        L += ["## Why it escalated", "",
+              "An escalation after a real improvement is not the same as a refusal, and one caused by the budget ending "
+              "on an action is not the same as either. The column counts them together because a person still has to act; "
+              "this table says which kind they were.", "",
+              "| kind | count |", "|---|---:|"]
+        for k, c in kinds.most_common():
+            L.append(f"| {k} | {c} |")
+        L.append("")
     for oc, title in (("wrong_unflagged", "Wrong and unflagged"), ("escalated", "Escalated")):
         sel = [r for r in rows if r.get("common_outcome") == oc]
         L += [f"## {title} ({len(sel)})", ""]
         if not sel:
             L.append("none")
         for r in sel:
-            L.append(f"- `{names.get(r['request_id'], r['request_id'])}` {r['scenario_id']}: {r.get('common_reason')}")
+            L.append(f"- `{names.get(r['request_id'], r['request_id'])}` {r['scenario_id']}: {r.get('common_reason')}"
+                     + (f" — {r['common_escalation_kind']}" if r.get("common_escalation_kind") else ""))
         L.append("")
     L += ["## Every scenario", "", "| nn | scenario | initial | outcome | diagnosis | final | actions | LLM/tool calls | tokens | why |", "|---|---|---|---|---|---|---:|---|---|---|"]
     for i, r in enumerate(rows, 1):

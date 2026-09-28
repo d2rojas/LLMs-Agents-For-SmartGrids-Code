@@ -21,10 +21,10 @@ import methods  # noqa: E402
 # The smoke run of 2026-09-27 was made with the previous contract; no paper run exists yet.
 PINNED_TEXTS = {
     "_shared/agent_system_prompt.txt": "33438f79a08f",
-    "_shared/common_rules.txt": "f77d5920ff05",
+    "_shared/common_rules.txt": "8c0f85ea1170",
     "_shared/gate_retry_instruction.txt": "2fbccbe68547",
     "_shared/llm_only_system_prompt.txt": "687705944e54",
-    "_shared/output_contract.txt": "c377a65fd333",
+    "_shared/output_contract.txt": "32ab6c8f3a3d",
     "llm_only_cot/reasoning_section.txt": "e6b046ab723e",
     "plan_act_nogate/plan_system_prompt.txt": "a08bfb652562",
 }
