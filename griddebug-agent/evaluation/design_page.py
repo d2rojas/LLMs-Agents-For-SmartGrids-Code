@@ -3,7 +3,7 @@
 
     index.html     the shell: Home, then Design / Results / Analysis in the sidebar, content in an iframe
     design.html    tabs Methods, Scenarios, Prompts, Tools, Gate & scoring, Run plan, generated from the code
-    results.html, viewer.html, compare.html, failures.html   static pages that read results/INDEX.json, summary.csv and traces/
+    results.html, viewer.html, failures.html   static pages that read results/INDEX.json, summary.csv and traces/
 
 The tab bodies are the same ones ``evaluation/page_fragments.py`` hands to the shared site, so
 the two presentations cannot drift; only the chrome differs. The three results pages are
@@ -89,7 +89,6 @@ INDEX_JS = """
 const ROUTES={'design':{src:'design.html',label:'Design',note:''},
  'results/table':{src:'results.html',note:'Numbers and traces exactly as the runs produced them.'},
  'results/traces':{src:'viewer.html',note:'Any run, any scenario, the real trace.'},
- 'results/compare':{src:'compare.html',note:'The same fault under two methods, step by step, with the prompts.'},
  'results/failures':{src:'failures.html',note:'Every non-solved scenario, step by step, with its prompts, gate attempts and verdict.'}};
 const frame=document.getElementById('frame'),crumb=document.getElementById('crumb'),note=document.getElementById('note'),side=document.getElementById('side');
 let cur='';const home=document.getElementById('home');
@@ -124,7 +123,7 @@ def index_html() -> str:
         "<a href='#design/gate' data-r='design/gate'>Gate &amp; scoring</a><a href='#design/plan' data-r='design/plan'>Run plan &amp; cost</a><hr>"
         "<div class='grp'><span class='n'>2</span>Results</div>"
         "<a href='#results/table' data-r='results/table'>Table &amp; scenarios</a><a href='#results/traces' data-r='results/traces'>Trace viewer</a>"
-        "<a href='#results/compare' data-r='results/compare'>Side by side</a>"
+        
         "<a href='#results/failures' data-r='results/failures'>Failure report</a><hr>"
         "<div class='grp'><span class='n'>3</span>Analysis</div><span class='off'>Comparisons &amp; conclusions<small>written after the results exist</small></span>"
         "</aside><main><section id='home'>"
@@ -158,7 +157,7 @@ def build() -> Path:
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "design.html").write_text(design_html(), encoding="utf-8")
     (OUT / "index.html").write_text(index_html(), encoding="utf-8")
-    for name in ("results.html", "viewer.html", "compare.html", "failures.html"):
+    for name in ("results.html", "viewer.html", "failures.html"):
         shutil.copyfile(STATIC / name, OUT / name)
     return OUT
 
