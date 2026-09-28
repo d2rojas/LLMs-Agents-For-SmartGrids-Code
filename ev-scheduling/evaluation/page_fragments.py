@@ -164,21 +164,6 @@ ROWS: Tuple[Dict[str, str], ...] = (
     },
 )
 
-REFERENCES: Tuple[Dict[str, str], ...] = (
-    {
-        "label": "CVXPY optimum",
-        "arm": "optimum",
-        "note": "The LP solved directly on the structured day, with no request text involved. Every row's cost gap "
-        "is measured against it.",
-    },
-    {
-        "label": "Charge as soon as possible",
-        "arm": "charge_asap",
-        "note": "Full power from arrival until the requested energy is delivered, ignoring price. The uncontrolled "
-        "operation any optimization has to beat, and the denominator of the cost reduction.",
-    },
-)
-
 COLUMNS: Tuple[Dict[str, str], ...] = (
     {"group": "Task utility", "name": "Form.",
      "what": "share of sessions whose arrival, departure, energy and maximum power match the day, exactly on step "
@@ -453,15 +438,6 @@ def tab_methods() -> str:
             ),
         )
     ]
-
-    body.append(
-        card(
-            "Two quantities computed on every day, and not methods",
-            "<p>Neither reads the request text, so neither can be scored on understanding one. They are printed "
-            "beside the table as the two ends of the scale every method is placed on.</p>"
-            + "".join(f"<p><b>{E(x['label'])}</b><br>{E(x['note'])}</p>" for x in REFERENCES),
-        )
-    )
 
     body.append(
         card(
@@ -1045,13 +1021,6 @@ def tab_results() -> str:
             split.append([f"<b>{E(row['label'])}</b>", str(len(rows)), pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged")])
         else:
             split.append([f"<b>{E(row['label'])}</b>", "<span class='muted'>not measured yet</span>", "", "", ""])
-    for ref in REFERENCES:
-        if ref["arm"] in by_method:
-            _d, rows, _h = by_method[ref["arm"]]
-            split.append([f"<span class='muted'>{E(ref['label'])} (reference)</span>", str(len(rows)),
-                          pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged")])
-
-    # the run's model is the one the LLM methods ran on; the reference rows say no-llm
     any_d, _r, any_h = next(
         (v for v in by_method.values() if v[2]["header"]["model"] != "no-llm"), next(iter(by_method.values()))
     )

@@ -42,8 +42,8 @@ in every artefact it writes.
 
 Arms
 ----
-``optimum`` and ``charge_asap`` are the non-LLM reference rows; ``llm_only`` is
-the no-tools arm in two prompting strategies from ``methods/prompting/strategies.py``;
+``optimum`` and ``charge_asap`` are registered for the harness tests only and are
+not rows of the table; ``llm_only`` is the no-tools arm in two prompting strategies from ``methods/prompting/strategies.py``;
 ``evagent`` is the solver-grounded arm through ``methods/agent/run.py::run_agent_from_text``.
 ``react`` is ``evagent`` with the gate switched off, the same code path with one
 flag, so the two rows differ by the gate alone. ``plan_act`` is registered as
@@ -143,7 +143,7 @@ FALLBACK_PRICING: Dict[str, Dict[str, float]] = {
 # this constant next to the estimate because the estimate is only as good as it.
 CHARS_PER_TOKEN = 4.0
 
-DEFAULT_MODEL = "openrouter:openai/gpt-4o"
+DEFAULT_MODEL = "openrouter:openai/gpt-4o-mini"  # the paper's cheap model; gpt-5.6-sol is passed explicitly
 DEFAULT_SEED = 0
 DEFAULT_REPEATS = 1
 DEFAULT_WORKERS = 1
@@ -394,9 +394,12 @@ register_arm(
     )
 )
 
+# The table's rows and nothing else. ``optimum`` and ``charge_asap`` stay
+# registered because the harness tests use them as arms that cost nothing, but
+# they are not methods and are not run by default: the optimum every row is
+# scored against is computed per request (``solve_day`` below), not taken from
+# an optimum row.
 DEFAULT_ARMS: Tuple[str, ...] = (
-    "optimum",
-    "charge_asap",
     "llm_only:structured",
     "llm_only:chain_of_thought",
     "react",

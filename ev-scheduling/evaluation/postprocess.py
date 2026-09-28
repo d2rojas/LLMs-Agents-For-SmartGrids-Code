@@ -42,7 +42,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RESULTS = PROJECT_ROOT / "results"
 
 # Runner arm name -> the folder name every case study uses for that method.
-# The two reference rows keep their own names: they are not methods.
+# optimum and charge_asap are kept only so a run set that still contains them
+# lays out; they are not rows of the table and are not run by default.
 FOLDER_FOR_ARM: Dict[str, str] = {
     "rule_based": "rule_based",
     "llm_only:structured": "llm_only_structured",

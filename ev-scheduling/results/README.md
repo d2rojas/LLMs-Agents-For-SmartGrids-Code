@@ -9,9 +9,9 @@ results/
   INDEX.md, INDEX.json                one line per method folder, newest first (run.py index)
   <instance>/                         caltech: the charging site the frozen days come from
     <YYYY-MM-DD>/                     the day the run was made
-      <model>/                        gpt-4o-mini, gpt-5.6-sol, ..., no-llm for the reference rows
+      <model>/                        gpt-4o-mini, gpt-5.6-sol, ..., no-llm for rule_based
         <method>/                     rule_based, llm_only_structured, llm_only_cot, plan_act_nogate,
-                                      react_nogate, evagent; and the two reference rows, optimum and charge_asap
+                                      react_nogate, evagent
           REPORT.md                   the method's outcome split, rates, cost, failure lists, every request
           summary.csv                 one line per request, the same columns on every method
           summary.json                header + aggregate, the line INDEX.md prints
@@ -59,4 +59,4 @@ folder's `raw/`. After that the run-set directory is not needed in the working t
 
 Only the newest run stays checked out. Older runs live in git history, where every number of the
 paper can still be traced to its trace; keeping them all in the tree made the newest one hard to
-find. The first run of this case study (2026-09-21, gpt-4o-mini, five methods) is the one here.
+find. The first run of this case study (2026-09-21, gpt-4o-mini, three of the six methods) is the one here.
