@@ -1,6 +1,6 @@
 # llm_only:cot on IEEE 14-bus with gpt-5.6-sol
 
-Generated 2026-09-28 10:13 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-28 11:27 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -28,7 +28,7 @@ One row per request, one cell per step (blue LLM call, teal tool call, purple pl
 
 ## Where every request ended
 
-The three outcomes are exclusive and sum to the run count. Escalation takes precedence: a run the method handed to a person is not an autonomous answer, right or wrong.
+The three outcomes are exclusive and cover every request the method answered. Escalation takes precedence: a run the method handed to a person is not an autonomous answer, right or wrong. A request whose API call failed never reached an answer, so it is listed apart and excluded from the rates.
 
 | outcome | count | share |
 |---|---:|---:|

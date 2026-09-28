@@ -1,6 +1,6 @@
 # pfagent on IEEE 300-bus with gpt-4o-mini
 
-Generated 2026-09-28 10:40 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-28 11:27 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -19,7 +19,7 @@ Generated 2026-09-28 10:40 by evaluation/postprocess.py from `report.rescored.js
 | plan_variant | text |
 | temperature | 0.0 |
 | system_prompt_hash | 43ef7eaadb12 |
-| description | PFAgent: ReAct loop with no in-loop gate plus the task-level verification gate V1-V7 on the final answer (methods/agent/engine.py verify_final_answer). The solver-grounded row. |
+| description | PFAgent: ReAct loop with no in-loop gate plus the task-level verification gate V1-V11 on the final answer (methods/agent/engine.py verify_final_answer). The solver-grounded row. |
 | prompt files | _shared/agent_system_prompt.txt, _shared/final_answer_instruction.txt |
 
 ![overview of the runs](overview.png)
@@ -28,22 +28,20 @@ One row per request, one cell per step (blue LLM call, teal tool call, purple pl
 
 ## Where every request ended
 
-The three outcomes are exclusive and sum to the run count. Escalation takes precedence: a run the method handed to a person is not an autonomous answer, right or wrong.
+The three outcomes are exclusive and cover every request the method answered. Escalation takes precedence: a run the method handed to a person is not an autonomous answer, right or wrong. A request whose API call failed never reached an answer, so it is listed apart and excluded from the rates.
 
 | outcome | count | share |
 |---|---:|---:|
 | Solved autonomously | 0 | 0.0% |
 | Escalated to a person | 17 | 85.0% |
 | Wrong, unflagged | 0 | 0.0% |
-| Run error / other | 3 | 15.0% |
 | **Total** | **20** | 100% |
 
 ## Metrics
 
 | group | metric | value |
 |---|---|---|
-| Task utility | Formulation exact | 5/8 (62.5%) |
-| Task utility | Formulation error types | unparsed: 3 |
+| Task utility | Formulation exact | 5/5 (100.0%) |
 | Task utility | Voltage MAE, all runs | n/a p.u. |
 | Task utility | Voltage MAE, formulation-exact runs | n/a p.u. |
 | Task utility | Flow MAE, all runs | n/a MW |
@@ -51,7 +49,7 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 | Task utility | KCL mismatch, mean | n/a MW |
 | Solver-grounded correctness | Solved (computation right, any path) | 0/20 (0.0%) |
 | Solver-grounded correctness | V-pass (all conditions, offline) | 20/20 (100.0%) |
-| Reporting | Traceable answers | 20/20 (100.0%) |
+| Reporting | Traceable answers | 17/17 (100.0%) |
 | Reporting | Traceable numbers, mean share | 1 |
 | Reporting | Stale state quoted | 0/20 |
 | Cost and time | LLM calls / tool calls, mean | 6.15 / 4 |
@@ -69,7 +67,7 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 | common_escalated_count | 17 | 17 |
 | common_wrong_count | 0 | 0 |
 | common_formulation_count | 5 | 5 |
-| common_traceable_count | 17 | 20  <-- differs |
+| common_traceable_count | 17 | 17 |
 | common_n | 17 | 20  <-- differs |
 
 ## By request difficulty
@@ -100,12 +98,6 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 - `case300-plain-008-s0` detected via gate_abstained; formulation None; not scored: the answer declares no formulation (it reports that the request could not be completed)  ([narrative](traces/18_case300-plain-008-s0.narrative.txt), [transcript](traces/18_case300-plain-008-s0.transcript.txt))
 - `case300-plain-012-s0` detected via gate_abstained; formulation None; not scored: the answer declares no formulation (it reports that the request could not be completed)  ([narrative](traces/19_case300-plain-012-s0.narrative.txt), [transcript](traces/19_case300-plain-012-s0.transcript.txt))
 - `case300-plain-016-s0` detected via cannot_answer, abstention_json; formulation exact; declared:  ([narrative](traces/20_case300-plain-016-s0.narrative.txt), [transcript](traces/20_case300-plain-016-s0.transcript.txt))
-
-## Formulation not exact (3)
-
-- `case300-ambiguous-003-s0` unparsed: no formulation field in the answer  ([narrative](traces/01_case300-ambiguous-003-s0.narrative.txt), [transcript](traces/01_case300-ambiguous-003-s0.transcript.txt))
-- `case300-ambiguous-015-s0` unparsed: no formulation field in the answer  ([narrative](traces/04_case300-ambiguous-015-s0.narrative.txt), [transcript](traces/04_case300-ambiguous-015-s0.transcript.txt))
-- `case300-parameterized-013-s0` unparsed: no formulation field in the answer  ([narrative](traces/14_case300-parameterized-013-s0.narrative.txt), [transcript](traces/14_case300-parameterized-013-s0.transcript.txt))
 
 ## Run errors (3)
 

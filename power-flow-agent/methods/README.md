@@ -19,7 +19,7 @@ committed ones. Do not strip or reflow whitespace in these files.
 | `llm_only_cot` | `llm_only:cot` | Structured plus a step-by-step reasoning section. | no | none |
 | `plan_act_nogate` | `plan_act_nogate` | One planning call emits the whole tool plan, then it executes. | yes | none |
 | `react_nogate` | `react_nogate` | ReAct loop: thought, tool call, observation, up to 8 rounds. | yes | none |
-| `pfagent` | `pfagent` | ReAct loop plus the task-level verification gate V1 to V7 on the final answer. The solver-grounded row. | yes | final gate |
+| `pfagent` | `pfagent` | ReAct loop plus the task-level verification gate V1 to V11 on the final answer. The solver-grounded row. | yes | final gate |
 
 These six are the current design (`run.py list-methods` shows them first, with the file and function that run each one; the map is also in the README, Where things are). Every method receives
 the same rules block (`_shared/common_rules.txt`), the same operations catalogue (`methods/agent/tools.py`,

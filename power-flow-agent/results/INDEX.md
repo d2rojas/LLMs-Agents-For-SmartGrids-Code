@@ -1,6 +1,8 @@
 # Results index
 
-Generated 2026-09-28 10:48 by `run.py index`. One line per run directory, newest first. Counts are runs; Form. and Trace. are percentages. Open the folder for `REPORT.md`, `summary.csv` and `traces/`.
+Generated 2026-09-28 11:28 by `run.py index`. One line per run directory, newest first. Counts are runs; Form. and Trace. are percentages. Open the folder for `REPORT.md`, `summary.csv` and `traces/`.
+
+All 36 runs were scored by the same evaluator (`evaluator_hash` cbfcc87389d7), so every row is comparable.
 
 ## ieee14
 
@@ -16,8 +18,8 @@ Generated 2026-09-28 10:48 by `run.py index`. One line per run directory, newest
 | 2026-09-26 | no-llm | rule_based | normal | load_split | 20 | 19 | 1 | 0 | 100.0 | 95.0 | 0 | 0.00 | new run | [rule_based](ieee14/2026-09-26/no-llm/rule_based/REPORT.md) |
 | 2026-09-26 | gpt-4o-mini | react_nogate | normal | load_split | 20 | 11 | 0 | 9 | 90.0 | 95.0 | 15068 | 0.07 | new run | [react_nogate](ieee14/2026-09-26/gpt-4o-mini/react_nogate/REPORT.md) |
 | 2026-09-26 | gpt-4o-mini | plan_act_nogate | normal | load_split | 20 | 11 | 0 | 9 | 100.0 | 85.0 | 6408 | 0.03 | new run | [plan_act_nogate](ieee14/2026-09-26/gpt-4o-mini/plan_act_nogate/REPORT.md) |
-| 2026-09-26 | gpt-4o-mini | llm_only_structured | normal | load_split | 20 | 0 | 0 | 20 | 80.0 | 0.0 | 4394 | 0.02 | new run | [llm_only_structured](ieee14/2026-09-26/gpt-4o-mini/llm_only_structured/REPORT.md) |
-| 2026-09-26 | gpt-4o-mini | llm_only_cot | normal | load_split | 20 | 0 | 0 | 20 | 70.0 | 0.0 | 4783 | 0.03 | new run | [llm_only_cot](ieee14/2026-09-26/gpt-4o-mini/llm_only_cot/REPORT.md) |
+| 2026-09-26 | gpt-4o-mini | llm_only_structured | normal | load_split | 20 | 0 | 0 | 20 | 100.0 | 0.0 | 4394 | 0.02 | new run | [llm_only_structured](ieee14/2026-09-26/gpt-4o-mini/llm_only_structured/REPORT.md) |
+| 2026-09-26 | gpt-4o-mini | llm_only_cot | normal | load_split | 20 | 0 | 0 | 20 | 95.0 | 0.0 | 4783 | 0.03 | new run | [llm_only_cot](ieee14/2026-09-26/gpt-4o-mini/llm_only_cot/REPORT.md) |
 
 ## ieee30
 
@@ -56,9 +58,9 @@ Generated 2026-09-28 10:48 by `run.py index`. One line per run directory, newest
 
 | date | model | method | cond. | tools | n | solved | escalated | wrong unflagged | Form. % | Trace. % | tokens/run | cost $ | in the paper | folder |
 |---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
-| 2026-09-28 | gpt-4o-mini | pfagent | normal | load_split | 20 | 0 | 17 | 0 | 62.5 | 100.0 | 231143 | 0.93 | new run | [pfagent](ieee300/2026-09-28/gpt-4o-mini/pfagent/REPORT.md) |
+| 2026-09-28 | gpt-4o-mini | pfagent | normal | load_split | 20 | 0 | 17 | 0 | 100.0 | 100.0 | 231143 | 0.93 | new run | [pfagent](ieee300/2026-09-28/gpt-4o-mini/pfagent/REPORT.md) |
 | 2026-09-27 | no-llm | rule_based | normal | load_split | 20 | 18 | 2 | 0 | 100.0 | 90.0 | 0 | 0.00 | new run | [rule_based](ieee300/2026-09-27/no-llm/rule_based/REPORT.md) |
-| 2026-09-27 | gpt-4o-mini | react_nogate | normal | load_split | 20 | 0 | 6 | 14 | 68.4 | 95.0 | 88506 | 0.40 | new run | [react_nogate](ieee300/2026-09-27/gpt-4o-mini/react_nogate/REPORT.md) |
+| 2026-09-27 | gpt-4o-mini | react_nogate | normal | load_split | 20 | 0 | 6 | 14 | 100.0 | 95.0 | 88506 | 0.40 | new run | [react_nogate](ieee300/2026-09-27/gpt-4o-mini/react_nogate/REPORT.md) |
 | 2026-09-27 | gpt-4o-mini | plan_act_nogate | normal | load_split | 20 | 0 | 5 | 15 | 100.0 | 95.0 | 32706 | 0.14 | new run | [plan_act_nogate](ieee300/2026-09-27/gpt-4o-mini/plan_act_nogate/REPORT.md) |
-| 2026-09-27 | gpt-4o-mini | llm_only_structured | normal | load_split | 20 | 0 | 0 | 20 | 85.0 | 0.0 | 33934 | 0.18 | new run | [llm_only_structured](ieee300/2026-09-27/gpt-4o-mini/llm_only_structured/REPORT.md) |
-| 2026-09-27 | gpt-4o-mini | llm_only_cot | normal | load_split | 20 | 0 | 0 | 20 | 65.0 | 0.0 | 29725 | 0.13 | new run | [llm_only_cot](ieee300/2026-09-27/gpt-4o-mini/llm_only_cot/REPORT.md) |
+| 2026-09-27 | gpt-4o-mini | llm_only_structured | normal | load_split | 20 | 0 | 0 | 20 | 95.0 | 0.0 | 33934 | 0.18 | new run | [llm_only_structured](ieee300/2026-09-27/gpt-4o-mini/llm_only_structured/REPORT.md) |
+| 2026-09-27 | gpt-4o-mini | llm_only_cot | normal | load_split | 20 | 0 | 0 | 20 | 80.0 | 0.0 | 29725 | 0.13 | new run | [llm_only_cot](ieee300/2026-09-27/gpt-4o-mini/llm_only_cot/REPORT.md) |
