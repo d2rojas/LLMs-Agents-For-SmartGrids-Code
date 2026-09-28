@@ -15,7 +15,7 @@ why.
 | folder | runner name | what it is | tools | gate | runs |
 |---|---|---|---|---|---|
 | `rule_based` | `rule_based` | Regular expressions read the request, the solver does the rest. The conventional-automation row. | yes | none | not yet |
-| `llm_only_structured` | `llm_only:structured` | The model answers from the request text alone and writes the kW matrix as text. | no | none | yes |
+| `llm_only_structured` | `llm_only:structured` | The model answers from the request text alone: one JSON reply with the formulation it read, the schedule as charging segments, and the answer. | no | none | yes |
 | `llm_only_cot` | `llm_only:chain_of_thought` | The structured prompt plus one reasoning section. | no | none | yes |
 | `plan_act_nogate` | `plan_act` | One call emits the whole sequence of solver calls, then it executes. | yes | none | not yet |
 | `react_nogate` | `react` | Tool call, observation, repeat, inside the round budget. | yes | none | not yet |
@@ -36,8 +36,12 @@ time because they depend on the request, and each method's `method.json` names t
   request text, for the no-tools methods exactly as for the solver-grounded one, so that reading the
   request is part of what is being measured.
 - **`## Task`** — the request text, verbatim.
-- **`## Output Requirements`** — the row count, the step count, and whether an answer line is
-  demanded, which depends on whether the request asks something checkable.
+- **`## Output Requirements`** — `_shared/llm_only_output_contract.txt` with the number of cars
+  filled in. The contract is one JSON object: the `formulation` the model read (the same schema the
+  agents' parse turn returns, so `evaluation/formulation.py` scores every method with one function),
+  the `schedule` as charging segments `[start_hour, end_hour, power_kw]` per car, and the `answer`.
+  Segments replaced the 96-number rows on 2026-09-28: on a day with 87 cars the rows did not fit in
+  the model's output window, and every reply of the run of 2026-09-21 was cut off mid-row.
 
 ## Whitespace is significant
 

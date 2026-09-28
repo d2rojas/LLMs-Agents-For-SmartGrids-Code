@@ -186,9 +186,11 @@ def test_every_row_was_actually_rebuilt(rescored):
     assert all(s["rescored"] for s in sources)
     assert {s["schedule"] for s in sources if s.get("schedule")} == {
         "rule_rerun",
-        "reply_reparsed",
+        "reply_reparsed_as_json",
         "resolved_from_parse_trace",
     }
+    # and the no-tools rows now carry a declared problem, read back from the reply
+    assert {s.get("parsed_problem") for s in sources if str(s.get("arm", "")).startswith("llm_only")} == {"reply"}
     assert all(s["cost_usd_matches"] for s in sources)
 
 

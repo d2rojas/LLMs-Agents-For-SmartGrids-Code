@@ -52,11 +52,11 @@ DIAGRAMS: Dict[str, Dict[str, Any]] = {
         "note": "No language model and no prompt. What the parser cannot read, it cannot answer.",
     },
     "llm_only_structured": {
-        "steps": [("request", "input"), ("LLM writes the kW matrix", "llm"), ("text answer", "out")],
+        "steps": [("request", "input"), ("LLM declares the problem and writes the schedule", "llm"), ("JSON answer", "out")],
         "note": "No solver and no tool calls. The kilowatts are written as text, and nothing checks them.",
     },
     "llm_only_cot": {
-        "steps": [("request", "input"), ("LLM reasons, then writes it", "llm"), ("text answer", "out")],
+        "steps": [("request", "input"), ("LLM reasons, then declares the problem and writes the schedule", "llm"), ("JSON answer", "out")],
         "note": "One added prompt section. Identical to the method on its left in every other respect.",
     },
     "plan_act_nogate": {
@@ -115,8 +115,8 @@ ROWS: Tuple[Dict[str, str], ...] = (
         "llm": "yes",
         "tools": "none",
         "gate": "none",
-        "isolates": "the language model on its own. It receives the sessions and the tariff and writes the "
-        "kilowatt matrix as text. No solver is involved at any point.",
+        "isolates": "the language model on its own. It reads the request, declares the problem it read and "
+        "writes the schedule as charging segments, all in one JSON reply. No solver is involved at any point.",
     },
     {
         "block": "LLM-only prompting",
@@ -771,7 +771,7 @@ BLOCKS: Dict[str, Tuple[str, str, str]] = {
                "methods/prompting/strategies.py::_context_section"),
     "u_task": ("#0f8f84", "user · task: the request, verbatim", "evaluation/requests.py::render_request"),
     "u_reason": ("#c0392b", "user · reasoning instructions", "methods/llm_only_cot/reasoning_section.txt"),
-    "u_out": ("#c99a06", "user · output requirements", "methods/prompting/strategies.py::_output_section"),
+    "u_out": ("#c99a06", "user · output requirements", "methods/_shared/llm_only_output_contract.txt"),
     "tools": ("#0f8f84", "tool schema (function calling)", "methods/agent/llm_agent.py::_SOLVE_TOOL"),
 }
 

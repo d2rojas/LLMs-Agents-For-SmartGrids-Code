@@ -22,13 +22,14 @@ import methods
 # newline removed and nothing else touched.
 PINS = {
     "_shared/agent_system_prompt.txt": "37d182fa4fd939f5ccf2a80b1115e122c2f5feb023cca4da236b1c58cb3e4326",
+    "_shared/llm_only_output_contract.txt": "b611378c4c819dafb01184c918782ad008b76ee4d031aba5ff990a80e97452ba",
     "_shared/llm_only_role.txt": "a4b5ca74dfbc00f047605340a40cc9d9e66d8a7b980bafb72b6169dafe17fea4",
-    "_shared/llm_only_system_prompt.txt": "a83b7b4f1f2aa5224ceee724daa42a5f1ff5c01dfbebe33dc76b0f1e799acae2",
+    "_shared/llm_only_system_prompt.txt": "b10e66600ef56ea50f7f24a4259bd811ef61a41d7d0213f6dc971f1a411d978a",
     "_shared/parse_extraction_system.txt": "dfce05de41373d7e769727b24aa01f950ef37480f491a06b4ce2ef43e924e726",
     "_shared/parse_inference_system.txt": "8d326d4f23a4b5a3477a02a3781ce48d26c65ffa4b4246cc3474afbf024b495e",
-    "llm_only_cot/reasoning_section.txt": "fe8fb883c579aac43672e2a4ea1f7cd4c57ce23826ea575a88f878c86247a3bf",
-    "llm_only_cot/system_suffix.txt": "8c6fbcecf3995dc1092b9557d15e06be58e780d643d4988617a80130406d448a",
-    "llm_only_structured/system_suffix.txt": "7d71bcffb2f6462613d2fa57bf831cbee439b40cc759a5483ffd306f93d1f0ba",
+    "llm_only_cot/reasoning_section.txt": "9e800ca719659a45c33d92e4dfa768675e7f2a0f4d119c2d095137aa5867e486",
+    "llm_only_cot/system_suffix.txt": "c18c3e486ff6beca491961ee4af90bd1f3512e56b8b46788579a35fbea6c0709",
+    "llm_only_structured/system_suffix.txt": "7914b0e72bd9517221342aa49d08b17b59393528b54e90c0d7c52a4d4b912063",
     "plan_act_nogate/plan_system_prompt.txt": "6a7627277fffda59a4932d39628646813572f2feb72686f2fe580c400de869bf",
 }
 
@@ -77,6 +78,8 @@ def test_the_two_prompting_methods_differ_by_one_text() -> None:
     removed = structured - cot
     assert added == {"llm_only_cot/reasoning_section.txt", "llm_only_cot/system_suffix.txt"}
     assert removed == {"llm_only_structured/system_suffix.txt"}
+    # and the answer contract is the one file, shared
+    assert "_shared/llm_only_output_contract.txt" in structured & cot
 
 
 def test_the_agent_methods_share_one_system_prompt() -> None:
