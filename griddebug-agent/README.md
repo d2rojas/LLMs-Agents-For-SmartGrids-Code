@@ -1,139 +1,85 @@
-# GridDebugAgent
+# GridDebugAgent: diagnose and repair a faulted IEEE network
 
-LLM-powered diagnostic tool for power flow simulation failures. Injects fault scenarios into IEEE test networks (via pandapower), runs diagnosis through baseline and agentic pipelines, and produces structured reports with root causes, affected components, and corrective actions.
+A power flow on an IEEE test network has failed or produced limit violations: a line is out, loads
+have grown, a generator is gone, a setpoint is wrong. The task is to say what happened and to bring
+the network back to a secure operating point with the actions a control room has, verified by the
+power flow. This case study measures six ways of doing that, from a rule engine with no language
+model to the solver-grounded agent, on thirty-nine frozen fault scenarios across the IEEE 14, 30
+and 57-bus systems, with one scorer for all six.
 
-## Demo
+It follows the layout every case study in this repository follows; see [`../LAYOUT.md`](../LAYOUT.md).
 
-[![Demo Video](https://img.youtube.com/vi/QCgl5L9DnQM/maxresdefault.jpg)](https://youtu.be/QCgl5L9DnQM)
+## Where things are
 
-## Features
+| path | what |
+|---|---|
+| `run.py` | the one entry point: `list-methods`, `show-prompt`, `freeze-scenarios`, `run`, `postprocess`, `rescore`, `index`, `serve` |
+| `config.py` | limits (0.95–1.05 p.u., 100 %), budgets (20 model calls, 40 tool calls, 600 s per scenario), model resolution |
+| `methods/` | one folder per method with its `method.json` and `.txt` prompts; code by role under `methods/agent/`, `methods/prompting/`, `methods/deterministic/`; `methods/README.md` is the table |
+| `solver/` | the trusted tool: `network.py` (load, ratings, hash), `violations.py` (observe a network relative to its base), `evidence.py`, `rules.py`, `tools.py` (the catalogue and the dispatcher) and the tool bodies |
+| `evaluation/` | `scenarios/` (the thirteen generators, `manifest.py`), `requests.py` (request text and evidence block), `scoring.py` (one scorer), `runner.py`, `postprocess.py`, `rescore.py`, `page_fragments.py` (this case study's sections of the shared site) |
+| `data/scenarios/manifest.json` | the frozen scenario set: a content hash of every injected network, its initial state, the injected fault |
+| `results/` | `<instance>/<date>/<model>/<method>/` with `REPORT.md`, `summary.csv`, `config.json`, `traces/` and `raw/`; see `results/README.md` |
+| `tests/` | API-key-free: every method end to end with a scripted model, the gate, the answer contract, the manifest, the prompt hashes |
+| `ui/` | the FastAPI and Next.js demo of the original project; not wired to the six methods and not part of the evaluation |
 
-- **Baseline Pipeline**: Single LLM call with evidence from power flow results. Uses OpenAI function calling for reliable structured output.
-- **Agentic Pipeline**: ReAct loop with tools for querying network state, running simulations, and checking violations.
-- **Network Visualization**: Interactive React Flow graph with affected component highlighting.
-- **Natural Language Input**: Describe failures in plain English (e.g., "Scale all loads by 15x") — the system generates and executes the scenario.
+## The six methods
 
-## Quick Start
+The same six, with the same names and in the same order, as every other case study.
 
-### Docker Compose
+| method | LLM | tools | gate |
+|---|---|---|---|
+| `rule_based` — the rule engine classifies, a fixed policy acts, the power flow verifies | no | yes | none |
+| `llm_only_structured` — the model writes the actions as text; the harness applies them once | yes | no | none |
+| `llm_only_cot` — the same plus one reasoning section | yes | no | none |
+| `plan_act_nogate` — one call plans every tool call, executed without feedback | yes | yes | none |
+| `react_nogate` — tool call, observation, repeat, inside the budget | yes | yes | none |
+| `griddebug` — the ReAct loop plus the verification gate G1–G6 | yes | yes | final |
+
+`python run.py list-methods` prints this from `methods/`.
+
+## Setup
 
 ```bash
-# Add your OpenAI key to a .env in the project root
-echo "OPENAI_API_KEY=sk-proj-your-key-here" > .env
-
-# Build and start
-docker compose up --build
-
-# Without rebuilding
-docker compose up
-```
-
-### Manual
-
-**Backend** (Python 3.10+):
-
-```bash
-cd backend
-python -m venv venv
-# Windows: .\venv\Scripts\Activate.ps1
-# macOS/Linux: source venv/bin/activate
+python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-echo "OPENAI_API_KEY=sk-proj-your-key-here" > .env
-python app.py
+cp .env.example .env        # OPENROUTER_API_KEY (or OPENAI_API_KEY); the repo's power-flow-agent/.env is read too
 ```
 
-**Frontend** (Node 20+):
+The networks come from `pandapower.networks`; line ratings are assigned by the rule of the
+power-flow case study (1.25 times the base-case current). The scenario set is frozen in
+`data/scenarios/manifest.json`, and a run refuses to start on an instance whose injected network
+hashes differently from the manifest.
+
+## Running
 
 ```bash
-cd frontend
-npm install
-npm run dev
+python run.py run --dry-run                                                  # the cost estimate; spends nothing
+python run.py run --method griddebug --network case14 --model openrouter:openai/gpt-4o-mini
+python run.py run                                                            # every method, every network, every scenario
+python run.py index                                                          # results/INDEX.md
 ```
 
-Frontend: http://localhost:3000 | Backend: http://localhost:8000
+Every method sees the same scenarios, the same request, the same evidence block, the same budget
+and the same answer contract. A scenario that fails is written as a row with its error rather than
+omitted, and a scenario whose trace exists already is kept unless `--force`. Nothing spends API
+credit without an explicit go, and every run ends with `REPORT.md`.
 
-## Project Structure
+## Tests
 
-```
-griddebugagent/
-├── backend/
-│   ├── app.py                     # FastAPI endpoints, report parsing
-│   ├── agents/
-│   │   ├── baseline.py            # LLM diagnosis with function calling
-│   │   ├── agentic_pipeline.py    # ReAct loop with tool access
-│   │   └── iterative_debugger.py  # Diagnose + iterative fix-verify loop
-│   ├── rule_engine/
-│   │   ├── evidence_collector.py  # Collects power flow results
-│   │   ├── preprocessor.py
-│   │   └── rules.py
-│   ├── scenarios/                 # Fault injection (preset + NL-generated)
-│   └── tools/                     # Query, simulation, diagnostic tools
-├── frontend/
-│   └── src/
-│       ├── components/            # React components
-│       └── types/
-├── docker-compose.yml
-└── README.md
+```bash
+pytest
 ```
 
-## API
+`tests/test_methods_end_to_end.py` runs all six methods on one scenario with a scripted model:
+a true repair is solved, a false claim is wrong-unflagged without the gate and escalated with it.
+`tests/test_methods_prompts.py` pins the hash of every prompt text under `methods/`.
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/networks` | Available test networks (case14, case30, case57, etc.) |
-| GET | `/scenarios` | Preset failure scenarios |
-| POST | `/diagnose` | Run diagnosis on preset scenario |
-| POST | `/diagnose_nl` | Generate scenario from natural language, then diagnose |
-| POST | `/diagnose_stream` | SSE streaming version of `/diagnose` |
-| POST | `/api/network_state` | Get network component data for visualization |
-| POST | `/api/simulate_overrides` | Apply manual overrides and re-run power flow |
-| POST | `/api/rediagnose` | Re-diagnose with manual overrides applied |
+## The shared site
 
-## Diagnosis Output
-
-Both pipelines return structured output:
-
-```json
-{
-  "rootCauses": ["Excessive load scaling (20x) exceeds generation capacity"],
-  "affectedComponents": ["Buses: 5, 7, 12", "Lines: 9, 28"],
-  "correctiveActions": ["Reduce load at buses 5 and 7", "Add generation capacity"],
-  "parsedAffectedComponents": {
-    "bus": [5, 7, 12],
-    "line": [9, 28]
-  }
-}
+```bash
+cd .. && python -m visuals.build --case griddebug && open site/griddebug.html      # or: python run.py serve
 ```
 
-The `parsedAffectedComponents` field drives graph highlighting.
-
-## Tools (Agentic Pipeline)
-
-| Category | Tools |
-|----------|-------|
-| Query | `get_network_summary`, `get_bus_data`, `get_voltage_profile`, `get_loading_profile` |
-| Simulation | `run_power_flow`, `run_dc_power_flow`, `run_n1_contingency` |
-| Diagnostic | `check_overloads`, `check_voltage_violations`, `find_disconnected_areas` |
-
-## LLM model
-
-Both pipelines call OpenAI **`gpt-4o`** (set in `backend/agents/`): diagnosis runs
-at `temperature=0.3` and natural-language scenario generation at `temperature=0.2`.
-The evaluation results referenced below were produced with this configuration.
-
-## Evaluation
-
-The agentic repair loop (diagnose → act → verify) was evaluated on 39 fault scenarios
-across three IEEE networks (13 each: non-convergence, voltage, thermal, contingency,
-normal). A scenario is *repaired* when the power flow converges after remediation with
-no more violations than before.
-
-| Network | Scenarios | Repair (%) | Violations (before → after) | Avg ReAct iters | Avg latency (s) |
-|---|---|---|---|---|---|
-| IEEE 14-bus | 13 | 100 | 48 → 1 | 7.5 | 83 |
-| IEEE 30-bus | 13 | 92.3 | 128 → 44 | 12.3 | 177 |
-| IEEE 57-bus | 13 | 61.5 | 321 → 192 | 14.7 | 236 |
-| **All** | **39** | **84.6** | **497 → 237** | **11.5** | **166** |
-
-Reproduce with `python -m eval.run_eval` (from `backend/`); it writes the full
-per-scenario tables, raw JSON, and figures to `backend/eval/results/`.
+`evaluation/page_fragments.py` writes this case study's sections from the method registry, the
+gate's condition table, the frozen manifest, the prompt builders and the result files.

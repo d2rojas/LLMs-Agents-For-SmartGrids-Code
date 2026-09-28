@@ -1,0 +1,18 @@
+## Output
+
+Your final message must be one JSON object and nothing else, with exactly these fields:
+
+{
+  "diagnosis": {
+    "fault_type": "<one of: none, load_increase, generation_loss, impedance_fault, islanding, voltage_setpoint, reactive_load, limit_derating, line_outage, trafo_outage>",
+    "components": {"<element type: bus|line|trafo|gen|sgen|load|ext_grid>": [<indices>]},
+    "explanation": "<one or two sentences: the initiating event, not the symptom>"
+  },
+  "actions": [{"tool": "<action tool name>", "args": {<its arguments>}}],
+  "final_state": {"converged": <true|false>, "n_new_violations": <integer>, "islanded_load_buses": [<bus indices>]},
+  "status": "<repaired | not_repaired | cannot_repair>",
+  "remaining_violations": ["<one string per remaining violation, e.g. 'bus 12 at 0.93 p.u.' or 'line 5 at 118 %'>"],
+  "summary": "<two or three sentences on what was wrong, what was done, and where the network stands>"
+}
+
+status is "repaired" only if the final power flow converged with zero new violations and no islanded load. Use "not_repaired" when you acted and violations remain, and "cannot_repair" when you found no action that helps or the budget ran out.
