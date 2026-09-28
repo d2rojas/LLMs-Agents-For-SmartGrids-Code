@@ -19,7 +19,7 @@ because a silent wording change would make new runs incomparable with the ones a
 | `llm_only_cot` | `llm_only:cot` | The structured prompt plus one reasoning section. | no | none |
 | `plan_act_nogate` | `plan_act_nogate` | One call emits the whole sequence of tool calls, executed without feedback, then one answer call. | yes | none |
 | `react_nogate` | `react_nogate` | Tool call, observation, repeat, inside the budget. The original GridDebugAgent loop without the gate. | yes | none |
-| `griddebug` | `griddebug` | The ReAct loop plus the verification gate G1–G6 on the final answer. The solver-grounded row. | yes | final gate |
+| `griddebug` | `griddebug` | The ReAct loop plus the verification gate G1–G7 on the final answer. The solver-grounded row. | yes | final gate |
 
 These six are the design, in this order, the same six with the same names as every other case
 study in the paper. Every method receives the same request, the same evidence block, the same

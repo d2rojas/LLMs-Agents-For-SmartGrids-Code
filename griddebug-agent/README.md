@@ -4,8 +4,9 @@ A power flow on an IEEE test network has failed or produced limit violations: a 
 have grown, a generator is gone, a setpoint is wrong. The task is to say what happened and to bring
 the network back to a secure operating point with the actions a control room has, verified by the
 power flow. This case study measures six ways of doing that, from a rule engine with no language
-model to the solver-grounded agent, on thirty-nine frozen fault scenarios across the IEEE 14, 30
-and 57-bus systems, with one scorer for all six.
+model to the solver-grounded agent, on twenty frozen fault instances per network, drawn from
+thirteen fault classes, across the IEEE 14, 30, 57, 118 and 300-bus systems, with one scorer for
+all six. Twenty instances on five networks is a hundred questions per method.
 
 It follows the layout every case study in this repository follows; see [`../LAYOUT.md`](../LAYOUT.md).
 
@@ -13,12 +14,12 @@ It follows the layout every case study in this repository follows; see [`../LAYO
 
 | path | what |
 |---|---|
-| `run.py` | the one entry point: `list-methods`, `show-prompt`, `freeze-scenarios`, `run`, `postprocess`, `rescore`, `index`, `serve` |
+| `run.py` | the one entry point: `list-methods`, `show-prompt`, `freeze-scenarios`, `run`, `postprocess`, `rescore`, `index`, `pages`, `serve` |
 | `config.py` | limits (0.95–1.05 p.u., 100 %), budgets (20 model calls, 40 tool calls, 600 s per scenario), model resolution |
 | `methods/` | one folder per method with its `method.json` and `.txt` prompts; code by role under `methods/agent/`, `methods/prompting/`, `methods/deterministic/`; `methods/README.md` is the table |
 | `solver/` | the trusted tool: `network.py` (load, ratings, hash), `violations.py` (observe a network relative to its base), `evidence.py`, `rules.py`, `tools.py` (the catalogue and the dispatcher) and the tool bodies |
-| `evaluation/` | `scenarios/` (the thirteen generators, `manifest.py`), `requests.py` (request text and evidence block), `scoring.py` (one scorer), `runner.py`, `postprocess.py`, `rescore.py`, `page_fragments.py` (this case study's sections of the shared site) |
-| `data/scenarios/manifest.json` | the frozen scenario set: a content hash of every injected network, its initial state, the injected fault |
+| `evaluation/` | `scenarios/` (the thirteen generators and their variants, `manifest.py`), `requests.py` (request text and evidence block), `scoring.py` (one scorer), `runner.py`, `postprocess.py`, `rescore.py`, `page_fragments.py` (this case study's sections of the shared site) |
+| `data/scenarios/manifest.json` | the frozen scenario set: a content hash of each of the hundred injected networks, its initial state, the injected fault |
 | `results/` | `<instance>/<date>/<model>/<method>/` with `REPORT.md`, `summary.csv`, `config.json`, `traces/` and `raw/`; see `results/README.md` |
 | `tests/` | API-key-free: every method end to end with a scripted model, the gate, the answer contract, the manifest, the prompt hashes |
 | `ui/` | the FastAPI and Next.js demo of the original project; not wired to the six methods and not part of the evaluation |
@@ -34,7 +35,7 @@ The same six, with the same names and in the same order, as every other case stu
 | `llm_only_cot` — the same plus one reasoning section | yes | no | none |
 | `plan_act_nogate` — one call plans every tool call, executed without feedback | yes | yes | none |
 | `react_nogate` — tool call, observation, repeat, inside the budget | yes | yes | none |
-| `griddebug` — the ReAct loop plus the verification gate G1–G6 | yes | yes | final |
+| `griddebug` — the ReAct loop plus the verification gate G1–G7 | yes | yes | final |
 
 `python run.py list-methods` prints this from `methods/`.
 
@@ -82,4 +83,6 @@ cd .. && python -m visuals.build --case griddebug && open site/griddebug.html   
 ```
 
 `evaluation/page_fragments.py` writes this case study's sections from the method registry, the
-gate's condition table, the frozen manifest, the prompt builders and the result files.
+gate's condition table, the frozen manifest, the prompt builders and the result files. It feeds both
+the shared site and the standalone pages under `results/visuals/`, which `run.py pages` writes and
+`run.py serve` serves.

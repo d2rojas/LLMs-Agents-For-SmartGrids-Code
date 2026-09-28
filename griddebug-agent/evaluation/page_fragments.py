@@ -135,7 +135,7 @@ def tab_home() -> str:
                 [("Failed network", "injected fault, solver evidence"),
                  ("Diagnose", "the event, not the symptom"),
                  ("Act", "actions from one catalogue"),
-                 ("Verify", "power flow, then G1-G6 (gated row)"),
+                 ("Verify", "power flow, then G1-G7 (gated row)"),
                  ("Report", "diagnosis, actions, state")],
                 loop=(3, 1, "one retry, then escalate"),
             ),
