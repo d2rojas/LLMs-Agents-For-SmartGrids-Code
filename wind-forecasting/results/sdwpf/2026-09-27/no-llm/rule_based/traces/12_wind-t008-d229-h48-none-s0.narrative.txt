@@ -1,0 +1,25 @@
+RUN 12  |  wind-t008-d229-h48-none-s0  |  rule_based  |  none:rule_based
+Instance: turbine 8, history days [229, 242], horizon 48 h, question none, condition normal
+Request: Turbine 8 of the SDWPF wind farm. Its SCADA history covers days 229 to 242 at 10-minute sampling (144 rows per day). Forecast its active power in kW for the next 48 hours at 10-minute resolution, that is 288 values starting right after the last history row. Report the series and say how it was produced.
+
+WHAT THE METHOD DID
+   1. get_history_summary({"turbine": 8, "history_end_day": 242})
+       -> {"turbine": 8, "history_days": [229, 242], "rows": 2016, "sampling_minutes": 10, "rated_kw": 1500.0, "per_day": [{"day": 229, "rows": 144, "valid_rows": 1, "mean_kw": 0.0, "max_kw": 0.0, "mean_wspd": 1.27}, {"day": 230, … (1910 chars)
+   2. gru_forecast({"turbine": 8, "history_end_day": 242, "horizon_hours": 48})
+       -> {"turbine": 8, "history_end_day": 242, "horizon_hours": 48, "n_values": 288, "unit": "kW", "method": "gru_forecast", "forecast": [313.0, 322.2, 319.0, 330.6, 333.2, 336.0, 341.0, 352.0, 345.9, 373.2, 365.1, 373.8, 370.6,… (2146 chars)
+  Totals: 0 LLM calls, 2 tool calls, 0 in / 0 out tokens, 0.141 s
+
+FORMULATION  (turbine, window and horizon as requested?)
+  declared: turbine 8, days [229, 242], 48 h   verdict: PASS   turbine, window and horizon as requested and as executed
+
+THE SERIES
+  status: forecast   values: 288   schema: True   range: True   source: gru_forecast   traceable: True
+  error on the target (KDD Cup rules, 284 points): MAE 553.32 kW, RMSE 677.69 kW, overall 615.51 kW
+
+THE ANSWER
+  given: None   implied by the series: None   coherent: None   against the truth: None -> None
+
+OUTCOME: SOLVED   (valid series, coherent answer, traceable to a tool output)
+
+SUMMARY WRITTEN BY THE METHOD
+  Parsed turbine 8, days 229 to 242, 48 h; forecast copied from gru_forecast (288 values).

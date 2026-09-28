@@ -50,7 +50,7 @@ others are being brought to it.
 
 | case study | folder | layout | notes |
 |---|---|---|---|
-| Wind (6.1) | `wind-forecasting/` | not yet | forecasting, not request answering: the six-method ladder does not map onto it as it stands, and its inputs have a known leakage question open |
+| Wind (6.1) | `wind-forecasting/` | done (2026-09-27) | the six methods on twenty frozen SDWPF windows, history only (no future inputs), the GRU as the trusted forecaster, gate W1–W5; the original scripts kept under `_legacy/` |
 | EVAgent (6.2) | `ev-scheduling/` | in progress | `methods/` done; the rest of the moves in this branch |
 | PFAgent (6.3) | `power-flow-agent/` | reference | `results/` layout, `run.py`, `methods/` as described |
 | GridDebug (6.4) | `griddebug-agent/` | done (2026-09-27) | `run.py`, `methods/` (six), `solver/`, `evaluation/` with the frozen scenario manifest and `page_fragments.py`; the original FastAPI/Next.js demo kept under `ui/`, not wired to the six methods |

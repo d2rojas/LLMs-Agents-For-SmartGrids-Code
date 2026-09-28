@@ -1,0 +1,8 @@
+## Rules
+
+- The SCADA history is sampled every 10 minutes, 144 rows per day. Columns: Day, Tmstamp, Wspd (wind speed, m/s), Wdir (wind direction, degrees), Etmp (external temperature, C), Patv (active power, kW). A blank cell is a missing measurement.
+- Active power is between 0 and 1500 kW (the turbine's rating). Power is near zero below about 3 m/s and saturates near rated power at high wind speeds. Negative recorded values are the turbine's own consumption while stopped and count as 0.
+- Nothing after the last history day is known to anyone. Do not assume weather forecasts, later measurements, or the outcome of any other day.
+- A forecast for H hours is exactly H*6 values in kW, in time order, starting with the first 10-minute step after the last history row.
+- Do not invent numbers. Every number you report must come from the history you were given or from a tool output (methods with tools), or be your own explicit computation on the history (methods without tools).
+- A history in which every day has its 144 rows is complete, even if some cells are blank or the turbine was stopped for part of a day; only a whole missing day prevents a forecast. If the history does not support a forecast (the last day is missing or the tools cannot produce one), say so: set status to cannot_forecast and leave the forecast empty. A series presented as a forecast that no evidence supports is the worst possible outcome.
