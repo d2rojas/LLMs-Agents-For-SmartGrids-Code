@@ -399,10 +399,14 @@ def rebuild_output(
     repairs: Optional[Dict[str, Any]] = None
     parse_success: Optional[bool] = None
 
-    if arm_name in ("optimum", "charge_asap"):
+    if arm_name in ("optimum", "charge_asap", "rule_based"):
         produced = matrix.RUNNERS[arm_name](ctx)
         schedule = produced.schedule
         tool_outputs = list(produced.tool_outputs)
+        parsed_problem = produced.parsed_problem
+        if arm_name == "rule_based":
+            # the rule reads the same text again; its refusal, if any, is the same refusal
+            answer_text = produced.answer_text
         sources["schedule"] = "rule_rerun"
         sources["tool_outputs"] = "rule_rerun"
     elif arm_name.startswith("llm_only"):

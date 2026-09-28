@@ -111,6 +111,7 @@ from evaluation.outcome import (  # noqa: E402
     GateVerdict,
     classify_outcome,
 )
+from evaluation.requests import SERVED_TOL_KWH  # noqa: E402
 from evaluation.requests import (  # noqa: E402
     EVRequest,
     build_site_tou,
@@ -249,6 +250,23 @@ def register_arm(arm: Arm) -> Arm:
     ARMS[arm.name] = arm
     return arm
 
+
+register_arm(
+    Arm(
+        name="rule_based",
+        label="Deterministic parser + solver",
+        uses_llm=False,
+        has_gate=False,
+        scores_formulation=True,
+        grounded=True,
+        cost=ZERO_COST,
+        description=(
+            "methods/deterministic/rule_based.py: regular expressions read the request, the CVXPY tool "
+            "computes the schedule, a template writes the answer. No model. A sentence the rules cannot "
+            "read is a declared inability and the day is escalated, never answered from a partial read."
+        ),
+    )
+)
 
 register_arm(
     Arm(
@@ -408,6 +426,7 @@ register_arm(
 # scored against is computed per request (``solve_day`` below), not taken from
 # an optimum row.
 DEFAULT_ARMS: Tuple[str, ...] = (
+    "rule_based",
     "llm_only:structured",
     "llm_only:chain_of_thought",
     "plan_act",
@@ -1011,6 +1030,51 @@ def run_llm_only(ctx: RunContext) -> ArmOutput:
     )
 
 
+def run_rule_based(ctx: RunContext) -> ArmOutput:
+    """The conventional-automation row: rules read the request, the solver computes, a template answers.
+
+    A request the rules cannot read is not guessed at: the row carries a zero
+    schedule, an answer that says which sentence stopped it, and a declared
+    inability, which the scorer counts as escalated. That refusal is the row's
+    honest behavior and the number the table needs from it.
+    """
+    from methods.agent.llm_agent import _execute_solve
+    from methods.agent.parse.parse import parsed_problem_to_day_site_tou
+    from methods.deterministic.rule_based import CannotParse, answer_for, parse_request
+
+    request = ctx.request
+    try:
+        parsed = parse_request(request.text)
+    except CannotParse as exc:
+        text = (
+            f"I cannot parse this request (unsupported phrasing: {exc.clause[:160]!r}; {exc.why}). "
+            "No schedule was produced."
+        )
+        return ArmOutput(
+            schedule=np.zeros((len(request.day.sessions), request.day.n_steps), dtype=float),
+            answer_text=text,
+            gate=GateVerdict(passed=False, declared_failure=True, reason=f"cannot parse: {exc.why}"),
+            gate_row={
+                "gate_passed": False, "gate_declared_failure": True, "gate_action": "declare_failure",
+                "gate_attempts": 0, "gate_reason": f"cannot parse: {exc.why}",
+            },
+            model_resolved="none:rule_based",
+            notes=f"cannot parse: {exc.why}",
+        )
+
+    day, site, tou = parsed_problem_to_day_site_tou(parsed.problem)
+    _solve_result, tool_result, _posed_day, _posed_site = _execute_solve(day, site, tou, {})
+    schedule = _align_rows(np.asarray(_solve_result.schedule, dtype=float), len(request.day.sessions))
+    answer = answer_for(parsed, day, tool_result, served_tol_kwh=SERVED_TOL_KWH)
+    return ArmOutput(
+        schedule=schedule,
+        answer_text=answer,
+        tool_outputs=[tool_result],
+        parsed_problem=parsed.problem,
+        model_resolved="none:rule_based",
+    )
+
+
 def run_evagent(ctx: RunContext) -> ArmOutput:
     """The solver-grounded arm, through ``methods/agent/run.py::run_agent_from_text``."""
     return _run_agent_arm(ctx, gate=True)
@@ -1081,6 +1145,7 @@ def _run_agent_arm(ctx: RunContext, *, gate: bool, architecture: str = "react") 
 
 
 RUNNERS: Dict[str, Callable[[RunContext], ArmOutput]] = {
+    "rule_based": run_rule_based,
     "optimum": run_optimum,
     "charge_asap": run_charge_asap,
     "llm_only:structured": run_llm_only,

@@ -100,7 +100,7 @@ ROWS: Tuple[Dict[str, str], ...] = (
         "block": "Conventional workflow",
         "name": "rule_based",
         "label": "Deterministic parser + solver",
-        "arm": "",
+        "arm": "rule_based",
         "llm": "no",
         "tools": "the solver, directly",
         "gate": "none",
