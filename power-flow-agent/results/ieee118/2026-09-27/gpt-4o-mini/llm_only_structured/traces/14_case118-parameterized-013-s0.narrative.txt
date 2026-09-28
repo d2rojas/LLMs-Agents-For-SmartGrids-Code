@@ -1,0 +1,23 @@
+RUN 14  |  case118-parameterized-013-s0  |  llm_only:structured  |  gpt-4o-mini  |  IEEE 118-bus  |  seed 0  |  difficulty parameterized
+Request: Load case118 and disconnect the line between bus 108 and bus 109.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): { "formulation": [ {"tool": "load_case", "args": {"case_name": "case118"}}, {"tool": "disconnect_line", "args": {"from_bus": 108, "to_bus": 109}}, {"tool": "run_powerflow", "args": {}} ], "converged":...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 14047 in / 2326 out tokens, $0.0035, 16.4 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case118") -> disconnect_line(from_bus=108, to_bus=109)
+  declared: load_case(case_name="case118") -> disconnect_line(from_bus=108, to_bus=109) -> run_powerflow()   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 121, untraceable: 121 -> traceable answer: no
+  untraceable values: ['1.006', '1.004', '1.002', '1.003', '1.001', '1.000', '1.005', '1.007', '1.008', '1.009', '1.010', '1.011', '1.012', '1.013', '1.014', '1.015', '1.016', '1.017', '1.018', '1.019']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: voltage_error
+  against the reference: voltage MAE 0.0746 p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case118-parameterized-013-s0_run0.json

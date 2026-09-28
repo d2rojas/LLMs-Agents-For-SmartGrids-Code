@@ -1,6 +1,6 @@
 # rule_based on IEEE 14-bus with no-llm
 
-Generated 2026-09-27 16:19 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-28 00:28 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -41,8 +41,7 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 
 | group | metric | value |
 |---|---|---|
-| Task utility | Formulation exact | 19/20 (95.0%) |
-| Task utility | Formulation error types | missed_step: 1 |
+| Task utility | Formulation exact | 19/19 (100.0%) |
 | Task utility | Voltage MAE, all runs | 1.61e-07 p.u. |
 | Task utility | Voltage MAE, formulation-exact runs | 1.61e-07 p.u. |
 | Task utility | Flow MAE, all runs | 2.39e-04 MW |
@@ -56,7 +55,7 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 | Cost and time | LLM calls / tool calls, mean | 0 / 3.05 |
 | Cost and time | Prompt / completion tokens, mean | 0 / 0 |
 | Cost and time | Cost, total | $0.0000 |
-| Cost and time | Wall time, mean | 0.6 s |
+| Cost and time | Wall time, mean | 1.4 s |
 
 ### Cross-check against the runner's own scoreboard
 
@@ -82,11 +81,7 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 ## Escalated (1)
 
-- `case14-ambiguous-011-s0` detected via cannot_answer, abstention_json, declared_inability, cannot_parse; formulation missed_step; the formulation declared in the answer omits load_case, set_active_load / modify_load, which the request needs  ([narrative](traces/03_case14-ambiguous-011-s0.narrative.txt), [transcript](traces/03_case14-ambiguous-011-s0.transcript.txt))
-
-## Formulation not exact (1)
-
-- `case14-ambiguous-011-s0` missed_step: the formulation declared in the answer omits load_case, set_active_load / modify_load, which the request needs  ([narrative](traces/03_case14-ambiguous-011-s0.narrative.txt), [transcript](traces/03_case14-ambiguous-011-s0.transcript.txt))
+- `case14-ambiguous-011-s0` detected via cannot_answer, abstention_json, declared_inability, cannot_parse; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/03_case14-ambiguous-011-s0.narrative.txt), [transcript](traces/03_case14-ambiguous-011-s0.transcript.txt))
 
 ## Untraceable numbers in the answer (1)
 

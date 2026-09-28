@@ -1,0 +1,27 @@
+RUN 15  |  case30-parameterized-017-s0  |  react_nogate  |  gpt-4o-mini  |  IEEE 30-bus  |  seed 0  |  difficulty parameterized
+Request: Load case30 and run an N-1 contingency analysis ranked by max violations and report the 8 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case30")   (1071 in / 16 out tokens, 0.9 s)
+       tool load_case -> case_name="case30", n_buses=30, n_lines=41, total_load_mw=191.087
+  2. LLM called run_n1_contingency(top_k=8, criteria="max_violations")   (1157 in / 26 out tokens, 1.0 s)
+       tool run_n1_contingency -> N-1 completed over 41 branches. Worst outage: 6-8 (line), V violations=2 (delta=2), thermal violations=3 (delta=3).
+  3. LLM replied without tool calls: ```json { "converged": true, "result": [ { "outage": "6-8 (line)", "converged": true, "voltage_violations": 2, "thermal_violations": 3, "worst_vm": 0.850447, "w   (9526 in / 680 out tokens, 5.4 s)
+  4. LLM wrote the final answer   (10272 in / 227 out tokens, 2.5 s)
+  Totals: 4 LLM calls, 2 tool calls, 2 tool rounds, 22026 in / 949 out tokens, $0.0039, 11.3 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case30") -> run_n1_contingency(top_k=8, criteria="max_violations")
+  executed: load_case(case_name="case30") -> run_n1_contingency(top_k=8, criteria="max_violations")
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 4, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: no_state_reported
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case30-parameterized-017-s0_run0.json

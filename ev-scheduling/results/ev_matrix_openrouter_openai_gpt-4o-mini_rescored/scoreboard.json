@@ -1,0 +1,977 @@
+{
+  "meta": {
+    "arm_descriptions": {
+      "evagent": "methods/agent/run.py::run_agent_from_text: parse the request text, call the CVXPY tool, answer behind the five-condition verification gate.",
+      "llm_only:chain_of_thought": "Same input and budget as the structured arm, plus a reasoning section.",
+      "llm_only:structured": "No tools. One JSON reply with the formulation the model read, the schedule as charging segments, and the answer.",
+      "plan_act": "methods/agent/run.py::run_agent_from_text(architecture='plan_act'): the same parse, then one planning call emits every solver call at once, the executor runs them with no model in the loop, and one call writes the answer from the outputs. No gate.",
+      "react": "methods/agent/run.py::run_agent_from_text with gate=False: the same parse, the same CVXPY tool and the same round budget as evagent, and the first answer surfaced as written. The row that differs from the solver-grounded one by the gate alone.",
+      "rule_based": "methods/deterministic/rule_based.py: regular expressions read the request, the CVXPY tool computes the schedule, a template writes the answer. No model. A sentence the rules cannot read is a declared inability and the day is escalated, never answered from a partial read."
+    },
+    "arms": [
+      "rule_based",
+      "llm_only:structured",
+      "llm_only:chain_of_thought",
+      "plan_act",
+      "react",
+      "evagent"
+    ],
+    "banner": "Real frozen ACN days. These traces are the evidence behind the reported numbers and belong in the repository.",
+    "budget_usd": 0.75,
+    "case_study": "ev_scheduling",
+    "completion_tokens": 332349,
+    "created_at": "2026-09-28T07:37:18+00:00",
+    "data_source": "cache",
+    "dates": [
+      "2018-09-17",
+      "2018-10-15",
+      "2018-11-05",
+      "2018-11-12",
+      "2018-12-03",
+      "2018-12-10",
+      "2019-01-15",
+      "2019-01-22",
+      "2019-02-20",
+      "2019-03-10",
+      "2019-04-15",
+      "2019-04-22",
+      "2019-05-01",
+      "2019-05-08",
+      "2019-05-15",
+      "2019-05-22",
+      "2019-06-03",
+      "2019-06-10",
+      "2019-06-15",
+      "2019-06-20"
+    ],
+    "formulation_aggregation": "per_session",
+    "gap_tol_pct": 1.0,
+    "harness": "evaluation/runner.py",
+    "items_per_arm": 20,
+    "max_completion_tokens": 8192,
+    "max_tool_rounds": 1,
+    "model_requested": "openrouter:openai/gpt-4o-mini",
+    "model_spec": "openrouter:openai/gpt-4o-mini",
+    "models_resolved": [
+      "openai/gpt-4o-mini"
+    ],
+    "n_days": 20,
+    "n_failed": 0,
+    "n_llm_calls": 220,
+    "out_dir": "/Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2-reorg-ev/ev-scheduling/results/ev_matrix_openrouter_openai_gpt-4o-mini_rescored",
+    "pending_arms": {},
+    "price_in_per_mtok": 0.15,
+    "price_out_per_mtok": 0.6,
+    "price_source": "/Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2-reorg-ev/power-flow-agent/pricing.json",
+    "prompt_tokens": 576474,
+    "python": "3.12.6",
+    "repeats": 1,
+    "requests_digest": "sha256:77e41af52a48db623768923f0b30c79966638643baf21b68db26b990da867967",
+    "run_id": "ev_matrix_20260928T073352Z_openrouter_openai_gpt-4o-mini",
+    "seeds": [
+      0
+    ],
+    "site_id": "caltech",
+    "smoke_test": false,
+    "solved_terms": [
+      "state",
+      "traceability",
+      "answer"
+    ],
+    "spent_usd": 0.28588,
+    "strategies": {
+      "llm_only:chain_of_thought": {
+        "sections": [
+          "## Role",
+          "## System Data",
+          "## Task",
+          "## Reasoning Instructions",
+          "## Output Requirements"
+        ],
+        "strategy": "chain_of_thought"
+      },
+      "llm_only:structured": {
+        "sections": [
+          "## Role",
+          "## System Data",
+          "## Task",
+          "## Output Requirements"
+        ],
+        "strategy": "structured"
+      }
+    },
+    "synthetic": false,
+    "traceability_policy": "grounded_only",
+    "rescore": {
+      "source_run": "/Users/lzanda/Documents/REVIEW-TUTORIAL-LLMS-AND-AGENTIC-FOR-SMART-GRIDS/03-codigo-casos-estudio/LLMs-Agents-For-SmartGrids-Code-v2-reorg-ev/ev-scheduling/results/ev_matrix_openrouter_openai_gpt-4o-mini",
+      "rescored_at": "2026-09-28T01:07:41",
+      "tool": "evaluation/rescore.py",
+      "requests_digest": "sha256:77e41af52a48db623768923f0b30c79966638643baf21b68db26b990da867967",
+      "n_rows": 120,
+      "n_rescored": 120,
+      "n_rescore_failed": 0,
+      "n_cost_mismatch": 0,
+      "model_calls": 0,
+      "usd_spent": 0.0,
+      "solved_terms": [
+        "state",
+        "traceability",
+        "answer"
+      ],
+      "formulation_aggregation": "per_session",
+      "previous_scoreboard": [
+        {
+          "arm": "rule_based",
+          "arm_label": "Deterministic parser + solver",
+          "n_items": 20,
+          "n_ok": 20,
+          "n_failed": 0,
+          "failure_reasons": [],
+          "solved": {
+            "rate": 0.05,
+            "count": 1,
+            "total": 20
+          },
+          "escalated": {
+            "rate": 0.0,
+            "count": 0,
+            "total": 20
+          },
+          "wrong_unflagged": {
+            "rate": 0.95,
+            "count": 19,
+            "total": 20
+          },
+          "formulation_exact": {
+            "rate": 1.0,
+            "count": 894,
+            "total": 894
+          },
+          "formulation_days": {
+            "rate": 1.0,
+            "count": 20,
+            "total": 20
+          },
+          "feasible": {
+            "rate": 1.0,
+            "count": 20,
+            "total": 20
+          },
+          "traceable": {
+            "rate": null,
+            "count": 0,
+            "total": 0
+          },
+          "answer_correct": {
+            "rate": 0.8947368421052632,
+            "count": 17,
+            "total": 19
+          },
+          "gap_pct_mean": -0.0017874468291072614,
+          "cost_usd_mean": 100.8276372,
+          "unmet_kwh_mean": 27.849100299999996,
+          "pct_fully_served_mean": 49.349005,
+          "repairs_changed": {
+            "rate": null,
+            "count": 0,
+            "total": 0
+          },
+          "negative_cells_total": 0,
+          "repair_rows_total": 0,
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "n_llm_calls": 0,
+          "n_tool_calls": 0,
+          "est_cost_usd": 0.0,
+          "wall_s": 0.0,
+          "model_resolved": [
+            "none:rule_based"
+          ],
+          "prompt_hashes": []
+        },
+        {
+          "arm": "llm_only:structured",
+          "arm_label": "LLM-only, structured prompting",
+          "n_items": 20,
+          "n_ok": 20,
+          "n_failed": 0,
+          "failure_reasons": [],
+          "solved": {
+            "rate": 0.0,
+            "count": 0,
+            "total": 20
+          },
+          "escalated": {
+            "rate": 0.0,
+            "count": 0,
+            "total": 20
+          },
+          "wrong_unflagged": {
+            "rate": 1.0,
+            "count": 20,
+            "total": 20
+          },
+          "formulation_exact": {
+            "rate": 0.9194630872483222,
+            "count": 822,
+            "total": 894
+          },
+          "formulation_days": {
+            "rate": 0.0,
+            "count": 0,
+            "total": 20
+          },
+          "feasible": {
+            "rate": 0.05,
+            "count": 1,
+            "total": 20
+          },
+          "traceable": {
+            "rate": null,
+            "count": 0,
+            "total": 0
+          },
+          "answer_correct": {
+            "rate": 0.15789473684210525,
+            "count": 3,
+            "total": 19
+          },
+          "gap_pct_mean": 355.11987826858655,
+          "cost_usd_mean": 447.85681910000005,
+          "unmet_kwh_mean": 20.0651961,
+          "pct_fully_served_mean": 90.820805,
+          "repairs_changed": {
+            "rate": 0.0,
+            "count": 0,
+            "total": 20
+          },
+          "negative_cells_total": 0,
+          "repair_rows_total": 0,
+          "prompt_tokens": 54425,
+          "completion_tokens": 71715,
+          "n_llm_calls": 20,
+          "n_tool_calls": 0,
+          "est_cost_usd": 0.051193,
+          "wall_s": 864.4585,
+          "model_resolved": [
+            "openai/gpt-4o-mini"
+          ],
+          "prompt_hashes": [
+            "sha256:a1352587b576fdd773605d90025e4ff136bc80a79f3ca7c310a601441d7518ba"
+          ]
+        },
+        {
+          "arm": "llm_only:chain_of_thought",
+          "arm_label": "LLM-only, chain-of-thought prompting",
+          "n_items": 20,
+          "n_ok": 20,
+          "n_failed": 0,
+          "failure_reasons": [],
+          "solved": {
+            "rate": 0.0,
+            "count": 0,
+            "total": 20
+          },
+          "escalated": {
+            "rate": 0.0,
+            "count": 0,
+            "total": 20
+          },
+          "wrong_unflagged": {
+            "rate": 1.0,
+            "count": 20,
+            "total": 20
+          },
+          "formulation_exact": {
+            "rate": 0.9206939281288724,
+            "count": 743,
+            "total": 807
+          },
+          "formulation_days": {
+            "rate": 0.05263157894736842,
+            "count": 1,
+            "total": 19
+          },
+          "feasible": {
+            "rate": 0.05,
+            "count": 1,
+            "total": 20
+          },
+          "traceable": {
+            "rate": null,
+            "count": 0,
+            "total": 0
+          },
+          "answer_correct": {
+            "rate": 0.05263157894736842,
+            "count": 1,
+            "total": 19
+          },
+          "gap_pct_mean": 314.6783624048329,
+          "cost_usd_mean": 401.1490006,
+          "unmet_kwh_mean": 63.35569405,
+          "pct_fully_served_mean": 84.01219,
+          "repairs_changed": {
+            "rate": 0.05,
+            "count": 1,
+            "total": 20
+          },
+          "negative_cells_total": 0,
+          "repair_rows_total": 87,
+          "prompt_tokens": 59925,
+          "completion_tokens": 102948,
+          "n_llm_calls": 20,
+          "n_tool_calls": 0,
+          "est_cost_usd": 0.070759,
+          "wall_s": 1077.6376,
+          "model_resolved": [
+            "openai/gpt-4o-mini"
+          ],
+          "prompt_hashes": [
+            "sha256:00a2c4a9e634caa9ff3ff65d701a20c2bdb0b87108501d1b90b6352f4c8b9494"
+          ]
+        },
+        {
+          "arm": "plan_act",
+          "arm_label": "Plan-and-Act, no gate",
+          "n_items": 20,
+          "n_ok": 20,
+          "n_failed": 0,
+          "failure_reasons": [],
+          "solved": {
+            "rate": 0.0,
+            "count": 0,
+            "total": 20
+          },
+          "escalated": {
+            "rate": 0.0,
+            "count": 0,
+            "total": 20
+          },
+          "wrong_unflagged": {
+            "rate": 1.0,
+            "count": 20,
+            "total": 20
+          },
+          "formulation_exact": {
+            "rate": 0.901565995525727,
+            "count": 806,
+            "total": 894
+          },
+          "formulation_days": {
+            "rate": 0.0,
+            "count": 0,
+            "total": 20
+          },
+          "feasible": {
+            "rate": 0.05,
+            "count": 1,
+            "total": 20
+          },
+          "traceable": {
+            "rate": 1.0,
+            "count": 20,
+            "total": 20
+          },
+          "answer_correct": {
+            "rate": 0.3684210526315789,
+            "count": 7,
+            "total": 19
+          },
+          "gap_pct_mean": -0.003657565498437306,
+          "cost_usd_mean": 100.72834675,
+          "unmet_kwh_mean": 28.587363600000003,
+          "pct_fully_served_mean": 49.497555,
+          "repairs_changed": {
+            "rate": null,
+            "count": 0,
+            "total": 0
+          },
+          "negative_cells_total": 0,
+          "repair_rows_total": 0,
+          "prompt_tokens": 139878,
+          "completion_tokens": 52564,
+          "n_llm_calls": 60,
+          "n_tool_calls": 20,
+          "est_cost_usd": 0.052521,
+          "wall_s": 1016.7484,
+          "model_resolved": [
+            "openai/gpt-4o-mini"
+          ],
+          "prompt_hashes": [
+            "sha256:c6d0f98682f0d0ecab579952259072c0e757a8d291b4990e629f262eb741c458"
+          ]
+        },
+        {
+          "arm": "react",
+          "arm_label": "ReAct, no gate",
+          "n_items": 20,
+          "n_ok": 20,
+          "n_failed": 0,
+          "failure_reasons": [],
+          "solved": {
+            "rate": 0.0,
+            "count": 0,
+            "total": 20
+          },
+          "escalated": {
+            "rate": 0.0,
+            "count": 0,
+            "total": 20
+          },
+          "wrong_unflagged": {
+            "rate": 1.0,
+            "count": 20,
+            "total": 20
+          },
+          "formulation_exact": {
+            "rate": 0.9060402684563759,
+            "count": 810,
+            "total": 894
+          },
+          "formulation_days": {
+            "rate": 0.0,
+            "count": 0,
+            "total": 20
+          },
+          "feasible": {
+            "rate": 0.05,
+            "count": 1,
+            "total": 20
+          },
+          "traceable": {
+            "rate": 1.0,
+            "count": 20,
+            "total": 20
+          },
+          "answer_correct": {
+            "rate": 0.3157894736842105,
+            "count": 6,
+            "total": 19
+          },
+          "gap_pct_mean": -0.03563791980811941,
+          "cost_usd_mean": 100.70805370000001,
+          "unmet_kwh_mean": 28.4999393,
+          "pct_fully_served_mean": 49.497555,
+          "repairs_changed": {
+            "rate": null,
+            "count": 0,
+            "total": 0
+          },
+          "negative_cells_total": 0,
+          "repair_rows_total": 0,
+          "prompt_tokens": 161123,
+          "completion_tokens": 52561,
+          "n_llm_calls": 60,
+          "n_tool_calls": 20,
+          "est_cost_usd": 0.055704000000000004,
+          "wall_s": 835.8552,
+          "model_resolved": [
+            "openai/gpt-4o-mini"
+          ],
+          "prompt_hashes": [
+            "sha256:c6d0f98682f0d0ecab579952259072c0e757a8d291b4990e629f262eb741c458"
+          ]
+        },
+        {
+          "arm": "evagent",
+          "arm_label": "EVAgent (solver-grounded, gated)",
+          "n_items": 20,
+          "n_ok": 20,
+          "n_failed": 0,
+          "failure_reasons": [],
+          "solved": {
+            "rate": 0.0,
+            "count": 0,
+            "total": 20
+          },
+          "escalated": {
+            "rate": 0.0,
+            "count": 0,
+            "total": 20
+          },
+          "wrong_unflagged": {
+            "rate": 1.0,
+            "count": 20,
+            "total": 20
+          },
+          "formulation_exact": {
+            "rate": 0.9049217002237137,
+            "count": 809,
+            "total": 894
+          },
+          "formulation_days": {
+            "rate": 0.0,
+            "count": 0,
+            "total": 20
+          },
+          "feasible": {
+            "rate": 0.05,
+            "count": 1,
+            "total": 20
+          },
+          "traceable": {
+            "rate": 1.0,
+            "count": 20,
+            "total": 20
+          },
+          "answer_correct": {
+            "rate": 0.3157894736842105,
+            "count": 6,
+            "total": 19
+          },
+          "gap_pct_mean": -0.038901543113855755,
+          "cost_usd_mean": 100.69649584999999,
+          "unmet_kwh_mean": 28.5874393,
+          "pct_fully_served_mean": 49.497555,
+          "repairs_changed": {
+            "rate": null,
+            "count": 0,
+            "total": 0
+          },
+          "negative_cells_total": 0,
+          "repair_rows_total": 0,
+          "prompt_tokens": 161123,
+          "completion_tokens": 52561,
+          "n_llm_calls": 60,
+          "n_tool_calls": 20,
+          "est_cost_usd": 0.055705,
+          "wall_s": 846.7353,
+          "model_resolved": [
+            "openai/gpt-4o-mini"
+          ],
+          "prompt_hashes": [
+            "sha256:c6d0f98682f0d0ecab579952259072c0e757a8d291b4990e629f262eb741c458"
+          ]
+        }
+      ],
+      "previous_scoreboard_source": "scoreboard.json"
+    }
+  },
+  "arms": [
+    {
+      "arm": "rule_based",
+      "arm_label": "Deterministic parser + solver",
+      "n_items": 20,
+      "n_ok": 20,
+      "n_failed": 0,
+      "failure_reasons": [],
+      "solved": {
+        "rate": 0.9,
+        "count": 18,
+        "total": 20
+      },
+      "escalated": {
+        "rate": 0.0,
+        "count": 0,
+        "total": 20
+      },
+      "wrong_unflagged": {
+        "rate": 0.1,
+        "count": 2,
+        "total": 20
+      },
+      "formulation_exact": {
+        "rate": 1.0,
+        "count": 894,
+        "total": 894
+      },
+      "formulation_days": {
+        "rate": 1.0,
+        "count": 20,
+        "total": 20
+      },
+      "feasible": {
+        "rate": 1.0,
+        "count": 20,
+        "total": 20
+      },
+      "traceable": {
+        "rate": null,
+        "count": 0,
+        "total": 0
+      },
+      "answer_correct": {
+        "rate": 0.8947368421052632,
+        "count": 17,
+        "total": 19
+      },
+      "gap_pct_mean": -0.0017874468291072614,
+      "cost_usd_mean": 100.8276372,
+      "unmet_kwh_mean": 27.849100299999996,
+      "pct_fully_served_mean": 49.349005,
+      "repairs_changed": {
+        "rate": null,
+        "count": 0,
+        "total": 0
+      },
+      "negative_cells_total": 0,
+      "repair_rows_total": 0,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "n_llm_calls": 0,
+      "n_tool_calls": 0,
+      "est_cost_usd": 0.0,
+      "wall_s": 0.0,
+      "model_resolved": [
+        "none:rule_based"
+      ],
+      "prompt_hashes": []
+    },
+    {
+      "arm": "llm_only:structured",
+      "arm_label": "LLM-only, structured prompting",
+      "n_items": 20,
+      "n_ok": 20,
+      "n_failed": 0,
+      "failure_reasons": [],
+      "solved": {
+        "rate": 0.0,
+        "count": 0,
+        "total": 20
+      },
+      "escalated": {
+        "rate": 0.0,
+        "count": 0,
+        "total": 20
+      },
+      "wrong_unflagged": {
+        "rate": 1.0,
+        "count": 20,
+        "total": 20
+      },
+      "formulation_exact": {
+        "rate": 0.9194630872483222,
+        "count": 822,
+        "total": 894
+      },
+      "formulation_days": {
+        "rate": 0.0,
+        "count": 0,
+        "total": 20
+      },
+      "feasible": {
+        "rate": 0.05,
+        "count": 1,
+        "total": 20
+      },
+      "traceable": {
+        "rate": null,
+        "count": 0,
+        "total": 0
+      },
+      "answer_correct": {
+        "rate": 0.15789473684210525,
+        "count": 3,
+        "total": 19
+      },
+      "gap_pct_mean": 355.11987826858655,
+      "cost_usd_mean": 447.85681910000005,
+      "unmet_kwh_mean": 20.0651961,
+      "pct_fully_served_mean": 90.820805,
+      "repairs_changed": {
+        "rate": 0.0,
+        "count": 0,
+        "total": 20
+      },
+      "negative_cells_total": 0,
+      "repair_rows_total": 0,
+      "prompt_tokens": 54425,
+      "completion_tokens": 71715,
+      "n_llm_calls": 20,
+      "n_tool_calls": 0,
+      "est_cost_usd": 0.051193,
+      "wall_s": 864.4585,
+      "model_resolved": [
+        "openai/gpt-4o-mini"
+      ],
+      "prompt_hashes": [
+        "sha256:a1352587b576fdd773605d90025e4ff136bc80a79f3ca7c310a601441d7518ba"
+      ]
+    },
+    {
+      "arm": "llm_only:chain_of_thought",
+      "arm_label": "LLM-only, chain-of-thought prompting",
+      "n_items": 20,
+      "n_ok": 20,
+      "n_failed": 0,
+      "failure_reasons": [],
+      "solved": {
+        "rate": 0.0,
+        "count": 0,
+        "total": 20
+      },
+      "escalated": {
+        "rate": 0.0,
+        "count": 0,
+        "total": 20
+      },
+      "wrong_unflagged": {
+        "rate": 1.0,
+        "count": 20,
+        "total": 20
+      },
+      "formulation_exact": {
+        "rate": 0.9206939281288724,
+        "count": 743,
+        "total": 807
+      },
+      "formulation_days": {
+        "rate": 0.05263157894736842,
+        "count": 1,
+        "total": 19
+      },
+      "feasible": {
+        "rate": 0.05,
+        "count": 1,
+        "total": 20
+      },
+      "traceable": {
+        "rate": null,
+        "count": 0,
+        "total": 0
+      },
+      "answer_correct": {
+        "rate": 0.05263157894736842,
+        "count": 1,
+        "total": 19
+      },
+      "gap_pct_mean": 314.6783624048329,
+      "cost_usd_mean": 401.1490006,
+      "unmet_kwh_mean": 63.35569405,
+      "pct_fully_served_mean": 84.01219,
+      "repairs_changed": {
+        "rate": 0.05,
+        "count": 1,
+        "total": 20
+      },
+      "negative_cells_total": 0,
+      "repair_rows_total": 87,
+      "prompt_tokens": 59925,
+      "completion_tokens": 102948,
+      "n_llm_calls": 20,
+      "n_tool_calls": 0,
+      "est_cost_usd": 0.070759,
+      "wall_s": 1077.6376,
+      "model_resolved": [
+        "openai/gpt-4o-mini"
+      ],
+      "prompt_hashes": [
+        "sha256:00a2c4a9e634caa9ff3ff65d701a20c2bdb0b87108501d1b90b6352f4c8b9494"
+      ]
+    },
+    {
+      "arm": "plan_act",
+      "arm_label": "Plan-and-Act, no gate",
+      "n_items": 20,
+      "n_ok": 20,
+      "n_failed": 0,
+      "failure_reasons": [],
+      "solved": {
+        "rate": 0.0,
+        "count": 0,
+        "total": 20
+      },
+      "escalated": {
+        "rate": 0.0,
+        "count": 0,
+        "total": 20
+      },
+      "wrong_unflagged": {
+        "rate": 1.0,
+        "count": 20,
+        "total": 20
+      },
+      "formulation_exact": {
+        "rate": 0.901565995525727,
+        "count": 806,
+        "total": 894
+      },
+      "formulation_days": {
+        "rate": 0.0,
+        "count": 0,
+        "total": 20
+      },
+      "feasible": {
+        "rate": 0.05,
+        "count": 1,
+        "total": 20
+      },
+      "traceable": {
+        "rate": 1.0,
+        "count": 20,
+        "total": 20
+      },
+      "answer_correct": {
+        "rate": 0.3684210526315789,
+        "count": 7,
+        "total": 19
+      },
+      "gap_pct_mean": -0.003657565498437306,
+      "cost_usd_mean": 100.72834675,
+      "unmet_kwh_mean": 28.587363600000003,
+      "pct_fully_served_mean": 49.497555,
+      "repairs_changed": {
+        "rate": null,
+        "count": 0,
+        "total": 0
+      },
+      "negative_cells_total": 0,
+      "repair_rows_total": 0,
+      "prompt_tokens": 139878,
+      "completion_tokens": 52564,
+      "n_llm_calls": 60,
+      "n_tool_calls": 20,
+      "est_cost_usd": 0.052521,
+      "wall_s": 1016.7484,
+      "model_resolved": [
+        "openai/gpt-4o-mini"
+      ],
+      "prompt_hashes": [
+        "sha256:c6d0f98682f0d0ecab579952259072c0e757a8d291b4990e629f262eb741c458"
+      ]
+    },
+    {
+      "arm": "react",
+      "arm_label": "ReAct, no gate",
+      "n_items": 20,
+      "n_ok": 20,
+      "n_failed": 0,
+      "failure_reasons": [],
+      "solved": {
+        "rate": 0.0,
+        "count": 0,
+        "total": 20
+      },
+      "escalated": {
+        "rate": 0.0,
+        "count": 0,
+        "total": 20
+      },
+      "wrong_unflagged": {
+        "rate": 1.0,
+        "count": 20,
+        "total": 20
+      },
+      "formulation_exact": {
+        "rate": 0.9060402684563759,
+        "count": 810,
+        "total": 894
+      },
+      "formulation_days": {
+        "rate": 0.0,
+        "count": 0,
+        "total": 20
+      },
+      "feasible": {
+        "rate": 0.05,
+        "count": 1,
+        "total": 20
+      },
+      "traceable": {
+        "rate": 1.0,
+        "count": 20,
+        "total": 20
+      },
+      "answer_correct": {
+        "rate": 0.3157894736842105,
+        "count": 6,
+        "total": 19
+      },
+      "gap_pct_mean": -0.03563791980811941,
+      "cost_usd_mean": 100.70805370000001,
+      "unmet_kwh_mean": 28.4999393,
+      "pct_fully_served_mean": 49.497555,
+      "repairs_changed": {
+        "rate": null,
+        "count": 0,
+        "total": 0
+      },
+      "negative_cells_total": 0,
+      "repair_rows_total": 0,
+      "prompt_tokens": 161123,
+      "completion_tokens": 52561,
+      "n_llm_calls": 60,
+      "n_tool_calls": 20,
+      "est_cost_usd": 0.055704000000000004,
+      "wall_s": 835.8552,
+      "model_resolved": [
+        "openai/gpt-4o-mini"
+      ],
+      "prompt_hashes": [
+        "sha256:c6d0f98682f0d0ecab579952259072c0e757a8d291b4990e629f262eb741c458"
+      ]
+    },
+    {
+      "arm": "evagent",
+      "arm_label": "EVAgent (solver-grounded, gated)",
+      "n_items": 20,
+      "n_ok": 20,
+      "n_failed": 0,
+      "failure_reasons": [],
+      "solved": {
+        "rate": 0.0,
+        "count": 0,
+        "total": 20
+      },
+      "escalated": {
+        "rate": 0.0,
+        "count": 0,
+        "total": 20
+      },
+      "wrong_unflagged": {
+        "rate": 1.0,
+        "count": 20,
+        "total": 20
+      },
+      "formulation_exact": {
+        "rate": 0.9049217002237137,
+        "count": 809,
+        "total": 894
+      },
+      "formulation_days": {
+        "rate": 0.0,
+        "count": 0,
+        "total": 20
+      },
+      "feasible": {
+        "rate": 0.05,
+        "count": 1,
+        "total": 20
+      },
+      "traceable": {
+        "rate": 1.0,
+        "count": 20,
+        "total": 20
+      },
+      "answer_correct": {
+        "rate": 0.3157894736842105,
+        "count": 6,
+        "total": 19
+      },
+      "gap_pct_mean": -0.038901543113855755,
+      "cost_usd_mean": 100.69649584999999,
+      "unmet_kwh_mean": 28.5874393,
+      "pct_fully_served_mean": 49.497555,
+      "repairs_changed": {
+        "rate": null,
+        "count": 0,
+        "total": 0
+      },
+      "negative_cells_total": 0,
+      "repair_rows_total": 0,
+      "prompt_tokens": 161123,
+      "completion_tokens": 52561,
+      "n_llm_calls": 60,
+      "n_tool_calls": 20,
+      "est_cost_usd": 0.055705,
+      "wall_s": 846.7353,
+      "model_resolved": [
+        "openai/gpt-4o-mini"
+      ],
+      "prompt_hashes": [
+        "sha256:c6d0f98682f0d0ecab579952259072c0e757a8d291b4990e629f262eb741c458"
+      ]
+    }
+  ]
+}

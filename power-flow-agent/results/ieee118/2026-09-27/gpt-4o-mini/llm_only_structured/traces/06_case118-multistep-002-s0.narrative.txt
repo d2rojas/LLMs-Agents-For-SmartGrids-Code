@@ -1,0 +1,23 @@
+RUN 06  |  case118-multistep-002-s0  |  llm_only:structured  |  gpt-4o-mini  |  IEEE 118-bus  |  seed 0  |  difficulty multistep
+Request: Load case118, disconnect the line between bus 104 and bus 105, disconnect the line between bus 47 and bus 69, and finally run an N-1 contingency analysis ranked by min voltage and report the 8 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): { "formulation": [ {"tool": "load_case", "args": {"case_name": "case118"}}, {"tool": "disconnect_line", "args": {"from_bus": 104, "to_bus": 105}}, {"tool": "disconnect_line", "args": {"from_bus": 47, ...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 14080 in / 3492 out tokens, $0.0042, 23.2 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case118") -> disconnect_line(from_bus=104, to_bus=105) -> disconnect_line(from_bus=47, to_bus=69) -> run_n1_contingency(top_k=8, criteria="min_voltage")
+  declared: load_case(case_name="case118") -> disconnect_line(from_bus=104, to_bus=105) -> disconnect_line(from_bus=47, to_bus=69) -> run_powerflow() -> run_n1_contingency(top_k=8, criteria="min_voltage", max_candidates=0)   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 241, untraceable: 241 -> traceable answer: no
+  untraceable values: ['0.934 p.u.', '1.02', '0.0', '1.01', '0.0', '0.0', '0.98', '0.0', '0.97', '0.0', '0.96', '0.0', '0.95', '0.0', '1.03', '0.0', '1.04', '0.0', '1.05', '0.0']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: voltage_error
+  against the reference: voltage MAE 0.4678 p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case118-multistep-002-s0_run0.json

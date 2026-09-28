@@ -242,6 +242,9 @@ ARCH_METHODS: dict[str, dict[str, Any]] = {
     "react_nogate": {"architecture": "react", "gate": False, "memory": False},
     "plan_act": {"architecture": "plan_act", "gate": True, "memory": False},
     "plan_act_nogate": {"architecture": "plan_act", "gate": False, "memory": False},
+    # Ablation (2026-09-28): the same task-level gate PFAgent runs, placed on the planner instead of
+    # the ReAct loop. Asks whether the gate's value depends on the architecture under it.
+    "plan_act_gate": {"architecture": "plan_act", "gate": False, "memory": False, "final_gate": True},
     # PFAgent = ReAct with no in-loop observation gate, plus the task-level final-answer
     # verification V(x,c,z,y) (methods.agent.engine.verify_final_answer). "pfagent_obsgate" keeps
     # the old (pre-V) behaviour reachable under its own name, for the already-reported

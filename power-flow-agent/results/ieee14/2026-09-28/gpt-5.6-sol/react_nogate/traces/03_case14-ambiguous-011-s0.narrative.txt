@@ -1,0 +1,29 @@
+RUN 03  |  case14-ambiguous-011-s0  |  react_nogate  |  gpt-5.6-sol  |  IEEE 14-bus  |  seed 0  |  difficulty ambiguous
+Request: Load case14 and set the active load at bus 6 to 14,700 kw.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case14")   (1070 in / 57 out tokens, 3.9 s)
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=263.136
+  2. LLM called set_active_load(bus_id=6, p_mw=14.7)   (1163 in / 28 out tokens, 1.8 s)
+       tool set_active_load -> converged=true, total_load_mw=267.145, total_generation_mw=281.819, total_loss_mw=14.674  [gate pass]
+  3. LLM called run_powerflow()   (1357 in / 15 out tokens, 2.0 s)
+       tool run_powerflow -> case_name="case14", converged=true, total_load_mw=267.145, total_generation_mw=281.819, total_loss_mw=14.674, bus_voltages[14], line_flows[20], voltage_violations[8], thermal_violations[0]  [gate pass]
+  4. LLM replied without tool calls: { "case_name": "case14", "converged": true, "summary": "Loaded IEEE case14 and set the active load at MATPOWER bus 6 to 14.7 MW (14,700 kW). The reactive load a   (3613 in / 2424 out tokens, 18.9 s)
+  5. LLM wrote the final answer   (5991 in / 2081 out tokens, 14.9 s)
+  Totals: 5 LLM calls, 3 tool calls, 3 tool rounds, 13194 in / 4605 out tokens, $0.0724, 43.8 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> modify_load(bus_id=6, p_mw=14.7)
+  executed: load_case(case_name="case14") -> set_active_load(bus_id=6, p_mw=14.7) -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 83, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 1.66e-07 p.u., flow MAE 2.40e-04 MW, KCL mismatch 1.85e-04 MW, power-balance error n/a
+  raw trace: case14-ambiguous-011-s0_run0.json

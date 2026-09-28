@@ -1,0 +1,24 @@
+{
+  "runner_name": "plan_act_gate",
+  "group": "Multi-step agents (paper Sec. 4)",
+  "kind": "engine",
+  "architecture": "plan_act",
+  "gate": false,
+  "final_gate": true,
+  "memory": false,
+  "uses_llm": true,
+  "uses_tools": true,
+  "description": "Plan-and-Act with the task-level verification gate on the final answer. Ablation, not a table row: it asks whether the gate is better placed on a planner than on a ReAct loop.",
+  "prompt_files": [
+    "_shared/agent_system_prompt.txt",
+    "_shared/final_answer_instruction.txt",
+    "plan_act_nogate/plan_system_prompt_prefix.txt",
+    "plan_act_nogate/plan_system_prompt_structured.txt"
+  ],
+  "dynamic_parts": [
+    "tool schemas (methods/agent/tools.py, --tool-variant v1|load_split)",
+    "tool catalogue appended to the planner prompt"
+  ],
+  "folder": "plan_act_gate",
+  "code": "methods/agent/engine.py: LLMEngine._run_plan_act + _verify_answer_with_retry; methods/agent/tools.py: ToolDispatcher"
+}

@@ -1332,6 +1332,7 @@ def score_row(
         optimum.cost_usd,
         unmet_kwh=unmet_kwh,
         unmet_star_kwh=optimum.unmet_kwh,
+        n_sessions=len(day.sessions),
     )
 
     formulation = None

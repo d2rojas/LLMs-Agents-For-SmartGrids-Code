@@ -1341,4 +1341,73 @@ class LLMEngine:
         if not text:
             text = "The model returned no final answer text after executing the plan."
             return self._finish(text, session, trace, "empty_final")
-        return self._finish(text, session, trace, "ok")
+        if not self.config.final_gate:
+            return self._finish(text, session, trace, "ok")
+        return self._verify_answer_with_retry(text, messages, session, trace, next_round=4)
+
+    # ---- the task-level gate as a closing step, for architectures whose loop has ended -----------
+
+    def _verify_answer_with_retry(
+        self, final_text: str, messages: List[Dict[str, Any]], session: SessionState, trace: Dict[str, Any], *, next_round: int
+    ) -> str:
+        """Verify the final answer; on failure send the failed conditions back and take one corrected
+        answer; on a second failure escalate. During the retry the model may inspect the current state
+        (read-only tools) but not change the network, the same rule as PFAgent's own loop."""
+        attempts = 0
+        while True:
+            attempts += 1
+            verdict = verify_final_answer(
+                trace, final_text, request_text=trace.get("request_text"), enforce_v6v7=True,
+                enforce_complete_state=self.config.complete_state_gate,
+            )
+            trace["verification"].append(verdict)
+            if verdict["passed"]:
+                trace["verification_attempts"] = attempts
+                trace["verification_outcome"] = "pass_first" if attempts == 1 else "pass_retry"
+                trace["status"] = "ok"
+                return final_text
+            if attempts >= 2:
+                trace["verification_attempts"] = attempts
+                trace["verification_outcome"] = "abstained"
+                return self._finish(_verification_abstention_text(verdict), session, trace, "verification_failed")
+
+            retry_msg = _verification_retry_message(verdict)
+            trace["verification_retry_messages"].append(retry_msg)
+            session.conversation_history.append({"role": "user", "content": retry_msg})
+            messages.append({"role": "user", "content": retry_msg})
+            rec: Dict[str, Any] = {"round": next_round, "phase": "verification_retry"}
+            trace["rounds"].append(rec)
+            try:
+                msg = self._call_llm(messages, with_tools=True, trace=trace, round_rec=rec)
+            except _LLMCallError as e:
+                return self._finish(e.text, session, trace, "llm_error")
+            entry = self._assistant_entry(msg)
+            session.conversation_history.append(entry)
+            messages.append(entry)
+            calls = msg.get("tool_calls") or []
+            blocked = [tc.get("name") for tc in calls if tc.get("name") in _RETRY_BLOCKED_TOOLS]
+            if blocked:
+                trace["verification_attempts"] = attempts
+                trace["verification_outcome"] = "abstained_retry_mutation"
+                text = (
+                    _verification_abstention_text(verdict)
+                    + " The answer attempted to change the network instead of correcting the report "
+                    f"(blocked tool call(s): {', '.join(blocked)})."
+                )
+                return self._finish(text, session, trace, "verification_failed")
+            next_round += 1
+            if calls:
+                self._execute_tool_calls(calls, messages, session, trace, rec)
+                rec2: Dict[str, Any] = {"round": next_round, "phase": "answer", "final": True}
+                trace["rounds"].append(rec2)
+                messages.append({"role": "user", "content": FINAL_ANSWER_INSTRUCTION})
+                session.conversation_history.append({"role": "user", "content": FINAL_ANSWER_INSTRUCTION})
+                try:
+                    msg = self._call_llm(messages, with_tools=False, trace=trace, round_rec=rec2)
+                except _LLMCallError as e:
+                    return self._finish(e.text, session, trace, "llm_error")
+                entry = self._assistant_entry(msg)
+                session.conversation_history.append(entry)
+                messages.append(entry)
+                next_round += 1
+            final_text = (msg.get("content") or "").strip() or final_text

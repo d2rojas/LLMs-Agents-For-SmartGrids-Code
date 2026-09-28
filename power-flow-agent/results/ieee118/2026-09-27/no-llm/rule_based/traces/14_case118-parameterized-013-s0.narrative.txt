@@ -1,0 +1,28 @@
+RUN 14  |  case118-parameterized-013-s0  |  rule_based  |  no-llm  |  IEEE 118-bus  |  seed 0  |  difficulty parameterized
+Request: Load case118 and disconnect the line between bus 108 and bus 109.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 2-step plan: load_case(case_name="case118") -> disconnect_line(from_bus=108, to_bus=109)
+  2. parser called load_case(case_name="case118")
+       tool load_case -> case_name="case118", n_buses=118, n_lines=184, total_load_mw=4228.518
+  3. parser called disconnect_line(from_bus=108, to_bus=109)
+       tool disconnect_line -> converged=true, total_load_mw=4228.518, total_generation_mw=4359.479, total_loss_mw=130.961  [gate pass]
+  4. parser called run_powerflow()
+       tool run_powerflow -> case_name="case118", converged=true, total_load_mw=4228.518, total_generation_mw=4359.479, total_loss_mw=130.961, bus_voltages[118], line_flows[184], voltage_violations[3], thermal_violations[4]  [gate pass]
+  Totals: 0 LLM calls, 3 tool calls, 1 tool rounds, 0 in / 0 out tokens, $0.0000, 0.7 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case118") -> disconnect_line(from_bus=108, to_bus=109)
+  executed: load_case(case_name="case118") -> disconnect_line(from_bus=108, to_bus=109) -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 623, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1, 2] after disconnect_line at call 1)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 1.30e-07 p.u., flow MAE 1.2061 MW, KCL mismatch 0.0119 MW, power-balance error n/a
+  raw trace: case118-parameterized-013-s0_run0.json

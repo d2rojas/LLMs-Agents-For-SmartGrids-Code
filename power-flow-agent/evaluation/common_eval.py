@@ -140,6 +140,15 @@ def score_common(
     if tr.get("status") == "cannot_parse" or (tr.get("architecture") == "rule_based" and "cannot parse" in text):
         reasons.append("cannot_parse")
     out["common_escalated"] = bool(reasons)
+    if out["common_escalated"]:
+        # A method that declares it cannot complete the request reports no formulation, so there is
+        # nothing to compare: the refusal is already counted under Escalated, and counting it again
+        # as a formulation error would penalize the same event twice. Formulation therefore reads
+        # "of the requests it answered, how many declared the right operations", the same rule for
+        # every method (2026-09-28).
+        out["common_formulation_exact"] = None
+        out["common_formulation_error_type"] = None
+        out["common_formulation_detail"] = "not scored: the method declared it could not complete the request"
     out["common_escalation_reason"] = ", ".join(reasons) if reasons else None
 
     # 5. traceability (tools only)
