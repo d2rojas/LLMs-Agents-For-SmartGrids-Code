@@ -736,11 +736,15 @@ def tab_plan() -> str:
 
 
 def tab_results() -> str:
-    dirs = method_dirs()
-    if not dirs:
+    if not method_dirs():
         return card("No runs yet", "<p>No results folder carries a summary.json. The first run is the smoke test, after Daniela's go.</p>")
-    newest = dirs[0].parts[-3]
-    latest = [d for d in dirs if d.parts[-3] == newest]
+    # One run set, never a mixture. Several sets share a date here (five smoke runs on
+    # 2026-09-28, plus a phase-1 run that was stopped two methods in), and picking the
+    # newest folder per method silently built a table whose six rows came from four
+    # different sets. _sbs_runs picks the set with the most methods, the same one the
+    # scenario rows below are read from, so the table and the traces agree.
+    tag, latest = _sbs_runs()
+    newest = latest[0].parts[-3] if latest else ""
     body = []
     by_net: Dict[str, Dict[str, Tuple[Path, List[Dict[str, str]], Dict[str, Any]]]] = {}
     for d in latest:
@@ -761,6 +765,7 @@ def tab_results() -> str:
         (GROUP_COST, ["Tokens", "Cost $", "Time s"]),
     )
 
+    set_name = f"run set {tag}" if tag else "the run set of the paper"  # a card title is plain text
     for net_name, per in by_net.items():
         rows_out: List[Tuple[str, List[str], List[str]]] = []
         for row in ROWS:
@@ -800,7 +805,7 @@ def tab_results() -> str:
             rows_out.append((d.parts[-2], [label, n_cell], cells, str(d.relative_to(PROJECT_ROOT / "results"))))
         missing = [r for r in ROWS if r["name"] not in per]
         body.append(card(
-            f"{NETWORK_LABELS.get(net_name, net_name)} · run of {E(newest)}",
+            f"{NETWORK_LABELS.get(net_name, net_name)} · {set_name}, {E(newest)}",
             comparison_table(GROUPS, rows_out, lead=("Model", "Method", "n")),
             (f"<p class='muted'>Not in this run: {E(', '.join(r['label'] for r in missing))}.</p>" if missing else ""),
             note("The three column groups are the same three in every case study of this site. Every figure carries, above it, "
