@@ -197,8 +197,14 @@ def check(
     return report, state
 
 
+# Conditions about the network the agent left behind, which only another action can change,
+# and conditions about the report it wrote, which only a rewrite can change.
+STATE_CONDITIONS = frozenset({"converged", "no_islanded_load", "secure_or_declared"})
+REPORT_CONDITIONS = frozenset({"currency", "traceable", "consistent", "actions_match_trace"})
+
+
 def verdict_text(report: Dict[str, Any]) -> str:
-    """The failed conditions, as the retry message hands them to the model."""
+    """The failed conditions and what to do about them, as the retry hands them to the model."""
     lines = []
     for k in report["failed"]:
         c = report["conditions"][k]
@@ -206,4 +212,17 @@ def verdict_text(report: Dict[str, Any]) -> str:
     st = report["state"]
     lines.append(f"- solver state now: converged={st['converged']}, new violations={st['n_new_violations']}, "
                  f"islanded load buses={st['islanded_load_buses']}" + (f", remaining: {', '.join(st['new'])}" if st.get("new") else ""))
+    failed = set(report["failed"])
+    lines.append("")
+    if failed <= REPORT_CONDITIONS:
+        if "currency" in failed:
+            lines.append("What to do: the network itself is not the problem, the report is. Run run_power_flow and the "
+                         "checks once more and rewrite the final answer from what they return. Do not change the network again.")
+        else:
+            lines.append("What to do: the network itself is not the problem, the report is. Do not call any more tools and "
+                         "do not change the network. Rewrite the final answer so that it says what the tools already returned.")
+    else:
+        lines.append("What to do: the network is not secure yet. Act on what remains above, run the power flow and the "
+                     "checks, and then write the answer. If you cannot make it secure, say so with status not_repaired or "
+                     "cannot_repair and list what remains: that answer passes, a repair claim the solver contradicts does not.")
     return "\n".join(lines)

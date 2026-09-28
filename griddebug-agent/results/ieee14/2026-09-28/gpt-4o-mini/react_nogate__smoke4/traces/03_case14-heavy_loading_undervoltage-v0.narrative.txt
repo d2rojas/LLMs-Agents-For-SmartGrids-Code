@@ -1,0 +1,51 @@
+RUN 03  |  case14-heavy_loading_undervoltage-v0  |  react_nogate  |  openrouter:openai/gpt-4o-mini  |  IEEE 14-bus
+Scenario: Heavy loading under-voltage (3x) (voltage); injected fault: load_increase {"load": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}
+Initial state: violations, 11 new violation(s)
+Request: The AC power flow on the IEEE 14-bus system (case14) converged with 11 new limit violation(s). Diagnose the cause and restore a secure operating point: the power flow converges, no in-service load is on an islanded bus, every bus voltage is within [0.95, 1.05] p.u., and no line or transformer is above 100 % loading, apart from the violations the base network already has. Use only the actions available. Report the diagnosis, the actions taken, and the final state.
+
+WHAT THE METHOD DID
+   1. scale_all_loads({"factor": 0.8})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.8, "old_total_p_mw": 777.0, "new_total_p_mw": 621.6}
+   2. switch_element({"element_type": "gen", "element_index": 1, "in_service": false})
+       -> {"action": "switch_element", "success": true, "element_type": "gen", "element_index": 1, "old_in_service": true, "new_in_service": false}
+   3. switch_element({"element_type": "gen", "element_index": 2, "in_service": false})
+       -> {"action": "switch_element", "success": true, "element_type": "gen", "element_index": 2, "old_in_service": true, "new_in_service": false}
+   4. switch_element({"element_type": "gen", "element_index": 3, "in_service": false})
+       -> {"action": "switch_element", "success": true, "element_type": "gen", "element_index": 3, "old_in_service": true, "new_in_service": false}
+   5. run_power_flow({})
+       -> {"converged": false, "message": "AC power flow did not converge (LoadflowNotConverged)."}
+   6. scale_all_loads({"factor": 0.7})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.7, "old_total_p_mw": 621.6, "new_total_p_mw": 435.12}
+   7. switch_element({"element_type": "gen", "element_index": 0, "in_service": false})
+       -> {"action": "switch_element", "success": true, "element_type": "gen", "element_index": 0, "old_in_service": true, "new_in_service": false}
+   8. run_power_flow({})
+       -> {"converged": false, "message": "AC power flow did not converge (LoadflowNotConverged)."}
+   9. scale_all_loads({"factor": 0.6})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.6, "old_total_p_mw": 435.12, "new_total_p_mw": 261.07}
+  10. switch_element({"element_type": "gen", "element_index": 0, "in_service": true})
+       -> {"action": "switch_element", "success": true, "element_type": "gen", "element_index": 0, "old_in_service": false, "new_in_service": true}
+  11. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  12. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [], "n_new_violations": 0, "pre_existing_in_base": {"n": 0, "buses": []}, "note": "Only new_violations count against the repair. The buses un… (332 chars)
+  13. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [], "n_new_overloads": 0, "pre_existing_in_base": {"n": 0, "elements": []}, "note": "Only new_overloads count against the repair. The elements under pre_ex… (320 chars)
+  14. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  Totals: 8 LLM calls, 14 tool calls, 30941 in / 792 out tokens, 14.295 s
+
+DIAGNOSIS  (is the injected fault named?)
+  answer: generation_loss {"gen": [1, 2, 3]}   verdict: FAIL   answer generation_loss, injected load_increase
+
+STATE  (the harness's own power flow on the final network)
+  converged: True   secure: True   new violations: 0   islanded load: []
+  repaired: True   improved: True   feasible: True
+
+REPORTING
+  status claimed: repaired   final_state claimed: converged=True, new violations=0
+  numbers in the answer: 0, untraceable: 0 -> traceable: pass
+
+OUTCOME: SOLVED   (secure, claimed, traceable, consistent)
+
+SUMMARY WRITTEN BY THE METHOD
+  The network experienced a generation loss, leading to insufficient capacity to meet the load demand. Actions included scaling down the loads and taking generators out of service. The power flow has now converged with no new violations.

@@ -20,9 +20,9 @@ import methods  # noqa: E402
 # contract now tells the model that the actions it lists are checked against the trace (gate G7).
 # The smoke run of 2026-09-27 was made with the previous contract; no paper run exists yet.
 PINNED_TEXTS = {
-    "_shared/agent_system_prompt.txt": "33438f79a08f",
+    "_shared/agent_system_prompt.txt": "55f4e3c29cdd",
     "_shared/common_rules.txt": "8c0f85ea1170",
-    "_shared/gate_retry_instruction.txt": "2fbccbe68547",
+    "_shared/gate_retry_instruction.txt": "81e0764be9cb",
     "_shared/llm_only_system_prompt.txt": "687705944e54",
     "_shared/output_contract.txt": "32ab6c8f3a3d",
     "llm_only_cot/reasoning_section.txt": "e6b046ab723e",
