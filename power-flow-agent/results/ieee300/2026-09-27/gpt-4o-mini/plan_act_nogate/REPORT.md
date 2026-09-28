@@ -1,6 +1,6 @@
 # plan_act_nogate on IEEE 300-bus with gpt-4o-mini
 
-Generated 2026-09-28 01:00 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-28 10:21 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -41,7 +41,7 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 
 | group | metric | value |
 |---|---|---|
-| Task utility | Formulation exact | 15/15 (100.0%) |
+| Task utility | Formulation exact | 20/20 (100.0%) |
 | Task utility | Voltage MAE, all runs | 7.51e-06 p.u. |
 | Task utility | Voltage MAE, formulation-exact runs | 7.51e-06 p.u. |
 | Task utility | Flow MAE, all runs | 2.27e-04 MW |
@@ -66,7 +66,7 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 | common_solved_count | 0 | 0 |
 | common_escalated_count | 5 | 5 |
 | common_wrong_count | 15 | 15 |
-| common_formulation_count | 15 | 15 |
+| common_formulation_count | 20 | 20 |
 | common_traceable_count | 19 | 19 |
 | common_n | 20 | 20 |
 
@@ -76,8 +76,8 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 |---|---:|---:|---:|---:|---:|
 | ambiguous | 5 | 0 | 0 | 5 | 5 |
 | multistep | 5 | 0 | 0 | 5 | 5 |
-| parameterized | 5 | 0 | 3 | 2 | 2 |
-| plain | 5 | 0 | 2 | 3 | 3 |
+| parameterized | 5 | 0 | 3 | 2 | 5 |
+| plain | 5 | 0 | 2 | 3 | 5 |
 
 ## Wrong and unflagged (15)
 
@@ -99,11 +99,11 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 ## Escalated (5)
 
-- `case300-parameterized-001-s0` detected via cannot_answer, abstention_json; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/11_case300-parameterized-001-s0.narrative.txt), [transcript](traces/11_case300-parameterized-001-s0.transcript.txt))
-- `case300-parameterized-009-s0` detected via cannot_answer, abstention_json; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/13_case300-parameterized-009-s0.narrative.txt), [transcript](traces/13_case300-parameterized-009-s0.transcript.txt))
-- `case300-parameterized-017-s0` detected via cannot_answer, abstention_json; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/15_case300-parameterized-017-s0.narrative.txt), [transcript](traces/15_case300-parameterized-017-s0.transcript.txt))
-- `case300-plain-004-s0` detected via cannot_answer, abstention_json; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/17_case300-plain-004-s0.narrative.txt), [transcript](traces/17_case300-plain-004-s0.transcript.txt))
-- `case300-plain-016-s0` detected via cannot_answer, abstention_json; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/20_case300-plain-016-s0.narrative.txt), [transcript](traces/20_case300-plain-016-s0.transcript.txt))
+- `case300-parameterized-001-s0` detected via cannot_answer, abstention_json; formulation exact; declared:  ([narrative](traces/11_case300-parameterized-001-s0.narrative.txt), [transcript](traces/11_case300-parameterized-001-s0.transcript.txt))
+- `case300-parameterized-009-s0` detected via cannot_answer, abstention_json; formulation exact; declared:  ([narrative](traces/13_case300-parameterized-009-s0.narrative.txt), [transcript](traces/13_case300-parameterized-009-s0.transcript.txt))
+- `case300-parameterized-017-s0` detected via cannot_answer, abstention_json; formulation exact; declared:  ([narrative](traces/15_case300-parameterized-017-s0.narrative.txt), [transcript](traces/15_case300-parameterized-017-s0.transcript.txt))
+- `case300-plain-004-s0` detected via cannot_answer, abstention_json; formulation exact; declared:  ([narrative](traces/17_case300-plain-004-s0.narrative.txt), [transcript](traces/17_case300-plain-004-s0.transcript.txt))
+- `case300-plain-016-s0` detected via cannot_answer, abstention_json; formulation exact; declared:  ([narrative](traces/20_case300-plain-016-s0.narrative.txt), [transcript](traces/20_case300-plain-016-s0.transcript.txt))
 
 ## Untraceable numbers in the answer (1)
 

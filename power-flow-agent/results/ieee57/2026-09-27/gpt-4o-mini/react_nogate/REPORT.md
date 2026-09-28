@@ -1,6 +1,6 @@
 # react_nogate on IEEE 57-bus with gpt-4o-mini
 
-Generated 2026-09-28 00:32 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-28 10:12 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -41,7 +41,7 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 
 | group | metric | value |
 |---|---|---|
-| Task utility | Formulation exact | 15/15 (100.0%) |
+| Task utility | Formulation exact | 20/20 (100.0%) |
 | Task utility | Voltage MAE, all runs | 2.25e-07 p.u. |
 | Task utility | Voltage MAE, formulation-exact runs | 2.25e-07 p.u. |
 | Task utility | Flow MAE, all runs | 0.0264 MW |
@@ -66,7 +66,7 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 | common_solved_count | 13 | 13 |
 | common_escalated_count | 5 | 5 |
 | common_wrong_count | 2 | 2 |
-| common_formulation_count | 15 | 15 |
+| common_formulation_count | 20 | 20 |
 | common_traceable_count | 20 | 20 |
 | common_n | 20 | 20 |
 
@@ -75,9 +75,9 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 | difficulty | n | solved | escalated | wrong unflagged | formulation exact |
 |---|---:|---:|---:|---:|---:|
 | ambiguous | 5 | 5 | 0 | 0 | 5 |
-| multistep | 5 | 2 | 2 | 1 | 3 |
-| parameterized | 5 | 2 | 2 | 1 | 3 |
-| plain | 5 | 4 | 1 | 0 | 4 |
+| multistep | 5 | 2 | 2 | 1 | 5 |
+| parameterized | 5 | 2 | 2 | 1 | 5 |
+| plain | 5 | 4 | 1 | 0 | 5 |
 
 ## Wrong and unflagged (2)
 
@@ -86,11 +86,11 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 ## Escalated (5)
 
-- `case57-multistep-006-s0` detected via cannot_answer, abstention_json; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/07_case57-multistep-006-s0.narrative.txt), [transcript](traces/07_case57-multistep-006-s0.transcript.txt))
-- `case57-multistep-018-s0` detected via cannot_answer, abstention_json; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/10_case57-multistep-018-s0.narrative.txt), [transcript](traces/10_case57-multistep-018-s0.transcript.txt))
-- `case57-parameterized-001-s0` detected via cannot_answer, abstention_json; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/11_case57-parameterized-001-s0.narrative.txt), [transcript](traces/11_case57-parameterized-001-s0.transcript.txt))
-- `case57-parameterized-017-s0` detected via cannot_answer, abstention_json; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/15_case57-parameterized-017-s0.narrative.txt), [transcript](traces/15_case57-parameterized-017-s0.transcript.txt))
-- `case57-plain-004-s0` detected via cannot_answer, abstention_json; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/17_case57-plain-004-s0.narrative.txt), [transcript](traces/17_case57-plain-004-s0.transcript.txt))
+- `case57-multistep-006-s0` detected via cannot_answer, abstention_json; formulation exact; declared:  ([narrative](traces/07_case57-multistep-006-s0.narrative.txt), [transcript](traces/07_case57-multistep-006-s0.transcript.txt))
+- `case57-multistep-018-s0` detected via cannot_answer, abstention_json; formulation exact; declared:  ([narrative](traces/10_case57-multistep-018-s0.narrative.txt), [transcript](traces/10_case57-multistep-018-s0.transcript.txt))
+- `case57-parameterized-001-s0` detected via cannot_answer, abstention_json; formulation exact; declared:  ([narrative](traces/11_case57-parameterized-001-s0.narrative.txt), [transcript](traces/11_case57-parameterized-001-s0.transcript.txt))
+- `case57-parameterized-017-s0` detected via cannot_answer, abstention_json; formulation exact; declared:  ([narrative](traces/15_case57-parameterized-017-s0.narrative.txt), [transcript](traces/15_case57-parameterized-017-s0.transcript.txt))
+- `case57-plain-004-s0` detected via cannot_answer, abstention_json; formulation exact; declared:  ([narrative](traces/17_case57-plain-004-s0.narrative.txt), [transcript](traces/17_case57-plain-004-s0.transcript.txt))
 
 ## Files
 

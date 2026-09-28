@@ -1,6 +1,6 @@
 # pfagent on IEEE 57-bus with gpt-4o-mini
 
-Generated 2026-09-28 00:59 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-28 10:15 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -41,7 +41,7 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 
 | group | metric | value |
 |---|---|---|
-| Task utility | Formulation exact | 14/14 (100.0%) |
+| Task utility | Formulation exact | 17/17 (100.0%) |
 | Task utility | Voltage MAE, all runs | 2.25e-07 p.u. |
 | Task utility | Voltage MAE, formulation-exact runs | 2.25e-07 p.u. |
 | Task utility | Flow MAE, all runs | 0.0336 MW |
@@ -66,7 +66,7 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 | common_solved_count | 14 | 14 |
 | common_escalated_count | 6 | 6 |
 | common_wrong_count | 0 | 0 |
-| common_formulation_count | 14 | 14 |
+| common_formulation_count | 17 | 17 |
 | common_traceable_count | 20 | 20 |
 | common_n | 20 | 20 |
 
@@ -76,17 +76,17 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 |---|---:|---:|---:|---:|---:|
 | ambiguous | 5 | 4 | 1 | 0 | 4 |
 | multistep | 5 | 4 | 1 | 0 | 4 |
-| parameterized | 5 | 2 | 3 | 0 | 2 |
-| plain | 5 | 4 | 1 | 0 | 4 |
+| parameterized | 5 | 2 | 3 | 0 | 4 |
+| plain | 5 | 4 | 1 | 0 | 5 |
 
 ## Escalated (6)
 
-- `case57-ambiguous-015-s0` detected via gate_abstained; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/04_case57-ambiguous-015-s0.narrative.txt), [transcript](traces/04_case57-ambiguous-015-s0.transcript.txt))
-- `case57-multistep-002-s0` detected via gate_abstained; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/06_case57-multistep-002-s0.narrative.txt), [transcript](traces/06_case57-multistep-002-s0.transcript.txt))
-- `case57-parameterized-001-s0` detected via cannot_answer, abstention_json; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/11_case57-parameterized-001-s0.narrative.txt), [transcript](traces/11_case57-parameterized-001-s0.transcript.txt))
-- `case57-parameterized-009-s0` detected via gate_abstained; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/13_case57-parameterized-009-s0.narrative.txt), [transcript](traces/13_case57-parameterized-009-s0.transcript.txt))
-- `case57-parameterized-017-s0` detected via cannot_answer, abstention_json; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/15_case57-parameterized-017-s0.narrative.txt), [transcript](traces/15_case57-parameterized-017-s0.transcript.txt))
-- `case57-plain-004-s0` detected via cannot_answer, abstention_json; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/17_case57-plain-004-s0.narrative.txt), [transcript](traces/17_case57-plain-004-s0.transcript.txt))
+- `case57-ambiguous-015-s0` detected via gate_abstained; formulation None; not scored: the answer declares no formulation (it reports that the request could not be completed)  ([narrative](traces/04_case57-ambiguous-015-s0.narrative.txt), [transcript](traces/04_case57-ambiguous-015-s0.transcript.txt))
+- `case57-multistep-002-s0` detected via gate_abstained; formulation None; not scored: the answer declares no formulation (it reports that the request could not be completed)  ([narrative](traces/06_case57-multistep-002-s0.narrative.txt), [transcript](traces/06_case57-multistep-002-s0.transcript.txt))
+- `case57-parameterized-001-s0` detected via cannot_answer, abstention_json; formulation exact; declared:  ([narrative](traces/11_case57-parameterized-001-s0.narrative.txt), [transcript](traces/11_case57-parameterized-001-s0.transcript.txt))
+- `case57-parameterized-009-s0` detected via gate_abstained; formulation None; not scored: the answer declares no formulation (it reports that the request could not be completed)  ([narrative](traces/13_case57-parameterized-009-s0.narrative.txt), [transcript](traces/13_case57-parameterized-009-s0.transcript.txt))
+- `case57-parameterized-017-s0` detected via cannot_answer, abstention_json; formulation exact; declared:  ([narrative](traces/15_case57-parameterized-017-s0.narrative.txt), [transcript](traces/15_case57-parameterized-017-s0.transcript.txt))
+- `case57-plain-004-s0` detected via cannot_answer, abstention_json; formulation exact; declared:  ([narrative](traces/17_case57-plain-004-s0.narrative.txt), [transcript](traces/17_case57-plain-004-s0.transcript.txt))
 
 ## Files
 

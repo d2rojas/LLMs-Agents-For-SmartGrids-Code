@@ -1,6 +1,6 @@
 # rule_based on IEEE 300-bus with no-llm
 
-Generated 2026-09-28 01:14 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-28 10:35 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -81,8 +81,8 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 ## Escalated (2)
 
-- `case300-ambiguous-003-s0` detected via cannot_answer, abstention_json, declared_inability, cannot_parse; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/01_case300-ambiguous-003-s0.narrative.txt), [transcript](traces/01_case300-ambiguous-003-s0.transcript.txt))
-- `case300-ambiguous-011-s0` detected via cannot_answer, abstention_json, declared_inability, cannot_parse; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/03_case300-ambiguous-011-s0.narrative.txt), [transcript](traces/03_case300-ambiguous-011-s0.transcript.txt))
+- `case300-ambiguous-003-s0` detected via cannot_answer, abstention_json, declared_inability, cannot_parse; formulation None; not scored: the answer declares no formulation (it reports that the request could not be completed)  ([narrative](traces/01_case300-ambiguous-003-s0.narrative.txt), [transcript](traces/01_case300-ambiguous-003-s0.transcript.txt))
+- `case300-ambiguous-011-s0` detected via cannot_answer, abstention_json, declared_inability, cannot_parse; formulation None; not scored: the answer declares no formulation (it reports that the request could not be completed)  ([narrative](traces/03_case300-ambiguous-011-s0.narrative.txt), [transcript](traces/03_case300-ambiguous-011-s0.transcript.txt))
 
 ## Untraceable numbers in the answer (2)
 
