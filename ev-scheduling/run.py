@@ -6,13 +6,15 @@
     python run.py run --days 20 --data-source cache  every method on the frozen days
     python run.py report <results_dir> [--pdf]       REPORT.md from the rows, no model called
     python run.py rescore <results_dir>              re-score rows after a scoring change
+    python run.py probe-parse --model M --days 10    the extraction step alone, to price a model's reading
     python run.py postprocess <run_set_dir>          lay a run set out as results/<instance>/<date>/<model>/<method>/
     python run.py freeze-days [--dry-run]            fetch and freeze the benchmark days (needs a token)
     python run.py index                              rebuild results/INDEX.md
     python run.py serve                              the shared evaluation site, on a local server
 
 Every verb delegates to the module that owns it: ``evaluation/runner.py``,
-``evaluation/report.py``, ``evaluation/rescore.py``, ``data/benchmark/freeze.py``.
+``evaluation/report.py``, ``evaluation/rescore.py``, ``evaluation/parse_probe.py``,
+``data/benchmark/freeze.py``.
 This file only routes, so that a reader who learned ``run.py`` on one case
 study can drive this one without reading anything else.
 """
@@ -99,6 +101,12 @@ def cmd_rescore(argv: List[str]) -> int:
     return int(rescore.main(argv) or 0)
 
 
+def cmd_probe_parse(argv: List[str]) -> int:
+    from evaluation import parse_probe
+
+    return int(parse_probe.main(argv) or 0)
+
+
 def cmd_freeze_days(argv: List[str]) -> int:
     from data.benchmark import freeze
 
@@ -169,7 +177,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     # verbs that own their own argument parsers get the rest of the line untouched
     passthrough = {"run": cmd_run, "report": cmd_report, "rescore": cmd_rescore, "freeze-days": cmd_freeze_days,
-                   "postprocess": cmd_postprocess}
+                   "postprocess": cmd_postprocess, "probe-parse": cmd_probe_parse}
     if argv and argv[0] in passthrough:
         return passthrough[argv[0]](argv[1:])
 
