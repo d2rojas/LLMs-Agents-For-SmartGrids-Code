@@ -4,6 +4,7 @@ One line per method folder, newest first. `python run.py index` rebuilds this.
 
 | case | date | model | method | n | solved | escalated | wrong | diagnosis % | trace % | repaired | tokens | cost $ | kind | path |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ieee14 | 2026-09-28 | no-llm | rule_based | 20 | 10 | 10 | 0 | 40.0 | 65.0 | 10 | 0 | 0.0 | run | `ieee14/2026-09-28/no-llm/rule_based` |
 | ieee14 | 2026-09-28 | no-llm | rule_based__smoke2 | 7 | 5 | 2 | 0 | 42.9 | 85.7 | 5 | 0 | 0.0 | run | `ieee14/2026-09-28/no-llm/rule_based__smoke2` |
 | ieee14 | 2026-09-28 | no-llm | rule_based__smoke3 | 7 | 5 | 2 | 0 | 42.9 | 85.7 | 5 | 0 | 0.0 | run | `ieee14/2026-09-28/no-llm/rule_based__smoke3` |
 | ieee14 | 2026-09-28 | no-llm | rule_based__smoke4 | 7 | 5 | 2 | 0 | 42.9 | 85.7 | 5 | 0 | 0.0 | run | `ieee14/2026-09-28/no-llm/rule_based__smoke4` |
@@ -16,6 +17,7 @@ One line per method folder, newest first. `python run.py index` rebuilds this.
 | ieee14 | 2026-09-28 | gpt-4o-mini | plan_act_nogate__smoke3 | 7 | 1 | 6 | 0 | 57.1 | 85.7 | 1 | 41178 | 0.0 | run | `ieee14/2026-09-28/gpt-4o-mini/plan_act_nogate__smoke3` |
 | ieee14 | 2026-09-28 | gpt-4o-mini | plan_act_nogate__smoke4 | 7 | 1 | 6 | 0 | 57.1 | 100.0 | 1 | 41247 | 0.0 | run | `ieee14/2026-09-28/gpt-4o-mini/plan_act_nogate__smoke4` |
 | ieee14 | 2026-09-28 | gpt-4o-mini | plan_act_nogate__smoke5 | 7 | 1 | 6 | 0 | 57.1 | 100.0 | 1 | 42461 | 0.0 | run | `ieee14/2026-09-28/gpt-4o-mini/plan_act_nogate__smoke5` |
+| ieee14 | 2026-09-28 | gpt-4o-mini | llm_only_structured | 20 | 2 | 2 | 16 | 15.0 | 75.0 | 2 | 58035 | 0.0 | run | `ieee14/2026-09-28/gpt-4o-mini/llm_only_structured` |
 | ieee14 | 2026-09-28 | gpt-4o-mini | llm_only_structured__smoke2 | 7 | 1 | 0 | 6 | 42.9 | 57.1 | 1 | 19758 | 0.0 | run | `ieee14/2026-09-28/gpt-4o-mini/llm_only_structured__smoke2` |
 | ieee14 | 2026-09-28 | gpt-4o-mini | llm_only_structured__smoke3 | 7 | 1 | 1 | 5 | 28.6 | 42.9 | 1 | 20162 | 0.0 | run | `ieee14/2026-09-28/gpt-4o-mini/llm_only_structured__smoke3` |
 | ieee14 | 2026-09-28 | gpt-4o-mini | llm_only_structured__smoke4 | 7 | 1 | 1 | 5 | 28.6 | 71.4 | 1 | 20262 | 0.0 | run | `ieee14/2026-09-28/gpt-4o-mini/llm_only_structured__smoke4` |
