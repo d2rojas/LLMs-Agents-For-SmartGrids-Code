@@ -52,13 +52,42 @@ TOKENS_GUESS = {  # measured on the 2026-09-27 smoke: the 14-day history is 45.7
 HORIZON_FACTOR = {3: 0.75, 6: 0.8, 48: 1.0}
 
 
+def source_changes() -> str:
+    """What differs from HEAD in the code of this case study, results excluded.
+
+    The old check ran ``git status --porcelain -- .`` over the whole project, which
+    always includes the directory the run is writing into, so every run recorded
+    itself as dirty and the flag said nothing. Results are output, not the code that
+    produced them: excluding them makes ``-dirty`` mean what it claims, that the code
+    on disk is not the code the commit names."""
+    try:
+        return subprocess.run(["git", "status", "--porcelain", "--", ".", ":!results"], cwd=PROJECT_ROOT,
+                              capture_output=True, text=True, check=True).stdout.strip()
+    except Exception:
+        return ""
+
+
 def git_commit() -> str:
     try:
         sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=PROJECT_ROOT, capture_output=True, text=True, check=True).stdout.strip()
-        dirty = subprocess.run(["git", "status", "--porcelain", "--", "."], cwd=PROJECT_ROOT, capture_output=True, text=True, check=True).stdout.strip()
-        return sha + ("-dirty" if dirty else "")
+        return sha + ("-dirty" if source_changes() else "")
     except Exception:
         return "unknown"
+
+
+def refuse_if_dirty(tag: Optional[str]) -> Optional[str]:
+    """An untagged run is the one the paper cites, so it must name a commit that exists.
+
+    A tagged run is a smoke test or a side condition and may run from a working tree.
+    Returns the message to print and stop on, or None to go ahead."""
+    changed = source_changes()
+    if tag or not changed:
+        return None
+    sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=PROJECT_ROOT, capture_output=True, text=True).stdout.strip()
+    files = "\n".join("    " + line for line in changed.splitlines()[:20])
+    more = f"\n    ... and {len(changed.splitlines()) - 20} more" if len(changed.splitlines()) > 20 else ""
+    return (f"the working tree differs from {sha}, so this run would record {sha}-dirty, which names no commit\n"
+            f"and cannot be reproduced. Commit the code first, or pass --tag to mark this as a side run.\n{files}{more}")
 
 
 def run_method(method: str, ctx: Context, req: Request) -> MethodRun:
@@ -168,6 +197,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.dry_run:
         return 0
 
+    stop = refuse_if_dirty(tag)
+    if stop:
+        print(stop)
+        return 2
     client = build_client(spec) if spec.uses_llm and any(m != "rule_based" for m in method_names) else None
     commit = git_commit()
     command = " ".join([sys.executable] + [str(a) for a in (argv if argv is not None else sys.argv)])
