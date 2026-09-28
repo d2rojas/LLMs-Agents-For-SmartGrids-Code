@@ -1,12 +1,13 @@
 """The tool catalogue every grounded method calls, and the dispatcher that runs it.
 
-Six tools in two kinds, one list, one schema builder, one dispatcher. Every method
+Seven tools in two kinds, one list, one schema builder, one dispatcher. Every method
 with tools receives this exact catalogue with the same schemas; the methods
 without tools receive the same catalogue rendered as text, so what a method may
 do is never a difference between rows.
 
     query      read the history: a summary, raw rows, the fitted power curve
     forecast   write a series: persistence, the power curve on the last day's wind, the GRU
+               trained here, and a pretrained foundation model that was not trained here
 
 The dispatcher holds one frozen window. A call for another turbine or another
 history window is refused with an error, the way a data service would refuse a
@@ -45,7 +46,10 @@ CATALOGUE: List[Dict[str, Any]] = [
      "description": "Forecast the next horizon_hours by applying the fitted power curve to the last history day's wind speeds, repeated. Exactly horizon_hours*6 values in kW.",
      "parameters": {"turbine": {"type": "integer"}, "history_end_day": {"type": "integer"}, "horizon_hours": {"type": "integer"}}},
     {"name": "gru_forecast", "kind": "forecast",
-     "description": "Forecast the next horizon_hours with the GRU trained on the farm's training period (days 1-214) from the last 24 h of the four SCADA features. The conventional forecaster of this case study. Exactly horizon_hours*6 values in kW.",
+     "description": "Forecast the next horizon_hours with the GRU trained on this farm's training period (days 1-214) from the last 24 h of the four SCADA features. The conventional forecaster of this case study. Exactly horizon_hours*6 values in kW.",
+     "parameters": {"turbine": {"type": "integer"}, "history_end_day": {"type": "integer"}, "horizon_hours": {"type": "integer"}}},
+    {"name": "foundation_forecast", "kind": "forecast",
+     "description": "Forecast the next horizon_hours with a pretrained time-series foundation model (Chronos-Bolt), used zero shot: it was never trained on this farm and it reads the power history only, not the wind. Exactly horizon_hours*6 values in kW.",
      "parameters": {"turbine": {"type": "integer"}, "history_end_day": {"type": "integer"}, "horizon_hours": {"type": "integer"}}},
 ]
 KINDS: Dict[str, str] = {t["name"]: t["kind"] for t in CATALOGUE}
@@ -147,8 +151,8 @@ class ToolDispatcher:
         if name == "get_history_rows":
             days = int(args.get("days") or 1)
             days = max(1, min(HISTORY_DAYS, days))
-            return {"turbine": w.turbine, "days": [w.history_end_day - days + 1, w.history_end_day], "columns": "Day,Tmstamp,Wspd,Wdir,Etmp,Patv",
-                    "csv": history_csv(w, days)}
+            return {"turbine": w.turbine, "days": [w.history_end_day - days + 1, w.history_end_day], "rated_power_kw": w.rating_kw,
+                    "columns": "Day,Tmstamp,Wspd,Wdir,Etmp,Patv", "csv": history_csv(w, days)}
         if name == "fit_power_curve":
             self._curve = F.fit_power_curve(w)
             return dict(self._curve)
@@ -165,10 +169,16 @@ class ToolDispatcher:
             series = F.power_curve_forecast(w, h, self._curve)
         elif name == "gru_forecast":
             series = F.gru_forecast(w, h)
+        elif name == "foundation_forecast":
+            from solver import foundation
+
+            if not foundation.available():
+                return {"error": "the foundation model is not installed in this environment (pip install chronos-forecasting)"}
+            series = foundation.forecast(w, h)
         else:
             return {"error": f"unknown tool {name!r}"}
         return {"turbine": w.turbine, "history_end_day": w.history_end_day, "horizon_hours": h, "n_values": len(series),
-                "unit": "kW", "method": name, "forecast": series}
+                "unit": "kW", "rated_power_kw": w.rating_kw, "method": name, "forecast": series}
 
     def _seen(self, name: str, args: Dict[str, Any]) -> Optional[int]:
         key = json.dumps(args, sort_keys=True, default=str)

@@ -8,7 +8,7 @@ What it writes:
 
     data/benchmark/t<TTT>-d<DDD>.csv      sixteen days of one turbine: the 14-day history and the 2 target days
     data/benchmark/manifest.json          the instances, a content hash per file, the choice rule, the raw file's hash
-    data/gru/train_t<TTT>.csv             days 1..214 of each benchmark turbine, the GRU's training slice
+    data/gru/train_t<TTT>.csv.gz             days 1..214 of each benchmark turbine, the GRU's training slice
 
 The instances are chosen by a fixed rule, not by hand: ``--seed`` draws ``--n-turbines``
 turbines among those whose target days carry at most ``--max-abnormal`` abnormal
@@ -63,6 +63,8 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--base-days", type=int, nargs="+", default=list(BASE_DAYS_DEFAULT))
     ap.add_argument("--max-abnormal", type=int, default=60, help="abnormal points allowed across a turbine's target days")
+    ap.add_argument("--train-turbines", default="all", choices=("all", "benchmark"),
+                    help="whose days 1..214 to freeze as training data: every complete turbine (more data, no leakage) or only the benchmark five")
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
@@ -105,13 +107,19 @@ def main(argv=None) -> int:
 
     GRU_DIR.mkdir(parents=True, exist_ok=True)
     train_files = []
-    for t in turbines:
-        p = GRU_DIR / f"train_t{t:03d}.csv"
+    # Which turbines' history may be used for training. Every complete turbine is allowed,
+    # but only its days 1..TRAIN_LAST_DAY: the turbines of one farm see nearly the same weather,
+    # so a target day of a benchmark turbine would leak through any other turbine's same day.
+    complete = sorted(int(t) for t, n in raw.groupby("TurbID").size().items() if n == DATASET_DAYS * 144)
+    train_turbines = complete if args.train_turbines == "all" else list(turbines)
+    print(f"training turbines: {len(train_turbines)} of {raw['TurbID'].nunique()} ({args.train_turbines}), days 1..{TRAIN_LAST_DAY} only")
+    for t in train_turbines:
+        p = GRU_DIR / f"train_t{t:03d}.csv.gz"
         sel = raw[(raw["TurbID"] == t) & (raw["Day"] <= TRAIN_LAST_DAY)].drop(columns=["TurbID"]).reset_index(drop=True)
         if p.exists() and not args.force:
             print(f"  kept {p.name}")
         else:
-            sel.to_csv(p, index=False, lineterminator="\n")
+            sel.to_csv(p, index=False, lineterminator="\n", compression={"method": "gzip", "mtime": 0})
             print(f"  wrote {p.name}: {len(sel)} rows (days 1..{TRAIN_LAST_DAY})")
         train_files.append({"turbine": t, "file": p.name, "content_hash": content_hash(p), "record_count": int(len(sel)), "days": [1, TRAIN_LAST_DAY]})
 
@@ -125,7 +133,10 @@ def main(argv=None) -> int:
                         "test_period": [TRAIN_LAST_DAY + 1, DATASET_DAYS]},
         "turbines": turbines,
         "instances": inst,
-        "gru_training": {"days": [1, TRAIN_LAST_DAY], "files": train_files},
+        "gru_training": {"days": [1, TRAIN_LAST_DAY], "turbines": train_turbines, "selection": args.train_turbines,
+                         "note": "only days 1 to 214, of any complete turbine. Turbines of one farm share their weather, so a benchmark "
+                                 "turbine's target day would leak through another turbine's same day; the day bound closes that path.",
+                         "files": train_files},
         "note": "No future information is available to any method: every input is SCADA history up to the day before the forecast start. "
                 "The farm's location and calendar dates are not published with the dataset, so no weather forecast is attached.",
     }

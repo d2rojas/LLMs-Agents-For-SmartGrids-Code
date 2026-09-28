@@ -6,7 +6,8 @@ gated agent's answer must trace to.
 
     persistence     the last full day of power, repeated
     power_curve     the wind-to-power curve fitted on the 14 days, applied to the last day's wind, repeated
-    gru             the trained GRU of ``solver/gru.py``
+    gru             the GRU of ``solver/gru.py``, trained here on this farm's training period
+    foundation      the pretrained foundation model of ``solver/foundation.py``, never trained here
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-from config import ABNORMAL_WSPD, RATED_KW, STEPS_PER_DAY, STEPS_PER_HOUR
+from config import ABNORMAL_WSPD, STEPS_PER_DAY, STEPS_PER_HOUR
 from solver.data import Window
 
 BIN_EDGES = [round(x * 0.5, 1) for x in range(0, 51)]   # 0 .. 25 m/s in 0.5 m/s steps
@@ -51,12 +52,12 @@ def fit_power_curve(window: Window) -> Dict[str, Any]:
     for i in range(len(BIN_EDGES) - 1):
         if i in med.index and cnt[i] >= 3:
             curve.append({"wspd_from": BIN_EDGES[i], "wspd_to": BIN_EDGES[i + 1], "median_kw": round(float(med[i]), 1), "n": int(cnt[i])})
-    rated = max((c["median_kw"] for c in curve), default=RATED_KW)
-    cut_in = next((c["wspd_from"] for c in curve if c["median_kw"] > 0.02 * RATED_KW), None)
-    return {"bins": curve, "n_points": int(ok.sum()), "cut_in_ms": cut_in, "max_median_kw": round(float(rated), 1), "rated_kw": RATED_KW}
+    rated = max((c["median_kw"] for c in curve), default=window.rating_kw)
+    cut_in = next((c["wspd_from"] for c in curve if c["median_kw"] > 0.02 * window.rating_kw), None)
+    return {"bins": curve, "n_points": int(ok.sum()), "cut_in_ms": cut_in, "max_median_kw": round(float(rated), 1), "rated_kw": window.rating_kw}
 
 
-def apply_power_curve(curve: Dict[str, Any], wind_ms: np.ndarray) -> np.ndarray:
+def apply_power_curve(curve: Dict[str, Any], wind_ms: np.ndarray, rating_kw: Optional[float] = None) -> np.ndarray:
     bins = curve["bins"]
     if not bins:
         return np.zeros(len(wind_ms))
@@ -65,7 +66,7 @@ def apply_power_curve(curve: Dict[str, Any], wind_ms: np.ndarray) -> np.ndarray:
     w = np.nan_to_num(wind_ms.astype(float), nan=0.0)
     out = np.interp(w, xs, ys, left=0.0, right=ys[-1])
     out[w < ABNORMAL_WSPD] = np.minimum(out[w < ABNORMAL_WSPD], ys[0] if len(ys) else 0.0)
-    return np.clip(out, 0.0, RATED_KW)
+    return np.clip(out, 0.0, rating_kw if rating_kw is not None else float(curve.get("rated_kw", max(ys))))
 
 
 def power_curve_forecast(window: Window, horizon_h: int, curve: Optional[Dict[str, Any]] = None) -> List[float]:
@@ -76,13 +77,19 @@ def power_curve_forecast(window: Window, horizon_h: int, curve: Optional[Dict[st
         raise ValueError(f"the last history day has {len(wind)} rows, not {STEPS_PER_DAY}")
     n = int(horizon_h) * STEPS_PER_HOUR
     reps = int(np.ceil(n / len(wind)))
-    return [round(float(v), 1) for v in apply_power_curve(curve, np.tile(wind, reps)[:n])]
+    return [round(float(v), 1) for v in apply_power_curve(curve, np.tile(wind, reps)[:n], window.rating_kw)]
 
 
 def gru_forecast(window: Window, horizon_h: int) -> List[float]:
     from solver import gru
 
-    return gru.forecast(window.history(days=2), horizon_h)
+    return gru.forecast(window, horizon_h)
+
+
+def foundation_forecast(window: Window, horizon_h: int) -> List[float]:
+    from solver import foundation
+
+    return foundation.forecast(window, horizon_h)
 
 
 def history_summary(window: Window) -> Dict[str, Any]:
@@ -99,7 +106,7 @@ def history_summary(window: Window) -> Dict[str, Any]:
     last = h.tail(6)
     return {
         "turbine": window.turbine, "history_days": [window.base_day, window.history_end_day], "rows": int(len(h)),
-        "sampling_minutes": 10, "rated_kw": RATED_KW, "per_day": days,
+        "sampling_minutes": 10, "rated_kw": window.rating_kw, "per_day": days,
         "last_hour": [{"day": int(r.Day), "time": str(r.Tmstamp), "wspd": None if pd.isna(r.Wspd) else round(float(r.Wspd), 2),
                        "patv_kw": None if pd.isna(r.Patv) else round(max(float(r.Patv), 0.0), 1)} for r in last.itertuples()],
         "last_day_complete": bool(days and days[-1]["rows_with_data"] >= 0.5 * STEPS_PER_DAY),

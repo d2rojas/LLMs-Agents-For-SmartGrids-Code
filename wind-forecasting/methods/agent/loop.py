@@ -93,7 +93,7 @@ def run_react(ctx: Context, *, gate: bool, question_kind: Optional[str] = None) 
             if not gate:
                 break
             attempts += 1
-            gate_report = G.check(answer, dispatcher.log, horizon_hours=ctx.horizon_hours, question_kind=question_kind)
+            gate_report = G.check(answer, dispatcher.log, horizon_hours=ctx.horizon_hours, question_kind=question_kind, power_max_kw=w.power_max_kw)
             rec.record_tool({"n": dispatcher.n_calls, "name": "harness_verify", "kind": "verify", "args": {"attempt": attempts},
                              "output": {"passed": gate_report["passed"], "failed": gate_report["failed"]}, "ok": gate_report["passed"], "latency_s": 0.0})
             gate_history.append({"attempt": attempts, "passed": gate_report["passed"], "failed": gate_report["failed"]})
@@ -120,7 +120,7 @@ def run_react(ctx: Context, *, gate: bool, question_kind: Optional[str] = None) 
                 harness_declared = "budget exhausted"
             budget_exhausted = True
             if gate and answer is not None:
-                gate_report = G.check(answer, dispatcher.log, horizon_hours=ctx.horizon_hours, question_kind=question_kind)
+                gate_report = G.check(answer, dispatcher.log, horizon_hours=ctx.horizon_hours, question_kind=question_kind, power_max_kw=w.power_max_kw)
         if gate and gate_report is not None and not gate_report["passed"] and harness_declared is None and not answer.declares_failure:
             # the budget ran out after a rejected answer: the rejected answer never leaves as a forecast
             obj = declared_failure("verification failed and the budget ran out before a retry could pass: " + ", ".join(gate_report["failed"]),

@@ -37,7 +37,15 @@ HORIZONS_H = (3, 6, 48)            # the paper's three horizons
 MAX_HORIZON_H: int = 48
 TARGET_DAYS: int = 2               # 48 h = two dataset days
 RATED_KW: float = 1500.0           # nominal turbine rating in the SDWPF farm
-POWER_MAX_KW: float = 1600.0       # physical range of a reported value: [0, POWER_MAX_KW]
+RANGE_MARGIN: float = 1.0667       # a reported value is in range up to rating * this
+POWER_MAX_KW: float = RATED_KW * RANGE_MARGIN   # the nominal window's range; a scaled window carries its own
+
+# The scaled condition, the memorisation check. One window is multiplied end to end, history and
+# target together, by a factor drawn from this range with the instance's own seed, and its rating
+# moves with it. The measurement stays real and its ground truth stays exact, because it is the
+# same measurement transformed; what stops matching is any memorised copy of the published series.
+# The same defence the power-flow case study uses when it perturbs the IEEE cases.
+SCALE_RANGE = (0.82, 1.18)
 FEATURES = ("Wspd", "Wdir", "Etmp", "Patv")   # the four columns the paper names
 
 # KDD Cup 2022 abnormal-data rules (Zhou et al., SDWPF): a target point is not scored when

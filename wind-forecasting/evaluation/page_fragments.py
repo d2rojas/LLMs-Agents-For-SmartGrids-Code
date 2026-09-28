@@ -33,6 +33,7 @@ from config import (  # noqa: E402
 
 CASE_ID = "wind"
 CASE_TITLE = "Wind"
+ABNORMAL_SHARE = "some"
 
 DIAGRAMS: Dict[str, Dict[str, Any]] = {
     "rule_based": {"steps": [("request", "input"), ("regex parser", "code"), ("GRU tool", "solver"), ("template answer", "out")],
@@ -67,7 +68,9 @@ ROWS: Tuple[Dict[str, str], ...] = (
 
 COLUMNS: Tuple[Dict[str, str], ...] = (
     {"group": "Task utility", "name": "Formulation", "what": "the turbine, history window and horizon declared in the answer match the request; with tools, also the call that produced the series", "why": "whether the request was understood, kept apart from whether the series is any good"},
-    {"group": "Task utility", "name": "MAE, RMSE", "what": "forecast error in kW on the target days under the KDD Cup abnormal-data rules, per horizon, over the requests whose series is valid", "why": "the quality of the forecast; the only place accuracy enters, because no method can see the target"},
+    {"group": "Task utility", "name": "MAE, RMSE", "what": "forecast error in kW against the target days under the KDD Cup abnormal-data rules, per horizon, over the requests whose series was valid", "why": "the KDD Cup's own score on this dataset is the mean of the two, kept so the numbers stay comparable with the submitted table"},
+    {"group": "Task utility", "name": "NBIAS, NMAE, NRMSE", "what": "the same errors divided by the 1500 kW installed capacity, in per cent", "why": "the minimum set the ANEMOS evaluation protocol asks every wind power forecast to report (Madsen et al. 2005, sec. 5.1); kW alone cannot be compared across turbines or between a windy and a calm window"},
+    {"group": "Task utility", "name": "Imp.", "what": "the protocol's improvement score, 100 (NMAE_ref - NMAE) / NMAE_ref, against its reference model a_k P(t) + (1 - a_k) Pbar fitted on the training period", "why": "an NMAE of 26 % means nothing on its own. This says whether a method beats what costs nothing. The reference is not persistence on purpose: the protocol states that comparing with persistence flatters a model, and the numbers here show it, 53 % improvement against persistence and -6 % against the proper reference for the same forecast"},
     {"group": "Task utility", "name": "Answer", "what": "the answer to the request's question (peak hour, energy) agrees with what the reported series implies", "why": "whether the report is consistent with itself"},
     {"group": "Solver-grounded correctness", "name": "Solved", "what": "a valid series in range, an answer coherent with it, and, with tools, a series traceable to a tool output", "why": "the end-to-end verdict on what can be verified without the future"},
     {"group": "Solver-grounded correctness", "name": "Escalated", "what": "the method declared cannot_forecast, or the budget ran out, or the gate rejected two attempts", "why": "how much work goes back to a person; under the stress condition it is the correct outcome"},
@@ -87,12 +90,9 @@ def manifest() -> Optional[Dict[str, Any]]:
 
 
 def gru_meta() -> Optional[Dict[str, Any]]:
-    from solver.gru import WEIGHTS_PATH
+    from solver import gru
 
-    if not WEIGHTS_PATH.exists():
-        return None
-    d = json.loads(WEIGHTS_PATH.read_text(encoding="utf-8"))
-    return {k: v for k, v in d.items() if k != "state"}
+    return gru.metadata() if gru.WEIGHTS_PATH.exists() else None
 
 
 def method_dirs() -> List[Path]:
@@ -120,16 +120,33 @@ def sample_request() -> Any:
 # ------------------------------------------------------------------ tabs
 
 
+def abnormal_share_text() -> str:
+    """The share of target points the KDD Cup rules exclude, over the frozen set."""
+    m = manifest()
+    if not m:
+        return "some"
+    tot = sum(int(e["abnormal_points_target"]) for e in m["instances"])
+    n = len(m["instances"]) * 288
+    return f"{100.0 * tot / n:.1f} %" if n else "some"
+
+
 def tab_home() -> str:
     m = manifest()
     n_inst = len(m["instances"]) if m else 0
+    global ABNORMAL_SHARE
+    ABNORMAL_SHARE = abnormal_share_text()
     body = [
         card(
             "The task",
-            "<p>A wind turbine's SCADA history for the last fourteen days is on the table: wind speed, wind direction, temperature and "
-            "active power every ten minutes. Somebody has to write down the next 3, 6 or 48 hours of active power, one value per ten-minute "
-            "step, and answer a question about that series. Today that somebody is a forecasting model an engineer chose and trained. This "
-            "case study asks what happens when it is a language model, and measures six ways of doing it on the same windows.</p>",
+            "<p>A wind farm has to tell the system operator how much power a turbine will produce over the next 3, 6 or 48 hours, at the "
+            "ten-minute resolution dispatch and the market settle on. So the answer to one request is a series of numbers in kW: 18 of them "
+            "at 3 hours, 36 at 6, 288 at 48. The only evidence is that turbine's own SCADA history for the fourteen days before the forecast "
+            "starts, ten minutes apart: wind speed, wind direction, temperature and active power.</p>"
+            "<p>Today a forecasting model an engineer chose, trained and validated produces that series. This case study asks what happens "
+            "when a language model is put in charge of the task, and measures six ways of producing the same series on the same windows. Three "
+            "of them call a trained forecaster and report what it returned; two write the numbers themselves, which is what the LLM-forecasting "
+            "literature proposes; one has no language model at all. Each request also asks one thing about the series returned, the hour it "
+            "peaks or the energy it carries, because a forecast nobody can read a decision off is not yet an answer.</p>",
             pipeline(
                 [("Request", "turbine, window, horizon, question"),
                  ("Read the history", "14 days of SCADA, nothing later"),
@@ -143,14 +160,24 @@ def tab_home() -> str:
         ),
         card(
             "No future information, for anyone",
-            "<p>The experiment behind the submitted paper fed the model reanalysis wind for the very hours it was asked to forecast. Here nothing "
-            "after the last history day exists for any method: no weather forecast, no later measurements. That is the protocol of the KDD Cup "
-            "2022 on this same dataset, and the dataset's location and calendar dates are not published, so no forecast product could be "
-            "attached honestly anyway. The conventional forecaster is a GRU trained in this repository on days 1 to "
-            f"{TRAIN_LAST_DAY} of the benchmark turbines; every evaluation window ends after day {TRAIN_LAST_DAY}, and the GRU receives exactly "
-            "the same history every other row receives.</p>"
-            f"<p>Active power lives in [0, {RATED_KW:.0f}] kW; a reported value is in range up to {POWER_MAX_KW:.0f} kW. The target points that the "
-            "KDD Cup rules call abnormal (a stopped turbine with wind, a feathered blade, a missing value) are not scored, for every method alike.</p>",
+            "<p>This is the point the case study exists to settle. The experiment behind the submitted paper gave its best variant reanalysis "
+            "wind speed <i>for the very hours it had to forecast</i>: a measurement of the future, not a forecast, and the reason a reviewer "
+            "asked for the experiment to be repeated. Here nothing after the last history day exists for any method. There is no weather input, "
+            "no later measurement, and no tool that could return one, so the question cannot be answered by leakage in any row.</p>"
+            "<p>That is also the protocol of the KDD Cup 2022 on this same dataset, which forecasts from history alone. The farm's location and "
+            "calendar dates are not published with the data, so no operational forecast product could be attached honestly even if it were "
+            f"wanted. The conventional forecaster, a GRU, is trained in this repository on days 1 to {TRAIN_LAST_DAY} and every scenario's target "
+            f"lies after day {TRAIN_LAST_DAY}, so it never saw what it is asked to predict, and it reads exactly the history every other row reads.</p>",
+        ),
+        card(
+            "What a value may be, and which points are scored",
+            f"<p>Active power lives in [0, {RATED_KW:.0f}] kW, the turbine's rating; a reported value counts as in range up to {POWER_MAX_KW:.0f} kW, "
+            "and anything outside that is a wrong answer rather than a bad one. A recorded negative value is the turbine's own consumption while "
+            "stopped and is read as zero.</p>"
+            "<p>A target point the KDD Cup rules call abnormal is not scored, identically for every method: the turbine stopped while the wind "
+            "blew above 2.5 m/s, a blade feathered past 89 degrees, a reading missing, a direction out of its physical range. In these twenty "
+            f"windows that removes {ABNORMAL_SHARE} of the target points, four fifths of them blades feathered during curtailment, which is an operator's "
+            "decision and not something a forecast can be blamed for.</p>",
         ),
         "<div class='grid g3'>"
         + card("What a correct answer needs",
@@ -166,7 +193,7 @@ def tab_home() -> str:
                f"{verdict('solved')} + {verdict('escalated')} = 100 %, {verdict('wrong')} = 0.</p>")
         + "</div>",
         card("Identical for every method",
-             chip(f"{n_inst} instances, frozen and hashed") + chip(f"{len(HORIZONS_H)} horizons: " + ", ".join(f"{h} h" for h in HORIZONS_H)) + chip("one request generator, seeded")
+             chip(f"{n_inst} scenarios, frozen and hashed") + chip(f"{len(HORIZONS_H)} horizons: " + ", ".join(f"{h} h" for h in HORIZONS_H)) + chip("one request generator, seeded")
              + chip("one tool catalogue") + chip(f"{MAX_LLM_CALLS} model calls, {MAX_TOOL_CALLS} tool calls, {REQUEST_TIMEOUT_S:.0f} s per request")
              + chip("temperature 0") + chip("one answer contract") + chip("one scorer") + chip("every message kept in the trace")),
     ]
@@ -223,13 +250,29 @@ def tab_scenarios() -> str:
                          + f"<div class='muted'>history: {e['abnormal_points_history']} abnormal rows of {HISTORY_DAYS * 144}</div>")
         rows.append(cells)
     g = gru_meta()
-    gru_txt = ("<p class='muted'>No GRU trained yet.</p>" if not g else
-               f"<p>{E(g['model'])}. Trained on days {g['training']['train_days'][0]} to {g['training']['train_days'][1]} of the five turbines "
-               f"({', '.join(g['training']['turbines'])}), validated on days {g['training']['val_days'][0]} to {g['training']['val_days'][1]}, "
-               f"seed {g['training']['seed']}, {g['training']['epochs']} epochs; best validation MAE {g['training']['best_val_mae_kw']} kW. "
-               f"Weights and training log in <code>data/gru/gru_v1.json</code>; its hash is stamped on every run's config.</p>")
+    if not g:
+        gru_txt = "<p class='muted'>No forecaster trained yet.</p>"
+    else:
+        t = g["training"]
+        rows_g = [[f"{h} h", f"{v['best_val_mae_kw']} kW", f"{v['reference_val_mae_kw']} kW", f"{v['best_val_improvement_pct']:+.1f} %"]
+                  for h, v in sorted(g["horizons"].items(), key=lambda kv: int(kv[0]))]
+        gru_txt = (f"<p>{E(g['model'])}, one per horizon. Trained on days {t['train_days'][0]} to {t['train_days'][1]} of "
+                   f"{t['n_turbines']} complete turbines of the farm, with days {t['val_days'][0]} to {t['val_days'][1]} held out to choose "
+                   f"the stopping epoch. No target day is read anywhere in training. Weights, the training log and the hashes of every "
+                   f"training file are in <code>data/gru/gru_v1.json</code>, and that file's hash is stamped on every run's config.</p>"
+                   "<p>It does not predict the power level. It predicts the <b>correction to the protocol's reference model</b>, so a model "
+                   "that learns nothing reproduces the reference and anything it learns is measurable added value. The held-out numbers:</p>"
+                   + table(["horizon", "validation MAE", "the reference on the same windows", "improvement"], rows_g)
+                   + "<p class='muted'>Measured on days 201 to 214, which no method is ever asked about. The test windows begin at day 215.</p>")
     return "".join([
-        card("Twenty instances: five turbines, four windows, three horizons",
+        card("What a scenario is, and how many there are",
+             "<p><b>One scenario is one turbine and one 14-day window of its history.</b> Five turbines times four windows makes twenty "
+             "scenarios, and each one is asked at three horizons (3, 6 and 48 hours ahead from the same starting moment), so every method "
+             "answers <b>sixty requests</b>: the same sixty, in the same order, generated once with a fixed seed and hashed into every result "
+             "row. The table below is the twenty scenarios; the horizons are what multiplies them.</p>"
+             "<p>What varies between scenarios is the turbine and the weather of those particular days, which is what a forecaster meets in "
+             "service. What never varies is the amount of evidence: fourteen days, 2,016 rows, four columns.</p>"),
+        card("The twenty scenarios",
              f"<p>The raw SDWPF file holds {len(turbines)} turbines chosen by the rule in the manifest: seed {m['choice_rule']['seed']}, among the turbines "
              f"whose target days carry at most {m['choice_rule']['max_abnormal_target_points']} abnormal points, with base days fixed so that every "
              f"target day lies in the KDD Cup test period (days {m['choice_rule']['test_period'][0]} to {m['choice_rule']['test_period'][1]}) on days the "
@@ -372,6 +415,24 @@ def tab_gate() -> str:
                  [verdict("escalated"), "the answer declares cannot_forecast, or the budget ran out, or the gate rejected two attempts. Takes precedence. Under the stress condition, the correct outcome"],
                  [verdict("wrong"), "a wrong number of values, a value out of range, an unsupported series (with tools), or an answer that contradicts the series, presented as valid"]])),
         card("The columns", "<p>Three groups, the same three in every case study.</p>", table(["group", "column", "what it measures", "why it is there"], crow)),
+        card("Where the error measures come from",
+             "<p>None of them is ours. Forecast quality is reported with the minimum set of the evaluation protocol the wind power forecasting "
+             "field standardised on: <b>NBIAS, NMAE and NRMSE</b>, each normalised by the installed capacity, plus the <b>improvement score</b> "
+             "against a reference model. That is Madsen, Pinson, Kariniotakis, Nielsen and Nielsen, <i>Standardizing the Performance Evaluation "
+             "of Short-Term Wind Power Prediction Models</i>, Wind Engineering 29(6):475-489, 2005, written for the EU ANEMOS project and used "
+             "there to evaluate more than ten prediction models. MAE and RMSE in kW are kept beside them because the KDD Cup 2022 on this "
+             "dataset scored with their mean, and the submitted paper's table is in kW.</p>"
+             "<p>The reference model is the protocol's, not persistence: "
+             "<code>P(t+k|t) = a<sub>k</sub> P(t) + (1 - a<sub>k</sub>) P&#772;</code> (eq. 4, after Nielsen et al.), with "
+             "<code>a<sub>k</sub></code> the correlation between power now and power k steps later and <code>P&#772;</code> the mean production, "
+             "both fitted on the training period alone and frozen in <code>data/reference/reference_model.json</code>. It is persistence at ten "
+             "minutes (a<sub>k</sub> = 0.97) and the long-run mean at two days (a<sub>k</sub> = 0.02), so neither end of the horizon is "
+             "flattered. The protocol's own words for why: <i>comparison with Persistence does not give a fair measure of the performance of an "
+             "advanced model, since even the use of the global mean as predictor leads to a 50% reduction in the variance of the error compared "
+             "to the error obtained with Persistence.</i></p>",
+             note("This is not a formality. The conventional forecaster of this case study improves on persistence by 53 % at 3 hours and is "
+                  "<b>5.7 % worse than the protocol's reference</b> on the same forecasts. Reporting only the first number would have put a "
+                  "claim in the paper that the field's own protocol calls unfair.", "warn")),
     ])
 
 
@@ -431,16 +492,21 @@ def tab_results() -> str:
                 d, rows, h = per[row["name"]]
                 a = h["aggregate"]
                 bh = a.get("by_horizon") or {}
-                mae = " / ".join(f"{bh[k]['mae']}" for k in sorted(bh, key=int)) if bh else str(a.get("mae"))
-                split.append([f"<b>{E(row['label'])}</b>", f"{d.parts[-2]}", str(len(rows)), f"{a.get('form')} %", mae, pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged"),
+                fmt = lambda key: " / ".join("—" if bh[k].get(key) is None else f"{bh[k][key]}" for k in sorted(bh, key=int)) if bh else "—"  # noqa: E731
+                split.append([f"<b>{E(row['label'])}</b>", f"{d.parts[-2]}", str(len(rows)), f"{a.get('form')} %", fmt("nmae_pct"), fmt("improvement_pct"), pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged"),
                               f"{a.get('trace') if a.get('trace') is not None else '—'} %", f"{a.get('tokens')}", f"{a.get('cost')}"])
             else:
-                split.append([f"<b>{E(row['label'])}</b>", "<span class='muted'>not run</span>"] + [""] * 9)
+                split.append([f"<b>{E(row['label'])}</b>", "<span class='muted'>not run</span>"] + [""] * 10)
+        hs = " / ".join(f"{h} h" for h in HORIZONS_H)
         body.append(card(f"Run set {E(set_name)}",
-                         table(["method", "model", "n", "formulation", "MAE kW by horizon (" + " / ".join(f"{h} h" for h in HORIZONS_H) + ")", verdict("solved"), verdict("escalated"), verdict("wrong"), "traceable", "tokens", "cost $"], split)))
+                         table(["method", "model", "n", "formulation", f"NMAE % ({hs})", f"Imp. % over the reference ({hs})", verdict("solved"), verdict("escalated"), verdict("wrong"), "traceable", "tokens", "cost $"], split),
+                         note("A dash in an error column is not a missing measurement: it means the method returned no valid series at that "
+                              "horizon, so there was nothing to score. NMAE is the error as a per cent of the 1500 kW installed capacity, and "
+                              "Imp. is the improvement over the protocol's reference model on the same points: 0 means no better than a model "
+                              "that costs nothing, negative means worse.", "info")))
     det = []
-    cols = [("nn", "nn"), ("instance_id", "instance"), ("horizon_hours", "h"), ("question", "question"), ("outcome", "outcome"), ("solved_reason", "why"),
-            ("formulation_exact", "form."), ("n_values", "values"), ("mae_kw", "MAE"), ("rmse_kw", "RMSE"), ("answer_ok", "answer"), ("source", "source"), ("gate_pass", "gate"),
+    cols = [("nn", "nn"), ("instance_id", "scenario"), ("horizon_hours", "h"), ("question", "question"), ("outcome", "outcome"), ("solved_reason", "why"),
+            ("formulation_exact", "form."), ("n_values", "values"), ("mae_kw", "MAE kW"), ("nmae_pct", "NMAE %"), ("improvement_pct", "Imp. %"), ("answer_ok", "answer"), ("source", "source"), ("gate_pass", "gate"),
             ("n_llm_calls", "llm"), ("n_tool_calls", "tools"), ("cost_usd", "cost $")]
     for d in dirs:
         rows = read_summary(d)
@@ -490,7 +556,7 @@ def tab_status() -> str:
                 "<p class='muted'>Not part of the evaluation: the original replication scripts and notebooks under <code>_legacy/</code>, kept as they were.</p>")
 
 
-GROUPS = (("Design", (("home", "Home"), ("methods", "Methods"), ("scenarios", "Instances"), ("prompts", "Prompts"), ("tools", "Tools"), ("gate", "Gate & scoring"), ("plan", "Run plan"))),
+GROUPS = (("Design", (("home", "Home"), ("methods", "Methods"), ("scenarios", "Scenarios"), ("prompts", "Prompts"), ("tools", "Tools"), ("gate", "Gate & scoring"), ("plan", "Run plan"))),
           ("Results", (("results", "Results"), ("traces", "Traces"), ("analysis", "Analysis"), ("status", "Implementation"))))
 BUILDERS = {"home": tab_home, "methods": tab_methods, "scenarios": tab_scenarios, "prompts": tab_prompts, "tools": tab_tools, "gate": tab_gate,
             "plan": tab_plan, "results": tab_results, "traces": tab_traces, "analysis": tab_analysis, "status": tab_status}
@@ -509,9 +575,9 @@ def payload() -> Dict[str, Any]:
     n = len(m["instances"]) if m else 0
     return {
         "id": CASE_ID, "title": CASE_TITLE, "brand": "WindAgent · wind power forecasting",
-        "note": f"{n} frozen instances of the SDWPF farm, {len(HORIZONS_H)} horizons",
+        "note": f"{n} frozen scenarios of the SDWPF farm, {len(HORIZONS_H)} horizons",
         "blurb": "Write the next 3, 6 or 48 hours of a turbine's active power from its 14-day SCADA history alone, and answer a question about the series.",
-        "summary": [("task", "forecast, no future inputs"), ("trusted tool", "GRU, persistence, power curve"), ("data", f"{n} frozen instances, KDD Cup test period")],
+        "summary": [("task", "forecast, no future inputs"), ("trusted tool", "GRU, persistence, power curve"), ("data", f"{n} frozen scenarios, KDD Cup test period")],
         "groups": [[label, [list(e) for e in entries]] for label, entries in GROUPS],
         "tabs": {key: BUILDERS[key]() for _l, entries in GROUPS for key, _t in entries},
         "script": SCRIPT,

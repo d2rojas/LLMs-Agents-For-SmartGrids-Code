@@ -84,3 +84,94 @@ def test_answer_derivation():
     assert answer_matches("peak_hour", 1, near) and answer_matches("peak_hour", 2, near) and not answer_matches("peak_hour", 3, near)
     assert answer_matches("energy_kwh", 151.0, s) and not answer_matches("energy_kwh", 170.0, s)
     assert answer_matches("none", None, s) is None
+
+
+def test_protocol_reference_model_is_persistence_then_the_mean():
+    """The ANEMOS reference: a_k P(t) + (1-a_k) Pbar, persistence at short lags, the mean at long ones."""
+    from solver import reference as R
+    from solver.data import load_window
+
+    p = R.parameters()["turbines"]["8"]
+    assert p["a_k"][0] > 0.9 and p["a_k"][17] < 0.8 and p["a_k"][-1] < 0.1
+    w = load_window(8, 201)
+    last = float(w.history(days=1)["Patv"].clip(lower=0).ffill().iloc[-1])
+    s3 = R.new_reference_forecast(w, 3)
+    s48 = R.new_reference_forecast(w, 48)
+    assert len(s3) == 18 and len(s48) == 288
+    assert abs(s3[0] - last) < 0.1 * max(last, 1.0)              # ten minutes ahead it is persistence
+    assert abs(s48[-1] - p["mean_kw"]) < 0.05 * p["mean_kw"]     # two days ahead it is the training mean
+
+
+def test_improvement_score_is_the_protocol_formula():
+    from evaluation.scoring import improvement_pct
+
+    assert improvement_pct(50.0, 100.0) == 50.0     # half the reference's error
+    assert improvement_pct(100.0, 100.0) == 0.0     # no better than the reference
+    assert improvement_pct(150.0, 100.0) == -50.0   # worse
+    assert improvement_pct(None, 100.0) is None and improvement_pct(10.0, 0.0) is None
+
+
+def test_errors_are_normalised_by_installed_capacity():
+    from config import RATED_KW
+    from evaluation.scoring import forecast_error
+    from solver.data import load_window
+
+    w = load_window(8, 201)
+    t = w.target(3)
+    import numpy as np
+    truth = np.clip(np.nan_to_num(t["Patv"].to_numpy(dtype=float)), 0, None)
+    e = forecast_error([float(v) + 150.0 for v in truth], w, 3)   # 150 kW too high everywhere
+    assert abs(e["mae"] - 150.0) < 1.0 and abs(e["bias"] + 150.0) < 1.0   # bias is measured minus predicted
+    assert abs(100.0 * e["mae"] / RATED_KW - 10.0) < 0.1                  # 150 of 1500 kW is 10 %
+
+
+def test_scaled_condition_keeps_the_ground_truth_exact():
+    """The memorisation check: history and target move together, so the measurement stays real and exact."""
+    from solver.data import load_window, scale_for
+
+    a = load_window(8, 201)
+    b = load_window(8, 201, condition="scaled")
+    c = scale_for(8, 201)
+    assert 0.82 <= c <= 1.18 and b.scale == c and a.scale == 1.0
+    assert scale_for(8, 201) == c and scale_for(9, 201) != c        # drawn from the instance, never at run time
+    assert abs(b.rating_kw - 1500.0 * c) < 0.2
+    for h in (3, 48):
+        ya = a.target(h)["Patv"].to_numpy(dtype=float)
+        yb = b.target(h)["Patv"].to_numpy(dtype=float)
+        import numpy as np
+        assert np.allclose(np.nan_to_num(yb), np.nan_to_num(ya) * c, rtol=1e-6)   # the truth transformed, not noise
+    assert b.frame["abnormal"].sum() == a.frame["abnormal"].sum()   # scaling changes no data-quality verdict
+
+
+def test_a_forecaster_is_scale_free_but_a_memorised_series_is_not():
+    """Every trusted forecaster follows the window's rating, so the scaled condition costs it nothing."""
+    import numpy as np
+
+    from solver import forecasters as F
+    from solver import reference as R
+    from solver.data import load_window
+
+    a, b = load_window(9, 207), load_window(9, 207, condition="scaled")
+    c = b.scale
+    for fn in (F.persistence, F.power_curve_forecast, R.new_reference_forecast, F.gru_forecast):
+        sa = np.asarray(fn(a, 3), dtype=float)
+        sb = np.asarray(fn(b, 3), dtype=float)
+        assert np.allclose(sb, sa * c, rtol=0.02, atol=1.0), fn.__name__
+    # the error of a scale-free forecaster is the same share of its rating in both conditions
+    from evaluation.scoring import forecast_error
+    ea = forecast_error(F.gru_forecast(a, 3), a, 3)["mae"] / a.rating_kw
+    eb = forecast_error(F.gru_forecast(b, 3), b, 3)["mae"] / b.rating_kw
+    assert abs(ea - eb) < 0.01
+
+
+def test_the_request_and_the_prompt_state_the_rating():
+    from evaluation.requests import generate_requests, window_for
+    from methods.common import Context, history_block
+    from config import ModelSpec
+
+    r = generate_requests(instance_ids=["t008-d201"], horizons=(3,), questions=("peak_hour",), condition="scaled")[0]
+    w = window_for(r)
+    assert r.condition == "scaled" and r.request_id.endswith("-scaled")
+    assert f"{w.rating_kw:.0f} kW" in r.text
+    ctx = Context(request_id=r.request_id, text=r.text, window=w, horizon_hours=3, spec=ModelSpec("none", "x"))
+    assert f"rated {w.rating_kw:.0f} kW" in history_block(ctx)

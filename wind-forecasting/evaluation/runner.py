@@ -122,7 +122,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--model", default=DEFAULT_MODEL_SPEC, help="provider:model (rule_based always runs with no model)")
     ap.add_argument("--instance", action="append", help="instance id such as t008-d201; repeatable; default all")
     ap.add_argument("--horizon", action="append", type=int, help="3, 6, 48; repeatable; default all three")
-    ap.add_argument("--condition", default="normal", choices=("normal", "stress"))
+    ap.add_argument("--condition", default="normal", choices=("normal", "stress", "scaled"),
+                    help="normal, stress (the last history day is blank), or scaled (the memorisation check: the window and its rating multiplied end to end)")
     ap.add_argument("--n", type=int, help="use only the first N instances of the manifest (a smoke test)")
     ap.add_argument("--seed", type=int, default=0, help="seed of the request phrasings")
     ap.add_argument("--tag", help="suffix on the method folder (a smoke test is not the paper set)")
@@ -146,7 +147,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     digest = requests_digest(reqs)
     spec = parse_model_spec(args.model)
     pricing = load_pricing()
-    tag = args.tag or ("stress" if args.condition == "stress" else None)
+    tag = args.tag or (None if args.condition == "normal" else args.condition)
 
     plan = []
     total = 0.0
