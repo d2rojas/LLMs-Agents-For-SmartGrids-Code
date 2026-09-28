@@ -1,6 +1,6 @@
 # griddebug on IEEE 14-bus with gpt-4o-mini
 
-Generated 2026-09-28 11:07 by evaluation/postprocess.py from `raw/rows.jsonl`. Scenarios: 7. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the harness's own power flow, the same way for every method.
+Generated 2026-09-28 13:37 by evaluation/postprocess.py from `raw/rows.jsonl`. Scenarios: 7. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the harness's own power flow, the same way for every method.
 
 ## Run
 
@@ -19,7 +19,7 @@ Generated 2026-09-28 11:07 by evaluation/postprocess.py from `raw/rows.jsonl`. S
 | system_prompt_hash | d59378ee7244 |
 | git_commit | c7673488-dirty |
 | pandapower | 3.5.5 |
-| description | The same loop as ReAct plus the verification gate G1-G6 on the final answer: the harness re-runs the power flow on the final network and checks convergence, islanded load, security or a declared remainder, currency, traceability and consistency. One retry, then a declared failure. The solver-grounded row. |
+| description | The same loop as ReAct plus the verification gate G1-G7 on the final answer: the harness re-runs the power flow on the final network and checks convergence, islanded load, security or a declared remainder, currency, traceability, consistency, and that the actions claimed are the ones the trace shows succeeding. One retry, then a declared failure. The solver-grounded row. |
 | prompt files | _shared/common_rules.txt, _shared/output_contract.txt, _shared/agent_system_prompt.txt, _shared/gate_retry_instruction.txt |
 
 ## Where every scenario ended
