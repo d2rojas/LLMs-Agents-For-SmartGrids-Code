@@ -144,3 +144,37 @@ def test_no_llm_rows_get_no_model_trace(laid_out) -> None:
     results, _ = laid_out
     for t in (results / "caltech/2026-09-21/no-llm/optimum/traces").glob("*.json"):
         assert "messages" not in json.loads(t.read_text(encoding="utf-8"))
+
+
+def test_a_row_the_arm_never_completed_is_labelled_run_error() -> None:
+    """``summary.csv`` has to say why a row is missing from the rates.
+
+    The three rates are taken over the rows that finished, and a row that did
+    not is reported separately by ``aggregate``. Writing its outcome as an empty
+    cell left the file silent about that, and anything recounting it had to
+    guess: the shared ``visuals/crosscheck.mjs`` read the blank as the last
+    branch of its three-way rule and counted a failed row of ``plan_act`` as
+    wrong and unflagged, so the page and the recount disagreed on a run whose
+    own numbers were right all along.
+
+    The label is the one power-flow writes for the same case, which is what
+    makes a recount of one case study's rows comparable with another's.
+    """
+    from evaluation.postprocess import aggregate, summary_row
+
+    failed = summary_row(1, {"request_id": "caltech-x", "outcome": "", "status": "failed",
+                             "error": "HarnessError: the parse asked for clarification"})
+    assert failed["outcome"] == "run_error"
+    assert failed["solved"] is False and failed["escalated"] is False and failed["wrong_silently"] is False
+
+    # And it stays out of the three rates, exactly as the blank did.
+    scored = summary_row(2, {"request_id": "caltech-y", "outcome": "wrong_unflagged"})
+    agg = aggregate([failed, scored])
+    assert agg["n"] == 2          # attempted
+    assert agg["n_scored"] == 1   # what the rates are over
+    assert agg["wrong"] == 1
+    assert agg["run_error"] == 1
+    assert agg["n"] == agg["n_scored"] + agg["run_error"]
+
+    # A row that simply has not been scored yet is not an error.
+    assert summary_row(3, {"request_id": "caltech-z", "outcome": ""})["outcome"] == ""
