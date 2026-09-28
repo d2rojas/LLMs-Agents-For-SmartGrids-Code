@@ -11,6 +11,8 @@ import pytest
 from data.format.schema import DaySessions, Session
 from methods.prompting.parse import (
     REPAIR_KINDS,
+    parse_segment_schedule,
+    read_reply,
     ParseResult,
     RepairLog,
     _resample_to_n_steps,
@@ -494,3 +496,71 @@ def test_default_parse_result_has_an_empty_log() -> None:
     assert isinstance(result.repairs, RepairLog)
     assert result.repairs.changed is False
     assert parse_llm_schedule("", day).success is False
+
+
+# --------------------------------------------------------------------------- the segment format
+
+
+def _four_step_day(n_sessions: int = 2, n_steps: int = 8):
+    from data.format.schema import DaySessions, Session
+
+    return DaySessions(
+        sessions=[
+            Session(session_id=f"S{i}", arrival_idx=0, departure_idx=n_steps, energy_kwh=5.0,
+                    charger_id=f"c{i}", max_power_kw=7.0)
+            for i in range(n_sessions)
+        ],
+        n_steps=n_steps,
+        dt_hours=0.25,
+    )
+
+
+def test_segments_fill_the_steps_they_name_and_nothing_else() -> None:
+    day = _four_step_day()
+    result = parse_segment_schedule({"EV 1": [[0.25, 1.0, 7.0]], "EV 2": []}, day)
+    assert result.success is True
+    assert result.repairs.changed is False
+    assert result.schedule[0].tolist() == [0.0, 7.0, 7.0, 7.0, 0.0, 0.0, 0.0, 0.0]
+    assert result.schedule[1].tolist() == [0.0] * 8
+
+
+def test_segment_repairs_are_recorded_by_kind() -> None:
+    day = _four_step_day()
+    result = parse_segment_schedule(
+        {"EV 1": [[1.5, 3.0, 7.0], [1.75, 2.0, 2.0], [0.0, 0.5, float("nan")]]}, day
+    )
+    counts = result.repairs.counts()
+    assert counts["clipped_segment"] == 1        # 3.0 h runs past a 2 h horizon
+    assert counts["overlapping_segment"] == 1    # 1.75-2.0 writes over 1.5-3.0
+    assert counts["nonfinite_cell"] == 2         # two steps of NaN, replaced with 0
+    assert counts["missing_row"] == 1            # EV 2 never named
+    assert result.schedule[0].tolist() == [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 7.0, 2.0]
+
+
+def test_negative_segment_power_reaches_the_checker() -> None:
+    day = _four_step_day(1)
+    result = parse_segment_schedule({"EV 1": [[0.0, 0.5, -3.5]]}, day)
+    assert result.repairs.negative_cells == 2
+    assert result.schedule[0][:2].tolist() == [-3.5, -3.5]
+
+
+def test_malformed_segments_are_errors_not_guesses() -> None:
+    day = _four_step_day(1)
+    result = parse_segment_schedule({"EV 1": [[1.0, 0.5, 7.0], [0.0, 7.0], "later"], "EV 7": []}, day)
+    assert result.success is False
+    assert "ends at or before it starts" in result.error_message
+    assert "not [start_hour, end_hour, power_kw]" in result.error_message
+    assert "outside EV 1..EV 1" in result.error_message
+
+
+def test_read_reply_takes_the_last_object_and_honors_braces_in_strings() -> None:
+    day = _four_step_day(1)
+    text = (
+        'First I considered {"schedule": {"EV 1": [[0.0, 0.25, 1.0]]}} but changed my mind.\n'
+        '{"formulation": {"sessions": []}, "schedule": {"EV 1": [[0.0, 0.5, 7.0]]}, '
+        '"answer": "a {brace} in a string", "cannot_answer": null}'
+    )
+    read = read_reply(text, day)
+    assert read.format == "json"
+    assert read.answer == "a {brace} in a string"
+    assert read.schedule.schedule[0][:2].tolist() == [7.0, 7.0]

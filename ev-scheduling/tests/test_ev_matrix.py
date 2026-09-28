@@ -164,6 +164,9 @@ class StubClient:
         if '{"plan":' in text and not has_tools:
             # the planner's turn: one solver call, planned before any result exists
             message = _FakeMessage(content='{"plan": [{"tool": "solve_ev_schedule", "args": {}}]}')
+        elif "## Output Requirements" in text and not has_tools:
+            # the no-tools arm: the contract's one JSON object
+            message = _FakeMessage(content=self.reply_text or self._contract_json())
         elif "JSON" in text and "sessions" in text and not has_tools:
             message = _FakeMessage(content=self._parse_json(text))
         elif has_tools and not has_tool_result:
@@ -195,6 +198,32 @@ class StubClient:
                 }
             )
         return json.dumps({"sessions": sessions, "n_steps": 96, "dt_hours": 0.25})
+
+    def _contract_json(self) -> str:
+        """A no-tools reply in the contract's shape: the day read back, one segment per car."""
+        sessions, schedule = [], {}
+        for i, session in enumerate(self.day.sessions if self.day is not None else []):
+            label = f"EV {i + 1}"
+            window_h = (session.departure_idx - session.arrival_idx) * 0.25
+            sessions.append(
+                {
+                    "session_id": label,
+                    "arrival_hour": session.arrival_idx * 0.25,
+                    "departure_hour": session.departure_idx * 0.25,
+                    "energy_kwh": session.energy_kwh,
+                    "max_power_kw": session.max_power_kw,
+                }
+            )
+            power = min(session.max_power_kw, session.energy_kwh / window_h) if window_h > 0 else 0.0
+            schedule[label] = [[session.arrival_idx * 0.25, session.departure_idx * 0.25, round(power, 4)]]
+        return json.dumps(
+            {
+                "formulation": {"sessions": sessions, "site_cap_kw": 50.0, "peak_price": 0.45, "off_peak_price": 0.12},
+                "schedule": schedule,
+                "answer": "1.00 kWh",
+                "cannot_answer": None,
+            }
+        )
 
     def _explanation(self, messages: List[Dict[str, Any]]) -> str:
         """An explanation that quotes the tool's own numbers, so E3/E4 can pass."""
@@ -1102,19 +1131,24 @@ def test_the_budget_ceiling_holds_with_several_items_in_flight(requests_two_days
     Adding a cost once an item has returned is not a ceiling when items overlap.
     The stub holds three calls open at once, so nothing has reached the ledger
     when the fourth item asks to launch and only its reservation can refuse it.
-    The stub also reports tokens close to what the estimate assumed, which is
+    The stub also reports tokens equal to what the estimate assumed, which is
     what makes the outcome independent of who finishes first: three items commit
-    about $0.073 whether they are running or already paid for, and a fourth
-    claim crosses $0.08 either way.
+    the same amount whether they are running or already paid for, and a fourth
+    claim crosses the ceiling either way. The ceiling is set at three and a half
+    items, from the arm's own cost model, so a change to that model moves the
+    ceiling with it rather than breaking this test.
     """
-    ledger = matrix.Ledger(price_in=2.5, price_out=10.0, limit_usd=0.08)
+    arm = matrix.ARMS["llm_only:structured"]
+    probe = matrix.Ledger(price_in=2.5, price_out=10.0, limit_usd=1.0)
+    per_item = max(matrix.estimate_item_cost(arm, r, probe) for _s, r in requests_two_days)
+    ceiling = 3.5 * per_item
+    ledger = matrix.Ledger(price_in=2.5, price_out=10.0, limit_usd=ceiling)
     client = GatedStubClient(
-        width=3, ledger=ledger, timeout=5.0, prompt_tokens=900, completion_tokens=2200,
+        width=3, ledger=ledger, timeout=5.0, prompt_tokens=900,
+        completion_tokens=arm.cost.completion_tokens_per_call,
     )
     client.day = requests_two_days[0][1].day
-    arm = matrix.ARMS["llm_only:structured"]
-    per_item = max(matrix.estimate_item_cost(arm, r, ledger) for _s, r in requests_two_days)
-    assert 3 * per_item < 0.08 <= 4 * per_item  # the ceiling this run is aimed at
+    assert 3 * per_item < ceiling <= 4 * per_item  # the ceiling this run is aimed at
 
     rows = _run(
         requests_two_days, tmp_path,
@@ -1127,10 +1161,10 @@ def test_the_budget_ceiling_holds_with_several_items_in_flight(requests_two_days
     assert client.gate.max_in_flight >= 2, "the items did not actually overlap"
     # Never, at any moment and with any number of them in flight, over the ceiling.
     assert client.committed, "no call was observed"
-    assert max(client.committed) <= 0.08
+    assert max(client.committed) <= ceiling
     assert len(ran) == 3
     assert len(blocked) == len(rows) - 3
-    assert ledger.spent_usd <= 0.08
+    assert ledger.spent_usd <= ceiling
     assert ledger.committed_usd() == pytest.approx(ledger.spent_usd)  # every claim released
     assert any("budget ceiling would be passed" in (r["error"] or "") for r in blocked)
     # A blocked row is still a row, with its day and its ground truth on it.

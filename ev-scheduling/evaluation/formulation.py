@@ -35,6 +35,16 @@ hours). The day-level type is the first of
 A day is ``formulation_exact`` only when every ground-truth session is matched,
 no extra session was invented, and every field of every session is exact. A day
 with no sessions on either side is exact: there was nothing to extract.
+
+One schema for every method (2026-09-28)
+----------------------------------------
+Every method declares the problem it read in the same JSON schema, the one
+``methods/_shared/parse_extraction_system.txt`` defines: the agents in their
+parse turn, the no-tools methods in the ``formulation`` field of their reply
+(``methods/_shared/llm_only_output_contract.txt``), the rule-based method from
+its grammar. ``problem_from_dict`` turns that object into the ``ParsedProblem``
+this module compares, so the column is one measurement across the six rows
+and not a different reading of each method's trace.
 """
 
 from dataclasses import dataclass, field
@@ -351,6 +361,58 @@ def _check_pair(truth: _Params, parsed: _Params, dt: float) -> SessionCheck:
         err,
         fields,
         "; ".join(f"{f.name}: {f.detail}" for f in bad),
+    )
+
+
+# --------------------------------------------------------------------------- the declared problem
+
+
+def problem_from_dict(data: Any, *, n_steps: int = 96, dt_hours: float = 0.25) -> Optional[Any]:
+    """The ``ParsedProblem`` a method declared, from its JSON object.
+
+    Read with ``methods.agent.parse.parse``'s own session reader, so a session
+    is built here exactly as the agents' parse step builds it: a missing power
+    takes that reader's default and is then scored against the truth.
+
+    Args:
+        data: The declared object: ``{"sessions": [...], "site_cap_kw": ...,
+            "peak_price": ..., "off_peak_price": ...}``. Anything else, or an
+            object without a ``sessions`` list, gives None.
+        n_steps: Horizon length recorded on the problem.
+        dt_hours: Step length recorded on the problem.
+
+    Returns:
+        The problem, or None when the object declares no sessions.
+    """
+    from methods.agent.parse.parse import ParsedProblem, _session_from_dict
+
+    if not isinstance(data, dict):
+        return None
+    raw_sessions = data.get("sessions")
+    if not isinstance(raw_sessions, list):
+        return None
+
+    def _float_default(value: Any, default: float) -> float:
+        try:
+            return default if value is None else float(value)
+        except (TypeError, ValueError):
+            return default
+
+    sessions = []
+    for i, item in enumerate(raw_sessions):
+        if not isinstance(item, dict):
+            continue
+        try:
+            sessions.append(_session_from_dict(item, i))
+        except (TypeError, ValueError):
+            continue
+    return ParsedProblem(
+        sessions=sessions,
+        n_steps=n_steps,
+        dt_hours=dt_hours,
+        site_cap_kw=_float_default(data.get("site_cap_kw"), 50.0),
+        peak_price=_float_default(data.get("peak_price"), 0.45),
+        off_peak_price=_float_default(data.get("off_peak_price"), 0.12),
     )
 
 
