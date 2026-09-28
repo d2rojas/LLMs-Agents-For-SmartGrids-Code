@@ -1,4 +1,4 @@
-"""Verification gate: seven conditions, one retry, then a declared failure.
+"""Verification gate: eight conditions, one retry, then a declared failure.
 
 What this is for
 ----------------
@@ -15,8 +15,8 @@ never got a second chance, and never declared a failure, so the case study could
 not tell a verified agent from an unverified one and could not report how many
 days a person has to take over.
 
-The seven conditions
-------------------
+The eight conditions
+--------------------
 Each is evaluated and reported separately, never collapsed into one boolean, so
 a supplementary table can list them (see ``CONDITION_DESCRIPTIONS``).
 
@@ -35,6 +35,8 @@ E6        ``shortfall_declared``     A material shortfall in the tool output is 
                                      the answer.
 E7        ``problem_read_back``      Every parameter the model extracted is the one the
                                      request states.
+E8        ``answers_the_question``   The quantity the answer reports is the quantity the
+                                     request asks for.
 ========  =========================  ====================================================
 
 E1-E2 are the EV counterpart of V1-V3 (convergence, balance, no isolated bus):
@@ -63,6 +65,18 @@ parse turn, which has already happened, and the retry is forbidden from changing
 it. So E7 sends the day to the declared failure, which is the point. A misread
 request should leave the system saying it cannot stand behind its reading, not
 producing a confident schedule for a day that does not exist.
+
+E8 exists because of the second thing that run measured, on the days the
+reading was right. Asked what share of the requested energy the plan delivers,
+the agent answered with ``pct_fully_served`` from the solver's own output: the
+share of cars that left full, 23.53 %, on a day that delivered 97.04 % of the
+energy. All seven conditions passed, correctly, because the number was real,
+current, from the last solve and consistent with the surfaced schedule. Six of
+the twenty days failed that way and none was escalated. Grounding a number in a
+trusted tool guarantees where it came from, not that it answers the question
+that was asked, and E8 is the condition for the second thing: the asked quantity
+is read from the request by a bounded grammar, recomputed from the schedule
+about to be surfaced, and compared with what the answer states.
 
 E5 has no power-flow counterpart and is the one condition this case study adds.
 In power flow the answer and the verified object are the same thing: one network
@@ -170,7 +184,7 @@ import numpy as np
 from config.site import SiteConfig, TOUConfig
 from solver.checker import CheckResult, check
 from data.format.schema import DaySessions
-from evaluation.outcome import GateVerdict
+from evaluation.outcome import ANSWER_REL_TOL, GateVerdict
 from evaluation.traceability import (
     TOLERANCE_BY_KIND,
     TOL_DEFAULT,
@@ -189,6 +203,43 @@ CONDITION_ORDER: Tuple[str, ...] = (
     "schedule_consistency",
     "shortfall_declared",
     "problem_read_back",
+    "answers_the_question",
+)
+
+# E8: the phrasings the request generator can append for each of the three
+# quantities the condition recomputes, lower-cased and whitespace-collapsed.
+#
+# This is a bounded grammar and it is deliberately coupled to
+# ``evaluation/requests.py``: ``tests/test_gate.py`` asserts that every phrasing
+# that file can emit for cost, unmet energy and served share is recognised here,
+# and that no phrasing of any other variant is. A new phrasing therefore breaks
+# a test rather than silently making E8 abstain, which is the failure mode a
+# looser pattern would have.
+_ASKED_PATTERNS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
+    (
+        "cost",
+        (
+            "what does that cheapest plan cost",
+            "electricity bill comes to",
+            "how much do we pay for the energy in total",
+        ),
+    ),
+    (
+        "unmet_kwh",
+        (
+            "how much of the requested energy cannot be delivered",
+            "how many kwh are left undelivered",
+            "how much energy goes undelivered",
+        ),
+    ),
+    (
+        "pct_energy_served",
+        (
+            "what share of the energy the drivers asked for actually gets delivered",
+            "what percentage of the requested energy is delivered",
+            "what percentage does the plan deliver",
+        ),
+    ),
 )
 
 # Paper/notes labels for the seven conditions, the EV counterpart of
@@ -202,6 +253,7 @@ CONDITION_LABELS: Dict[str, str] = {
     "schedule_consistency": "E5",
     "shortfall_declared": "E6",
     "problem_read_back": "E7",
+    "answers_the_question": "E8",
 }
 
 # One line per condition, for the supplementary table.
@@ -215,6 +267,10 @@ CONDITION_DESCRIPTIONS: Dict[str, str] = {
     "problem_read_back": (
         "every parameter the model extracted is the one the request states, as read back by the "
         "deterministic grammar"
+    ),
+    "answers_the_question": (
+        "the quantity the answer reports is the quantity the request asks for, recomputed from the "
+        "surfaced schedule"
     ),
 }
 
@@ -868,6 +924,116 @@ def _check_problem_read_back(
     )
 
 
+def _asked_quantity(request_text: Optional[str]) -> Optional[str]:
+    """Which of E8's three quantities the request asks for, or None.
+
+    A bounded grammar over the question the generator appends, in the same
+    spirit as E7: it recognises the phrasings it knows and says nothing about
+    the rest. None means "not one of the three", which makes E8 abstain, and
+    that is the right answer for a request that prescribes an operation only,
+    asks a yes/no, names a car, or asks about the day rather than the plan.
+
+    Two matches also return None. A request that asks for two of the three
+    quantities at once is not a question E8 can hold a single number to, and
+    accusing on an ambiguous read is the mistake E7 was written to avoid.
+    """
+    if not request_text or not str(request_text).strip():
+        return None
+    text = " ".join(str(request_text).lower().split())
+    hits = [name for name, patterns in _ASKED_PATTERNS if any(p in text for p in patterns)]
+    return hits[0] if len(hits) == 1 else None
+
+
+def _check_answers_the_question(
+    answer_text: Optional[str],
+    request_text: Optional[str],
+    schedule: Optional[np.ndarray],
+    check_result: Optional[CheckResult],
+    day: DaySessions,
+    tou: Optional[TOUConfig],
+) -> Condition:
+    """E8: the quantity the answer reports is the quantity the request asks for.
+
+    Why this is not E3
+    ------------------
+    E3 asks where a number came from and is satisfied by any tool output. The
+    run of 2026-09-28 showed that this is not enough. Asked what percentage of
+    the requested energy the plan delivers, the agent answered 23.53 %, which is
+    ``pct_fully_served`` in the solver's own output: the share of *cars* that
+    left full, on a day that delivered 97.04 % of the *energy*. Every condition
+    passed, because every condition was satisfied. The number was real, current,
+    from the last solve, and consistent with the surfaced schedule. It was an
+    answer to a question nobody asked. Six of the twenty days failed this way,
+    and the gate escalated none of them.
+
+    Grounding a number in a tool guarantees its provenance, not its relevance.
+    E8 is the condition that asks for relevance, and it is the only one that
+    reads the request in order to judge the answer rather than the problem.
+
+    How it decides
+    --------------
+    The asked quantity is read from the request text by ``_asked_quantity`` and
+    recomputed here from the schedule that is about to be surfaced, never from a
+    reference solution: the cost from the schedule and the tariff, the
+    undelivered energy from the checker, the delivered share from the two. That
+    keeps E8 inside the gate's scope, which is the agent's own evidence. It also
+    keeps E8 independent of E7: if the day was misread, the quantity recomputed
+    here is the one the misread day implies, and saying so is E7's job, not this
+    one's.
+
+    The comparison tolerance is the scorer's, ``evaluation.outcome``'s absolute
+    floor widened by ``ANSWER_REL_TOL`` of the magnitude, so that a reply which
+    rounds for a human reader is not escalated for rounding. Holding the gate to
+    a tighter rule than the scorer would escalate days the scorer then counts as
+    answered, which is a disagreement between two parts of the same system.
+
+    Abstains when the question is not one of the three, when there is no answer
+    text, when there is no schedule to recompute from, and, for cost only, when
+    no tariff was supplied.
+    """
+    name = "answers_the_question"
+    asked = _asked_quantity(request_text)
+    if asked is None:
+        return _condition(name, NOT_APPLICABLE, None, "the request does not ask for a quantity this condition reads")
+    if not answer_text or not str(answer_text).strip():
+        return _condition(name, NOT_APPLICABLE, None, "there is no answer text to read a number out of")
+    if schedule is None or check_result is None:
+        return _condition(name, NOT_APPLICABLE, None, "there is no surfaced schedule to recompute the quantity from")
+
+    requested_kwh = float(sum(s.energy_kwh for s in day.sessions))
+    if asked == "cost":
+        if tou is None:
+            return _condition(name, NOT_APPLICABLE, None, "no tariff was supplied, so the cost cannot be recomputed")
+        from evaluation.metrics import total_cost  # local import: as in E5, no metrics at import time
+
+        value = float(total_cost(schedule, tou, day.dt_hours))
+        kinds, label, unit = ("cost", "unknown"), "the day's cost", "$"
+    elif asked == "unmet_kwh":
+        value = float(check_result.total_unmet_kwh)
+        kinds, label, unit = ("energy", "unknown"), "the undelivered energy", "kWh"
+    else:  # pct_energy_served
+        if requested_kwh <= 0.0:
+            return _condition(name, NOT_APPLICABLE, None, "the day requests no energy, so no share is defined")
+        value = 100.0 * (requested_kwh - float(check_result.total_unmet_kwh)) / requested_kwh
+        kinds, label, unit = ("percent", "unknown"), "the share of the requested energy delivered", "%"
+
+    tol = max(TOLERANCE_BY_KIND.get(kinds[0], TOL_DEFAULT), ANSWER_REL_TOL * abs(value))
+    mentions = numbers_in_text(answer_text)
+    if any(m.kind in kinds and abs(m.value - value) <= tol for m in mentions):
+        return _condition(name, PASS, 0.0, f"the answer states {label}, {value:.2f} {unit}")
+
+    stated = [f"{m.value:g}" for m in mentions if m.kind in kinds][:3]
+    got = f"it states {', '.join(stated)} instead" if stated else "it states no number of that quantity"
+    nearest = min((abs(m.value - value) for m in mentions if m.kind in kinds), default=None)
+    return _condition(
+        name,
+        FAIL,
+        float(nearest) if nearest is not None else float(abs(value)),
+        f"the request asks for {label}, which this schedule puts at {value:.2f} {unit}, and {got}, "
+        "so the answer reports a real number that is not the one asked for",
+    )
+
+
 def verify_answer(
     answer_text: Optional[str],
     *,
@@ -937,6 +1103,9 @@ def verify_answer(
         "shortfall_declared": _check_shortfall_declared(answer_text, day, tool_outputs, check_result),
         "problem_read_back": _check_problem_read_back(
             read_back_day if read_back_day is not None else day, request_text
+        ),
+        "answers_the_question": _check_answers_the_question(
+            answer_text, request_text, schedule, check_result, day, tou
         ),
     }
 

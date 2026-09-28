@@ -114,6 +114,47 @@ ANSWER_TOLERANCES: Dict[str, float] = {
     "value": 0.01,
 }
 
+# Relative floor under those absolute tolerances, applied to the magnitude of
+# the ground truth.
+#
+# The absolute values above are the unit a person would write the quantity in:
+# a cent, a hundredth of a kWh. They are the right tolerance on a quantity of
+# ones and tens, and the wrong one on a quantity of hundreds, because the reply
+# is prose written for a human and a human rounds. The run of 2026-09-28
+# measured what that costs: ``rule_based``, which runs no model at all and
+# solves the same LP, lost four of its twenty days on 158.46 against 158.45,
+# 60.26 against 60.28, 17.23 against 17.22 and 97.96 against 97.97. A row with
+# no language model in it cannot be wrong about the answer to its own solve, so
+# the tolerance, not the row, was at fault.
+#
+# One part in a thousand is below any rounding a reply performs (two decimals on
+# a quantity of hundreds is one part in ten thousand) and far under the errors
+# this term exists to catch, which on the same run were whole quantities apart:
+# 23.53 % reported where 97.04 % was asked for. It is a floor, never a ceiling,
+# so nothing here loosens the small quantities the absolute values already suit.
+ANSWER_REL_TOL = 1e-3
+
+
+def answer_tolerance(kind: str, truth: Any, override: Optional[float] = None) -> float:
+    """Tolerance to hold a numeric answer of this kind and size to.
+
+    Args:
+        kind: RequestAnswer kind, for the absolute floor in ANSWER_TOLERANCES.
+        truth: The ground-truth value, for the relative floor.
+        override: The request's own tolerance, which wins outright when given.
+
+    Returns:
+        The larger of the kind's absolute tolerance and ANSWER_REL_TOL of the
+        truth's magnitude, or ``override`` when the generator set one.
+    """
+    if override is not None:
+        return float(override)
+    absolute = ANSWER_TOLERANCES.get(kind, 0.01)
+    magnitude = _numeric(truth)
+    if magnitude is None:
+        return absolute
+    return max(absolute, ANSWER_REL_TOL * abs(float(magnitude)))
+
 
 @dataclass
 class GateVerdict:
@@ -339,7 +380,7 @@ def check_answer(answer: Optional[RequestAnswer]) -> AnswerCheck:
 
     truth_num, given_num = _numeric(answer.truth), _numeric(answer.given)
     if truth_num is not None and given_num is not None:
-        tol = answer.tolerance if answer.tolerance is not None else ANSWER_TOLERANCES.get(kind, 0.01)
+        tol = answer_tolerance(kind, truth_num, answer.tolerance)
         ok = abs(given_num - truth_num) <= tol
         return AnswerCheck(
             PASS if ok else FAIL,
