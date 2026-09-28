@@ -1,6 +1,6 @@
 # react_nogate on SDWPF with gpt-4o-mini
 
-Generated 2026-09-27 23:38 by evaluation/postprocess.py from `raw/rows.jsonl`. Requests: 3. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the frozen target days, the same way for every method.
+Generated 2026-09-28 00:05 by evaluation/postprocess.py from `raw/rows.jsonl`. Requests: 3. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the frozen target days, the same way for every method.
 
 ## Run
 
@@ -43,6 +43,8 @@ The three outcomes are exclusive and sum to the request count. Escalation takes 
 | Task utility | Formulation exact | 3/3 (100.0%) |
 | Task utility | Formulation error types | {} |
 | Task utility | MAE / RMSE / overall, kW, over valid series (n=2) | 453.28 / 549.08 / 501.18 |
+| Task utility | MAE as a share of the 1500 kW rating | 30.22 % |
+| Task utility | Skill against persistence (1 - MAE/MAE_persistence; 0 = no better, negative = worse) | 0.32 (persistence MAE 656.15 kW) |
 | Task utility | MAE / RMSE, kW, over solved requests | 573.78 / 682.68 |
 | Task utility | Answer coherent with the series | 0/1 |
 | Solver-grounded correctness | Valid series (schema and range) | 2/3 (66.7%) |
@@ -56,9 +58,11 @@ The three outcomes are exclusive and sum to the request count. Escalation takes 
 
 ## By horizon
 
-| horizon | n | solved | valid series scored | MAE kW | RMSE kW | overall kW |
-|---|---:|---:|---:|---:|---:|---:|
-| 48 h | 3 | 1 | 2 | 453.28 | 549.08 | 501.18 |
+Every error is the mean over the requests of that horizon whose series was valid; a method that returns no valid series at a horizon has nothing to average, which is itself the finding. Skill is against persistence on the same points.
+
+| horizon | n | solved | valid series scored | MAE kW | RMSE kW | overall kW | nMAE % | persistence MAE kW | skill |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 48 h | 3 | 1 | 2 | 453.28 | 549.08 | 501.18 | 30.22 | 656.15 | 0.32 |
 
 ## Wrong and unflagged (1)
 

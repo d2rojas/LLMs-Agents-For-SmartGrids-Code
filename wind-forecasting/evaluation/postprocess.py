@@ -42,7 +42,7 @@ SUMMARY_COLUMNS = [
     "nn", "request_id", "instance_id", "turbine", "horizon_hours", "question", "condition",
     "formulation_exact", "formulation_error_type", "formulation_detail",
     "outcome", "solved", "solved_reason", "escalated", "wrong_silently", "escalation_reason",
-    "status", "schema_ok", "range_ok", "n_values", "mae_kw", "rmse_kw", "overall_kw", "n_scored_points",
+    "status", "schema_ok", "range_ok", "n_values", "mae_kw", "rmse_kw", "overall_kw", "nmae_pct", "mae_persistence_kw", "skill_vs_persistence", "n_scored_points",
     "answer_given", "answer_implied", "answer_ok", "answer_truth", "answer_truth_ok",
     "source", "traceable", "gate_pass", "gate_failed",
     "n_llm_calls", "n_tool_calls", "prompt_tokens", "completion_tokens", "cost_usd", "wall_time_s",
@@ -74,7 +74,9 @@ def summary_row(nn: int, r: Dict[str, Any]) -> Dict[str, Any]:
         "outcome": oc, "solved": oc == "solved", "solved_reason": r.get("common_reason"), "escalated": oc == "escalated",
         "wrong_silently": oc == "wrong_unflagged", "escalation_reason": r.get("common_escalation_reason"),
         "status": r.get("common_status"), "schema_ok": r.get("common_schema_ok"), "range_ok": r.get("common_range_ok"), "n_values": r.get("common_n_values"),
-        "mae_kw": r.get("common_mae"), "rmse_kw": r.get("common_rmse"), "overall_kw": r.get("common_overall"), "n_scored_points": r.get("common_n_scored_points"),
+        "mae_kw": r.get("common_mae"), "rmse_kw": r.get("common_rmse"), "overall_kw": r.get("common_overall"),
+        "nmae_pct": r.get("common_nmae_pct"), "mae_persistence_kw": r.get("common_mae_persistence"), "skill_vs_persistence": r.get("common_skill_vs_persistence"),
+        "n_scored_points": r.get("common_n_scored_points"),
         "answer_given": a.get("answer"), "answer_implied": r.get("common_answer_implied"), "answer_ok": r.get("common_answer_ok"),
         "answer_truth": r.get("common_answer_truth"), "answer_truth_ok": r.get("common_answer_truth_ok"),
         "source": r.get("common_source"), "traceable": r.get("common_traceable"),
@@ -218,6 +220,8 @@ def render_report(header: Dict[str, Any], rows: List[Dict[str, Any]], agg: Dict[
           f"| Task utility | Formulation exact | {agg.get('common_formulation_count')}/{agg.get('common_formulation_total')} ({agg.get('common_formulation_rate')}%) |",
           f"| Task utility | Formulation error types | {dict(Counter(r.get('common_formulation_error_type') for r in rows if not r.get('common_formulation_exact')))} |",
           f"| Task utility | MAE / RMSE / overall, kW, over valid series (n={agg.get('common_scored_n')}) | {agg.get('common_mae_mean')} / {agg.get('common_rmse_mean')} / {agg.get('common_overall_mean')} |",
+          f"| Task utility | MAE as a share of the 1500 kW rating | {agg.get('common_nmae_pct_mean')} % |",
+          f"| Task utility | Skill against persistence (1 - MAE/MAE_persistence; 0 = no better, negative = worse) | {agg.get('common_skill_mean')} (persistence MAE {agg.get('common_mae_persistence_mean')} kW) |",
           f"| Task utility | MAE / RMSE, kW, over solved requests | {agg.get('common_mae_solved_mean')} / {agg.get('common_rmse_solved_mean')} |",
           f"| Task utility | Answer coherent with the series | {agg.get('common_answer_count')}/{agg.get('common_answer_total')} |",
           f"| Solver-grounded correctness | Valid series (schema and range) | {agg.get('common_schema_count')}/{n} ({agg.get('common_schema_rate')}%) |",
@@ -228,9 +232,13 @@ def render_report(header: Dict[str, Any], rows: List[Dict[str, Any]], agg: Dict[
           f"| Cost and time | Prompt / completion tokens, mean | {agg.get('prompt_tokens_mean')} / {agg.get('completion_tokens_mean')} |",
           f"| Cost and time | Cost, total | ${agg.get('cost_usd_total', 0):.4f} |",
           f"| Cost and time | Wall time, mean | {agg.get('wall_time_mean_s')} s |", ""]
-    L += ["## By horizon", "", "| horizon | n | solved | valid series scored | MAE kW | RMSE kW | overall kW |", "|---|---:|---:|---:|---:|---:|---:|"]
+    L += ["## By horizon", "",
+          "Every error is the mean over the requests of that horizon whose series was valid; a method that returns no valid series at a "
+          "horizon has nothing to average, which is itself the finding. Skill is against persistence on the same points.", "",
+          "| horizon | n | solved | valid series scored | MAE kW | RMSE kW | overall kW | nMAE % | persistence MAE kW | skill |",
+          "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for h, v in (agg.get("by_horizon") or {}).items():
-        L.append(f"| {h} h | {v['n']} | {v['solved']} | {v['n_scored']} | {v['mae']} | {v['rmse']} | {v['overall']} |")
+        L.append(f"| {h} h | {v['n']} | {v['solved']} | {v['n_scored']} | {v['mae']} | {v['rmse']} | {v['overall']} | {v.get('nmae_pct')} | {v.get('mae_persistence')} | {v.get('skill')} |")
     L.append("")
     for oc, title in (("wrong_unflagged", "Wrong and unflagged"), ("escalated", "Escalated")):
         sel = [r for r in rows if r.get("common_outcome") == oc]

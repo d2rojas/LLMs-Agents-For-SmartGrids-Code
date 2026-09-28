@@ -1,6 +1,6 @@
 # rule_based on SDWPF with no-llm
 
-Generated 2026-09-27 23:09 by evaluation/postprocess.py from `raw/rows.jsonl`. Requests: 60. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the frozen target days, the same way for every method.
+Generated 2026-09-28 00:02 by evaluation/postprocess.py from `raw/rows.jsonl`. Requests: 60. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the frozen target days, the same way for every method.
 
 ## Run
 
@@ -43,6 +43,8 @@ The three outcomes are exclusive and sum to the request count. Escalation takes 
 | Task utility | Formulation exact | 60/60 (100.0%) |
 | Task utility | Formulation error types | {} |
 | Task utility | MAE / RMSE / overall, kW, over valid series (n=60) | 280.7 / 333.08 / 306.89 |
+| Task utility | MAE as a share of the 1500 kW rating | 18.71 % |
+| Task utility | Skill against persistence (1 - MAE/MAE_persistence; 0 = no better, negative = worse) | 0.45 (persistence MAE 494.45 kW) |
 | Task utility | MAE / RMSE, kW, over solved requests | 280.7 / 333.08 |
 | Task utility | Answer coherent with the series | 40/40 |
 | Solver-grounded correctness | Valid series (schema and range) | 60/60 (100.0%) |
@@ -56,11 +58,13 @@ The three outcomes are exclusive and sum to the request count. Escalation takes 
 
 ## By horizon
 
-| horizon | n | solved | valid series scored | MAE kW | RMSE kW | overall kW |
-|---|---:|---:|---:|---:|---:|---:|
-| 3 h | 20 | 20 | 20 | 196.01 | 229.4 | 212.71 |
-| 6 h | 20 | 20 | 20 | 250.21 | 283.85 | 267.03 |
-| 48 h | 20 | 20 | 20 | 395.89 | 486.0 | 440.94 |
+Every error is the mean over the requests of that horizon whose series was valid; a method that returns no valid series at a horizon has nothing to average, which is itself the finding. Skill is against persistence on the same points.
+
+| horizon | n | solved | valid series scored | MAE kW | RMSE kW | overall kW | nMAE % | persistence MAE kW | skill |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 3 h | 20 | 20 | 20 | 196.01 | 229.4 | 212.71 | 13.07 | 426.12 | 0.53 |
+| 6 h | 20 | 20 | 20 | 250.21 | 283.85 | 267.03 | 16.68 | 470.86 | 0.49 |
+| 48 h | 20 | 20 | 20 | 395.89 | 486.0 | 440.94 | 26.39 | 586.38 | 0.32 |
 
 ## Wrong and unflagged (0)
 

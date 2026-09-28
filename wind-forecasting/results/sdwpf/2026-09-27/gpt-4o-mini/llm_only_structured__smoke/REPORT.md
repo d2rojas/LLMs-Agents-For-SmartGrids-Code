@@ -1,6 +1,6 @@
 # llm_only_structured on SDWPF with gpt-4o-mini
 
-Generated 2026-09-27 23:32 by evaluation/postprocess.py from `raw/rows.jsonl`. Requests: 3. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the frozen target days, the same way for every method.
+Generated 2026-09-28 00:05 by evaluation/postprocess.py from `raw/rows.jsonl`. Requests: 3. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the frozen target days, the same way for every method.
 
 ## Run
 
@@ -43,6 +43,8 @@ The three outcomes are exclusive and sum to the request count. Escalation takes 
 | Task utility | Formulation exact | 0/3 (0.0%) |
 | Task utility | Formulation error types | {'no_formulation': 3} |
 | Task utility | MAE / RMSE / overall, kW, over valid series (n=0) | None / None / None |
+| Task utility | MAE as a share of the 1500 kW rating | None % |
+| Task utility | Skill against persistence (1 - MAE/MAE_persistence; 0 = no better, negative = worse) | None (persistence MAE None kW) |
 | Task utility | MAE / RMSE, kW, over solved requests | None / None |
 | Task utility | Answer coherent with the series | 0/0 |
 | Solver-grounded correctness | Valid series (schema and range) | 0/3 (0.0%) |
@@ -56,9 +58,11 @@ The three outcomes are exclusive and sum to the request count. Escalation takes 
 
 ## By horizon
 
-| horizon | n | solved | valid series scored | MAE kW | RMSE kW | overall kW |
-|---|---:|---:|---:|---:|---:|---:|
-| 48 h | 3 | 0 | 0 | None | None | None |
+Every error is the mean over the requests of that horizon whose series was valid; a method that returns no valid series at a horizon has nothing to average, which is itself the finding. Skill is against persistence on the same points.
+
+| horizon | n | solved | valid series scored | MAE kW | RMSE kW | overall kW | nMAE % | persistence MAE kW | skill |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 48 h | 3 | 0 | 0 | None | None | None | None | None | None |
 
 ## Wrong and unflagged (3)
 
