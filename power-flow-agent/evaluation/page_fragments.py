@@ -227,6 +227,17 @@ def _runs() -> List[Dict[str, Any]]:
     return [r for r in json.loads(INDEX.read_text(encoding="utf-8")).get("runs", []) if r.get("kind") == "run"]
 
 
+def _config(run: Dict[str, Any]) -> Dict[str, Any]:
+    """What the run recorded about itself: the harness commit, the prompt, the tool."""
+    f = RESULTS / run["path"] / "config.json"
+    if not f.exists():
+        return {}
+    try:
+        return json.loads(f.read_text(encoding="utf-8"))
+    except ValueError:
+        return {}
+
+
 def _rows(run: Dict[str, Any]) -> List[Dict[str, str]]:
     f = RESULTS / run["path"] / "summary.csv"
     if not f.exists():
@@ -349,11 +360,18 @@ def tab_results() -> str:
                 cells, n_cell = _cells(_rows(run), model)
                 if not cells:
                     continue
-                name = (f"<b>{E(label)}</b><div class='muted'><code>{E(key)}</code> · {E(run['date'])}</div>")
+                # The date says when, the commit says with what. They are not the
+                # same control and the second is the one that actually varies:
+                # every table here spans four or five harness commits.
+                cfg = _config(run)
+                sha = str(cfg.get("git_commit") or "")[:8]
+                name = (f"<b>{E(label)}</b><div class='muted'><code>{E(key)}</code> · {E(run['date'])}"
+                        + (f" · <code>{E(sha)}</code>" if sha else "") + "</div>")
                 rows_out.append((model, [name, n_cell], cells, run["path"]))
         if not rows_out:
             continue
         dates = sorted({r["date"] for r in chosen.values()})
+        shas = sorted({str(_config(r).get("git_commit") or "")[:8] for r in chosen.values()} - {""})
         # Six methods on one system were not run in one sitting, and a table that
         # does not say so reads as one experiment. Each row carries its own date
         # under the method name; this says it out loud as well.
@@ -369,11 +387,13 @@ def tab_results() -> str:
                  "requests whose answer declared one, which an escalated request does not. V_MAE and B_mean are "
                  "given over the solved requests and over every request that reported a state. Traceable is not "
                  "applicable to a method that calls no tool, which is not the same as passing."
-                 + ("" if len(dates) == 1 else
-                    " <b>The rows of this table come from runs made on different days</b>, each named under its "
-                    "method: the six methods were not run in one sitting on this system. The requests are the "
-                    "same set for all of them, which is what makes the rows comparable, but a difference between "
-                    "two rows is a difference between two runs and not between two arms of one experiment."),
+                 + ("" if len(shas) < 2 else
+                    f" <b>These rows were produced by {len(shas)} different builds of the harness</b>, named under "
+                    "each method beside its date, because the six methods were not run in one sitting on this "
+                    "system. What is shared is what the comparison rests on: every row answered the same request "
+                    "set, was scored by the same evaluator, called the same tool variant and ran at temperature 0. "
+                    "What is not shared is the code that drove them, so a difference between two rows is a "
+                    "difference between two builds as well as between two methods."),
                  "info")))
 
     body.append(_request_section())
