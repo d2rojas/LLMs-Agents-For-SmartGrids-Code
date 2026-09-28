@@ -488,7 +488,9 @@ def tab_results() -> str:
     # The comparison table, laid out like every other case study's: the same three column groups,
     # and one column per horizon instead of three numbers packed into a cell. A 48 h forecast is a
     # different problem from a 3 h one, and reading them stacked in the same cell hid that.
-    LEAD = ("Method", "Model", "n")
+    # Model leads, so the rows of one model sit together and the table reads as one block per
+    # model rather than one per method. The ladder order is kept inside each model.
+    LEAD = ("Model", "Method", "n")
     GROUPS = (
         ("Task utility", ["Form. %"] + [f"{h} h {c}" for h in HORIZONS_H for c in ("scored", "NMAE %", "Imp. %")]),
         ("Solver-grounded correctness", ["Solved %", "Escalated %", "Wrong-unflagged %", "Traceable %"]),
@@ -501,11 +503,20 @@ def tab_results() -> str:
     R = lambda v: f"<td style='text-align:right'>{v}</td>"          # noqa: E731
     DASH = "<td style='text-align:right;color:var(--muted)'>—</td>"
 
+    def model_of(row_name: str, per: Dict[str, Any]) -> str:
+        return per[row_name][0].parts[-2] if row_name in per else ""
+
     for set_name, per in by_set.items():
-        trs = []
-        for row in ROWS:
+        # no-llm first, then the language models; inside each, the ladder order of ROWS
+        models = sorted({model_of(r["name"], per) for r in ROWS if r["name"] in per},
+                        key=lambda m: (m != "no-llm", m))
+        ordered = [r for m in models for r in ROWS if model_of(r["name"], per) == m]
+        ordered += [r for r in ROWS if r["name"] not in per]
+        trs, shown = [], None
+        for row in ordered:
             if row["name"] not in per:
-                trs.append(f"<tr><td><b>{E(row['label'])}</b></td><td colspan='{2 + NCOL}' class='muted'>not run</td></tr>")
+                trs.append(f"<tr><td class='muted'>—</td><td><b>{E(row['label'])}</b></td>"
+                           f"<td colspan='{1 + NCOL}' class='muted'>not run</td></tr>")
                 continue
             d, rows, h = per[row["name"]]
             a = h["aggregate"]
@@ -522,8 +533,13 @@ def tab_results() -> str:
                     R(f"{a.get('trace')}") if a.get("trace") is not None else DASH]
             tds += [R(f"{a.get('tokens'):,}") if a.get("tokens") is not None else DASH,
                     num(a.get("cost"), "{:.3f}"), num(a.get("wall_time_mean_s"), "{:.0f}")]
-            trs.append(f"<tr><td><b>{E(row['label'])}</b><div class='muted'><code>{E(row['name'])}</code></div></td>"
-                       f"<td>{E(d.parts[-2])}</td>{R(len(rows))}" + "".join(tds) + "</tr>")
+            model = d.parts[-2]
+            # the model is named once per block, so the eye groups the rows without a repeated cell
+            cell = f"<b>{E(model)}</b>" if model != shown else "<span class='muted'>&#8220;</span>"
+            shown = model
+            trs.append(f"<tr><td>{cell}</td>"
+                       f"<td><b>{E(row['label'])}</b><div class='muted'><code>{E(row['name'])}</code></div></td>"
+                       f"{R(len(rows))}" + "".join(tds) + "</tr>")
         body.append(card(f"Run set {E(set_name)}",
                          "<div class='tw'><table class='cmp'>" + head + "".join(trs) + "</table></div>",
                          note("The three column groups are the same three in every case study of this site. Inside Task utility, read each "
