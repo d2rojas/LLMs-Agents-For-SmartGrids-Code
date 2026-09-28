@@ -1264,6 +1264,130 @@ def expected_table() -> str:
     )
 
 
+
+def _short(x: Any, n: int = 150) -> str:
+    return " ".join(str(x).split())[:n]
+
+
+def step_lines(trace: Optional[Dict[str, Any]], row: Dict[str, str]) -> List[Tuple[str, str, str]]:
+    """(kind, short, full) log lines of one run, from its raw trace and its summary row.
+
+    Kinds are the ones every case study uses: plan, model, solver, gate, final,
+    status. The lines are what the method did, in order, as the trace recorded
+    it; nothing is summarized by a model.
+    """
+    L: List[Tuple[str, str, str]] = []
+    if trace is None:
+        ans = row.get("request_text", "")
+        L.append(("status", "no model: computed from the parsed day", ""))
+        return L
+    msgs = trace.get("messages") or []
+    tool_outputs: List[Any] = []
+    for rd in ((trace.get("trace") or {}).get("rounds") or []):
+        for t in rd.get("tools") or []:
+            tool_outputs.append(t)
+    ti = 0
+    for m in msgs:
+        role = m.get("role")
+        if role == "assistant":
+            calls = m.get("tool_calls") or []
+            if calls:
+                names = []
+                for c in calls:
+                    fn = c.get("function", {}) if isinstance(c, dict) else {}
+                    names.append(f"{fn.get('name', '?')}({fn.get('arguments', '')})")
+                L.append(("model", "calls → " + "; ".join(names), "\n".join(names)))
+                for c in calls:
+                    fn = c.get("function", {}) if isinstance(c, dict) else {}
+                    out = tool_outputs[ti]["output"] if ti < len(tool_outputs) else ""
+                    ti += 1
+                    out_s = out if isinstance(out, str) else json.dumps(out)
+                    try:
+                        o = json.loads(out_s) if isinstance(out_s, str) else out
+                        brief = f"cost ${o.get('total_cost_usd')} · peak {o.get('peak_load_kw')} kW · unmet {o.get('total_unmet_kwh')} kWh · {o.get('solver_status', '')}"
+                    except Exception:
+                        brief = _short(out_s)
+                    L.append(("solver", f"{fn.get('name', '?')} → {brief}", out_s))
+            elif m.get("content"):
+                text = str(m["content"])
+                if text.strip().startswith("{") and '"plan"' in text:
+                    L.append(("plan", "plan: " + _short(text), text))
+                else:
+                    L.append(("model", "text: " + _short(text), text))
+        elif role == "user" and str(m.get("content", "")).startswith("Result of step"):
+            # plan-and-act feeds results back as user turns
+            text = str(m["content"])
+            L.append(("solver", _short(text), text))
+        elif role == "user" and ("verification" in str(m.get("content", "")).lower() or "retry" in str(m.get("content", "")).lower()) and L:
+            L.append(("gate", "retry message: " + _short(m["content"]), str(m["content"])))
+    gate = trace.get("gate") or {}
+    if gate and gate.get("gate_passed") is not None:
+        conds = []
+        for k in sorted(gate):
+            if k.startswith("gate_E") and not k.endswith("_residual"):
+                v = str(gate[k])
+                conds.append(f"{k[5:7]}{'✓' if v == 'pass' else ('·' if v in ('not_applicable', 'n/a', 'None') else '✗')}")
+        L.append(("gate", f"gate: {'PASS' if str(gate.get('gate_passed')).lower() == 'true' else 'FAIL'} · " + " ".join(conds) + f" · {gate.get('gate_action', '')}",
+                  "\n".join(f"{k}: {gate[k]}" for k in sorted(gate))))
+    elif gate:
+        L.append(("gate", "no gate: answer surfaced as written", ""))
+    ans = trace.get("answer") or ""
+    if ans:
+        L.append(("final", _short(ans), str(ans)))
+    L.append(("status", f"{row.get('outcome', '')}: {row.get('solved_reason', '')}", row.get("solved_reason", "")))
+    return L
+
+
+def same_request_section() -> str:
+    """The same request under each method, one column per method, as the traces recorded it."""
+    dirs = latest_run()
+    by_method = {read_header(d)["header"]["method"]: d for d in dirs}
+    reqs = run_requests()
+    if not dirs or not reqs:
+        return ""
+    ids = [q["id"] for q in sorted(reqs, key=lambda x: x["id"])]
+    labels = {q["id"]: f"{q.get('date')} · {q.get('variant')} · " + (q.get("text", "").strip().splitlines()[-1][:90] if q.get("text") else "")
+              for q in reqs}
+    out = [
+        "<div class='card'><h2>The same request under each method, step by step</h2>"
+        "<p class='muted'>One column per method. Each column is the log of what the method did on that request: "
+        "what it wrote, what it called, what the solver returned, what the gate decided, the answer, and where "
+        "the request ended up. Click a line to expand it. The counts at the foot are model calls and tool calls, "
+        "from the trace.</p>"
+        "<p><label>Request <select id='exq'>" + "".join(f"<option value='{E(i)}'>{E(labels[i])}</option>" for i in ids) + "</select></label></p></div>"
+    ]
+    for n, rid in enumerate(ids):
+        out.append(f"<div class='ex{' on' if n == 0 else ''}' data-exq='{E(rid)}'><div class='cols6'>")
+        for r in ROWS:
+            d = by_method.get(r["name"])
+            if d is None:
+                out.append(f"<div class='col'><h4>{E(r['label'])}</h4><p class='muted' style='padding:8px 10px'>no run</p></div>")
+                continue
+            summ = {x["request_id"]: x for x in read_summary(d)}
+            row = summ.get(rid)
+            if row is None:
+                out.append(f"<div class='col'><h4>{E(r['label'])}</h4><p class='muted' style='padding:8px 10px'>not in this run</p></div>")
+                continue
+            stem = f"{int(row['nn']):02d}_{rid}"
+            tpath = d / "traces" / f"{stem}.json"
+            trace = None
+            if tpath.exists():
+                try:
+                    payload = json.loads(tpath.read_text(encoding="utf-8"))
+                    trace = payload if "messages" in payload else None
+                except ValueError:
+                    trace = None
+            lines = step_lines(trace, row)
+            out.append(
+                f"<div class='col'><h4>{E(r['label'])}{verdict(row.get('outcome', ''))}</h4><div class='log'>"
+                + "".join(f"<div class='ln' data-full='{E(full)}'><span class='k {k}'>{k}</span><span class='s'>{E(short)}</span></div>" for k, short, full in lines)
+                + f"</div><div class='vt'>{E(row.get('n_llm_calls', '0') or '0')} model calls, {E(row.get('n_tool_calls', '0') or '0')} tool calls · "
+                f"{E(row.get('prompt_tokens', '0') or '0')} in / {E(row.get('completion_tokens', '0') or '0')} out tokens</div></div>"
+            )
+        out.append("</div></div>")
+    return "".join(out)
+
+
 def tab_results() -> str:
     dirs = latest_run()
     if not dirs:
@@ -1279,6 +1403,7 @@ def tab_results() -> str:
             expected_table(),
         )
     ]
+    body.append(same_request_section())
 
     # headline: the gated row against its target
     if "evagent" in by_method:
@@ -1517,6 +1642,11 @@ SCRIPT = """
       u.style.display = u.dataset.scn===scn.value ? '' : 'none';});
   }
   scn.onchange=apply; mth.onchange=apply; apply();
+})();
+(function(){
+  var q=document.getElementById('exq'); if(!q) return;
+  function show(){document.querySelectorAll('.ex').forEach(function(x){x.classList.toggle('on', x.dataset.exq===q.value);});}
+  q.onchange=show; show();
 })();
 (function(){
   var m=document.getElementById('trm'), q=document.getElementById('trq');
