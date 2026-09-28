@@ -17,7 +17,7 @@ committed ones. Do not strip or reflow whitespace in these files.
 | `rule_based` | `rule_based` | Deterministic regex parser, no LLM. The conventional-workflow row. | yes | none |
 | `llm_only_structured` | `llm_only:structured` | LLM answers from the case tables in the prompt. Structured prompt, JSON output. | no | none |
 | `llm_only_cot` | `llm_only:cot` | Structured plus a step-by-step reasoning section. | no | none |
-| `plan_act_nogate` | `plan_act_nogate` | One planning call emits the whole tool plan, then it executes. | yes | none |
+| `plan_act_nogate` | `plan_act_nogate` | One planning call emits the whole tool plan, then it executes. Reasoning returns only when a step fails (tool error, or a solve the gate rejects), to revise the remaining plan; at most twice. | yes | none |
 | `react_nogate` | `react_nogate` | ReAct loop: thought, tool call, observation, up to 8 rounds. | yes | none |
 | `pfagent` | `pfagent` | ReAct loop plus the task-level verification gate V1 to V11 on the final answer. The solver-grounded row. | yes | final gate |
 

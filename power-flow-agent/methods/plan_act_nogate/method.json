@@ -8,17 +8,18 @@
   "memory": false,
   "uses_llm": true,
   "uses_tools": true,
-  "description": "Plan-and-Act with no gate.",
+  "description": "Plan-and-Act with no gate. Replans on failure: when a planned step errors or a solve does not converge, one reasoning call revises the remaining plan and execution resumes, at most twice (EngineConfig.max_replans, main.tex Sec. 4).",
   "prompt_files": [
     "_shared/agent_system_prompt.txt",
     "_shared/final_answer_instruction.txt",
     "plan_act_nogate/plan_system_prompt_prefix.txt",
-    "plan_act_nogate/plan_system_prompt_structured.txt"
+    "plan_act_nogate/plan_system_prompt_structured.txt",
+    "plan_act_nogate/replan_instruction.txt"
   ],
   "dynamic_parts": [
     "tool schemas (methods/agent/tools.py, --tool-variant v1|load_split)",
     "tool catalogue appended to the planner prompt"
   ],
   "folder": "plan_act_nogate",
-  "code": "methods/agent/engine.py: LLMEngine._run_plan_act; methods/agent/tools.py: ToolDispatcher"
+  "code": "methods/agent/engine.py: LLMEngine._run_plan_act + _act_with_replanning; methods/agent/tools.py: ToolDispatcher"
 }

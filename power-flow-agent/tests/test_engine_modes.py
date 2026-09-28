@@ -451,3 +451,117 @@ def test_react_accepts_a_reply_that_already_is_the_answer_object():
     engine = LLMEngine(client=client, dispatcher=tools.dispatcher(), config=EngineConfig(model="fake"))
     text, trace = engine.run_with_trace("run it", SessionState())
     assert text == answer and trace["n_llm_calls"] == 2  # no third call for the final-answer instruction
+
+
+# ------------------------------------------------- Plan-and-Act replanning on failure (2026-09-28)
+
+
+class _FailThenRecoverTools(ScriptedTools):
+    """run_powerflow does not converge the first time and converges after that.
+
+    The shape the paper names as the replanning trigger: "a solver not converging".
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.pf_runs = 0
+
+    def dispatcher(self) -> ToolDispatcher:
+        def load_case(args):
+            self.calls.append(("load_case", dict(args)))
+            return {"case_name": args.get("case_name"), "n_buses": 14}
+
+        def run_powerflow(args):
+            self.calls.append(("run_powerflow", dict(args)))
+            self.pf_runs += 1
+            if self.pf_runs == 1:
+                return {**_pf_payload(), "converged": False}
+            return self.pf_payload
+
+        def get_status(args):
+            self.calls.append(("get_status", dict(args)))
+            return {"active_case": "fake", "has_last_result": True}
+
+        return ToolDispatcher(handlers={"load_case": load_case, "run_powerflow": run_powerflow, "get_status": get_status})
+
+
+def test_plan_act_replans_when_a_planned_step_fails():
+    """main.tex: reasoning is invoked again on failure, revising the remaining plan."""
+    tools = _FailThenRecoverTools()
+    plan = {"plan": [
+        {"tool": "load_case", "args": {"case_name": "case14"}},
+        {"tool": "run_powerflow", "args": {}},
+        {"tool": "get_status", "args": {}},
+    ]}
+    revised = {"plan": [{"tool": "run_powerflow", "args": {}}]}
+    client = ScriptedClient([
+        _resp(content=json.dumps(plan)),
+        _resp(content=json.dumps(revised)),
+        _resp(content="Done: load 259.000 MW."),
+    ])
+    engine = LLMEngine(client=client, dispatcher=tools.dispatcher(), config=EngineConfig(model="fake", architecture="plan_act"))
+
+    text, trace = engine.run_with_trace("load case14 and run pf", SessionState())
+
+    assert text == "Done: load 259.000 MW."
+    assert trace["n_replans"] == 1
+    assert trace["replan_reasons"][0]["tool"] == "run_powerflow"
+    assert "not_converged" in trace["replan_reasons"][0]["reason"]
+    # the third planned step never ran: the revised plan replaced what was left
+    assert [c[0] for c in tools.calls] == ["load_case", "run_powerflow", "run_powerflow"]
+    assert [r.get("phase") for r in trace["rounds"]] == ["plan", "act", "replan", "act", "answer"]
+
+
+def test_plan_act_replanning_is_bounded_and_then_answers():
+    """A solver that never converges must not loop: two replans, then the answer."""
+    tools = ScriptedTools(pf_payload={**_pf_payload(), "converged": False})
+    plan = {"plan": [{"tool": "run_powerflow", "args": {}}, {"tool": "get_status", "args": {}}]}
+    client = ScriptedClient([
+        _resp(content=json.dumps(plan)),
+        _resp(content=json.dumps(plan)),
+        _resp(content=json.dumps(plan)),
+        _resp(content="The power flow did not converge, so I cannot report a state."),
+    ])
+    engine = LLMEngine(client=client, dispatcher=tools.dispatcher(), config=EngineConfig(model="fake", architecture="plan_act"))
+
+    text, trace = engine.run_with_trace("run pf", SessionState())
+
+    assert trace["n_replans"] == 2 == EngineConfig().max_replans
+    assert text.startswith("The power flow did not converge")
+    assert trace["rounds"][-1]["phase"] == "answer"
+
+
+def test_plan_act_without_replanning_budget_is_the_old_single_segment():
+    """max_replans=0 restores the pre-2026-09-28 behaviour exactly: plan, act, answer."""
+    tools = _FailThenRecoverTools()
+    plan = {"plan": [{"tool": "run_powerflow", "args": {}}, {"tool": "get_status", "args": {}}]}
+    client = ScriptedClient([_resp(content=json.dumps(plan)), _resp(content="Reported.")])
+    engine = LLMEngine(
+        client=client, dispatcher=tools.dispatcher(),
+        config=EngineConfig(model="fake", architecture="plan_act", max_replans=0),
+    )
+
+    text, trace = engine.run_with_trace("run pf", SessionState())
+
+    assert text == "Reported."
+    assert trace["n_replans"] == 0
+    assert len(client.calls) == 2  # plan + answer, no reasoning in between
+    assert [c[0] for c in tools.calls] == ["run_powerflow", "get_status"]  # nothing was cut short
+    assert [r.get("phase") for r in trace["rounds"]] == ["plan", "act", "answer"]
+
+
+def test_plan_act_replan_that_declines_to_plan_lets_the_model_say_so():
+    tools = ScriptedTools(pf_payload={**_pf_payload(), "converged": False})
+    plan = {"plan": [{"tool": "run_powerflow", "args": {}}, {"tool": "get_status", "args": {}}]}
+    client = ScriptedClient([
+        _resp(content=json.dumps(plan)),
+        _resp(content="This request cannot be completed: the network does not solve."),
+        _resp(content="I could not complete the request."),
+    ])
+    engine = LLMEngine(client=client, dispatcher=tools.dispatcher(), config=EngineConfig(model="fake", architecture="plan_act"))
+
+    text, trace = engine.run_with_trace("run pf", SessionState())
+
+    assert trace["n_replans"] == 1
+    assert trace["rounds"][2]["plan"] is None
+    assert text == "I could not complete the request."
