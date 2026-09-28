@@ -69,6 +69,7 @@ from methods.agent.parse.parse import (  # noqa: E402
     parsed_problem_to_day_site_tou,
 )
 from evaluation.outcome import SOLVED_TERMS  # noqa: E402
+from evaluation.formulation import problem_from_dict
 from evaluation.requests import EVRequest, from_jsonl  # noqa: E402
 from evaluation import runner as matrix  # noqa: E402
 
@@ -233,10 +234,9 @@ def read_trace(path: Optional[Path]) -> Optional[Dict[str, Any]]:
 def parsed_problem_from_trace(trace: Dict[str, Any]) -> Optional[ParsedProblem]:
     """The ``ParsedProblem`` the run's parse step produced, from its trace.
 
-    Rebuilt with ``methods.agent.parse.parse``'s own helpers, on the raw text the model
-    returned, so the formulation term is recomputed on exactly what was
-    extracted. The private helpers are used deliberately: a second JSON reader
-    here would be a second definition of what the model said.
+    Rebuilt from the raw text the model returned, through the one reader every
+    method's declared problem goes through (``evaluation.formulation.problem_from_dict``),
+    so the formulation term is recomputed on exactly what was extracted.
 
     Args:
         trace: The parse trace payload.
@@ -251,21 +251,14 @@ def parsed_problem_from_trace(trace: Dict[str, Any]) -> Optional[ParsedProblem]:
         data = _parse_llm_json(str(raw))
     except ValueError:
         return None
-    raw_sessions = data.get("sessions")
-    if not isinstance(raw_sessions, list):
-        return None
+    return problem_from_dict(data)
 
-    def _float_default(value: Any, default: float) -> float:
-        return default if value is None else float(value)
 
-    return ParsedProblem(
-        sessions=[_session_from_dict(s, i) for i, s in enumerate(raw_sessions)],
-        n_steps=96,
-        dt_hours=0.25,
-        site_cap_kw=_float_default(data.get("site_cap_kw"), 50.0),
-        peak_price=_float_default(data.get("peak_price"), 0.45),
-        off_peak_price=_float_default(data.get("off_peak_price"), 0.12),
-    )
+def reply_from_trace(trace: Optional[Dict[str, Any]]) -> str:
+    """The model's reply as the run recorded it, "" when the trace is absent."""
+    if not trace:
+        return ""
+    return str(trace.get("answer") or (trace.get("trace") or {}).get("final_text") or "")
 
 
 def tool_calls_from_trace(trace: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -410,12 +403,19 @@ def rebuild_output(
         sources["schedule"] = "rule_rerun"
         sources["tool_outputs"] = "rule_rerun"
     elif arm_name.startswith("llm_only"):
-        parse_result = matrix.parse_llm_schedule(answer_text, request.day)
-        schedule = np.asarray(parse_result.schedule, dtype=float)
-        repairs = parse_result.repairs.to_dict()
-        parse_success = bool(parse_result.success)
-        sources["schedule"] = "reply_reparsed"
+        # The reply is in the trace; the row's answer_text is the whole reply
+        # only for runs before 2026-09-28, and is the fallback for a run whose
+        # trace was not copied with it.
+        reply = reply_from_trace(read_trace(resolve_trace(run_dir, row.get("trace_path")))) or answer_text
+        read = matrix.read_reply(reply, request.day)
+        schedule = np.asarray(read.schedule.schedule, dtype=float)
+        repairs = read.schedule.repairs.to_dict()
+        parse_success = bool(read.schedule.success)
+        parsed_problem = problem_from_dict(read.formulation, n_steps=request.day.n_steps, dt_hours=request.day.dt_hours)
+        answer_text = matrix.llm_only_answer_text(read, reply)
+        sources["schedule"] = f"reply_reparsed_as_{read.format}"
         sources["tool_outputs"] = "none"
+        sources["parsed_problem"] = "reply" if parsed_problem is not None else "none"
     elif arm_name in ("evagent", "react", "plan_act"):
         # The two agent rows leave the same artefacts: a parse trace and an
         # agent trace with the tool calls. Only the gate differs, and the gate

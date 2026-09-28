@@ -1,0 +1,18 @@
+{
+  "runner_name": "windagent",
+  "group": "Multi-step agents (paper Sec. 4)",
+  "kind": "agent",
+  "architecture": "react",
+  "uses_llm": true,
+  "uses_tools": true,
+  "gate": true,
+  "description": "The same loop as ReAct plus the verification gate W1-W5 on the final answer: schema, physical range, traceability to a tool output, consistency of the declared formulation with the call that produced the series, and coherence of the answer with the series. One retry, then a declared failure. The solver-grounded row.",
+  "prompt_files": ["_shared/common_rules.txt", "_shared/output_contract.txt", "_shared/agent_system_prompt.txt", "_shared/gate_retry_instruction.txt"],
+  "dynamic_parts": [
+    "the request (evaluation/requests.py::request_text)",
+    "the tool schemas (solver/tools.py::openai_schemas)",
+    "the gate's verdict, handed back to the model on the one retry (methods/agent/gate.py)"
+  ],
+  "code": "methods/agent/loop.py::run_react(gate=True); methods/agent/gate.py",
+  "implemented": true
+}

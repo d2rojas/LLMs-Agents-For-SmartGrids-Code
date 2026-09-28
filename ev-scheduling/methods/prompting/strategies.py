@@ -33,22 +33,34 @@ step is on the evaluated path (see ``evaluation/requests.py``). The context
 section carries only what the request text cannot carry: the time grid, the unit
 convention, and the mapping from the text's "EV n" to schedule row n-1.
 
-The reply has to survive two readers
-------------------------------------
-``methods/prompting/parse.py::parse_llm_schedule`` reads the schedule rows and
-``evaluation/requests.py::extract_answer`` reads the answer to the question,
-which ``evaluation/outcome.py`` scores as part of Solved. An unextractable answer
-on a checkable request counts as wrong, not as skipped, so the output format
-demands both: one ``EV n:`` row per car, then a final ``Answer:`` line phrased in
-the question's own words. ``ANSWER_PREFIX`` is the literal the extractor's
-highest-priority pattern anchors on.
+The reply is one JSON object, read by three readers
+---------------------------------------------------
+The reply carries three things, in one object whose shape is
+``methods/_shared/llm_only_output_contract.txt``: the ``formulation`` the model
+read out of the text (every car's window, energy and plug limit, the site limit
+and the tariff, in the schema the solver-grounded methods' parse step uses, so
+``evaluation/formulation.py`` scores every method with one function), the
+``schedule`` as charging segments ``[start_hour, end_hour, power_kw]`` per car,
+and the ``answer`` to the question. ``methods/prompting/parse.py::read_reply``
+reads the object; ``evaluation/requests.py::extract_answer`` reads the answer
+the runner rewrites as an ``Answer:`` line; ``evaluation/outcome.py`` scores it
+as part of Solved. An unextractable answer on a checkable request counts as
+wrong, not as skipped.
+
+Why segments and not a matrix (2026-09-28)
+------------------------------------------
+Until this date the schedule was demanded as one row of 96 numbers per car.
+On a day with 87 cars that is 8,352 numbers, about 33,000 tokens, and every
+reply of the run of 2026-09-21 stopped at the 16,384-token output cap of the
+model, mid-row, so the no-tools rows were scored on a schedule the model never
+finished writing. Segments say the same schedule in a few numbers per car, so
+the whole reply fits with room to spare, and the row measures the model's
+scheduling rather than the size of its output window.
 
 Known limitation, inherited from the extractor: ``extract_answer`` takes the
-first matching sentence, so a chain-of-thought reply that states a conclusion in
-its reasoning is read as meaning that one, not the final ``Answer:`` line. The
-reasoning instructions therefore tell the model to keep conclusions out of the
-reasoning. This is a property of the scorer, not something this module can fix
-from here.
+first matching sentence, so the chain-of-thought instructions tell the model
+to keep conclusions out of the reasoning and the answer in the ``answer``
+field, which is the only text the extractor is given.
 """
 
 from __future__ import annotations
@@ -83,20 +95,18 @@ EXAMPLES_HEADING = "## Worked Examples"
 REASONING_HEADING = "## Reasoning Instructions"
 OUTPUT_HEADING = "## Output Requirements"
 
-# The literal the schedule rows start with and the literal the answer line starts
-# with. ``methods/prompting/parse.py`` accepts the first, ``evaluation/requests.py``
-# anchors its highest-priority pattern on the second. Changing either string
-# means changing that reader too.
-SCHEDULE_LINE_PREFIX = "EV"
+# The literal the runner puts in front of the reply's ``answer`` field before
+# ``evaluation/requests.py::extract_answer`` reads it: the extractor anchors its
+# highest-priority pattern on it. Changing the string means changing that reader.
 ANSWER_PREFIX = "Answer:"
+
+# The token in the output contract that the number of cars replaces.
+_N_SESSIONS_TOKEN = "@N_SESSIONS@"
 
 # One completion budget for every strategy and for the solver-grounded arm, so a
 # row never differs because it was allowed to write more. Matches the default of
 # ``baseline/run.py::run_baseline``.
 MAX_COMPLETION_TOKENS = 8192
-
-# Decimal places asked for in the schedule rows.
-_POWER_DECIMALS = 4
 
 
 # --------------------------------------------------------------------------- shared text
@@ -105,7 +115,7 @@ _ROLE = methods.read_text("_shared/llm_only_role.txt")
 
 
 def _context_section(request: EVRequest) -> str:
-    """The conventions the request text does not state: grid, units, labels.
+    """The conventions the request text does not state: time, grid, units, labels.
 
     Args:
         request: The request being rendered. Only its horizon is read.
@@ -117,15 +127,16 @@ def _context_section(request: EVRequest) -> str:
     day = request.day
     n_steps = day.n_steps
     dt_hours = day.dt_hours
-    last = n_steps - 1
     return "\n".join(
         [
             CONTEXT_HEADING,
-            f"- The day is divided into {n_steps} time steps of {dt_hours:.4f} h each. "
-            f"Step 0 starts at midnight, so step k covers hour k x {dt_hours:.4f} to "
-            f"(k+1) x {dt_hours:.4f}, and step {last} is the last one.",
-            "- Power is in kW, energy in kWh, prices in dollars per kWh. Energy delivered to a "
-            f"car over one step is its power at that step times {dt_hours:.4f} h.",
+            "- Time is written as decimal hours from midnight: 0.0 is midnight at the start of "
+            "the day, 16.75 is a quarter to five in the afternoon, 24.0 is midnight at the end "
+            "of the day.",
+            f"- Power is scheduled in {n_steps} steps of {dt_hours:.4f} h each, so every hour you "
+            f"write is a multiple of {dt_hours:.4f}, and a car's power is constant within a step.",
+            "- Power is in kW, energy in kWh, prices in dollars per kWh. Energy delivered over a "
+            "segment is its power times its length in hours.",
             f"- The cars are named EV 1 to EV {len(day.sessions)} in the request. Report them "
             "under those same names.",
             "- Every number you need about the cars, the site limit and the prices is in the "
@@ -139,52 +150,22 @@ def _task_section(request: EVRequest) -> str:
     return f"{TASK_HEADING}\n{request.text.strip()}"
 
 
+_OUTPUT_CONTRACT = methods.read_text("_shared/llm_only_output_contract.txt")
+
+
 def _output_section(request: EVRequest) -> str:
-    """The output contract both readers depend on.
+    """The output contract, with the number of cars filled in.
 
     Args:
-        request: The request being rendered; its horizon sets the row length and
-            its ``checkable`` flag decides whether an answer line is demanded.
+        request: The request being rendered; its car count is the only thing
+            the contract takes from it. Whether an answer is due is decided by
+            the model from the request text, as the contract says.
 
     Returns:
         The ``## Output Requirements`` section.
     """
-    day = request.day
-    n_sessions = len(day.sessions)
-    n_steps = day.n_steps
-    zeros = " ".join(f"{0.0:.{_POWER_DECIMALS}f}" for _ in range(3))
-    lines = [
-        OUTPUT_HEADING,
-        f"Write exactly {n_sessions} schedule rows, EV 1 first and EV {n_sessions} last, one per "
-        "line, in this form:",
-        "",
-        f"EV 1: v0 v1 v2 ... v{n_steps - 1}",
-        "",
-        f"Each row is the label, a colon, then exactly {n_steps} space-separated decimal numbers: "
-        f"the charging power in kW of that car at step 0, step 1, ..., step {n_steps - 1}. Use "
-        f"{_POWER_DECIMALS} decimal places (for example {zeros}). Do not write units, commas, "
-        "brackets or any other text inside a row.",
-        "",
-        f"Check before you finish: {n_sessions} rows, each with exactly {n_steps} numbers. A row "
-        "of the wrong length is counted as a formatting failure, so count them.",
-    ]
-    if request.checkable:
-        lines += [
-            "",
-            f"After the last row, write one final line that starts with '{ANSWER_PREFIX}' and "
-            "answers the question asked in the request. Phrase it in the words the question "
-            "uses, and give the number with its unit, or the name of the car as 'EV 3', or "
-            "'yes' or 'no', whichever the question asks for. Examples of the shape, not of the "
-            f"values: '{ANSWER_PREFIX} $12.34', '{ANSWER_PREFIX} 4.50 kWh', "
-            f"'{ANSWER_PREFIX} 87.5 percent of the cars are fully served', "
-            f"'{ANSWER_PREFIX} yes', '{ANSWER_PREFIX} EV 3 needs the most energy', "
-            f"'{ANSWER_PREFIX} EV 2 and EV 5 cannot be fully served'.",
-            "",
-            "Write the schedule rows first and the answer line last. Nothing after it.",
-        ]
-    else:
-        lines += ["", "Write the schedule rows and nothing else."]
-    return "\n".join(lines)
+    n_sessions = len(request.day.sessions)
+    return f"{OUTPUT_HEADING}\n" + _OUTPUT_CONTRACT.replace(_N_SESSIONS_TOKEN, str(n_sessions))
 
 
 _SYSTEM_BASE = methods.read_text("_shared/llm_only_system_prompt.txt")
@@ -401,12 +382,13 @@ def describe(strategy: Optional[str] = None) -> Dict[str, str]:
     """
     known = {
         "structured": (
-            "Sectioned prompt: role, system data, task, output format. No reasoning section, "
-            "no examples, no retrieval, no tools."
+            "Sectioned prompt: role, system data, task, output contract. The reply is one JSON "
+            "object with the formulation the model read, the schedule as segments and the "
+            "answer. No reasoning section, no examples, no retrieval, no tools."
         ),
         "chain_of_thought": (
             "The structured prompt plus a reasoning section that asks the model to work the "
-            "allocation through step by step before committing to the schedule. No tools."
+            "allocation through step by step before writing the JSON object. No tools."
         ),
     }
     if strategy is None:

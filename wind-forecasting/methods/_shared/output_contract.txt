@@ -1,0 +1,15 @@
+## Output
+
+Your final message must be one JSON object and nothing else, with exactly these fields:
+
+{
+  "formulation": {"turbine": <integer>, "history_days": [<first day>, <last day>], "horizon_hours": <integer>},
+  "forecast": [<exactly horizon_hours*6 numbers in kW, in time order>],
+  "source": "<one of: persistence_forecast | power_curve_forecast | gru_forecast | mean_of_tools | own_computation>",
+  "answer": <the number the request asks for, or null when it asks for nothing>,
+  "status": "<forecast | cannot_forecast>",
+  "cannot_forecast": null,
+  "summary": "<one or two sentences: which turbine and window, how the forecast was produced, and the answer>"
+}
+
+formulation restates the request as you understood it: the turbine, the first and last day of the history you used, and the horizon in hours. source names the tool whose output the forecast is copied from, mean_of_tools when it is the element-wise mean of two tool outputs, or own_computation when you wrote the numbers yourself. answer is derived from the forecast you return: the 1-based hour with the highest mean forecast power, or the energy over the horizon in kWh (the sum of the values divided by 6), as the request asks. If you cannot forecast, status is cannot_forecast, forecast is [], answer is null, and cannot_forecast says why.

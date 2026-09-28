@@ -54,10 +54,26 @@ Accepted row labels
 ``EV 1:`` ... ``EV n:`` (one-based, the names the request text uses) and
 ``Session 0:`` ... ``Session i:`` (zero-based, the older format). Both map to the
 same rows: the text's ``EV k`` is ``day.sessions[k - 1]``.
+
+Two reply formats (2026-09-28)
+------------------------------
+``read_reply`` is the entry point the runner uses. Since 2026-09-28 the prompt
+asks for one JSON object (``methods/_shared/llm_only_output_contract.txt``)
+carrying the ``formulation`` the model read, the ``schedule`` as charging
+segments ``[start_hour, end_hour, power_kw]`` per car, and the ``answer``. A
+reply that carries such an object is read by ``parse_segment_schedule``; one
+that does not falls back to the matrix rows above, so the runs committed before
+that date rescore exactly as they scored, and a model that ignores the contract
+is still read rather than scored as an empty schedule. Segment repairs have
+their own kinds: a ``clipped_segment`` ran past the horizon and was cut to it,
+and an ``overlapping_segment`` wrote over an earlier segment of the same car.
 """
 
+import json
+import math
+import re
 from dataclasses import dataclass, field
-from typing import Dict, List, NamedTuple, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 import numpy as np
 
@@ -77,6 +93,8 @@ REPAIR_KINDS: Tuple[str, ...] = (
     "split_row",
     "unlabeled_row",
     "missing_row",
+    "clipped_segment",
+    "overlapping_segment",
 )
 
 
@@ -594,3 +612,244 @@ def parse_llm_schedule(
         return _finish(False, "; ".join(errors))
 
     return _finish(True, None)
+
+
+# --------------------------------------------------------------------------- the JSON reply
+
+# A schedule key: "EV 3", "EV-3", "ev_3", "EV #3".
+_KEY_LABEL_RE = re.compile(r"^\s*ev[\s\-_#]*(?P<n>\d{1,3})\s*$", re.IGNORECASE)
+
+# The keys that mark an object as the reply the contract asks for.
+_REPLY_KEYS = ("schedule", "formulation", "answer", "cannot_answer")
+
+
+@dataclass
+class ReplyParse:
+    """A reply read as the contract's JSON object, or as matrix rows when it is not one.
+
+    Attributes:
+        schedule: The schedule parse, with its repair log, in either format.
+        formulation: The ``formulation`` object as the model wrote it, or None
+            when the reply carried none. The runner turns it into the problem
+            the formulation term compares.
+        answer: The ``answer`` field as a string, or None when null or absent.
+        cannot_answer: The ``cannot_answer`` field, or None.
+        format: "json" when the contract's object was found, "matrix" otherwise.
+    """
+
+    schedule: ParseResult
+    formulation: Optional[Dict[str, Any]] = None
+    answer: Optional[str] = None
+    cannot_answer: Optional[str] = None
+    format: str = "matrix"
+
+
+def _json_objects(text: str) -> List[Dict[str, Any]]:
+    """Every top-level JSON object in the text, in order, fences removed.
+
+    Braces inside strings are honored, so a reason in ``cannot_answer`` that
+    contains one does not cut the object short.
+    """
+    cleaned = re.sub(r"```(?:json)?", "", text)
+    found: List[Dict[str, Any]] = []
+    i, n = 0, len(cleaned)
+    while i < n:
+        start = cleaned.find("{", i)
+        if start == -1:
+            break
+        depth, in_string, escaped, end = 0, False, False, -1
+        for j in range(start, n):
+            ch = cleaned[j]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif ch == "\\":
+                    escaped = True
+                elif ch == '"':
+                    in_string = False
+                continue
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = j
+                    break
+        if end == -1:
+            i = start + 1
+            continue
+        try:
+            payload = json.loads(cleaned[start : end + 1])
+        except json.JSONDecodeError:
+            i = start + 1
+            continue
+        if isinstance(payload, dict):
+            found.append(payload)
+        i = end + 1
+    return found
+
+
+def _hour_to_idx(value: Any, dt_hours: float) -> Optional[int]:
+    try:
+        hour = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(hour):
+        return None
+    return int(round(hour / dt_hours))
+
+
+def parse_segment_schedule(value: Any, day: DaySessions) -> ParseResult:
+    """The ``schedule`` field of the contract as a (n_sessions, n_steps) matrix.
+
+    ``{"EV 1": [[start_hour, end_hour, power_kw], ...], ...}``: each segment
+    fills the steps from ``round(start / dt)`` up to but not including
+    ``round(end / dt)`` with ``power_kw``. Everything the reader had to do to
+    the model's segments is in the repair log, as for the matrix format:
+
+    - a segment past either end of the horizon is cut to it (``clipped_segment``),
+    - a segment over steps an earlier segment of the same car filled writes
+      over them, later wins (``overlapping_segment``),
+    - a non-finite power is counted and replaced with 0.0 (``nonfinite_cell``),
+    - a negative power is kept and counted, for the checker to score,
+    - a car with no key is left as zeros (``missing_row``).
+
+    A key that names no car, a segment that is not three numbers, and a
+    segment whose end is not after its start are errors: the segment is
+    skipped and the parse is marked unsuccessful, with the schedule kept.
+
+    Args:
+        value: The ``schedule`` field, normally a dict keyed by car label. A
+            list is read positionally, each row an ``unlabeled_row``.
+        day: The day being scheduled; supplies the shape and the step length.
+
+    Returns:
+        ParseResult with the schedule, the repair log and the first errors.
+    """
+    n_sessions, n_steps, dt = len(day.sessions), day.n_steps, day.dt_hours
+    schedule = np.zeros((n_sessions, n_steps), dtype=float)
+    events: List[RepairEvent] = []
+    errors: List[str] = []
+    negative_cells = 0
+    used = [False] * n_sessions
+
+    if isinstance(value, list):
+        items = [(f"EV {i + 1}", segments) for i, segments in enumerate(value)]
+        for label, _ in items[:n_sessions]:
+            idx = int(label.split()[1]) - 1
+            events.append(RepairEvent("unlabeled_row", idx, detail="schedule given as a list, car taken from the position"))
+    elif isinstance(value, dict):
+        items = list(value.items())
+    else:
+        errors.append("schedule is not an object keyed by car label")
+        items = []
+
+    for key, segments in items:
+        match = _KEY_LABEL_RE.match(str(key))
+        if match is None:
+            errors.append(f"schedule key {str(key)[:40]!r} names no car")
+            continue
+        idx = int(match.group("n")) - 1
+        if idx < 0 or idx >= n_sessions:
+            errors.append(f"schedule key {str(key)!r} is outside EV 1..EV {n_sessions}")
+            continue
+        if used[idx]:
+            continue  # first occurrence wins, as for matrix rows
+        used[idx] = True
+        if segments is None:
+            segments = []
+        if not isinstance(segments, list):
+            errors.append(f"{key}: segments are not a list")
+            continue
+        filled = np.zeros(n_steps, dtype=bool)
+        for seg in segments:
+            if not isinstance(seg, (list, tuple)) or len(seg) != 3:
+                errors.append(f"{key}: a segment is not [start_hour, end_hour, power_kw]")
+                continue
+            start, end = _hour_to_idx(seg[0], dt), _hour_to_idx(seg[1], dt)
+            if start is None or end is None:
+                errors.append(f"{key}: a segment has a non-numeric hour")
+                continue
+            try:
+                power = float(seg[2])
+            except (TypeError, ValueError):
+                errors.append(f"{key}: a segment has a non-numeric power")
+                continue
+            if end <= start:
+                errors.append(f"{key}: a segment ends at or before it starts ({seg[0]} to {seg[1]})")
+                continue
+            lo, hi = max(0, start), min(n_steps, end)
+            if lo != start or hi != end:
+                events.append(RepairEvent("clipped_segment", idx, detail=f"{seg[0]} to {seg[1]} h cut to the horizon"))
+            if hi <= lo:
+                continue
+            if not math.isfinite(power):
+                events.append(RepairEvent("nonfinite_cell", idx, count=hi - lo, detail="NaN or infinity replaced with 0.0 so the day can be scored"))
+                power = 0.0
+            elif power < 0.0:
+                negative_cells += hi - lo
+            if filled[lo:hi].any():
+                events.append(RepairEvent("overlapping_segment", idx, detail=f"{seg[0]} to {seg[1]} h wrote over an earlier segment; later wins"))
+            schedule[idx, lo:hi] = power
+            filled[lo:hi] = True
+
+    for idx, was_used in enumerate(used):
+        if not was_used:
+            events.append(RepairEvent("missing_row", idx, detail="no schedule entry for this car, left as zeros"))
+
+    if not any(used) and not errors:
+        errors.append("the schedule names no car")
+    return ParseResult(
+        schedule=schedule,
+        success=not errors,
+        error_message="; ".join(errors) or None,
+        repairs=RepairLog(events=tuple(events), negative_cells=negative_cells),
+    )
+
+
+def _as_text(value: Any) -> Optional[str]:
+    """A JSON field as the string the extractor reads, None for null or blank."""
+    if value is None or isinstance(value, bool):
+        return None if value is None else str(value).lower()
+    if isinstance(value, (int, float)):
+        return f"{value}"
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(v) for v in value) or None
+    text = str(value).strip()
+    return text or None
+
+
+def read_reply(response_text: str, day: DaySessions) -> ReplyParse:
+    """Read a no-tools reply in whichever format it came.
+
+    The last top-level JSON object carrying any of the contract's keys is the
+    reply (chain-of-thought writes reasoning before it, and the contract says
+    the object comes last). Without one, the text is read as matrix rows by
+    ``parse_llm_schedule``.
+
+    Args:
+        response_text: The model's reply, verbatim.
+        day: The day being scheduled; supplies the shape.
+
+    Returns:
+        ReplyParse. ``format`` says which reader applied.
+    """
+    text = response_text or ""
+    candidates = [obj for obj in _json_objects(text) if any(k in obj for k in _REPLY_KEYS)]
+    if not candidates:
+        return ReplyParse(schedule=parse_llm_schedule(text, day), format="matrix")
+    obj = candidates[-1]
+    schedule = parse_segment_schedule(obj.get("schedule"), day)
+    formulation = obj.get("formulation")
+    cannot = _as_text(obj.get("cannot_answer"))
+    if cannot and not schedule.success:
+        schedule.error_message = f"the reply declares it cannot answer: {cannot}"
+    return ReplyParse(
+        schedule=schedule,
+        formulation=formulation if isinstance(formulation, dict) else None,
+        answer=_as_text(obj.get("answer")),
+        cannot_answer=cannot,
+        format="json",
+    )
