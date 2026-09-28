@@ -19,7 +19,7 @@ why.
 | `llm_only_cot` | `llm_only:chain_of_thought` | The structured prompt plus one reasoning section. | no | none | yes |
 | `plan_act_nogate` | `plan_act` | One call emits the whole sequence of solver calls, then it executes. | yes | none | not yet |
 | `react_nogate` | `react` | Tool call, observation, repeat, inside the round budget. | yes | none | not yet |
-| `evagent` | `evagent` | The ReAct loop plus the verification gate E1–E6 on the final answer. The solver-grounded row. | yes | final gate | yes |
+| `evagent` | `evagent` | The ReAct loop plus the verification gate E1–E7 on the final answer. The solver-grounded row. | yes | final gate | yes |
 
 These six are the design, in this order, and they are the same six with the same names as every
 other case study in the paper. A method that exists in one case study and not another cannot be

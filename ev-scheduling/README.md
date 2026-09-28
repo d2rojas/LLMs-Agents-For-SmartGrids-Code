@@ -35,7 +35,7 @@ The same six, with the same names and in the same order, as every other case stu
 | `llm_only_cot` — the same plus one reasoning section | yes | no | none | yes |
 | `plan_act_nogate` — one call emits the whole tool plan, then it executes | yes | yes | none | not yet |
 | `react_nogate` — tool call, observation, repeat, inside the round budget | yes | yes | none | not yet |
-| `evagent` — the ReAct loop plus the verification gate E1–E6 | yes | yes | final | yes |
+| `evagent` — the ReAct loop plus the verification gate E1–E7 | yes | yes | final | yes |
 
 `python run.py list-methods` prints this from `methods/`. The cost gap of every row is measured
 against the CVXPY optimum of the same day, computed per request by the scorer; it is not a row.
