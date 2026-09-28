@@ -90,6 +90,16 @@ VARIANTS_OF: Dict[str, int] = {
     "line_contingency_overload": 2,
     "trafo_contingency_voltage": 2,
 }
+# Why a class is posed only once. Three of them perturb the whole network and there is
+# one way to do it; one is the control; two are held at one instance on purpose.
+POSED_ONCE: Dict[str, str] = {
+    "normal_operation": "the control: the unmodified network, and there is only one of those",
+    "extreme_load_scaling": "every load at once: a global perturbation with one way to do it",
+    "all_generators_removed": "every generator at once: a global perturbation with one way to do it",
+    "excess_generation_overvoltage": "every generator and the slack setpoint at once: a global perturbation",
+    "disconnected_subnetwork": "could be posed at a second bus; held at one so the non-convergence mode keeps five scenarios and the mix stays balanced",
+    "topology_redirection": "takes the most loaded line whose outage actually breaks something; a second one would collide with the two N-1 classes, which take the worst outages among the rest",
+}
 VARIES_BY: Dict[str, str] = {
     "near_zero_impedance": "which line carries the near-zero impedance, most loaded first",
     "heavy_loading_undervoltage": "every load at 3x, or only the loads on the half of the network furthest from the slack bus, at 5x",
@@ -196,6 +206,6 @@ def build(network: str, scenario_id: str, variant: int = 0) -> Tuple[pp.pandapow
 
 __all__ = [
     "SCENARIOS", "SCENARIO_IDS", "CATEGORY_OF", "LABEL_OF", "FAULT_TYPES", "FAULT_TYPE_OF",
-    "VARIANTS_OF", "VARIES_BY", "INSTANCES", "N_INSTANCES", "instance_id",
+    "VARIANTS_OF", "VARIES_BY", "POSED_ONCE", "INSTANCES", "N_INSTANCES", "instance_id",
     "Injected", "FailureScenario", "ScenarioResult", "build",
 ]

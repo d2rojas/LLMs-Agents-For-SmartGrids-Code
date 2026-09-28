@@ -11,6 +11,11 @@ be read next to a row of the power-flow one.
                   never a term of Solved)
     state         the harness's own power flow on the final network: converged,
                   islanded load, violations beyond the base network
+    load served  the active demand still in service, against the base network's demand.
+                 A network with every load curtailed is secure, and the smoke test showed a
+                 method reaching that state; without this column the table would call it a
+                 repair. It is reported beside Repaired, never gated: how much load a repair
+                 may shed is an operator's judgement, not a threshold the harness can set.
     repaired / improved / feasible   the paper's three definitions, on the harness state
     traceable     every number in the answer appears in a tool output or the evidence
     escalated     the answer declares not_repaired or cannot_repair, or the harness
@@ -31,11 +36,12 @@ from evaluation.scenarios import Injected
 from methods.agent.gate import traceability
 from methods.answer import Answer
 from methods.common import MethodRun
-from solver.violations import Key, State, observe
+from solver.violations import Key, State, observe, served_load_mw
 
 FIELDS = [
     "common_json_ok", "common_status", "common_claims_repaired", "common_declares_failure",
     "common_converged", "common_secure", "common_islanded", "common_n_violations", "common_n_new_violations",
+    "common_load_served_mw", "common_load_served_pct",
     "common_repaired", "common_improved", "common_feasible",
     "common_formulation_exact", "common_formulation_error_type", "common_formulation_detail",
     "common_n_numbers", "common_n_untraceable", "common_traceable",
@@ -78,7 +84,8 @@ def score_diagnosis(answer: Answer, injected: Injected) -> Dict[str, Any]:
     return {"exact": True, "error_type": "ok", "detail": f"{injected.fault_type}, {len(overlap)} injected component(s) named"}
 
 
-def score_run(run: MethodRun, *, injected: Injected, initial: State, base_keys: FrozenSet[Key], evidence_text: str, request_text: str) -> Dict[str, Any]:
+def score_run(run: MethodRun, *, injected: Injected, initial: State, base_keys: FrozenSet[Key], evidence_text: str,
+              request_text: str, base_load_mw: Optional[float] = None) -> Dict[str, Any]:
     out: Dict[str, Any] = {k: None for k in FIELDS}
     a = run.answer
     final = observe(run.final_net, base_keys)
@@ -92,6 +99,9 @@ def score_run(run: MethodRun, *, injected: Injected, initial: State, base_keys: 
     out["common_islanded"] = list(final.islanded_load_buses)
     out["common_n_violations"] = final.n_violations
     out["common_n_new_violations"] = final.n_new
+    served = served_load_mw(run.final_net)
+    out["common_load_served_mw"] = round(served, 2)
+    out["common_load_served_pct"] = round(100.0 * served / base_load_mw, 1) if base_load_mw else None
 
     # the paper's three definitions, on the harness state and relative to the base network
     out["common_feasible"] = bool(final.converged)
@@ -194,6 +204,8 @@ def aggregate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "common_traceable_count": cnt("common_traceable", True), "common_traceable_rate": rate(cnt("common_traceable", True)),
         "violations_initial_new": sum(int(r["initial_n_new"]) for r in conv_both), "violations_final_new": sum(int(r["common_n_new_violations"]) for r in conv_both),
         "violations_comparable_n": len(conv_both),
+        "load_served_pct_mean": mean("common_load_served_pct"),
+        "load_served_pct_min": (min((float(r["common_load_served_pct"]) for r in rs if r.get("common_load_served_pct") is not None), default=None)),
         "n_llm_calls_mean": mean("n_llm_calls"), "n_tool_calls_mean": mean("n_tool_calls"),
         "prompt_tokens_mean": mean("prompt_tokens"), "completion_tokens_mean": mean("completion_tokens"),
         "tokens_total": int(sum(float(r.get("prompt_tokens") or 0) + float(r.get("completion_tokens") or 0) for r in rs)),

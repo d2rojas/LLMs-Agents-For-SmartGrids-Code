@@ -44,12 +44,60 @@ def _score_outage(net: pp.pandapowerNet, element: str, idx: int) -> Optional[Tup
     return over + volt, worst_loading, dev
 
 
-def _most_loaded_line(net: pp.pandapowerNet) -> Optional[int]:
-    """The line ``topology_redirection`` removes; the contingency scenarios pick another one."""
+def topology_line(net: pp.pandapowerNet, variant: int = 0) -> Optional[int]:
+    """The line ``topology_redirection`` takes out, and the one the contingency scenarios avoid.
+
+    The most loaded line whose outage converges and leaves at least one element outside its
+    limits. Picking the most loaded line outright is not enough: on IEEE-118 its outage
+    changes nothing, and a scenario that injects nothing measures nothing.
+    """
     try:
-        return int(net.res_line["loading_percent"].idxmax()) if len(net.res_line) else None
+        import copy as _copy
+
+        probe = _copy.deepcopy(net)
+        pp.runpp(probe)
+        ranked = [int(i) for i in probe.res_line["loading_percent"].fillna(-1).sort_values(ascending=False).index
+                  if bool(probe.line.at[i, "in_service"])]
+        base = _violation_keys(probe)
+        hits = []
+        for idx in ranked:
+            n = _copy.deepcopy(net)
+            n.line.at[idx, "in_service"] = False
+            try:
+                pp.runpp(n)
+            except Exception:
+                continue
+            if not n.converged:
+                continue
+            if _violation_keys(n) - base:
+                hits.append(idx)
+                if len(hits) > variant:
+                    return hits[variant]
+        return hits[variant % len(hits)] if hits else (ranked[0] if ranked else None)
     except Exception:
-        return None
+        try:
+            return int(net.res_line["loading_percent"].idxmax()) if len(net.res_line) else None
+        except Exception:
+            return None
+
+
+def _violation_keys(net: pp.pandapowerNet) -> set:
+    """(element, index) of everything outside its limits, for comparing two solved networks."""
+    out = set()
+    res = getattr(net, "res_bus", None)
+    if res is not None and len(res):
+        for i, row in res.iterrows():
+            vm = row.get("vm_pu")
+            if vm is not None and vm == vm and (vm < 0.95 or vm > 1.05):
+                out.add(("bus", int(i)))
+    for el in ("line", "trafo"):
+        r = getattr(net, f"res_{el}", None)
+        if r is not None and len(r) and "loading_percent" in r.columns:
+            for i, row in r.iterrows():
+                ld = row.get("loading_percent")
+                if ld is not None and ld == ld and ld > 100:
+                    out.add((el, int(i)))
+    return out
 
 
 def _rank_outages(net: pp.pandapowerNet, element: str, prefer: str, exclude: Tuple[int, ...] = ()) -> List[int]:
@@ -94,7 +142,7 @@ class LineContingencyOverload(FailureScenario):
         self.run_pf()
         # topology_redirection takes the most loaded line; this scenario takes the
         # variant-th worst N-1 line among the rest, so the two never coincide.
-        most = _most_loaded_line(self.net)
+        most = topology_line(self.net)
         ranked = _rank_outages(self.net, "line", "loading", exclude=(most,) if most is not None else ())
         worst = _pick(ranked, self.variant, int(self.net.line.index[0]))
         self.net.line.at[worst, "in_service"] = False
@@ -128,7 +176,7 @@ class TrafoContingencyVoltage(FailureScenario):
         if len(self.net.trafo) == 0:
             # IEEE-30 as shipped by pandapower has no transformer table: fall back to the
             # second-worst line outage so the scenario still injects a contingency.
-            most = _most_loaded_line(self.net)
+            most = topology_line(self.net)
             used = _rank_outages(self.net, "line", "loading", exclude=(most,) if most is not None else ())[:2]
             excl = tuple(x for x in ([most] + used) if x is not None)
             ranked = _rank_outages(self.net, "line", "voltage", exclude=excl)

@@ -1,5 +1,9 @@
 """Freeze the scenario set: ``data/scenarios/manifest.json``.
 
+Every system the harness can run is frozen, not only the three a run covers by
+default, so the page can show what IEEE-118 and IEEE-300 would pose and a
+decision to add them costs nothing but the run.
+
 One entry per (network, scenario): the content hash of the injected network,
 its measured initial state, the injected fault and the base network's own
 violations. ``run.py freeze-scenarios`` writes it; ``check(request)`` compares
@@ -17,7 +21,7 @@ from typing import Any, Dict, List, Optional
 
 import pandapower as pp
 
-from config import NETWORKS, PROJECT_ROOT
+from config import ALL_NETWORKS, NETWORKS, PROJECT_ROOT
 
 MANIFEST = PROJECT_ROOT / "data" / "scenarios" / "manifest.json"
 
@@ -31,7 +35,7 @@ def entry_key(network: str, scenario_id: str, variant: int = 0) -> str:
 def build_manifest(networks: Optional[List[str]] = None) -> Dict[str, Any]:
     from evaluation.requests import build_requests
 
-    reqs = build_requests(list(networks or NETWORKS))
+    reqs = build_requests(list(networks or ALL_NETWORKS))
     entries = {}
     for r in reqs:
         entries[r.request_id] = {

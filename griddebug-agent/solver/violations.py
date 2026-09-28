@@ -176,6 +176,14 @@ def observe(net: pp.pandapowerNet, base_keys: Optional[FrozenSet[Key]] = None, *
     )
 
 
+def served_load_mw(net: pp.pandapowerNet) -> float:
+    """Active demand still in service, in MW. The denominator of the load-served column."""
+    df = getattr(net, "load", None)
+    if df is None or not len(df):
+        return 0.0
+    return float(df.loc[df["in_service"], "p_mw"].sum())
+
+
 def base_violation_keys(net: pp.pandapowerNet) -> FrozenSet[Key]:
     """The violations the unmodified network already has; the floor every scenario is measured against."""
     st = observe(net)

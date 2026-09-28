@@ -50,7 +50,7 @@ def rescore(dir_: Path) -> None:
                         prompt_tokens=int(r.get("prompt_tokens") or 0), completion_tokens=int(r.get("completion_tokens") or 0),
                         wall_time_s=float(r.get("wall_time_s") or 0))
         scored = scoring.score_run(run, injected=req.injected, initial=req.initial, base_keys=req.base_keys,
-                                   evidence_text=req.evidence_text, request_text=req.text)
+                                   evidence_text=req.evidence_text, request_text=req.text, base_load_mw=req.base_load_mw)
         r2 = {k: v for k, v in r.items() if not k.startswith("common_")}
         r2["answer"] = run.answer.as_dict()
         r2.update(scored)

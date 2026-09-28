@@ -20,7 +20,7 @@ from config import MAX_LOADING_PERCENT, NETWORK_LABELS, V_MAX_PU, V_MIN_PU
 from evaluation import scenarios as S
 from solver.evidence import EvidenceCollector
 from solver.network import load_network, network_hash
-from solver.violations import Key, State, base_violation_keys, observe
+from solver.violations import Key, State, base_violation_keys, observe, served_load_mw
 
 
 @dataclass
@@ -38,6 +38,7 @@ class Request:
     base_keys: FrozenSet[Key]
     net: pp.pandapowerNet      # the injected network, power flow attempted
     network_hash: str
+    base_load_mw: float = 0.0  # the unmodified network's active demand, the load-served denominator
     truth: Any = None
 
     def as_record(self) -> Dict[str, Any]:
@@ -46,6 +47,7 @@ class Request:
             "variant": self.variant, "category": self.category, "label": self.label, "text": self.text,
             "injected": self.injected.as_dict(), "initial_state": self.initial.as_dict(),
             "base_violations": sorted(f"{k}:{i}" for k, i in self.base_keys), "network_hash": self.network_hash,
+            "base_load_mw": self.base_load_mw,
         }
 
 
@@ -112,7 +114,8 @@ def build_request(network: str, scenario_id: str, variant: int = 0) -> Request:
         category=S.CATEGORY_OF[scenario_id], label=S.LABEL_OF[scenario_id],
         text=request_text(network, initial),
         evidence_text=evidence_block(net, base_keys, initial),
-        injected=injected, initial=initial, base_keys=base_keys, net=net, network_hash=h, truth=truth,
+        injected=injected, initial=initial, base_keys=base_keys, net=net, network_hash=h,
+        base_load_mw=round(served_load_mw(base), 2), truth=truth,
     )
 
 

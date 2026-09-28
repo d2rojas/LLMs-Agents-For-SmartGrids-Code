@@ -168,10 +168,13 @@ class TopologyRedirection(FailureScenario):
         )
 
     def apply(self) -> ScenarioResult:
-        # Run baseline to find the most loaded line
-        self.run_pf()
-        most_loaded = int(self.net.res_line["loading_percent"].idxmax())
+        from .contingency import topology_line
 
+        # The most loaded line whose outage actually leaves the network converged and
+        # worse than it was. On IEEE-118 the most loaded line's outage changes nothing,
+        # and a scenario that injects nothing measures nothing.
+        most_loaded = topology_line(self.net, self.variant)
+        self.reset()
         self.net.line.at[most_loaded, "in_service"] = False
 
         converged = self.run_pf()
@@ -199,6 +202,7 @@ class TopologyRedirection(FailureScenario):
             ),
             metadata={
                 "removed_line": most_loaded,
+                "variant": self.variant,
                 "converged": converged,
                 "overloaded_lines": overloaded,
             },

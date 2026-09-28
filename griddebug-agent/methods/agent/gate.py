@@ -14,6 +14,7 @@ load left on an island.
     G4  currency       the last power-flow run came after the last action
     G5  traceable      every number in the answer appears in a tool output or in the evidence
     G6  consistent     the answer's status and final_state agree with what the solver found
+    G7  actions match  the actions the answer lists are the actions the trace shows succeeded
 
 ``check`` returns one record per condition plus ``passed``, and the state the
 harness observed, which is logged as a tool call so its numbers are traceable.
@@ -23,6 +24,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Set, Tuple
 
 import pandapower as pp
@@ -31,10 +33,10 @@ from methods.answer import Answer
 from solver.tools import ACTION_TOOLS
 from solver.violations import Key, State, observe
 
-CONDITION_ORDER = ("converged", "no_islanded_load", "secure_or_declared", "currency", "traceable", "consistent")
+CONDITION_ORDER = ("converged", "no_islanded_load", "secure_or_declared", "currency", "traceable", "consistent", "actions_match_trace")
 CONDITION_LABELS = {
     "converged": "G1", "no_islanded_load": "G2", "secure_or_declared": "G3",
-    "currency": "G4", "traceable": "G5", "consistent": "G6",
+    "currency": "G4", "traceable": "G5", "consistent": "G6", "actions_match_trace": "G7",
 }
 CONDITION_DESCRIPTIONS = {
     "converged": "the AC power flow, re-run by the harness on the final network, converges",
@@ -43,10 +45,24 @@ CONDITION_DESCRIPTIONS = {
     "currency": "the last power-flow run came after the last action; nothing was changed after the last verification",
     "traceable": "every number in the answer appears in a tool output or in the evidence the method received",
     "consistent": "status and final_state in the answer agree with the solver's final state",
+    "actions_match_trace": "every action the answer lists succeeded in the trace, and no action it took is hidden",
 }
 MAX_VERIFICATION_ATTEMPTS = 2
 
 _NUM = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])")
+
+
+def _arg_key(args: Any) -> str:
+    """An action's identity: its arguments, rounded, so 0.5 and 0.50 are one action."""
+    if not isinstance(args, dict):
+        return str(args)
+    out = []
+    for k in sorted(args):
+        if k.startswith("_"):
+            continue
+        v = args[k]
+        out.append(f"{k}={round(v, 3) if isinstance(v, float) else v}")
+    return ",".join(out)
 
 
 def numbers_in(text: str) -> List[str]:
@@ -153,6 +169,24 @@ def check(
         if answer.status is None:
             problems.append("status missing")
     results["consistent"] = {"passed": not problems, "detail": "; ".join(problems) if problems else "status and final_state agree with the solver"}
+
+    # G7: the counterpart of the power-flow case study's request_applied and
+    # formulation_matches_trace, and of the EV case study's schedule_consistency. An action
+    # that errored (a load index the network does not have) and an action taken but not
+    # reported are the same kind of failure: the answer describes a repair that did not happen.
+    ran = [(e["name"], _arg_key(e.get("args"))) for e in tool_log if e.get("name") in ACTION_TOOLS and e.get("ok")]
+    failed = [(e["name"], _arg_key(e.get("args"))) for e in tool_log if e.get("name") in ACTION_TOOLS and not e.get("ok")]
+    claimed = [(a.get("tool"), _arg_key(a.get("args"))) for a in answer.actions]
+    ran_c, claimed_c = Counter(ran), Counter(claimed)
+    invented = list((claimed_c - ran_c).elements())
+    hidden = list((ran_c - claimed_c).elements())
+    bits: List[str] = []
+    if invented:
+        why = " (it errored in the trace)" if any(i in failed for i in invented) else " (no such call in the trace)"
+        bits.append(f"{len(invented)} action(s) claimed that did not succeed{why}: {[f'{t}({k})' for t, k in invented[:4]]}")
+    if hidden:
+        bits.append(f"{len(hidden)} action(s) taken and not reported: {[f'{t}({k})' for t, k in hidden[:4]]}")
+    results["actions_match_trace"] = {"passed": not bits, "detail": "; ".join(bits) if bits else f"{len(ran)} action(s) taken, all reported"}
 
     report = {
         "conditions": {k: results[k] for k in CONDITION_ORDER},

@@ -43,7 +43,7 @@ DIAGRAMS: Dict[str, Dict[str, Any]] = {
                         "note": "Plans once. The whole sequence of tool calls is committed before any result comes back."},
     "react_nogate": {"steps": [("failed network", "input"), ("LLM decides a tool call", "llm"), ("tool runs on the network", "solver"), ("LLM writes the answer", "llm")],
                      "loop": 2, "note": f"Up to {MAX_LLM_CALLS} model calls and {MAX_TOOL_CALLS} tool calls. The model sees every result; nothing checks the answer."},
-    "griddebug": {"steps": [("failed network", "input"), ("LLM decides a tool call", "llm"), ("tool runs on the network", "solver"), ("gate G1-G6", "gate")],
+    "griddebug": {"steps": [("failed network", "input"), ("LLM decides a tool call", "llm"), ("tool runs on the network", "solver"), ("gate G1-G7", "gate")],
                   "loop": 2, "branch": ("report", "escalate"),
                   "note": "The same loop, then six conditions on the answer. A claim the solver contradicts leaves as an escalation, not as a repair."},
 }
@@ -59,7 +59,7 @@ ROWS: Tuple[Dict[str, str], ...] = (
      "isolates": "solver access through a plan. One call emits the whole sequence, executed without the model seeing the results in between."},
     {"block": "Multi-step agents", "name": "react_nogate", "label": "ReAct, no gate", "llm": "yes", "tools": "the catalogue, through function calling", "gate": "none",
      "isolates": "iteration. The model sees each tool output and may call again, inside the same budget as the row above and the row below."},
-    {"block": "Multi-step agents", "name": "griddebug", "label": "GridDebugAgent, solver-grounded", "llm": "yes", "tools": "the catalogue, through function calling", "gate": "six conditions on the answer",
+    {"block": "Multi-step agents", "name": "griddebug", "label": "GridDebugAgent, solver-grounded", "llm": "yes", "tools": "the catalogue, through function calling", "gate": "seven conditions on the answer",
      "isolates": "the verification gate, and nothing else. Same tools, same budget and same scenarios as ReAct, so any difference between the two rows is the gate."},
 )
 
@@ -67,6 +67,8 @@ COLUMNS: Tuple[Dict[str, str], ...] = (
     {"group": "Task utility", "name": "Diagnosis", "what": "the fault type and at least one injected component named in the answer match what the scenario injected", "why": "whether the initiating event was understood, not just the symptom (the formulation column of this case study)"},
     {"group": "Task utility", "name": "Repaired", "what": "the harness's own power flow on the final network converges, no load is islanded, no violation beyond the base network", "why": "the paper's repair definition, made relative to the base network"},
     {"group": "Task utility", "name": "Improved", "what": "converged and fewer new violations than at the start, or a solution where there was none", "why": "partial repairs, honestly reported, are worth something"},
+    {"group": "Task utility", "name": "Load served", "what": "the active demand still in service after the repair, against the base network's demand",
+     "why": "a network with every load curtailed is secure; without this column the table would call that a repair"},
     {"group": "Task utility", "name": "Violations", "what": "new violations before and after, over scenarios converged at both ends", "why": "a non-converged state is never a count of zero"},
     {"group": "Task utility", "name": "Solved", "what": "repaired, claimed as repaired, every number traceable, final_state consistent with the solver", "why": "the end-to-end verdict"},
     {"group": "Solver-grounded correctness", "name": "Feasible", "what": "the final power flow converges", "why": "the solver status column of the other case studies"},
@@ -109,6 +111,12 @@ def sample_request() -> Any:
 
 
 # ------------------------------------------------------------------ tabs
+
+
+def S_N() -> int:
+    from evaluation.scenarios import N_INSTANCES
+
+    return N_INSTANCES
 
 
 def tab_home() -> str:
@@ -160,7 +168,7 @@ def tab_home() -> str:
                f"{verdict('solved')} + {verdict('escalated')} = 100 %, {verdict('wrong')} = 0.</p>")
         + "</div>",
         card("Identical for every method",
-             chip(f"{len(NETWORKS)} IEEE networks") + chip(f"{n_inst} instances of 13 fault classes, frozen and hashed") + chip("one request template")
+             chip(f"{len(NETWORKS)} IEEE networks") + chip(f"{S_N()} scenarios per network, from 13 fault classes") + chip("one request template")
              + chip("one evidence block") + chip("one tool catalogue") + chip(f"{MAX_LLM_CALLS} model calls, {MAX_TOOL_CALLS} tool calls, {SCENARIO_TIMEOUT_S:.0f} s per scenario")
              + chip("temperature 0") + chip("one answer contract") + chip("one scorer") + chip("every message kept in the trace")),
     ]
@@ -185,6 +193,42 @@ def tab_methods() -> str:
              table(["Block", "Method", "LLM", "Tools", "Gate", "What it adds over the row above"], rows),
              note("<b>The step the design rests on is the last one.</b> ReAct and GridDebugAgent receive the same tools, the same budget and the "
                   "same scenarios. The only difference is that GridDebugAgent's answer has to pass the verification gate before anyone sees it.", "info")),
+        card(
+            "Where this design leaves Section 6.4 as submitted",
+            "<p>Section 6.4 describes verification <b>inside</b> the loop: the agent re-runs the power flow and checks the "
+            "violations before its next step, and the harness re-runs PandaPower at scoring time so a fabricated repair does "
+            "not count. It describes no gate on the answer and no way for the agent to escalate. Section 2, on the other "
+            "hand, states the rule the whole paper turns on: a reported number passes an explicit verification before it is "
+            "surfaced. On GridDebugAgent the two sections disagree, and this implementation resolves them in favour of "
+            "Section 2.</p>",
+            table(
+                ["Section 6.4 as submitted", "what runs here", "why"],
+                [
+                    ["verification inside the loop only; no answer gate, no escalation",
+                     "the same loop, then G1-G7 on the final answer, one retry, then a declared failure",
+                     "the row is otherwise not solver-grounded in the sense Section 2 claims, and R3.2 and R4.3 ask for "
+                     "verification as a factor that can be isolated, which needs the ungated twin <code>react_nogate</code>"],
+                    ["the rule engine's classification is fed into the agent's prompt",
+                     "the rule engine is the deterministic row's policy and reaches no method with a language model",
+                     "otherwise every row is rules plus a model, and the non-LLM baseline R4.5 asks for does not exist as a "
+                     "separate arm"],
+                    ["five tool categories, memory management among them",
+                     "four kinds, 21 tools; snapshots, OPF, short circuit and DC flow are out",
+                     "OPF would solve the repair for the method; the snapshots were used three times in 447 calls and leaked "
+                     "state between scenarios through a module-level dictionary"],
+                    ["GPT-4o, temperature 0.3, max 50 iterations",
+                     f"gpt-4o-mini and gpt-5.6-sol, temperature 0, {MAX_LLM_CALLS} model calls and {MAX_TOOL_CALLS} tool calls",
+                     "temperature 0 for reproducibility, the two models the advisor fixed for the main table, and one budget "
+                     "shared by the three loop rows so the comparison is matched"],
+                    ["one agent against one diagnosis-only baseline",
+                     "six methods, the same six as every other case study",
+                     "R3.2, R4.3 and R4.5"],
+                ],
+            ),
+            note("Section 6.4 has to be rewritten around this design; the numbers it prints today come from a run that is "
+                 "not reproducible from the repository, which is the finding of the September audit. That rewrite is the "
+                 "editor's work, not this case study's.", "warn"),
+        ),
         card("What the original GridDebugAgent was, and what changed",
              "<p>The code behind the submitted table had one architecture: a ReAct loop with OpenAI function calling, gpt-4o at temperature 0.3, "
              "up to 30 model calls, no verification of the answer, and a baseline that only diagnosed and never acted. It is the <code>react_nogate</code> "
@@ -202,13 +246,15 @@ def tab_scenarios() -> str:
     if not m:
         return card("Scenarios", "<p class='muted'>No manifest frozen yet: run <code>run.py freeze-scenarios</code>.</p>")
     ent = m["entries"]
-    head = ["#", "instance", "category", "injected fault"] + [NETWORK_LABELS[n] for n in NETWORKS]
+    shown = [n for n in ALL_NETWORKS if any(e["network"] == n for e in ent.values())]
+    head = (["#", "scenario", "category", "injected fault"]
+            + [NETWORK_LABELS[n] + ("" if n in NETWORKS else " <span class='muted'>(not in the plan yet)</span>") for n in shown])
     rows = []
     for i, (sid, v) in enumerate(S.INSTANCES, 1):
         nvar = S.VARIANTS_OF[sid]
         name = f"<code>{E(sid)}</code>" + (f"<span class='muted'> · v{v}</span>" if nvar > 1 else "")
         cells = [f"<b>{i}</b>", f"{name}<div class='muted'>{E(S.LABEL_OF[sid])}</div>", E(S.CATEGORY_OF[sid]), E(S.FAULT_TYPE_OF[sid])]
-        for n in NETWORKS:
+        for n in shown:
             e = ent.get(S.instance_id(n, sid, v))
             if e is None:
                 cells.append("<span class='muted'>—</span>")
@@ -219,7 +265,7 @@ def tab_scenarios() -> str:
             comps = ", ".join(f"{t} {x[:3]}{'…' if len(x) > 3 else ''}" for t, x in e["injected"]["components"].items())
             cells.append(chip(st.replace("_", " ") + extra, k) + f"<div class='muted'>{E(comps)}</div>")
         rows.append(cells)
-    base = {n: len(ent[S.instance_id(n, "normal_operation", 0)]["base_violations"]) for n in NETWORKS
+    base = {n: len(ent[S.instance_id(n, "normal_operation", 0)]["base_violations"]) for n in shown
             if S.instance_id(n, "normal_operation", 0) in ent}
     by_cat: Dict[str, int] = {}
     for sid, _v in S.INSTANCES:
@@ -227,17 +273,19 @@ def tab_scenarios() -> str:
 
     body = [
         card(
-            f"{S.N_INSTANCES} instances of {len(S.SCENARIOS)} fault classes, on each network",
-            f"<p>Thirteen classes, one per kind of fault, are the taxonomy of the submitted paper. Seven of them can place "
-            f"their fault at more than one point of the network, and each of those contributes two instances, so a run poses "
-            f"<b>{S.N_INSTANCES} instances per network</b>: "
+            f"{S.N_INSTANCES} scenarios per network, built from {len(S.SCENARIOS)} fault classes",
+            f"<p><b>A run poses {S.N_INSTANCES} scenarios on each network, and every method answers the same "
+            f"{S.N_INSTANCES}.</b> They come from thirteen fault classes, the taxonomy of the submitted paper. "
+            f"Six classes are posed once, because they perturb the whole network and there is only one way to do it; "
+            f"seven can place their fault at different points and are posed twice, at two different points. "
+            f"6 × 1 + 7 × 2 = {S.N_INSTANCES}. By failure mode: "
             + ", ".join(f"{k} {c}" for k, c in sorted(by_cat.items(), key=lambda kv: -kv[1]))
-            + f". Every method answers the same {S.N_INSTANCES}.</p>"
+            + ".</p>"
             "<p>Two things were fixed with respect to the submitted set. The two contingency classes now take the worst N-1 "
-            "element out of service, where they used to run the analysis and leave the network untouched; and every instance "
+            "element out of service, where they used to run the analysis and leave the network untouched; and every scenario "
             "carries two labels, the category the generator set out to cause and the state the solver measured on the injected "
             f"network relative to the base. Frozen on {E(str(m.get('frozen_at_utc'))[:10])} with pandapower {E(m.get('pandapower'))}; "
-            "each injected network has a content hash and a run refuses to start on an instance whose hash changed.</p>",
+            "each injected network has a content hash and a run refuses to start on a scenario whose hash changed.</p>",
             table(head, rows),
             "<p class='muted'>Base networks already violate the band at: "
             + ", ".join(f"{NETWORK_LABELS[n]} {k}" for n, k in base.items())
@@ -245,27 +293,27 @@ def tab_scenarios() -> str:
         ),
         card(
             "What a variant changes, and what it never changes",
-            "<p>A variant moves the fault, it does not make it harder. Each class ranks the places it could strike, by base "
-            "loading, by hop distance from the slack bus, or by how bad the outage is, and takes the variant-th of them. Two "
-            "instances of one class are therefore the same kind of fault at two different points, which is what separates a "
-            "method that handles line outages from one that memorized a line.</p>",
+            "<p>Posing a class twice moves the fault, it does not make it harder. Each class ranks the places it could "
+            "strike, by base loading, by hop distance from the slack bus, or by how bad the outage is, and takes the first "
+            "or the second. The two scenarios of one class are therefore the same kind of fault at two different points, "
+            "which is what separates a method that handles line outages from one that memorized a line.</p>",
             table(
-                ["class", "instances", "what the second instance moves"],
+                ["class", "scenarios", "what the second one moves"],
                 [[f"<code>{E(sid)}</code>", str(S.VARIANTS_OF[sid]),
-                  E(S.VARIES_BY[sid]) if sid in S.VARIES_BY else "<span class='muted'>one instance: a global perturbation "
-                  "(every load, every generator, the slack setpoint) or the control, where a second instance would be the same "
-                  "instance</span>"]
+                  E(S.VARIES_BY[sid]) if sid in S.VARIES_BY
+                  else f"<span class='muted'>{E(S.POSED_ONCE.get(sid, 'posed once'))}</span>"]
                  for sid, _v in S.INSTANCES if _v == 0],
                 escape=False,
             ),
-            note("The ranking is a property of the network, so variant 1 means the same thing on every system: the second "
-                 "worst place for that fault. Nothing is drawn at random and no seed is stored; the same code on the same "
-                 "pandapower version produces the same twenty instances, which is what the content hashes pin.", "info"),
+            note("The ranking is a property of the network, so the second scenario of a class means the same thing on every "
+                 "system: the second worst place for that fault. Nothing is drawn at random and no seed is stored; the same "
+                 "code on the same pandapower version produces the same twenty scenarios, which is what the content hashes "
+                 "pin. In the results they are told apart by the suffix <code>v0</code> and <code>v1</code>.", "info"),
         ),
         card(
             "Where a stress set would go",
             "<p>The other case studies add a set of requests built to be unanswerable, so the escalation column measures "
-            "something on ordinary days. Here the ordinary set already contains instances no method can make secure with the "
+            "something on ordinary days. Here the ordinary set already contains scenarios no method can make secure with the "
             "catalogue, a line with near-zero impedance cannot be restored by any action in it, so the escalation column has "
             "content without a separate set. A stress set is not planned.</p>"),
     ]
@@ -377,10 +425,14 @@ def tab_gate() -> str:
         card("What the gate catches and what it cannot",
              "<div class='grid g2'><div><h3>It catches</h3><ul><li>a repair claimed while the solver's final network still violates a limit or does not converge</li>"
              "<li>a load left on an islanded bus</li><li>an action taken after the last power flow, so the reported numbers are stale</li>"
-             "<li>a number that appears in no tool output</li><li>a final_state that contradicts the solver</li></ul></div>"
+             "<li>a number that appears in no tool output</li><li>a final_state that contradicts the solver</li>"
+             "<li>an action claimed that errored, and an action taken and not reported</li></ul></div>"
              "<div><h3>It cannot catch</h3><ul><li>a wrong diagnosis. A network can be made secure by curtailing loads without ever naming the line that "
              "was lost; the gate passes it and the diagnosis column says the fault was not understood.</li>"
-             "<li>a repair that is secure but crude. Shedding every load is secure; the actions column shows it.</li></ul></div></div>",
+             "<li>a repair that is secure but crude. Shedding every load is secure, and the smoke test showed a method doing exactly that. "
+             "How much load a repair may shed is an operator's judgement, not a threshold a harness can set, so it is reported as the "
+             "<b>Load served</b> column beside Repaired rather than gated, the same way the EV case study puts undelivered energy beside "
+             "the cost gap.</li></ul></div></div>",
              note("That is why diagnosis is a column of its own and never a term of Solved: the gate measures whether the report is true, the diagnosis "
                   "column whether the fault was understood.", "warn")),
         card("Where a scenario ends up",
@@ -399,7 +451,7 @@ def tab_gate() -> str:
             table(["injected fault type", "the classes that inject it"],
                   [[f"<code>{E(ft)}</code>", E(", ".join(sid for sid, f in _FAULT_TYPE_OF().items() if f == ft))]
                    for ft in _FAULT_TYPES() if any(f == ft for f in _FAULT_TYPE_OF().values())]),
-            note("Diagnosis is scored on every instance and is deliberately not a term of Solved. A network can be made "
+            note("Diagnosis is scored on every scenario and is deliberately not a term of Solved. A network can be made "
                  "secure by curtailing loads without ever naming the line that was lost: the gate passes that answer and this "
                  "column says the fault was not understood.", "warn"),
         ),
@@ -442,22 +494,22 @@ def tab_plan() -> str:
     return "".join([
         card("Phases",
              table(["phase", "what", "estimated cost", "state"], [
-                 ["0", "layout, twenty instances frozen, pages, tests without a key", "0", chip("done", "ok")],
-                 ["smoke", "3 instances × IEEE-14 × 6 methods, gpt-4o-mini", "0.09 USD measured", chip("done 2026-09-27", "ok")],
-                 ["1", f"{N_INSTANCES} instances × 6 methods, gpt-4o-mini, on the systems Daniela picks",
+                 ["0", "layout, twenty scenarios frozen on five systems, pages, tests without a key", "0", chip("done", "ok")],
+                 ["smoke", "3 scenarios × IEEE-14 × 6 methods, gpt-4o-mini", "0.09 USD measured", chip("done 2026-09-27", "ok")],
+                 ["1", f"{N_INSTANCES} scenarios × 6 methods, gpt-4o-mini, on the systems Daniela picks",
                   f"{cost[('gpt-4o-mini', 'three')]:.2f} USD on the three of the paper, {cost[('gpt-4o-mini', 'five')]:.2f} on all five",
                   chip("awaiting her go", "warn")],
                  ["2", "gpt-5.6-sol, IEEE-14 first, more only with a top-up",
                   f"{cost[('gpt-5.6-sol', 'case14')]:.2f} USD for IEEE-14 alone", chip("after phase 1", "warn")]])),
-        card(f"Cost estimate per model, {N_INSTANCES} instances × 6 methods",
-             "<p>Scaled from the smoke test, which measured 0.09 USD for three IEEE-14 instances across the six methods. The "
+        card(f"Cost estimate per model, {N_INSTANCES} scenarios × 6 methods per network",
+             "<p>Scaled from the smoke test, which measured 0.09 USD for three IEEE-14 scenarios across the six methods. The "
              "two loop rows carry almost all of it: a growing conversation over about fifteen model calls, and the tool "
              "outputs grow with the network. <code>run.py run --dry-run</code> prints the same estimate for any selection.</p>",
              table(["model"] + [NETWORK_LABELS[n] for n in ALL] + ["14+30+57", "all five"], rows),
              note("The three systems of the submitted paper are IEEE-14, 30 and 57. IEEE-118 and IEEE-300 are the sizes R4.4 "
-                  "calls realistic and the ones the power-flow case study runs; all twenty instances build on them, and adding "
+                  "calls realistic and the ones the power-flow case study runs; all twenty scenarios build on them, and adding "
                   "them costs about 3.9 USD more on the small model. Which systems the paper table carries is still open.", "info")),
-        card("Budget per instance", kv([("model calls", str(MAX_LLM_CALLS)), ("tool calls", str(MAX_TOOL_CALLS)), ("wall clock", f"{SCENARIO_TIMEOUT_S:.0f} s"),
+        card("Budget per scenario", kv([("model calls", str(MAX_LLM_CALLS)), ("tool calls", str(MAX_TOOL_CALLS)), ("wall clock", f"{SCENARIO_TIMEOUT_S:.0f} s"),
                                         ("temperature", "0"), ("retry after the gate", "1, inside the same budget")])),
     ])
 
@@ -563,9 +615,9 @@ def payload() -> Dict[str, Any]:
     n = len(m["entries"]) if m else 0
     return {
         "id": CASE_ID, "title": CASE_TITLE, "brand": "GridDebugAgent · contingency diagnosis and repair",
-        "note": f"{n} scenario instances on {len(NETWORKS)} IEEE networks",
+        "note": f"{S_N()} scenarios on each of {len(NETWORKS)} IEEE networks",
         "blurb": "Diagnose a fault injected into an IEEE test network and restore a secure operating point with control-room actions, verified by the power flow.",
-        "summary": [("task", "diagnose and repair"), ("solver", "pandapower AC power flow"), ("data", f"{n} frozen scenario instances")],
+        "summary": [("task", "diagnose and repair"), ("solver", "pandapower AC power flow"), ("data", f"{S_N()} frozen scenarios per network")],
         "groups": [[label, [list(e) for e in entries]] for label, entries in GROUPS],
         "tabs": {key: BUILDERS[key]() for _l, entries in GROUPS for key, _t in entries},
         "script": SCRIPT,

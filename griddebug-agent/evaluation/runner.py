@@ -81,7 +81,7 @@ def run_method(method: str, ctx: Context) -> MethodRun:
 
 def row_for(req: Request, run: MethodRun, spec: ModelSpec, pricing: Dict[str, Any]) -> Dict[str, Any]:
     scored = scoring.score_run(run, injected=req.injected, initial=req.initial, base_keys=req.base_keys,
-                               evidence_text=req.evidence_text, request_text=req.text)
+                               evidence_text=req.evidence_text, request_text=req.text, base_load_mw=req.base_load_mw)
     cost = price_usd(spec, run.prompt_tokens, run.completion_tokens, pricing) if spec.uses_llm else 0.0
     tools_by_kind: Dict[str, int] = {}
     for e in run.tool_log:
