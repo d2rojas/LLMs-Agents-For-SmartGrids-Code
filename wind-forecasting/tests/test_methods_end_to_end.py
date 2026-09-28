@@ -258,6 +258,11 @@ def test_duplicate_tool_calls_are_refused_and_not_charged(window):
     assert d.n_calls == 2 and d.n_charged == 1 and not d.exhausted
     assert d.call("persistence_forecast", ARGS).get("forecast") and d.call("power_curve_forecast", ARGS).get("forecast")
     assert d.exhausted
+    d2 = ToolDispatcher(window, max_calls=12)
+    d2.call("gru_forecast", ARGS)
+    for _ in range(4):
+        d2.call("gru_forecast", ARGS)
+    assert d2.exhausted and d2.n_charged == 1   # a loop that repeats itself is sent to its final answer
 
 
 def test_llm_only_prompt_carries_the_data_check(req, window):

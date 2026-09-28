@@ -59,6 +59,7 @@ DATASET_DAYS: int = 245
 
 MAX_LLM_CALLS: int = int(os.environ.get("WIND_MAX_LLM_CALLS", "8"))
 MAX_TOOL_CALLS: int = int(os.environ.get("WIND_MAX_TOOL_CALLS", "12"))
+MAX_DUPLICATE_CALLS: int = 4        # repeated identical calls before the loop is sent to its final answer
 REQUEST_TIMEOUT_S: float = float(os.environ.get("WIND_REQUEST_TIMEOUT_S", "600"))   # per request, wall clock
 API_TIMEOUT_S: float = float(os.environ.get("WIND_API_TIMEOUT_S", "240"))           # one model call
 MAX_RETRIES: int = int(os.environ.get("WIND_MAX_RETRIES", "2"))

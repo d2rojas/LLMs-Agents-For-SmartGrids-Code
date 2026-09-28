@@ -21,7 +21,7 @@ import json
 import time
 from typing import Any, Dict, List, Optional
 
-from config import HISTORY_DAYS, HORIZONS_H, MAX_HORIZON_H
+from config import HISTORY_DAYS, HORIZONS_H, MAX_DUPLICATE_CALLS, MAX_HORIZON_H
 from solver import forecasters as F
 from solver.data import Window, history_csv
 
@@ -92,8 +92,15 @@ class ToolDispatcher:
         return len(self.log)
 
     @property
+    def n_duplicates(self) -> int:
+        return sum(1 for e in self.log if e["kind"] == "duplicate")
+
+    @property
     def exhausted(self) -> bool:
-        return self.max_calls is not None and self.n_charged >= self.max_calls
+        """The budget is spent, or the caller keeps repeating identical calls: either way the loop ends in its final answer."""
+        if self.max_calls is None:
+            return False
+        return self.n_charged >= self.max_calls or self.n_duplicates >= MAX_DUPLICATE_CALLS
 
     # ---------------------------------------------------------------- checks
 
