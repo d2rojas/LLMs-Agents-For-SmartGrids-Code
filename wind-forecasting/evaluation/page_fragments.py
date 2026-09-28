@@ -483,34 +483,57 @@ def tab_results() -> str:
 
     def pct(rows: List[Dict[str, str]], kind: str) -> str:
         k = sum(1 for r in rows if r.get("outcome") == kind)
-        return f"{100.0 * k / len(rows):.0f} % <span class='muted'>({k}/{len(rows)})</span>" if rows else "-"
+        return f"{100.0 * k / len(rows):.0f} <span class='muted'>({k}/{len(rows)})</span>" if rows else "—"
+
+    # The comparison table, laid out like every other case study's: the same three column groups,
+    # and one column per horizon instead of three numbers packed into a cell. A 48 h forecast is a
+    # different problem from a 3 h one, and reading them stacked in the same cell hid that.
+    LEAD = ("Method", "Model", "n")
+    GROUPS = (
+        ("Task utility", ["Form. %"] + [f"{h} h {c}" for h in HORIZONS_H for c in ("scored", "NMAE %", "Imp. %")]),
+        ("Solver-grounded correctness", ["Solved %", "Escalated %", "Wrong-unflagged %", "Traceable %"]),
+        ("Cost and time", ["Tokens", "Cost $", "Time s"]),
+    )
+    NCOL = sum(len(c) for _g, c in GROUPS)
+    head = ("<tr>" + "".join(f"<th rowspan='2'>{E(x)}</th>" for x in LEAD)
+            + "".join(f"<th class='g' colspan='{len(c)}'>{E(g)}</th>" for g, c in GROUPS) + "</tr>"
+            + "<tr>" + "".join(f"<th>{E(lab)}</th>" for _g, c in GROUPS for lab in c) + "</tr>")
+    R = lambda v: f"<td style='text-align:right'>{v}</td>"          # noqa: E731
+    DASH = "<td style='text-align:right;color:var(--muted)'>—</td>"
 
     for set_name, per in by_set.items():
-        split = []
+        trs = []
         for row in ROWS:
-            if row["name"] in per:
-                d, rows, h = per[row["name"]]
-                a = h["aggregate"]
-                bh = a.get("by_horizon") or {}
-                fmt = lambda key: " / ".join("—" if bh[k].get(key) is None else f"{bh[k][key]}" for k in sorted(bh, key=int)) if bh else "—"  # noqa: E731
-                # every error cell is an average over the requests this method actually answered, so the
-                # count that produced it travels beside it: a row that answered 7 of 20 is not comparable
-                # with one that answered 20, however good its NMAE looks
-                scored = " / ".join(f"{bh[k].get('n_scored', 0)}/{bh[k].get('n', 0)}" for k in sorted(bh, key=int)) if bh else "—"
-                split.append([f"<b>{E(row['label'])}</b>", f"{d.parts[-2]}", str(len(rows)), f"{a.get('form')} %", scored, fmt("nmae_pct"), fmt("improvement_pct"), pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged"),
-                              f"{a.get('trace') if a.get('trace') is not None else '—'} %", f"{a.get('tokens')}", f"{a.get('cost')}"])
-            else:
-                split.append([f"<b>{E(row['label'])}</b>", "<span class='muted'>not run</span>"] + [""] * 11)
-        hs = " / ".join(f"{h} h" for h in HORIZONS_H)
+            if row["name"] not in per:
+                trs.append(f"<tr><td><b>{E(row['label'])}</b></td><td colspan='{2 + NCOL}' class='muted'>not run</td></tr>")
+                continue
+            d, rows, h = per[row["name"]]
+            a = h["aggregate"]
+            bh = a.get("by_horizon") or {}
+            num = lambda v, f="{:.2f}": DASH if v is None else R(f.format(v))  # noqa: E731
+            tds = [R(f"{a.get('form')}")]
+            for hz in HORIZONS_H:
+                e = bh.get(str(hz)) or {}
+                # the count first, then the errors it produced: a row scored on 7 of 20 scenarios
+                # answered only what it found easy, so its NMAE is not comparable with a full row
+                tds += [R(f"{e.get('n_scored', 0)}/{e.get('n', 0)}") if e else DASH,
+                        num(e.get("nmae_pct")), num(e.get("improvement_pct"), "{:+.1f}")]
+            tds += [R(pct(rows, "solved")), R(pct(rows, "escalated")), R(pct(rows, "wrong_unflagged")),
+                    R(f"{a.get('trace')}") if a.get("trace") is not None else DASH]
+            tds += [R(f"{a.get('tokens'):,}") if a.get("tokens") is not None else DASH,
+                    num(a.get("cost"), "{:.3f}"), num(a.get("wall_time_mean_s"), "{:.0f}")]
+            trs.append(f"<tr><td><b>{E(row['label'])}</b><div class='muted'><code>{E(row['name'])}</code></div></td>"
+                       f"<td>{E(d.parts[-2])}</td>{R(len(rows))}" + "".join(tds) + "</tr>")
         body.append(card(f"Run set {E(set_name)}",
-                         table(["method", "model", "n", "formulation", f"scored ({hs})", f"NMAE % ({hs})", f"Imp. % over the reference ({hs})", verdict("solved"), verdict("escalated"), verdict("wrong"), "traceable", "tokens", "cost $"], split),
-                         note("Read the scored column before the error columns. It gives, per horizon, how many of the 20 scenarios the method "
-                              "returned a valid series for, and the errors to its right are averages over exactly those. A method that answers "
-                              "7 scenarios keeps the ones it found easy, so its NMAE is not comparable with a method that answered all 20, even "
-                              "when the number is smaller. A dash is not a missing measurement: it means the method returned no valid series at "
-                              "that horizon, so there was nothing to score, which is itself the result. NMAE is the error as a per cent of the "
-                              "1500 kW installed capacity, and Imp. is the improvement over the protocol's reference model on the same points: "
-                              "0 means no better than a model that costs nothing, negative means worse.", "info")))
+                         "<div class='tw'><table class='cmp'>" + head + "".join(trs) + "</table></div>",
+                         note("The three column groups are the same three in every case study of this site. Inside Task utility, read each "
+                              "horizon's <b>scored</b> column before its two error columns: it gives how many of the 20 scenarios the method "
+                              "returned a valid series for, and the NMAE and Imp. beside it are averages over exactly those. A method that "
+                              "answered 7 scenarios kept the ones it found easy, so its NMAE is not comparable with a method that answered all "
+                              "20, even when the number is smaller. A dash is not a missing measurement: it means the method returned no valid "
+                              "series at that horizon, so there was nothing to score, which is itself the result. NMAE is the error as a per "
+                              "cent of the 1500 kW installed capacity, and Imp. is the improvement over the protocol's reference model on the "
+                              "same points: 0 means no better than a model that costs nothing, negative means worse.", "info")))
     det = []
     cols = [("nn", "nn"), ("instance_id", "scenario"), ("horizon_hours", "h"), ("question", "question"), ("outcome", "outcome"), ("solved_reason", "why"),
             ("formulation_exact", "form."), ("n_values", "values"), ("mae_kw", "MAE kW"), ("nmae_pct", "NMAE %"), ("improvement_pct", "Imp. %"), ("answer_ok", "answer"), ("source", "source"), ("gate_pass", "gate"),
