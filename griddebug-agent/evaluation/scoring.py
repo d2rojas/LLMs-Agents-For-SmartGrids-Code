@@ -190,6 +190,11 @@ def score_run(run: MethodRun, *, injected: Injected, initial: State, base_keys: 
     return out
 
 
+def _ls_rows(rs):
+    """The rows that carry a load-served number at all."""
+    return [r for r in rs if r.get("common_load_served_pct") is not None]
+
+
 def aggregate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     rows_all = [r for r in rows if r.get("common_outcome") is not None]
     errors = [r for r in rows_all if r["common_outcome"] == "run_error"]
@@ -222,8 +227,11 @@ def aggregate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "common_traceable_count": cnt("common_traceable", True), "common_traceable_rate": rate(cnt("common_traceable", True)),
         "violations_initial_new": sum(int(r["initial_n_new"]) for r in conv_both), "violations_final_new": sum(int(r["common_n_new_violations"]) for r in conv_both),
         "violations_comparable_n": len(conv_both),
-        "load_served_pct_mean": mean("common_load_served_pct"),
-        "load_served_pct_min": (min((float(r["common_load_served_pct"]) for r in rs if r.get("common_load_served_pct") is not None), default=None)),
+        # Capped at 100: serving more than the base network's demand means the injected load
+        # increase is still connected, which is a failure to repair, not extra load served.
+        # The uncapped per-scenario value stays in summary.csv.
+        "load_served_pct_mean": (round(sum(min(float(r["common_load_served_pct"]), 100.0) for r in _ls_rows(rs)) / len(_ls_rows(rs)), 2) if _ls_rows(rs) else None),
+        "load_served_pct_min": (min((min(float(r["common_load_served_pct"]), 100.0) for r in _ls_rows(rs)), default=None)),
         "n_llm_calls_mean": mean("n_llm_calls"), "n_tool_calls_mean": mean("n_tool_calls"),
         "prompt_tokens_mean": mean("prompt_tokens"), "completion_tokens_mean": mean("completion_tokens"),
         "tokens_total": int(sum(float(r.get("prompt_tokens") or 0) + float(r.get("completion_tokens") or 0) for r in rs)),

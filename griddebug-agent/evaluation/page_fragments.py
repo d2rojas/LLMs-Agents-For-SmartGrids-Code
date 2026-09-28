@@ -70,12 +70,13 @@ COLUMNS: Tuple[Dict[str, str], ...] = (
     {"group": "Task utility", "name": "Load served", "what": "the active demand still in service after the repair, against the base network's demand",
      "why": "a network with every load curtailed is secure; without this column the table would call that a repair"},
     {"group": "Task utility", "name": "Violations", "what": "new violations before and after, over scenarios converged at both ends", "why": "a non-converged state is never a count of zero"},
-    {"group": "Task utility", "name": "Solved", "what": "repaired, claimed as repaired, every number traceable, final_state consistent with the solver", "why": "the end-to-end verdict"},
+    {"group": "Solver-grounded correctness", "name": "Solved", "what": "repaired, claimed as repaired, every number traceable, final_state consistent with the solver", "why": "the end-to-end verdict, and the first of the three exclusive outcomes"},
+    {"group": "Solver-grounded correctness", "name": "Escalated", "what": "the method declared not_repaired or cannot_repair, listing what remains, or the harness had to write the answer", "why": "the second outcome: how much work goes back to a person"},
+    {"group": "Solver-grounded correctness", "name": "Wrong, unflagged", "what": "a repair claim the solver contradicts, or an unsupported number, presented as valid", "why": "the third outcome, and the quantity a solver-grounded design exists to drive to zero. The three add up to 100 %"},
     {"group": "Solver-grounded correctness", "name": "Feasible", "what": "the final power flow converges", "why": "the solver status column of the other case studies"},
     {"group": "Solver-grounded correctness", "name": "Traceable", "what": "every number in the answer appears in a tool output or in the evidence", "why": "the reported numbers have an origin that can be checked"},
-    {"group": "Solver-grounded correctness", "name": "Wrong, unflagged", "what": "a repair claim the solver contradicts, or an unsupported number, presented as valid", "why": "the quantity a solver-grounded design exists to drive to zero"},
-    {"group": "Cost and operation", "name": "Escalated", "what": "the method declared not_repaired or cannot_repair, listing what remains, or the harness had to write the answer", "why": "how much work goes back to a person"},
     {"group": "Cost and operation", "name": "Calls, Tokens", "what": "model calls, tool calls, prompt and completion tokens per scenario", "why": "what the architecture costs to run"},
+    {"group": "Cost and operation", "name": "Cost, Time", "what": "dollars for the whole run set, and wall time per scenario", "why": "the operating cost of each architecture, on the same scenarios"},
 )
 
 

@@ -1,6 +1,6 @@
 # griddebug on IEEE 14-bus with gpt-4o-mini
 
-Generated 2026-09-28 10:26 by evaluation/postprocess.py from `raw/rows.jsonl`. Scenarios: 7. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the harness's own power flow, the same way for every method.
+Generated 2026-09-28 11:07 by evaluation/postprocess.py from `raw/rows.jsonl`. Scenarios: 7. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the harness's own power flow, the same way for every method.
 
 ## Run
 
@@ -42,11 +42,12 @@ The three outcomes are exclusive and sum to the scenario count. Escalation takes
 | Task utility | Repaired (secure final network) | 2/7 (28.6%) |
 | Task utility | Improved | 6/7 (85.7%) |
 | Task utility | New violations, before -> after (scenarios converged at both ends, n=6) | 36 -> 8 |
-| Task utility | Load served, mean / worst | 74.83 % / 37.6 % of the base network's demand |
+| Task utility | Load served, mean / worst | 74.83 % / 37.6 % of the base network's demand (a scenario that still carries the injected load increase counts as 100, not more) |
+| Solver-grounded correctness | Solved autonomously | 2/7 (28.6%) |
+| Solver-grounded correctness | Escalated to a person | 5/7 (71.4%) |
+| Solver-grounded correctness | Wrong, unflagged | 0/7 (0.0%) |
 | Solver-grounded correctness | Feasible (final power flow converges) | 7/7 (100.0%) |
 | Solver-grounded correctness | Traceable answers | 7/7 (100.0%) |
-| Solver-grounded correctness | Wrong, unflagged | 0/7 (0.0%) |
-| Cost and operation | Escalated | 5/7 (71.4%) |
 | Cost and operation | LLM calls / tool calls, mean | 13.43 / 30.43 |
 | Cost and operation | Prompt / completion tokens, mean | 70167.43 / 1587.86 |
 | Cost and operation | Cost, total | $0.0803 |
