@@ -202,10 +202,10 @@ def tab_scenarios() -> str:
     if not m:
         return card("Scenarios", "<p class='muted'>No manifest frozen yet: run <code>run.py freeze-scenarios</code>.</p>")
     ent = m["entries"]
-    head = ["scenario", "category", "injected fault"] + [NETWORK_LABELS[n] for n in NETWORKS]
+    head = ["#", "scenario", "category", "injected fault"] + [NETWORK_LABELS[n] for n in NETWORKS]
     rows = []
-    for s in S.SCENARIOS:
-        cells = [f"<code>{E(s['id'])}</code><div class='muted'>{E(s['label'])}</div>", E(s["category"]), E(S.FAULT_TYPE_OF[s["id"]])]
+    for i, s in enumerate(S.SCENARIOS, 1):
+        cells = [f"<b>{i}</b>", f"<code>{E(s['id'])}</code><div class='muted'>{E(s['label'])}</div>", E(s["category"]), E(S.FAULT_TYPE_OF[s["id"]])]
         for n in NETWORKS:
             e = ent.get(f"{n}-{s['id']}")
             if e is None:
