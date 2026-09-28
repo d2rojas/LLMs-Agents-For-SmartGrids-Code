@@ -493,17 +493,24 @@ def tab_results() -> str:
                 a = h["aggregate"]
                 bh = a.get("by_horizon") or {}
                 fmt = lambda key: " / ".join("—" if bh[k].get(key) is None else f"{bh[k][key]}" for k in sorted(bh, key=int)) if bh else "—"  # noqa: E731
-                split.append([f"<b>{E(row['label'])}</b>", f"{d.parts[-2]}", str(len(rows)), f"{a.get('form')} %", fmt("nmae_pct"), fmt("improvement_pct"), pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged"),
+                # every error cell is an average over the requests this method actually answered, so the
+                # count that produced it travels beside it: a row that answered 7 of 20 is not comparable
+                # with one that answered 20, however good its NMAE looks
+                scored = " / ".join(f"{bh[k].get('n_scored', 0)}/{bh[k].get('n', 0)}" for k in sorted(bh, key=int)) if bh else "—"
+                split.append([f"<b>{E(row['label'])}</b>", f"{d.parts[-2]}", str(len(rows)), f"{a.get('form')} %", scored, fmt("nmae_pct"), fmt("improvement_pct"), pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged"),
                               f"{a.get('trace') if a.get('trace') is not None else '—'} %", f"{a.get('tokens')}", f"{a.get('cost')}"])
             else:
-                split.append([f"<b>{E(row['label'])}</b>", "<span class='muted'>not run</span>"] + [""] * 10)
+                split.append([f"<b>{E(row['label'])}</b>", "<span class='muted'>not run</span>"] + [""] * 11)
         hs = " / ".join(f"{h} h" for h in HORIZONS_H)
         body.append(card(f"Run set {E(set_name)}",
-                         table(["method", "model", "n", "formulation", f"NMAE % ({hs})", f"Imp. % over the reference ({hs})", verdict("solved"), verdict("escalated"), verdict("wrong"), "traceable", "tokens", "cost $"], split),
-                         note("A dash in an error column is not a missing measurement: it means the method returned no valid series at that "
-                              "horizon, so there was nothing to score. NMAE is the error as a per cent of the 1500 kW installed capacity, and "
-                              "Imp. is the improvement over the protocol's reference model on the same points: 0 means no better than a model "
-                              "that costs nothing, negative means worse.", "info")))
+                         table(["method", "model", "n", "formulation", f"scored ({hs})", f"NMAE % ({hs})", f"Imp. % over the reference ({hs})", verdict("solved"), verdict("escalated"), verdict("wrong"), "traceable", "tokens", "cost $"], split),
+                         note("Read the scored column before the error columns. It gives, per horizon, how many of the 20 scenarios the method "
+                              "returned a valid series for, and the errors to its right are averages over exactly those. A method that answers "
+                              "7 scenarios keeps the ones it found easy, so its NMAE is not comparable with a method that answered all 20, even "
+                              "when the number is smaller. A dash is not a missing measurement: it means the method returned no valid series at "
+                              "that horizon, so there was nothing to score, which is itself the result. NMAE is the error as a per cent of the "
+                              "1500 kW installed capacity, and Imp. is the improvement over the protocol's reference model on the same points: "
+                              "0 means no better than a model that costs nothing, negative means worse.", "info")))
     det = []
     cols = [("nn", "nn"), ("instance_id", "scenario"), ("horizon_hours", "h"), ("question", "question"), ("outcome", "outcome"), ("solved_reason", "why"),
             ("formulation_exact", "form."), ("n_values", "values"), ("mae_kw", "MAE kW"), ("nmae_pct", "NMAE %"), ("improvement_pct", "Imp. %"), ("answer_ok", "answer"), ("source", "source"), ("gate_pass", "gate"),

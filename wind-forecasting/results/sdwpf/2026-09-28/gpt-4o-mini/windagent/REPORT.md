@@ -1,6 +1,6 @@
 # windagent on SDWPF with gpt-4o-mini
 
-Generated 2026-09-28 12:12 by evaluation/postprocess.py from `raw/rows.jsonl`. Requests: 60. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the frozen target days, the same way for every method.
+Generated 2026-09-28 12:38 by evaluation/postprocess.py from `raw/rows.jsonl`. Requests: 60. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the frozen target days, the same way for every method.
 
 ## Run
 
@@ -43,9 +43,9 @@ The three outcomes are exclusive and sum to the request count. Escalation takes 
 | Task utility | Formulation exact | 60/60 (100.0%) |
 | Task utility | Formulation error types | {} |
 | Task utility | MAE / RMSE / overall, kW, over valid series (n=16) | 302.51 / 356.31 / 329.41 |
-| Task utility | NBIAS / NMAE / NRMSE, % of installed capacity (ANEMOS protocol) | 10.91 / 20.17 / 23.75 |
-| Task utility | Improvement over the protocol's reference model, % (its NMAE 17.65 %) | -23.37 |
-| Task utility | Improvement over persistence, % (its NMAE 30.43 %) | 32.4 |
+| Task utility | NBIAS / NMAE / NRMSE, % of installed capacity (ANEMOS protocol), over valid series (n=16) | 10.91 / 20.17 / 23.75 |
+| Task utility | Improvement over the protocol's reference model, % (its NMAE 17.65 %), over valid series (n=16) | -23.37 |
+| Task utility | Improvement over persistence, % (its NMAE 30.43 %), over valid series (n=16) | 32.4 |
 | Task utility | MAE / RMSE, kW, over solved requests | 302.51 / 356.31 |
 | Task utility | Answer coherent with the series | 7/7 |
 | Solver-grounded correctness | Valid series (schema and range) | 16/60 (26.7%) |

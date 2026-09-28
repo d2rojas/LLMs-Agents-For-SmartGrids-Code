@@ -1,6 +1,6 @@
 # llm_only_cot on SDWPF with gpt-4o-mini
 
-Generated 2026-09-28 11:12 by evaluation/postprocess.py from `raw/rows.jsonl`. Requests: 60. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the frozen target days, the same way for every method.
+Generated 2026-09-28 12:38 by evaluation/postprocess.py from `raw/rows.jsonl`. Requests: 60. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the frozen target days, the same way for every method.
 
 ## Run
 
@@ -43,9 +43,9 @@ The three outcomes are exclusive and sum to the request count. Escalation takes 
 | Task utility | Formulation exact | 41/60 (68.3%) |
 | Task utility | Formulation error types | {'no_formulation': 19} |
 | Task utility | MAE / RMSE / overall, kW, over valid series (n=25) | 309.67 / 344.97 / 327.32 |
-| Task utility | NBIAS / NMAE / NRMSE, % of installed capacity (ANEMOS protocol) | 17.42 / 20.64 / 23.0 |
-| Task utility | Improvement over the protocol's reference model, % (its NMAE 12.2 %) | -84.36 |
-| Task utility | Improvement over persistence, % (its NMAE 27.99 %) | 24.99 |
+| Task utility | NBIAS / NMAE / NRMSE, % of installed capacity (ANEMOS protocol), over valid series (n=25) | 17.42 / 20.64 / 23.0 |
+| Task utility | Improvement over the protocol's reference model, % (its NMAE 12.2 %), over valid series (n=25) | -84.36 |
+| Task utility | Improvement over persistence, % (its NMAE 27.99 %), over valid series (n=25) | 24.99 |
 | Task utility | MAE / RMSE, kW, over solved requests | 304.58 / 346.17 |
 | Task utility | Answer coherent with the series | 15/34 |
 | Solver-grounded correctness | Valid series (schema and range) | 25/60 (41.7%) |

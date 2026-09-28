@@ -1,6 +1,6 @@
 # react_nogate on SDWPF with gpt-4o-mini
 
-Generated 2026-09-28 12:12 by evaluation/postprocess.py from `raw/rows.jsonl`. Requests: 60. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the frozen target days, the same way for every method.
+Generated 2026-09-28 12:38 by evaluation/postprocess.py from `raw/rows.jsonl`. Requests: 60. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the frozen target days, the same way for every method.
 
 ## Run
 
@@ -43,9 +43,9 @@ The three outcomes are exclusive and sum to the request count. Escalation takes 
 | Task utility | Formulation exact | 52/60 (86.7%) |
 | Task utility | Formulation error types | {'no_formulation': 8} |
 | Task utility | MAE / RMSE / overall, kW, over valid series (n=47) | 321.6 / 371.81 / 346.71 |
-| Task utility | NBIAS / NMAE / NRMSE, % of installed capacity (ANEMOS protocol) | 15.61 / 21.44 / 24.79 |
-| Task utility | Improvement over the protocol's reference model, % (its NMAE 16.68 %) | -44.5 |
-| Task utility | Improvement over persistence, % (its NMAE 30.87 %) | 31.36 |
+| Task utility | NBIAS / NMAE / NRMSE, % of installed capacity (ANEMOS protocol), over valid series (n=47) | 15.61 / 21.44 / 24.79 |
+| Task utility | Improvement over the protocol's reference model, % (its NMAE 16.68 %), over valid series (n=47) | -44.5 |
+| Task utility | Improvement over persistence, % (its NMAE 30.87 %), over valid series (n=47) | 31.36 |
 | Task utility | MAE / RMSE, kW, over solved requests | 261.08 / 309.3 |
 | Task utility | Answer coherent with the series | 12/40 |
 | Solver-grounded correctness | Valid series (schema and range) | 47/60 (78.3%) |

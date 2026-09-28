@@ -1,6 +1,6 @@
 # rule_based on SDWPF with no-llm
 
-Generated 2026-09-28 09:57 by evaluation/postprocess.py from `raw/rows.jsonl`. Requests: 60. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the frozen target days, the same way for every method.
+Generated 2026-09-28 12:38 by evaluation/postprocess.py from `raw/rows.jsonl`. Requests: 60. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the frozen target days, the same way for every method.
 
 ## Run
 
@@ -43,9 +43,9 @@ The three outcomes are exclusive and sum to the request count. Escalation takes 
 | Task utility | Formulation exact | 60/60 (100.0%) |
 | Task utility | Formulation error types | {} |
 | Task utility | MAE / RMSE / overall, kW, over valid series (n=60) | 272.48 / 330.6 / 301.54 |
-| Task utility | NBIAS / NMAE / NRMSE, % of installed capacity (ANEMOS protocol) | 8.09 / 18.17 / 22.04 |
-| Task utility | Improvement over the protocol's reference model, % (its NMAE 19.16 %) | 3.77 |
-| Task utility | Improvement over persistence, % (its NMAE 32.96 %) | 46.57 |
+| Task utility | NBIAS / NMAE / NRMSE, % of installed capacity (ANEMOS protocol), over valid series (n=60) | 8.09 / 18.17 / 22.04 |
+| Task utility | Improvement over the protocol's reference model, % (its NMAE 19.16 %), over valid series (n=60) | 3.77 |
+| Task utility | Improvement over persistence, % (its NMAE 32.96 %), over valid series (n=60) | 46.57 |
 | Task utility | MAE / RMSE, kW, over solved requests | 272.48 / 330.6 |
 | Task utility | Answer coherent with the series | 40/40 |
 | Solver-grounded correctness | Valid series (schema and range) | 60/60 (100.0%) |
