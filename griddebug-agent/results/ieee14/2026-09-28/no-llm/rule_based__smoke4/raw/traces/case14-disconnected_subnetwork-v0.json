@@ -1,0 +1,669 @@
+{
+ "case_study": "griddebug",
+ "method": "rule_based",
+ "model": "none:rule_based",
+ "request_id": "case14-disconnected_subnetwork-v0",
+ "status": "ok",
+ "error": null,
+ "answer": "{\n  \"diagnosis\": {\n    \"fault_type\": \"islanding\",\n    \"components\": {\n      \"bus\": [\n        1\n      ],\n      \"line\": [\n        0,\n        2,\n        3,\n        4\n      ]\n    },\n    \"explanation\": \"rule engine: overvoltage, line_overload, gen_at_q_limit\"\n  },\n  \"actions\": [\n    {\n      \"tool\": \"switch_element\",\n      \"args\": {\n        \"element_type\": \"line\",\n        \"element_index\": 0,\n        \"in_service\": true\n      }\n    },\n    {\n      \"tool\": \"switch_element\",\n      \"args\": {\n        \"element_type\": \"line\",\n        \"element_index\": 2,\n        \"in_service\": true\n      }\n    },\n    {\n      \"tool\": \"switch_element\",\n      \"args\": {\n        \"element_type\": \"line\",\n        \"element_index\": 3,\n        \"in_service\": true\n      }\n    },\n    {\n      \"tool\": \"switch_element\",\n      \"args\": {\n        \"element_type\": \"line\",\n        \"element_index\": 4,\n        \"in_service\": true\n      }\n    }\n  ],\n  \"final_state\": {\n    \"converged\": true,\n    \"n_new_violations\": 0,\n    \"islanded_load_buses\": []\n  },\n  \"status\": \"repaired\",\n  \"remaining_violations\": [],\n  \"summary\": \"Rules fired: overvoltage, line_overload, gen_at_q_limit. Actions applied: switch_element. The network is secure.\"\n}",
+ "messages": [],
+ "rounds": [
+  {
+   "round": 1,
+   "role": "harness",
+   "llm": null,
+   "tools": [
+    {
+     "n": 1,
+     "name": "run_power_flow",
+     "kind": "simulation",
+     "args": {},
+     "output": {
+      "converged": true,
+      "message": "AC power flow (Newton-Raphson) converged."
+     },
+     "ok": true,
+     "latency_s": 0.0115
+    },
+    {
+     "n": 2,
+     "name": "check_voltage_violations",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "limits_pu": {
+       "min": 0.95,
+       "max": 1.05
+      },
+      "new_violations": [
+       {
+        "bus": 1,
+        "vm_pu": 0.0,
+        "limit": 0.94,
+        "kind": "under"
+       },
+       {
+        "bus": 4,
+        "vm_pu": 0.9258,
+        "limit": 0.94,
+        "kind": "under"
+       }
+      ],
+      "n_new_violations": 2,
+      "pre_existing_in_base": {
+       "n": 2,
+       "buses": [
+        5,
+        7
+       ]
+      },
+      "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.0003
+    },
+    {
+     "n": 3,
+     "name": "check_overloads",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "threshold_percent": 100.0,
+      "new_overloads": [
+       {
+        "element": "line",
+        "index": 7,
+        "loading_percent": 170.2,
+        "from_bus": 5,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 9,
+        "loading_percent": 100.2,
+        "from_bus": 5,
+        "to_bus": 12
+       },
+       {
+        "element": "line",
+        "index": 12,
+        "loading_percent": 254.8,
+        "from_bus": 9,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 13,
+        "loading_percent": 135.5,
+        "from_bus": 11,
+        "to_bus": 12
+       },
+       {
+        "element": "line",
+        "index": 14,
+        "loading_percent": 159.5,
+        "from_bus": 12,
+        "to_bus": 13
+       }
+      ],
+      "n_new_overloads": 5,
+      "pre_existing_in_base": {
+       "n": 0,
+       "elements": []
+      },
+      "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.0004
+    },
+    {
+     "n": 4,
+     "name": "find_disconnected_areas",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "disconnected_buses": [
+       1
+      ],
+      "connected_buses": [
+       0,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13
+      ],
+      "message": "1 bus(es) not connected to slack."
+     },
+     "ok": true,
+     "latency_s": 0.0002
+    },
+    {
+     "n": 5,
+     "name": "switch_element",
+     "kind": "action",
+     "args": {
+      "element_type": "line",
+      "element_index": 0,
+      "in_service": true
+     },
+     "output": {
+      "action": "switch_element",
+      "success": true,
+      "element_type": "line",
+      "element_index": 0,
+      "old_in_service": false,
+      "new_in_service": true
+     },
+     "ok": true,
+     "latency_s": 0.0
+    },
+    {
+     "n": 6,
+     "name": "switch_element",
+     "kind": "action",
+     "args": {
+      "element_type": "line",
+      "element_index": 2,
+      "in_service": true
+     },
+     "output": {
+      "action": "switch_element",
+      "success": true,
+      "element_type": "line",
+      "element_index": 2,
+      "old_in_service": false,
+      "new_in_service": true
+     },
+     "ok": true,
+     "latency_s": 0.0
+    },
+    {
+     "n": 7,
+     "name": "switch_element",
+     "kind": "action",
+     "args": {
+      "element_type": "line",
+      "element_index": 3,
+      "in_service": true
+     },
+     "output": {
+      "action": "switch_element",
+      "success": true,
+      "element_type": "line",
+      "element_index": 3,
+      "old_in_service": false,
+      "new_in_service": true
+     },
+     "ok": true,
+     "latency_s": 0.0
+    },
+    {
+     "n": 8,
+     "name": "switch_element",
+     "kind": "action",
+     "args": {
+      "element_type": "line",
+      "element_index": 4,
+      "in_service": true
+     },
+     "output": {
+      "action": "switch_element",
+      "success": true,
+      "element_type": "line",
+      "element_index": 4,
+      "old_in_service": false,
+      "new_in_service": true
+     },
+     "ok": true,
+     "latency_s": 0.0
+    },
+    {
+     "n": 9,
+     "name": "run_power_flow",
+     "kind": "simulation",
+     "args": {},
+     "output": {
+      "converged": true,
+      "message": "AC power flow (Newton-Raphson) converged."
+     },
+     "ok": true,
+     "latency_s": 0.0111
+    },
+    {
+     "n": 10,
+     "name": "run_power_flow",
+     "kind": "simulation",
+     "args": {},
+     "output": {
+      "converged": true,
+      "message": "AC power flow (Newton-Raphson) converged."
+     },
+     "ok": true,
+     "latency_s": 0.0111
+    }
+   ]
+  }
+ ],
+ "n_llm_calls": 0,
+ "n_tool_calls": 10,
+ "prompt_tokens": 0,
+ "completion_tokens": 0,
+ "wall_time_s": 0.268,
+ "rules_fired": [
+  "overvoltage",
+  "line_overload",
+  "gen_at_q_limit"
+ ],
+ "harness_declared": null,
+ "system_prompt_hash": null,
+ "request": {
+  "request_id": "case14-disconnected_subnetwork-v0",
+  "network": "case14",
+  "scenario_id": "disconnected_subnetwork",
+  "variant": 0,
+  "category": "nonconvergence",
+  "label": "Disconnected sub-network",
+  "text": "The AC power flow on the IEEE 14-bus system (case14) converged, but 1 bus(es) with load are islanded and 7 new limit violation(s) appeared. Diagnose the cause and restore a secure operating point: the power flow converges, no in-service load is on an islanded bus, every bus voltage is within [0.95, 1.05] p.u., and no line or transformer is above 100 % loading, apart from the violations the base network already has. Use only the actions available. Report the diagnosis, the actions taken, and the final state.",
+  "injected": {
+   "fault_type": "islanding",
+   "components": {
+    "bus": [
+     1
+    ],
+    "line": [
+     0,
+     2,
+     3,
+     4
+    ]
+   },
+   "description": "Bus 1 is disconnected from the main grid; Lines [0, 2, 3, 4] taken out of service",
+   "also_accepted": []
+  },
+  "initial_state": {
+   "converged": true,
+   "label": "islanded_load",
+   "n_violations": 11,
+   "n_new_violations": 7,
+   "n_voltage": 6,
+   "n_thermal": 5,
+   "voltage": [
+    {
+     "bus": 0,
+     "vm_pu": 1.06,
+     "limit": 1.05,
+     "kind": "over"
+    },
+    {
+     "bus": 3,
+     "vm_pu": 0.9411,
+     "limit": 0.95,
+     "kind": "under"
+    },
+    {
+     "bus": 4,
+     "vm_pu": 0.9258,
+     "limit": 0.95,
+     "kind": "under"
+    },
+    {
+     "bus": 5,
+     "vm_pu": 1.07,
+     "limit": 1.05,
+     "kind": "over"
+    },
+    {
+     "bus": 7,
+     "vm_pu": 1.09,
+     "limit": 1.05,
+     "kind": "over"
+    },
+    {
+     "bus": 11,
+     "vm_pu": 1.0526,
+     "limit": 1.05,
+     "kind": "over"
+    }
+   ],
+   "thermal": [
+    {
+     "element": "line",
+     "index": 7,
+     "loading_percent": 170.2
+    },
+    {
+     "element": "line",
+     "index": 9,
+     "loading_percent": 100.2
+    },
+    {
+     "element": "line",
+     "index": 12,
+     "loading_percent": 254.8
+    },
+    {
+     "element": "line",
+     "index": 13,
+     "loading_percent": 135.5
+    },
+    {
+     "element": "line",
+     "index": 14,
+     "loading_percent": 159.5
+    }
+   ],
+   "new": [
+    "bus:3",
+    "bus:4",
+    "line:12",
+    "line:13",
+    "line:14",
+    "line:7",
+    "line:9"
+   ],
+   "islanded_load_buses": [
+    1
+   ],
+   "nan_buses": [
+    1
+   ],
+   "vm_min": 0.9258,
+   "vm_max": 1.09,
+   "max_loading": 254.8,
+   "secure": false
+  },
+  "base_violations": [
+   "bus:0",
+   "bus:10",
+   "bus:11",
+   "bus:12",
+   "bus:5",
+   "bus:6",
+   "bus:7",
+   "bus:8",
+   "bus:9"
+  ],
+  "network_hash": "906906f61341d089",
+  "base_load_mw": 259.0
+ },
+ "tool_log": [
+  {
+   "n": 1,
+   "name": "run_power_flow",
+   "kind": "simulation",
+   "args": {},
+   "output": {
+    "converged": true,
+    "message": "AC power flow (Newton-Raphson) converged."
+   },
+   "ok": true,
+   "latency_s": 0.0115
+  },
+  {
+   "n": 2,
+   "name": "check_voltage_violations",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "limits_pu": {
+     "min": 0.95,
+     "max": 1.05
+    },
+    "new_violations": [
+     {
+      "bus": 1,
+      "vm_pu": 0.0,
+      "limit": 0.94,
+      "kind": "under"
+     },
+     {
+      "bus": 4,
+      "vm_pu": 0.9258,
+      "limit": 0.94,
+      "kind": "under"
+     }
+    ],
+    "n_new_violations": 2,
+    "pre_existing_in_base": {
+     "n": 2,
+     "buses": [
+      5,
+      7
+     ]
+    },
+    "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.0003
+  },
+  {
+   "n": 3,
+   "name": "check_overloads",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "threshold_percent": 100.0,
+    "new_overloads": [
+     {
+      "element": "line",
+      "index": 7,
+      "loading_percent": 170.2,
+      "from_bus": 5,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 9,
+      "loading_percent": 100.2,
+      "from_bus": 5,
+      "to_bus": 12
+     },
+     {
+      "element": "line",
+      "index": 12,
+      "loading_percent": 254.8,
+      "from_bus": 9,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 13,
+      "loading_percent": 135.5,
+      "from_bus": 11,
+      "to_bus": 12
+     },
+     {
+      "element": "line",
+      "index": 14,
+      "loading_percent": 159.5,
+      "from_bus": 12,
+      "to_bus": 13
+     }
+    ],
+    "n_new_overloads": 5,
+    "pre_existing_in_base": {
+     "n": 0,
+     "elements": []
+    },
+    "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.0004
+  },
+  {
+   "n": 4,
+   "name": "find_disconnected_areas",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "disconnected_buses": [
+     1
+    ],
+    "connected_buses": [
+     0,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13
+    ],
+    "message": "1 bus(es) not connected to slack."
+   },
+   "ok": true,
+   "latency_s": 0.0002
+  },
+  {
+   "n": 5,
+   "name": "switch_element",
+   "kind": "action",
+   "args": {
+    "element_type": "line",
+    "element_index": 0,
+    "in_service": true
+   },
+   "output": {
+    "action": "switch_element",
+    "success": true,
+    "element_type": "line",
+    "element_index": 0,
+    "old_in_service": false,
+    "new_in_service": true
+   },
+   "ok": true,
+   "latency_s": 0.0
+  },
+  {
+   "n": 6,
+   "name": "switch_element",
+   "kind": "action",
+   "args": {
+    "element_type": "line",
+    "element_index": 2,
+    "in_service": true
+   },
+   "output": {
+    "action": "switch_element",
+    "success": true,
+    "element_type": "line",
+    "element_index": 2,
+    "old_in_service": false,
+    "new_in_service": true
+   },
+   "ok": true,
+   "latency_s": 0.0
+  },
+  {
+   "n": 7,
+   "name": "switch_element",
+   "kind": "action",
+   "args": {
+    "element_type": "line",
+    "element_index": 3,
+    "in_service": true
+   },
+   "output": {
+    "action": "switch_element",
+    "success": true,
+    "element_type": "line",
+    "element_index": 3,
+    "old_in_service": false,
+    "new_in_service": true
+   },
+   "ok": true,
+   "latency_s": 0.0
+  },
+  {
+   "n": 8,
+   "name": "switch_element",
+   "kind": "action",
+   "args": {
+    "element_type": "line",
+    "element_index": 4,
+    "in_service": true
+   },
+   "output": {
+    "action": "switch_element",
+    "success": true,
+    "element_type": "line",
+    "element_index": 4,
+    "old_in_service": false,
+    "new_in_service": true
+   },
+   "ok": true,
+   "latency_s": 0.0
+  },
+  {
+   "n": 9,
+   "name": "run_power_flow",
+   "kind": "simulation",
+   "args": {},
+   "output": {
+    "converged": true,
+    "message": "AC power flow (Newton-Raphson) converged."
+   },
+   "ok": true,
+   "latency_s": 0.0111
+  },
+  {
+   "n": 10,
+   "name": "run_power_flow",
+   "kind": "simulation",
+   "args": {},
+   "output": {
+    "converged": true,
+    "message": "AC power flow (Newton-Raphson) converged."
+   },
+   "ok": true,
+   "latency_s": 0.0111
+  }
+ ],
+ "scored": {
+  "common_json_ok": true,
+  "common_status": "repaired",
+  "common_claims_repaired": true,
+  "common_declares_failure": false,
+  "common_converged": true,
+  "common_secure": true,
+  "common_islanded": [],
+  "common_n_violations": 9,
+  "common_n_new_violations": 0,
+  "common_load_served_mw": 259.0,
+  "common_load_served_pct": 100.0,
+  "common_repaired": true,
+  "common_improved": true,
+  "common_feasible": true,
+  "common_formulation_exact": true,
+  "common_formulation_error_type": "ok",
+  "common_formulation_detail": "islanding, 5 injected component(s) named",
+  "common_n_numbers": 0,
+  "common_n_untraceable": 0,
+  "common_traceable": true,
+  "common_escalated": false,
+  "common_escalation_reason": null,
+  "common_escalation_kind": null,
+  "common_solved": true,
+  "common_reason": "secure, claimed, traceable, consistent",
+  "common_outcome": "solved",
+  "common_gate_passed": null,
+  "common_gate_failed": null
+ }
+}

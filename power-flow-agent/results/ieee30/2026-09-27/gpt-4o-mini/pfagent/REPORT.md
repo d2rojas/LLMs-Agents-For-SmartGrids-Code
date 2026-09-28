@@ -1,6 +1,6 @@
 # pfagent on IEEE 30-bus with gpt-4o-mini
 
-Generated 2026-09-28 00:23 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-28 13:42 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -19,7 +19,7 @@ Generated 2026-09-28 00:23 by evaluation/postprocess.py from `report.rescored.js
 | plan_variant | text |
 | temperature | 0.0 |
 | system_prompt_hash | 43ef7eaadb12 |
-| description | PFAgent: ReAct loop with no in-loop gate plus the task-level verification gate V1-V7 on the final answer (methods/agent/engine.py verify_final_answer). The solver-grounded row. |
+| description | PFAgent: ReAct loop with no in-loop gate plus the task-level verification gate V1-V11 on the final answer (methods/agent/engine.py verify_final_answer). The solver-grounded row. |
 | prompt files | _shared/agent_system_prompt.txt, _shared/final_answer_instruction.txt |
 
 ![overview of the runs](overview.png)
@@ -28,7 +28,7 @@ One row per request, one cell per step (blue LLM call, teal tool call, purple pl
 
 ## Where every request ended
 
-The three outcomes are exclusive and sum to the run count. Escalation takes precedence: a run the method handed to a person is not an autonomous answer, right or wrong.
+The three outcomes are exclusive and cover every request the method answered. Escalation takes precedence: a run the method handed to a person is not an autonomous answer, right or wrong. A request whose API call failed never reached an answer, so it is listed apart and excluded from the rates.
 
 | outcome | count | share |
 |---|---:|---:|
@@ -81,8 +81,8 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 ## Escalated (2)
 
-- `case30-multistep-006-s0` detected via gate_abstained; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/07_case30-multistep-006-s0.narrative.txt), [transcript](traces/07_case30-multistep-006-s0.transcript.txt))
-- `case30-multistep-018-s0` detected via gate_abstained; formulation None; not scored: the method declared it could not complete the request  ([narrative](traces/10_case30-multistep-018-s0.narrative.txt), [transcript](traces/10_case30-multistep-018-s0.transcript.txt))
+- `case30-multistep-006-s0` detected via gate_abstained; formulation None; not scored: the answer declares no formulation (it reports that the request could not be completed)  ([narrative](traces/07_case30-multistep-006-s0.narrative.txt), [transcript](traces/07_case30-multistep-006-s0.transcript.txt))
+- `case30-multistep-018-s0` detected via gate_abstained; formulation None; not scored: the answer declares no formulation (it reports that the request could not be completed)  ([narrative](traces/10_case30-multistep-018-s0.narrative.txt), [transcript](traces/10_case30-multistep-018-s0.transcript.txt))
 
 ## Files
 

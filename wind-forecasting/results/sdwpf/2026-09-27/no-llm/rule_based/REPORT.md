@@ -1,6 +1,6 @@
 # rule_based on SDWPF with no-llm
 
-Generated 2026-09-27 23:09 by evaluation/postprocess.py from `raw/rows.jsonl`. Requests: 60. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the frozen target days, the same way for every method.
+Generated 2026-09-28 00:16 by evaluation/postprocess.py from `raw/rows.jsonl`. Requests: 60. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the frozen target days, the same way for every method.
 
 ## Run
 
@@ -43,6 +43,9 @@ The three outcomes are exclusive and sum to the request count. Escalation takes 
 | Task utility | Formulation exact | 60/60 (100.0%) |
 | Task utility | Formulation error types | {} |
 | Task utility | MAE / RMSE / overall, kW, over valid series (n=60) | 280.7 / 333.08 / 306.89 |
+| Task utility | NBIAS / NMAE / NRMSE, % of installed capacity (ANEMOS protocol) | 10.51 / 18.71 / 22.21 |
+| Task utility | Improvement over the protocol's reference model, % (its NMAE 19.16 %) | -1.06 |
+| Task utility | Improvement over persistence, % (its NMAE 32.96 %) | 44.77 |
 | Task utility | MAE / RMSE, kW, over solved requests | 280.7 / 333.08 |
 | Task utility | Answer coherent with the series | 40/40 |
 | Solver-grounded correctness | Valid series (schema and range) | 60/60 (100.0%) |
@@ -56,11 +59,13 @@ The three outcomes are exclusive and sum to the request count. Escalation takes 
 
 ## By horizon
 
-| horizon | n | solved | valid series scored | MAE kW | RMSE kW | overall kW |
-|---|---:|---:|---:|---:|---:|---:|
-| 3 h | 20 | 20 | 20 | 196.01 | 229.4 | 212.71 |
-| 6 h | 20 | 20 | 20 | 250.21 | 283.85 | 267.03 |
-| 48 h | 20 | 20 | 20 | 395.89 | 486.0 | 440.94 |
+Every error is the mean over the requests of that horizon whose series was valid; a method that returns no valid series at a horizon has nothing to average, which is itself the finding. NMAE and NRMSE are normalised by the 1500 kW installed capacity, and Imp. is the improvement score of the ANEMOS protocol (Madsen et al. 2005) over its reference model, `a_k P(t) + (1-a_k) Pbar`, fitted on the training period; the improvement over plain persistence is beside it because persistence is the reference most readers know, and the protocol warns it flatters a model at long horizons.
+
+| horizon | n | solved | scored | MAE kW | RMSE kW | NMAE % | NRMSE % | reference NMAE % | Imp. % | persistence NMAE % | Imp. vs pers. % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 3 h | 20 | 20 | 20 | 196.01 | 229.4 | 13.07 | 15.29 | 12.64 | -5.67 | 28.41 | 53.34 |
+| 6 h | 20 | 20 | 20 | 250.21 | 283.85 | 16.68 | 18.92 | 17.16 | -1.12 | 31.39 | 48.81 |
+| 48 h | 20 | 20 | 20 | 395.89 | 486.0 | 26.39 | 32.4 | 27.68 | 3.61 | 39.09 | 32.16 |
 
 ## Wrong and unflagged (0)
 

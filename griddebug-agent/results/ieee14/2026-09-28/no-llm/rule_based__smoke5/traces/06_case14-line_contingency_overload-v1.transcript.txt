@@ -1,0 +1,47 @@
+==============================================================================
+TRANSCRIPT  rule_based  |  none:rule_based  |  case14  |  case14-line_contingency_overload-v1
+==============================================================================
+date: 2026-09-28   scenario: line_contingency_overload   category: contingency   injected: line_outage
+
+(no model messages: deterministic method)
+[tool log, every call in order]
+    1. run_power_flow({}) [simulation] -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+    2. check_voltage_violations({}) [diagnostic] -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [], "n_new_violations": 0, "pre_existing_in_base": {"n": 3, "buses": [5, 6, 7]}, "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."}
+    3. check_overloads({}) [diagnostic] -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 9, "loading_percent": 110.4, "from_bus": 5, "to_bus": 12}, {"element": "line", "index": 13, "loading_percent": 290.9, "from_bus": 11, "to_bus": 12}], "n_new_overloads": 2, "pre_existing_in_base": {"n": 0, "elements": []}, "note": "Only new_overloads count against the repair. The elements under pre_existi… (496 chars)
+    4. find_disconnected_areas({}) [diagnostic] -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+    5. switch_element({"element_type": "line", "element_index": 8, "in_service": true}) [action] -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 8, "old_in_service": false, "new_in_service": true, "islanded_load_buses_after": [], "note": "This switching left no load stranded."}
+    6. run_power_flow({}) [simulation] -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+    7. run_power_flow({}) [simulation] -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+
+[final answer]
+{
+  "diagnosis": {
+    "fault_type": "line_outage",
+    "components": {
+      "line": [
+        8
+      ]
+    },
+    "explanation": "rule engine: overvoltage, line_overload"
+  },
+  "actions": [
+    {
+      "tool": "switch_element",
+      "args": {
+        "element_type": "line",
+        "element_index": 8,
+        "in_service": true
+      }
+    }
+  ],
+  "final_state": {
+    "converged": true,
+    "n_new_violations": 0,
+    "islanded_load_buses": []
+  },
+  "status": "repaired",
+  "remaining_violations": [],
+  "summary": "Rules fired: overvoltage, line_overload. Actions applied: switch_element. The network is secure."
+}
+
+[verdict] outcome=solved  reason=secure, claimed, traceable, consistent

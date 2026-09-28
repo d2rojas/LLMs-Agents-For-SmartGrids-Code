@@ -16,12 +16,12 @@ class NonConvergenceScenarios:
     """Factory for non-convergence failure scenarios."""
 
     @staticmethod
-    def all_scenarios(network_name: str = "case14") -> list[FailureScenario]:
+    def all_scenarios(network_name: str = "case14", variant: int = 0) -> list[FailureScenario]:
         return [
-            ExtremeLoadScaling(network_name),
-            AllGeneratorsRemoved(network_name),
-            NearZeroImpedanceLine(network_name),
-            DisconnectedSubNetwork(network_name),
+            ExtremeLoadScaling(network_name, variant),
+            AllGeneratorsRemoved(network_name, variant),
+            NearZeroImpedanceLine(network_name, variant),
+            DisconnectedSubNetwork(network_name, variant),
         ]
 
 
@@ -107,7 +107,9 @@ class NearZeroImpedanceLine(FailureScenario):
         )
 
     def apply(self) -> ScenarioResult:
-        target_line = 0  # First line
+        # variant: which line. The most loaded lines first, so the fault sits where it matters.
+        target_line = self.pick(self.lines_by_loading(), self.variant)
+        self.reset()
         self.net.line.at[target_line, "r_ohm_per_km"] = 1e-10
         self.net.line.at[target_line, "x_ohm_per_km"] = 1e-10
 
@@ -122,7 +124,7 @@ class NearZeroImpedanceLine(FailureScenario):
             ],
             affected_components={"line": [target_line]},
             known_fix="Restore line impedance to realistic values",
-            metadata={"target_line": target_line},
+            metadata={"target_line": target_line, "variant": self.variant},
         )
 
 

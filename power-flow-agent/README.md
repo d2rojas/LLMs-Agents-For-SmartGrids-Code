@@ -87,11 +87,16 @@ Three groups, as in the paper. Definitions and code: `evaluation/scoring.py`, `e
 
 ## Verification gate (PFAgent)
 
-Conditions V1 to V7 in `methods/agent/engine.py:verify_final_answer`: converged, power balance, no isolated
-buses, faithfulness of reported numbers, currency (numbers come from the solve after the last
-mutation), argument grounding (every mutating-tool argument traces to the request or a prior tool
-output), and claims consistent with the agent's own last solved state. A rejected answer is
-retried once with the failed conditions spelled out; an answer that still fails is escalated.
+Conditions V1 to V11 in `methods/agent/engine.py:verify_final_answer`: V1 the last power flow
+converged, V2 active-power balance, V3 no isolated bus, V4 traceability of every reported number,
+V5 currency (numbers come from the solve after the last mutation), V6 argument grounding (every
+mutating-tool argument traces to the request or a prior tool output), V7 claims consistent with the
+agent's own last solved state, V8 the request was applied (every change the agent made took effect),
+V9 a plausible state (advisory only, it never rejects on its own), V10 a complete state (the answer
+carries every bus and branch of the last solve), and V11 the declared formulation matches the
+operations the trace shows. A rejected answer is retried once with the failed conditions spelled out,
+with the read-only tools available and the mutating ones blocked; an answer that still fails is
+escalated.
 
 ## Paper tables
 
@@ -119,9 +124,9 @@ piece lives. The evaluation design itself (methods, prompts, answer object, scor
 | Deterministic parser | `rule_based` | `methods/deterministic/rule_based.py` (`_parse_clause`, `run`, `contract_answer`) |
 | Structured prompting | `llm_only_structured` | `methods/prompting/prompt_variants.py` (`build_messages`), `methods/prompting/llm_only.py` (case tables), `evaluation/runner.py` (`evaluate_item`, kind `llm_only`) |
 | Chain-of-thought prompting | `llm_only_cot` | same as structured, with the reasoning section from `methods/_shared/` |
-| Plan-and-Act | `plan_act_nogate` | `methods/agent/engine.py` (`LLMEngine._run_plan_act`, planner prompt from `methods/plan_act_nogate/`) |
+| Plan-and-Act | `plan_act_nogate` | `methods/agent/engine.py` (`LLMEngine._run_plan_act` + `_act_with_replanning`, planner prompt from `methods/plan_act_nogate/`) |
 | ReAct | `react_nogate` | `methods/agent/engine.py` (`LLMEngine._run_react`) |
-| PFAgent | `pfagent` | `methods/agent/engine.py` (`LLMEngine._run_react` + `verify_final_answer`, the gate V1 to V7) |
+| PFAgent | `pfagent` | `methods/agent/engine.py` (`LLMEngine._run_react` + `verify_final_answer`, the gate V1 to V11) |
 
 Every method with tools calls the same twelve tools through `methods/agent/tools.py` (`ToolDispatcher`,
 `build_default_dispatcher`); the tool schemas and the text catalogue the no-tools methods read come

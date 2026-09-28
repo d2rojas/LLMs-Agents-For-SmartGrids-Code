@@ -1,0 +1,25 @@
+RUN 13  |  wind-t009-d201-h03-peak_hour-s0-scaled  |  rule_based  |  none:rule_based
+Instance: turbine 9, history days [201, 214], horizon 3 h, question peak_hour, condition scaled
+Request: We need a 3 h active-power forecast for turbine 9 in the SDWPF farm, a 1380 kW machine, starting immediately after the last row of its history (days 201 to 214, 10-minute SCADA). Return the 18 forecast values in kW in time order. Also report the hour of the horizon, counted 1 to 3, in which the mean forecast power is highest.
+
+WHAT THE METHOD DID
+   1. get_history_summary({"turbine": 9, "history_end_day": 214})
+       -> {"turbine": 9, "history_days": [201, 214], "rows": 2016, "sampling_minutes": 10, "rated_kw": 1380.2, "per_day": [{"day": 201, "rows": 144, "rows_with_data": 111, "rows_turbine_stopped_or_curtailed": 62, "mean_kw": 73.6, … (2754 chars)
+   2. gru_forecast({"turbine": 9, "history_end_day": 214, "horizon_hours": 3})
+       -> {"turbine": 9, "history_end_day": 214, "horizon_hours": 3, "n_values": 18, "unit": "kW", "rated_power_kw": 1380.2, "method": "gru_forecast", "forecast": [306.0, 309.6, 316.8, 337.7, 341.9, 330.3, 359.7, 375.3, 359.1, 389… (280 chars)
+  Totals: 0 LLM calls, 2 tool calls, 0 in / 0 out tokens, 0.019 s
+
+FORMULATION  (turbine, window and horizon as requested?)
+  declared: turbine 9, days [201, 214], 3 h   verdict: PASS   turbine, window and horizon as requested and as executed
+
+THE SERIES
+  status: forecast   values: 18   schema: True   range: True   source: gru_forecast   traceable: True
+  error on the target (KDD Cup rules, 17 points): MAE 155.1 kW, RMSE 171.92 kW, overall 163.51 kW
+
+THE ANSWER
+  given: 3.0   implied by the series: 3.0   coherent: True   against the truth: 2.0 -> True
+
+OUTCOME: SOLVED   (valid series, coherent answer, traceable to a tool output)
+
+SUMMARY WRITTEN BY THE METHOD
+  Parsed turbine 9, days 201 to 214, 3 h; forecast copied from gru_forecast (18 values).

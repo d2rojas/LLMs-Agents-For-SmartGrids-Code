@@ -1,0 +1,103 @@
+RUN 02  |  case14-extreme_load_scaling-v0  |  rule_based  |  none:rule_based  |  IEEE 14-bus
+Scenario: Extreme load scaling (20x) (nonconvergence); injected fault: load_increase {"load": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}
+Initial state: not_converged, None new violation(s)
+Request: The AC power flow on the IEEE 14-bus system (case14) did not converge. Diagnose the cause and restore a secure operating point: the power flow converges, no in-service load is on an islanded bus, every bus voltage is within [0.95, 1.05] p.u., and no line or transformer is above 100 % loading, apart from the violations the base network already has. Use only the actions available. Report the diagnosis, the actions taken, and the final state.
+
+WHAT THE METHOD DID
+   1. run_power_flow({})
+       -> {"converged": false, "message": "AC power flow did not converge (LoadflowNotConverged)."}
+   2. scale_all_loads({"factor": 0.8})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.8, "old_total_p_mw": 5180.0, "new_total_p_mw": 4144.0}
+   3. run_power_flow({})
+       -> {"converged": false, "message": "AC power flow did not converge (LoadflowNotConverged)."}
+   4. scale_all_loads({"factor": 0.8, "_step": 2})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.8, "old_total_p_mw": 4144.0, "new_total_p_mw": 3315.2}
+   5. run_power_flow({})
+       -> {"converged": false, "message": "AC power flow did not converge (LoadflowNotConverged)."}
+   6. scale_all_loads({"factor": 0.8, "_step": 3})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.8, "old_total_p_mw": 3315.2, "new_total_p_mw": 2652.16}
+   7. run_power_flow({})
+       -> {"converged": false, "message": "AC power flow did not converge (LoadflowNotConverged)."}
+   8. scale_all_loads({"factor": 0.8, "_step": 4})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.8, "old_total_p_mw": 2652.16, "new_total_p_mw": 2121.73}
+   9. run_power_flow({})
+       -> {"converged": false, "message": "AC power flow did not converge (LoadflowNotConverged)."}
+  10. scale_all_loads({"factor": 0.8, "_step": 5})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.8, "old_total_p_mw": 2121.73, "new_total_p_mw": 1697.38}
+  11. run_power_flow({})
+       -> {"converged": false, "message": "AC power flow did not converge (LoadflowNotConverged)."}
+  12. scale_all_loads({"factor": 0.8, "_step": 6})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.8, "old_total_p_mw": 1697.38, "new_total_p_mw": 1357.91}
+  13. run_power_flow({})
+       -> {"converged": false, "message": "AC power flow did not converge (LoadflowNotConverged)."}
+  14. scale_all_loads({"factor": 0.8, "_step": 7})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.8, "old_total_p_mw": 1357.91, "new_total_p_mw": 1086.32}
+  15. run_power_flow({})
+       -> {"converged": false, "message": "AC power flow did not converge (LoadflowNotConverged)."}
+  16. scale_all_loads({"factor": 0.8, "_step": 8})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.8, "old_total_p_mw": 1086.32, "new_total_p_mw": 869.06}
+  17. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  18. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [{"bus": 3, "vm_pu": 0.8825, "limit": 0.94, "kind": "under"}, {"bus": 4, "vm_pu": 0.8789, "limit": 0.94, "kind": "under"}, {"bus": 13, "vm_pu… (524 chars)
+  19. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 0, "loading_percent": 103.7, "from_bus": 0, "to_bus": 1}, {"element": "line", "index": 7, "loading_percent": 513.3, "from_bus… (1115 chars)
+  20. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  21. curtail_load({"load_index": 6, "scale_factor": 0.8})
+       -> {"action": "curtail_load", "success": true, "load_index": 6, "old_p_mw": 30.2, "new_p_mw": 24.16, "scale_factor": 0.8}
+  22. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  23. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [{"bus": 3, "vm_pu": 0.8877, "limit": 0.94, "kind": "under"}, {"bus": 4, "vm_pu": 0.8842, "limit": 0.94, "kind": "under"}, {"bus": 13, "vm_pu… (524 chars)
+  24. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 0, "loading_percent": 102.4, "from_bus": 0, "to_bus": 1}, {"element": "line", "index": 7, "loading_percent": 477.9, "from_bus… (1115 chars)
+  25. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  26. scale_all_loads({"factor": 0.8, "_step": 9})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.8, "old_total_p_mw": 863.02, "new_total_p_mw": 690.42}
+  27. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  28. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [{"bus": 13, "vm_pu": 0.9232, "limit": 0.94, "kind": "under"}], "n_new_violations": 1, "pre_existing_in_base": {"n": 2, "buses": [5, 7]}, "no… (396 chars)
+  29. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 7, "loading_percent": 325.2, "from_bus": 5, "to_bus": 10}, {"element": "line", "index": 8, "loading_percent": 238.8, "from_bu… (1028 chars)
+  30. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  31. scale_all_loads({"factor": 0.8, "_step": 10})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.8, "old_total_p_mw": 690.42, "new_total_p_mw": 552.33}
+  32. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  33. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [], "n_new_violations": 0, "pre_existing_in_base": {"n": 2, "buses": [5, 7]}, "note": "Only new_violations count against the repair. The buse… (336 chars)
+  34. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 7, "loading_percent": 230.3, "from_bus": 5, "to_bus": 10}, {"element": "line", "index": 8, "loading_percent": 184.7, "from_bu… (940 chars)
+  35. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  36. scale_all_loads({"factor": 0.8, "_step": 11})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.8, "old_total_p_mw": 552.33, "new_total_p_mw": 441.87}
+  37. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  38. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [], "n_new_violations": 0, "pre_existing_in_base": {"n": 2, "buses": [5, 7]}, "note": "Only new_violations count against the repair. The buse… (336 chars)
+  39. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 7, "loading_percent": 165.2, "from_bus": 5, "to_bus": 10}, {"element": "line", "index": 8, "loading_percent": 143.9, "from_bu… (940 chars)
+  40. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  Totals: 0 LLM calls, 40 tool calls, 0 in / 0 out tokens, 1.083 s, budget exhausted
+
+DIAGNOSIS  (is the injected fault named?)
+  answer: voltage_setpoint {"ext_grid": [0]}   verdict: FAIL   answer voltage_setpoint, injected load_increase
+
+STATE  (the harness's own power flow on the final network)
+  converged: True   secure: False   new violations: 7   islanded load: []
+  repaired: False   improved: True   feasible: True
+
+REPORTING
+  status claimed: not_repaired   final_state claimed: converged=True, new violations=7
+  numbers in the answer: 14, untraceable: 0 -> traceable: pass
+
+OUTCOME: ESCALATED   (escalated: declared not_repaired)
+
+SUMMARY WRITTEN BY THE METHOD
+  Rules fired: overvoltage, line_overload, reactive_deficit. Actions applied: curtail_load, scale_all_loads. Violations remain; see remaining_violations.

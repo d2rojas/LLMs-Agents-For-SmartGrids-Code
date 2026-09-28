@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import csv
 import datetime as _dt
+import hashlib
 import json
 import re
 import shutil
@@ -152,6 +153,23 @@ def load_full_trace(raw_dir: Path, row: Dict[str, Any]) -> Dict[str, Any]:
 # --------------------------------------------------------------------------- helpers
 
 
+# The modules that decide a verdict. A run folder records the hash of these files the same way it
+# records `system_prompt_hash`, so a results tree scored under two different versions of the rules is
+# visible instead of silent. Three folders sat at a pre-fix scorer unnoticed on 2026-09-28 because
+# nothing stamped this.
+_SCORING_MODULES = ("common_eval.py", "scoring.py", "metrics.py", "requests.py")
+
+
+def evaluator_hash() -> str:
+    """Twelve hex chars over the concatenated source of the scoring modules."""
+    h = hashlib.sha256()
+    here = Path(__file__).resolve().parent
+    for name in _SCORING_MODULES:
+        h.update(name.encode("utf-8"))
+        h.update((here / name).read_bytes())
+    return h.hexdigest()[:12]
+
+
 def _model_short(model: Optional[str]) -> str:
     if not model or model.startswith("none:"):
         return "no-llm"
@@ -199,7 +217,8 @@ def _outcome(row: Dict[str, Any]) -> str:
     if row.get("solved_autonomously") or row.get("solved"):
         return "solved"
     if row.get("error"):
-        return "error"
+        # The same name common_eval.py writes, so summary.csv and the scorer agree (2026-09-28).
+        return "run_error"
     return "other"
 
 
@@ -539,7 +558,7 @@ def render_narrative(nn: int, row: Dict[str, Any], payload: Dict[str, Any], head
     out.append("")
 
     oc = _outcome(row)
-    label = {"solved": "SOLVED AUTONOMOUSLY", "escalated": "ESCALATED TO A PERSON", "wrong_unflagged": "WRONG, UNFLAGGED", "error": "RUN ERROR", "other": "OTHER"}[oc]
+    label = {"solved": "SOLVED AUTONOMOUSLY", "escalated": "ESCALATED TO A PERSON", "wrong_unflagged": "WRONG, UNFLAGGED", "run_error": "RUN ERROR", "other": "OTHER"}[oc]
     out.append(f"OUTCOME: {label}")
     out.append(f"  computation correct (solved): {_yesno(row.get('solved'))}" + (f"   reason: {row.get('solved_reason')}" if row.get("solved_reason") else ""))
     if row.get("escalated"):
@@ -579,6 +598,13 @@ def _mean(values: Iterable[Any]) -> Optional[float]:
 
 
 def aggregate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    # Rates and means are over the requests the method answered, the same denominator
+    # aggregate_common() and results.html use. A request whose API call failed never produced an
+    # answer, so counting its tokens and wall time would mix a failed transport with a reply
+    # (2026-09-28, found by tests/crosscheck_page.mjs: the page said n=17 where this said n=20).
+    oc_all = Counter(_outcome(r) for r in rows)
+    errors = [r for r in rows if _outcome(r) == "run_error"]
+    rows = [r for r in rows if _outcome(r) != "run_error"]
     n = len(rows)
     oc = Counter(_outcome(r) for r in rows)
     fe_rows = [r for r in rows if r.get("formulation_exact") is not None]
@@ -593,7 +619,7 @@ def aggregate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "solved_autonomously": oc.get("solved", 0),
         "escalated": oc.get("escalated", 0),
         "wrong_unflagged": oc.get("wrong_unflagged", 0),
-        "run_errors": oc.get("error", 0),
+        "run_errors": len(errors),
         "other": oc.get("other", 0),
         "solved_any": sum(1 for r in rows if r.get("solved")),
         "formulation_total": len(fe_rows), "formulation_exact": len(exact), "formulation_errors": dict(err_types),
@@ -669,7 +695,7 @@ def render_report(header: Dict[str, Any], rows: List[Dict[str, Any]], agg: Dict[
         out.append("")
     out.append("## Where every request ended")
     out.append("")
-    out.append("The three outcomes are exclusive and sum to the run count. Escalation takes precedence: a run the method handed to a person is not an autonomous answer, right or wrong.")
+    out.append("The three outcomes are exclusive and cover every request the method answered. Escalation takes precedence: a run the method handed to a person is not an autonomous answer, right or wrong. A request whose API call failed never reached an answer, so it is listed apart and excluded from the rates.")
     out.append("")
     out.append("| outcome | count | share |")
     out.append("|---|---:|---:|")
@@ -790,6 +816,7 @@ def _header_from(report: Dict[str, Any], rows: List[Dict[str, Any]], config_json
         "k": cfg.get("k"), "max_rounds": cfg.get("max_rounds"), "tool_variant": cfg.get("tool_variant"), "plan_variant": cfg.get("plan_variant"),
         "temperature": cfg.get("temperature"),
         "system_prompt_hash": ",".join(sorted({str(r.get("system_prompt_hash")) for r in rows})) if rows else None,
+        "evaluator_hash": evaluator_hash(),
         "report_file": report.get("_source_file"),
     }
     h["model_short"] = _model_short(h["model"])

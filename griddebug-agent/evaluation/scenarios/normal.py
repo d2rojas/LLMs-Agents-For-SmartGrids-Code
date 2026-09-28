@@ -22,5 +22,5 @@ class NormalOperation(FailureScenario):
 class NormalScenarios:
     """Factory for normal operation scenarios."""
     @staticmethod
-    def all_scenarios(network_name: str) -> list[FailureScenario]:
-        return [NormalOperation(network_name)]
+    def all_scenarios(network_name: str, variant: int = 0) -> list[FailureScenario]:
+        return [NormalOperation(network_name, variant)]

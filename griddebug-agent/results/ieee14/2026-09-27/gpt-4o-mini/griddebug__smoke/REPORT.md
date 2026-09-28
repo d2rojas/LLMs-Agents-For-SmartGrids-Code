@@ -1,6 +1,6 @@
 # griddebug on IEEE 14-bus with gpt-4o-mini
 
-Generated 2026-09-27 18:43 by evaluation/postprocess.py from `raw/rows.jsonl`. Scenarios: 3. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the harness's own power flow, the same way for every method.
+Generated 2026-09-28 13:37 by evaluation/postprocess.py from `raw/rows.jsonl`. Scenarios: 3. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the harness's own power flow, the same way for every method.
 
 ## Run
 
@@ -19,7 +19,7 @@ Generated 2026-09-27 18:43 by evaluation/postprocess.py from `raw/rows.jsonl`. S
 | system_prompt_hash | ebc0129ac659 |
 | git_commit | 5ff343de |
 | pandapower | 3.5.5 |
-| description | The same loop as ReAct plus the verification gate G1-G6 on the final answer: the harness re-runs the power flow on the final network and checks convergence, islanded load, security or a declared remainder, currency, traceability and consistency. One retry, then a declared failure. The solver-grounded row. |
+| description | The same loop as ReAct plus the verification gate G1-G7 on the final answer: the harness re-runs the power flow on the final network and checks convergence, islanded load, security or a declared remainder, currency, traceability, consistency, and that the actions claimed are the ones the trace shows succeeding. One retry, then a declared failure. The solver-grounded row. |
 | prompt files | _shared/common_rules.txt, _shared/output_contract.txt, _shared/agent_system_prompt.txt, _shared/gate_retry_instruction.txt |
 
 ## Where every scenario ended
@@ -42,10 +42,12 @@ The three outcomes are exclusive and sum to the scenario count. Escalation takes
 | Task utility | Repaired (secure final network) | 0/3 (0.0%) |
 | Task utility | Improved | 3/3 (100.0%) |
 | Task utility | New violations, before -> after (scenarios converged at both ends, n=2) | 16 -> 5 |
+| Task utility | Load served, mean / worst | None % / None % of the base network's demand (a scenario that still carries the injected load increase counts as 100, not more) |
+| Solver-grounded correctness | Solved autonomously | 0/3 (0.0%) |
+| Solver-grounded correctness | Escalated to a person | 3/3 (100.0%) |
+| Solver-grounded correctness | Wrong, unflagged | 0/3 (0.0%) |
 | Solver-grounded correctness | Feasible (final power flow converges) | 3/3 (100.0%) |
 | Solver-grounded correctness | Traceable answers | 3/3 (100.0%) |
-| Solver-grounded correctness | Wrong, unflagged | 0/3 (0.0%) |
-| Cost and operation | Escalated | 3/3 (100.0%) |
 | Cost and operation | LLM calls / tool calls, mean | 15.0 / 36.0 |
 | Cost and operation | Prompt / completion tokens, mean | 91570.67 / 1513.67 |
 | Cost and operation | Cost, total | $0.0439 |
@@ -66,6 +68,14 @@ The three outcomes are exclusive and sum to the scenario count. Escalation takes
 | not_converged | 1 | 0 | 1 | 0 | 0 | 0 |
 | violations | 2 | 0 | 2 | 0 | 0 | 0 |
 
+## Why it escalated
+
+An escalation after a real improvement is not the same as a refusal, and one caused by the budget ending on an action is not the same as either. The column counts them together because a person still has to act; this table says which kind they were.
+
+| kind | count |
+|---|---:|
+| unlabelled | 3 |
+
 ## Wrong and unflagged (0)
 
 none
@@ -80,8 +90,8 @@ none
 
 | nn | scenario | initial | outcome | diagnosis | final | actions | LLM/tool calls | tokens | why |
 |---|---|---|---|---|---|---:|---|---|---|
-| 01 | extreme_load_scaling | not_converged (None) | escalated | wrong_type | 2 new | 11 | 17/19 | 67671 | escalated: declared not_repaired |
-| 02 | heavy_loading_undervoltage | violations (11) | escalated | wrong_type | 1 new | 25 | 12/48 | 90894 | escalated: gate rejected currency, declared cannot_repair |
-| 03 | line_contingency_overload | violations (5) | escalated | wrong_type | 4 new | 20 | 16/41 | 120688 | escalated: gate rejected consistent, declared cannot_repair |
+| 01 | extreme_load_scaling-v0 | not_converged (None) | escalated | wrong_type | 2 new | 11 | 17/19 | 67671 | escalated: declared not_repaired |
+| 02 | heavy_loading_undervoltage-v0 | violations (11) | escalated | wrong_type | 1 new | 25 | 12/48 | 90894 | escalated: gate rejected currency, declared cannot_repair |
+| 03 | line_contingency_overload-v0 | violations (5) | escalated | wrong_type | 4 new | 20 | 16/41 | 120688 | escalated: gate rejected consistent, declared cannot_repair |
 
 Traces: `traces/NN_<request-id>.narrative.txt` (what happened), `.transcript.txt` (the raw exchange), `.json` (the trace).

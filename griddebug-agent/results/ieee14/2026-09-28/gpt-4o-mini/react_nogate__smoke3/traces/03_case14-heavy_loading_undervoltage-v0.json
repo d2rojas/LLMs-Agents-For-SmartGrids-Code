@@ -1,0 +1,1958 @@
+{
+ "case_study": "griddebug",
+ "method": "react_nogate",
+ "model": "openrouter:openai/gpt-4o-mini",
+ "request_id": "case14-heavy_loading_undervoltage-v0",
+ "status": "ok",
+ "error": null,
+ "answer": "```json\n{\n  \"diagnosis\": {\n    \"fault_type\": \"generation_loss\",\n    \"components\": {\n      \"gen\": [1, 2, 3]\n    },\n    \"explanation\": \"The generation capacity was insufficient to meet the load demand, leading to voltage and loading violations.\"\n  },\n  \"actions\": [\n    {\n      \"tool\": \"adjust_generation\",\n      \"args\": {\n        \"gen_index\": 1,\n        \"p_mw_new\": 100.0\n      }\n    },\n    {\n      \"tool\": \"adjust_generation\",\n      \"args\": {\n        \"gen_index\": 2,\n        \"p_mw_new\": 100.0\n      }\n    },\n    {\n      \"tool\": \"adjust_generation\",\n      \"args\": {\n        \"gen_index\": 3,\n        \"p_mw_new\": 100.0\n      }\n    }\n  ],\n  \"final_state\": {\n    \"converged\": true,\n    \"n_new_violations\": 1,\n    \"islanded_load_buses\": []\n  },\n  \"status\": \"not_repaired\",\n  \"remaining_violations\": [\n    \"bus 13 at 0.9107 p.u.\",\n    \"line 7 at 387.0 %\",\n    \"line 8 at 271.6 %\",\n    \"line 9 at 285.2 %\",\n    \"line 10 at 110.4 %\",\n    \"line 11 at 209.5 %\",\n    \"line 12 at 516.4 %\",\n    \"line 13 at 356.5 %\",\n    \"line 14 at 385.8 %\"\n  ],\n  \"summary\": \"The network initially had insufficient generation to meet the load demand, resulting in voltage and line loading violations. After increasing the generation at three generators, the power flow converged, but violations remain at bus 13 and several lines. The network is not yet secure.\"\n}\n```",
+ "messages": [
+  {
+   "role": "system",
+   "content": "You are a power systems engineer with tool access to a pandapower model of an IEEE test network whose power flow has failed or produced limit violations. You diagnose the initiating fault and repair the network with the tools.\n\nHow to work:\n1. Read the evidence first. It already lists convergence, the violating buses and branches, the islanded buses, and the load and generation totals. Query tools only for what the evidence does not give you.\n2. Identify the initiating event (a lost line, a scaled load, a lost generator, a raised setpoint), not the symptom. Voltage and thermal violations are symptoms.\n3. Act with the action tools, then run_power_flow, then check_voltage_violations, check_overloads and find_disconnected_areas. A converged network with violations is not repaired. A network with an in-service load on an islanded bus is not repaired.\n4. Prefer the smallest action that addresses the initiating event over many small adjustments. Do not repeat an action that did not help.\n5. Every number in your final answer must come from a tool output produced after your last action. If your last tool call was an action, run the power flow again before answering.\n6. Stop when the network is secure, or when you have exhausted the useful actions, or when the budget message tells you to. Then write the final answer.\n\n## Rules\n\n- Bus, line, transformer, generator and load indices are the 0-based pandapower indices shown in the evidence and returned by the tools.\n- Voltage limits are 0.95 to 1.05 p.u. on every bus. Thermal limit is 100 % loading on every line and transformer.\n- A bus or branch that already violated a limit in the unmodified base network is not counted against you, and fixing it is not your job. Only violations the fault introduced, or that your actions introduce, count. The evidence lists both, and `check_voltage_violations` and `check_overloads` answer with `new_violations` / `new_overloads` first and the pre-existing ones separately: read the new ones.\n- A secure operating point means: the power flow converges, no in-service load sits on an islanded bus, and there is no violation beyond those of the base network.\n- Do not invent numbers. Every number you report must come from the evidence or from a tool output.\n- If you cannot reach a secure operating point, say so: set status to not_repaired or cannot_repair and list what remains. A claim of repair that the solver contradicts is the worst possible outcome.\n\n## Output\n\nYour final message must be one JSON object and nothing else, with exactly these fields:\n\n{\n  \"diagnosis\": {\n    \"fault_type\": \"<one of: none, load_increase, generation_loss, generation_excess, impedance_fault, islanding, voltage_setpoint, reactive_load, limit_derating, line_outage, trafo_outage>\",\n    \"components\": {\"<element type: bus|line|trafo|gen|sgen|load|ext_grid>\": [<indices>]},\n    \"explanation\": \"<one or two sentences: the initiating event, not the symptom>\"\n  },\n  \"actions\": [{\"tool\": \"<action tool name>\", \"args\": {<its arguments>}}],\n  \"final_state\": {\"converged\": <true|false>, \"n_new_violations\": <integer>, \"islanded_load_buses\": [<bus indices>]},\n  \"status\": \"<repaired | not_repaired | cannot_repair>\",\n  \"remaining_violations\": [\"<one string per remaining violation, e.g. 'bus 12 at 0.93 p.u.' or 'line 5 at 118 %'>\"],\n  \"summary\": \"<two or three sentences on what was wrong, what was done, and where the network stands>\"\n}\n\nstatus is \"repaired\" only if the final power flow converged with zero new violations and no islanded load. Use \"not_repaired\" when you acted and violations remain, and \"cannot_repair\" when you found no action that helps or the budget ran out.\n\nactions must be the actions that actually succeeded: list every one you took, in order, and none that errored or that you only considered."
+  },
+  {
+   "role": "user",
+   "content": "## Request\nThe AC power flow on the IEEE 14-bus system (case14) converged with 11 new limit violation(s). Diagnose the cause and restore a secure operating point: the power flow converges, no in-service load is on an islanded bus, every bus voltage is within [0.95, 1.05] p.u., and no line or transformer is above 100 % loading, apart from the violations the base network already has. Use only the actions available. Report the diagnosis, the actions taken, and the final state.\n\n## Evidence\n============================================================\nPOWER FLOW EVIDENCE REPORT\n============================================================\n\nConvergence: YES\n\n\u2500\u2500 INPUT: Load Demand \u2500\u2500\n  Total active load (P):   777.0 MW\n  Total reactive load (Q): 220.5 Mvar\n  Number of in-service loads: 11\n  Top loads by MW:\n    Load 1 at bus 2: 282.6 MW, 57.0 Mvar\n    Load 2 at bus 3: 143.4 MW, -11.7 Mvar\n    Load 5 at bus 8: 88.5 MW, 49.8 Mvar\n    Load 0 at bus 1: 65.1 MW, 38.1 Mvar\n    Load 10 at bus 13: 44.7 MW, 15.0 Mvar\n    Load 9 at bus 12: 40.5 MW, 17.4 Mvar\n    Load 4 at bus 5: 33.6 MW, 22.5 Mvar\n    Load 6 at bus 9: 27.0 MW, 17.4 Mvar\n\n\u2500\u2500 INPUT: Generation Capacity \u2500\u2500\n  Ext grid count:  1\n  Generator count: 4 (in-service)\n  Total gen capacity (P_max): 440.0 MW\n    Gen 0 at bus 1: p_mw=40.0, in_service=True\n    Gen 1 at bus 2: p_mw=0.0, in_service=True\n    Gen 2 at bus 5: p_mw=0.0, in_service=True\n    Gen 3 at bus 7: p_mw=0.0, in_service=True\n\n\u2500\u2500 LOAD vs GENERATION COMPARISON \u2500\u2500\n  Load/GenCapacity ratio: 1.77x\n  \u26a0\ufe0f  LOAD EXCEEDS GENERATION CAPACITY by 77%\n  Demand-supply gap: 337.0 MW\n\n\u2500\u2500 RESULT: Bus Voltages (14 buses) \u2500\u2500\n  Range: 0.8895 \u2013 1.0900 pu\n  Mean:  0.9865 pu\n  Under-voltage (under bus-specific limit or default 0.95 pu): 5 buses\n    Bus 3: 0.9175 pu (limit: 0.9400 pu)\n    Bus 4: 0.9170 pu (limit: 0.9400 pu)\n    Bus 8: 0.9258 pu (limit: 0.9400 pu)\n    Bus 9: 0.9259 pu (limit: 0.9400 pu)\n    Bus 13: 0.8895 pu (limit: 0.9400 pu)\n  Over-voltage (over bus-specific limit or default 1.05 pu): 2 buses\n    Bus 5: 1.0700 pu (limit: 1.0600 pu)\n    Bus 7: 1.0900 pu (limit: 1.0600 pu)\n\n\u2500\u2500 RESULT: Line Loading (15 lines) \u2500\u2500\n  Max loading: 593.4%\n  Overloaded (>100%): 8 lines\n    Line 7: 418.9%\n    Line 8: 275.1%\n    Line 9: 289.6%\n    Line 10: 169.4%\n    Line 11: 225.0%\n\n\u2500\u2500 RESULT: Power Balance \u2500\u2500\n  Total generation: 966.2 MW, 919.3 Mvar\n  Total load:       777.0 MW, 220.5 Mvar\n  Mismatch:         189.20 MW, 698.81 Mvar\n\n\u2500\u2500 Pandapower Diagnostics \u2500\u2500\n  implausible_impedance_values: ISSUES FOUND\n  invalid_values: ISSUES FOUND\n============================================================\n\n\u2500\u2500 SWITCHING STATE \u2500\u2500\n  Elements out of service: none\n\n\u2500\u2500 BASE NETWORK (before the fault) \u2500\u2500\n  The unmodified network already violates limits at 9 element(s); these do not count against the repair: bus 0, bus 5, bus 6, bus 7, bus 8, bus 9, bus 10, bus 11, bus 12\n  New violations introduced by the fault: 11 (bus 3, bus 4, bus 13, line 7, line 8, line 9, line 10, line 11, line 12, line 13, line 14)"
+  },
+  {
+   "role": "assistant",
+   "tool_calls": [
+    {
+     "id": "call_Dfo4U5h1omC3E59mtdwZ0LZL",
+     "function": {
+      "arguments": "{}",
+      "name": "get_gen_data"
+     },
+     "type": "function",
+     "index": 0
+    },
+    {
+     "id": "call_cV7nTmYP87gkF61l8rBsbEuG",
+     "function": {
+      "arguments": "{}",
+      "name": "get_loading_profile"
+     },
+     "type": "function",
+     "index": 1
+    },
+    {
+     "id": "call_6EqgusrxUkubSkm0bEchjjp7",
+     "function": {
+      "arguments": "{}",
+      "name": "get_bus_data"
+     },
+     "type": "function",
+     "index": 2
+    },
+    {
+     "id": "call_cwQDAJ3khOWmLGFqzVPQSa5b",
+     "function": {
+      "arguments": "{}",
+      "name": "get_line_data"
+     },
+     "type": "function",
+     "index": 3
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "call_Dfo4U5h1omC3E59mtdwZ0LZL",
+   "content": "{\"generators\": [{\"index\": 0, \"name\": null, \"bus\": 1, \"p_mw\": 40.0, \"vm_pu\": 1.045, \"sn_mva\": null, \"min_q_mvar\": -40.0, \"max_q_mvar\": 50.0, \"scaling\": 1.0, \"slack\": false, \"in_service\": true, \"slack_weight\": 0.0, \"type\": null, \"controllable\": true, \"max_p_mw\": 140.0, \"min_p_mw\": 0.0, \"id_q_capability_characteristic\": null, \"reactive_capability_curve\": false, \"curve_style\": null}, {\"index\": 1, \"name\": null, \"bus\": 2, \"p_mw\": 0.0, \"vm_pu\": 1.01, \"sn_mva\": null, \"min_q_mvar\": 0.0, \"max_q_mvar\": 40.0, \"scaling\": 1.0, \"slack\": false, \"in_service\": true, \"slack_weight\": 0.0, \"type\": null, \"controllable\": true, \"max_p_mw\": 100.0, \"min_p_mw\": 0.0, \"id_q_capability_characteristic\": null, \"reactive_capability_curve\": false, \"curve_style\": null}, {\"index\": 2, \"name\": null, \"bus\": 5, \"p_mw\": 0.0, \"vm_pu\": 1.07, \"sn_mva\": null, \"min_q_mvar\": -6.0, \"max_q_mvar\": 24.0, \"scaling\": 1.0, \"slack\": false, \"in_service\": true, \"slack_weight\": 0.0, \"type\": null, \"controllable\": true, \"max_p_mw\": 100.0, \"min_p_mw\": 0.0, \"id_q_capability_characteristic\": null, \"reactive_capability_curve\": false, \"curve_style\": null}, {\"index\": 3, \"name\": null, \"bus\": 7, \"p_mw\": 0.0, \"vm_pu\": 1.09, \"sn_mva\": null, \"min_q_mvar\": -6.0, \"max_q_mvar\": 24.0, \"scaling\": 1.0, \"slack\": false, \"in_service\": true, \"slack_weight\": 0.0, \"type\": null, \"controllable\": true, \"max_p_mw\": 100.0, \"min_p_mw\": 0.0, \"id_q_capability_characteristic\": null, \"reactive_capability_curve\": false, \"curve_style\": null}]}"
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "call_cV7nTmYP87gkF61l8rBsbEuG",
+   "content": "{\"available\": true, \"lines\": [{\"line_index\": 0, \"loading_percent\": 67.3}, {\"line_index\": 1, \"loading_percent\": 31.2}, {\"line_index\": 2, \"loading_percent\": 28.3}, {\"line_index\": 3, \"loading_percent\": 22.1}, {\"line_index\": 4, \"loading_percent\": 16.1}, {\"line_index\": 5, \"loading_percent\": 10.3}, {\"line_index\": 6, \"loading_percent\": 26.4}, {\"line_index\": 7, \"loading_percent\": 213.8}, {\"line_index\": 8, \"loading_percent\": 239.2}, {\"line_index\": 9, \"loading_percent\": 231.7}, {\"line_index\": 10, \"loading_percent\": 214.9}, {\"line_index\": 11, \"loading_percent\": 240.8}, {\"line_index\": 12, \"loading_percent\": 202.5}, {\"line_index\": 13, \"loading_percent\": 215.8}, {\"line_index\": 14, \"loading_percent\": 226.5}], \"trafos\": [{\"trafo_index\": 0, \"loading_percent\": 0.9}, {\"trafo_index\": 1, \"loading_percent\": 0.5}, {\"trafo_index\": 2, \"loading_percent\": 1.3}, {\"trafo_index\": 3, \"loading_percent\": 0.0}, {\"trafo_index\": 4, \"loading_percent\": 0.9}]}"
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "call_6EqgusrxUkubSkm0bEchjjp7",
+   "content": "{\"buses\": [{\"index\": 0, \"name\": 1, \"vn_kv\": 135.0, \"type\": \"b\", \"zone\": 1.0, \"in_service\": true, \"max_vm_pu\": 1.06, \"min_vm_pu\": 0.94, \"geo\": \"{\\\"coordinates\\\": [1.9673949894, -0.9610198739], \\\"type\\\": \\\"Point\\\"}\"}, {\"index\": 1, \"name\": 2, \"vn_kv\": 135.0, \"type\": \"b\", \"zone\": 1.0, \"in_service\": true, \"max_vm_pu\": 1.06, \"min_vm_pu\": 0.94, \"geo\": \"{\\\"coordinates\\\": [2.9779852289, -1.0412882366], \\\"type\\\": \\\"Point\\\"}\"}, {\"index\": 2, \"name\": 3, \"vn_kv\": 135.0, \"type\": \"b\", \"zone\": 1.0, \"in_service\": true, \"max_vm_pu\": 1.06, \"min_vm_pu\": 0.94, \"geo\": \"{\\\"coordinates\\\": [3.780660539, -1.6066859687], \\\"type\\\": \\\"Point\\\"}\"}, {\"index\": 3, \"name\": 4, \"vn_kv\": 135.0, \"type\": \"b\", \"zone\": 1.0, \"in_service\": true, \"max_vm_pu\": 1.06, \"min_vm_pu\": 0.94, \"geo\": \"{\\\"coordinates\\\": [3.8337344898, -0.4914657254], \\\"type\\\": \\\"Point\\\"}\"}, {\"index\": 4, \"name\": 5, \"vn_kv\": 135.0, \"type\": \"b\", \"zone\": 1.0, \"in_service\": true, \"max_vm_pu\": 1.06, \"min_vm_pu\": 0.94, \"geo\": \"{\\\"coordinates\\\": [2.6937067209, -0.095882852], \\\"type\\\": \\\"Point\\\"}\"}, {\"index\": 5, \"name\": 6, \"vn_kv\": 0.208, \"type\": \"b\", \"zone\": 1.0, \"in_service\": true, \"max_vm_pu\": 1.06, \"min_vm_pu\": 0.94, \"geo\": \"{\\\"coordinates\\\": [2.5321180205, 1.2056156419], \\\"type\\\": \\\"Point\\\"}\"}, {\"index\": 6, \"name\": 7, \"vn_kv\": 14.0, \"type\": \"b\", \"zone\": 1.0, \"in_service\": true, \"max_vm_pu\": 1.06, \"min_vm_pu\": 0.94, \"geo\": \"{\\\"coordinates\\\": [4.8721406581, -0.2692952825], \\\"type\\\": \\\"Point\\\"}\"}, {\"index\": 7, \"name\": 8, \"vn_kv\": 12.0, \"type\": \"b\", \"zone\": 1.0, \"in_service\": true, \"max_vm_pu\": 1.06, \"min_vm_pu\": 0.94, \"geo\": \"{\\\"coordinates\\\": [5.9042747731, -0.5402149495], \\\"type\\\": \\\"Point\\\"}\"}, {\"index\": 8, \"name\": 9, \"vn_kv\": 0.208, \"type\": \"b\", \"zone\": 1.0, \"in_service\": true, \"max_vm_pu\": 1.06, \"min_vm_pu\": 0.94, \"geo\": \"{\\\"coordinates\\\": [4.274948799, 0.5335379916], \\\"type\\\": \\\"Point\\\"}\"}, {\"index\": 9, \"name\": 10, \"vn_kv\": 0.208, \"type\": \"b\", \"zone\": 1.0, \"in_service\": true, \"max_vm_pu\": 1.06, \"min_vm_pu\": 0.94, \"geo\": \"{\\\"coordinates\\\": [3.2723067024, 0.9619849305], \\\"type\\\": \\\"Point\\\"}\"}, {\"index\": 10, \"name\": 11, \"vn_kv\": 0.208, \"type\": \"b\", \"zone\": 1.0, \"in_service\": true, \"max_vm_pu\": 1.06, \"min_vm_pu\": 0.94, \"geo\": \"{\\\"coordinates\\\": [1.8366837619, 1.0890065149], \\\"type\\\": \\\"Point\\\"}\"}, {\"index\": 11, \"name\": 12, \"vn_kv\": 0.208, \"type\": \"b\", \"zone\": 1.0, \"in_service\": true, \"max_vm_pu\": 1.06, \"min_vm_pu\": 0.94, \"geo\": \"{\\\"coordinates\\\": [2.3371166416, 2.3091630377], \\\"type\\\": \\\"Point\\\"}\"}, {\"index\": 12, \"name\": 13, \"vn_kv\": 0.208, \"type\": \"b\", \"zone\": 1.0, \"in_service\": true, \"max_vm_pu\": 1.06, \"min_vm_pu\": 0.94, \"geo\": \"{\\\"coordinates\\\": [3.3094922817, 2.1179802998], \\\"type\\\": \\\"Point\\\"}\"}, {\"index\": 13, \"name\": 14, \"vn_kv\": 0.208, \"type\": \"b\", \"zone\": 1.0, \"in_service\": true, \"max_vm_pu\": 1.06, \"min_vm_pu\": 0.94, \"geo\": \"{\\\"coordinates\\\": [4.3962052866, 1.6847581464], \\\"type\\\": \\\"Point\\\"}\"}]}"
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "call_cwQDAJ3khOWmLGFqzVPQSa5b",
+   "content": "{\"lines\": [{\"index\": 0, \"from_bus\": 0, \"to_bus\": 1, \"in_service\": true, \"length_km\": 1.0, \"max_i_ka\": 3.106322282994911}, {\"index\": 1, \"from_bus\": 0, \"to_bus\": 4, \"in_service\": true, \"length_km\": 1.0, \"max_i_ka\": 3.106322282994911}, {\"index\": 2, \"from_bus\": 1, \"to_bus\": 2, \"in_service\": true, \"length_km\": 1.0, \"max_i_ka\": 3.106322282994911}, {\"index\": 3, \"from_bus\": 1, \"to_bus\": 3, \"in_service\": true, \"length_km\": 1.0, \"max_i_ka\": 3.106322282994911}, {\"index\": 4, \"from_bus\": 1, \"to_bus\": 4, \"in_service\": true, \"length_km\": 1.0, \"max_i_ka\": 3.106322282994911}, {\"index\": 5, \"from_bus\": 2, \"to_bus\": 3, \"in_service\": true, \"length_km\": 1.0, \"max_i_ka\": 3.106322282994911}, {\"index\": 6, \"from_bus\": 3, \"to_bus\": 4, \"in_service\": true, \"length_km\": 1.0, \"max_i_ka\": 3.106322282994911}, {\"index\": 7, \"from_bus\": 5, \"to_bus\": 10, \"in_service\": true, \"length_km\": 1.0, \"max_i_ka\": 26.49233654746893}, {\"index\": 8, \"from_bus\": 5, \"to_bus\": 11, \"in_service\": true, \"length_km\": 1.0, \"max_i_ka\": 26.520555653803672}, {\"index\": 9, \"from_bus\": 5, \"to_bus\": 12, \"in_service\": true, \"length_km\": 1.0, \"max_i_ka\": 62.12644565989822}, {\"index\": 10, \"from_bus\": 8, \"to_bus\": 9, \"in_service\": true, \"length_km\": 1.0, \"max_i_ka\": 22.07370935220393}, {\"index\": 11, \"from_bus\": 8, \"to_bus\": 13, \"in_service\": true, \"length_km\": 1.0, \"max_i_ka\": 33.16755417640142}, {\"index\": 12, \"from_bus\": 9, \"to_bus\": 10, \"in_service\": true, \"length_km\": 1.0, \"max_i_ka\": 13.586548203079625}, {\"index\": 13, \"from_bus\": 11, \"to_bus\": 12, \"in_service\": true, \"length_km\": 1.0, \"max_i_ka\": 5.858396583811924}, {\"index\": 14, \"from_bus\": 12, \"to_bus\": 13, \"in_service\": true, \"length_km\": 1.0, \"max_i_ka\": 19.515823790366554}]}"
+  },
+  {
+   "role": "assistant",
+   "tool_calls": [
+    {
+     "id": "call_4Pp2vX57PR62dv2EpPPzwpbc",
+     "function": {
+      "arguments": "{\"gen_index\": 1, \"p_mw_new\": 100.0}",
+      "name": "adjust_generation"
+     },
+     "type": "function",
+     "index": 0
+    },
+    {
+     "id": "call_jiaww3s0OSkidbNQRpyjrVU3",
+     "function": {
+      "arguments": "{\"gen_index\": 2, \"p_mw_new\": 100.0}",
+      "name": "adjust_generation"
+     },
+     "type": "function",
+     "index": 1
+    },
+    {
+     "id": "call_vTBId9Ke4snItf5xivNpTTlR",
+     "function": {
+      "arguments": "{\"gen_index\": 3, \"p_mw_new\": 100.0}",
+      "name": "adjust_generation"
+     },
+     "type": "function",
+     "index": 2
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "call_4Pp2vX57PR62dv2EpPPzwpbc",
+   "content": "{\"action\": \"adjust_generation\", \"success\": true, \"gen_type\": \"gen\", \"gen_index\": 1, \"old_state\": {\"p_mw\": 0.0}, \"new_state\": {\"p_mw\": 100.0}}"
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "call_jiaww3s0OSkidbNQRpyjrVU3",
+   "content": "{\"action\": \"adjust_generation\", \"success\": true, \"gen_type\": \"gen\", \"gen_index\": 2, \"old_state\": {\"p_mw\": 0.0}, \"new_state\": {\"p_mw\": 100.0}}"
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "call_vTBId9Ke4snItf5xivNpTTlR",
+   "content": "{\"action\": \"adjust_generation\", \"success\": true, \"gen_type\": \"gen\", \"gen_index\": 3, \"old_state\": {\"p_mw\": 0.0}, \"new_state\": {\"p_mw\": 100.0}}"
+  },
+  {
+   "role": "assistant",
+   "tool_calls": [
+    {
+     "id": "call_XCU8nRgaFTjjiyWKl5ZSdFcV",
+     "function": {
+      "arguments": "{}",
+      "name": "run_power_flow"
+     },
+     "type": "function",
+     "index": 0
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "call_XCU8nRgaFTjjiyWKl5ZSdFcV",
+   "content": "{\"converged\": true, \"message\": \"AC power flow (Newton-Raphson) converged.\"}"
+  },
+  {
+   "role": "assistant",
+   "tool_calls": [
+    {
+     "id": "call_yJOM2faq3QoMF7yhnuBNxN8T",
+     "function": {
+      "arguments": "{}",
+      "name": "check_voltage_violations"
+     },
+     "type": "function",
+     "index": 0
+    },
+    {
+     "id": "call_0qKTwGgNww2ETkh1K0Vklewq",
+     "function": {
+      "arguments": "{}",
+      "name": "check_overloads"
+     },
+     "type": "function",
+     "index": 1
+    },
+    {
+     "id": "call_g6pwhzb4ZgVHfKeGU2v9EZC6",
+     "function": {
+      "arguments": "{}",
+      "name": "find_disconnected_areas"
+     },
+     "type": "function",
+     "index": 2
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "call_yJOM2faq3QoMF7yhnuBNxN8T",
+   "content": "{\"converged\": true, \"limits_pu\": {\"min\": 0.95, \"max\": 1.05}, \"new_violations\": [{\"bus\": 13, \"vm_pu\": 0.9107, \"limit\": 0.94, \"kind\": \"under\"}], \"n_new_violations\": 1, \"pre_existing_in_base\": {\"n\": 2, \"buses\": [5, 7]}, \"note\": \"Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix.\"}"
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "call_0qKTwGgNww2ETkh1K0Vklewq",
+   "content": "{\"converged\": true, \"threshold_percent\": 100.0, \"new_overloads\": [{\"element\": \"line\", \"index\": 7, \"loading_percent\": 387.0, \"from_bus\": 5, \"to_bus\": 10}, {\"element\": \"line\", \"index\": 8, \"loading_percent\": 271.6, \"from_bus\": 5, \"to_bus\": 11}, {\"element\": \"line\", \"index\": 9, \"loading_percent\": 285.2, \"from_bus\": 5, \"to_bus\": 12}, {\"element\": \"line\", \"index\": 10, \"loading_percent\": 110.4, \"from_bus\": 8, \"to_bus\": 9}, {\"element\": \"line\", \"index\": 11, \"loading_percent\": 209.5, \"from_bus\": 8, \"to_bus\": 13}, {\"element\": \"line\", \"index\": 12, \"loading_percent\": 516.4, \"from_bus\": 9, \"to_bus\": 10}, {\"element\": \"line\", \"index\": 13, \"loading_percent\": 356.5, \"from_bus\": 11, \"to_bus\": 12}, {\"element\": \"line\", \"index\": 14, \"loading_percent\": 385.8, \"from_bus\": 12, \"to_bus\": 13}], \"n_new_overloads\": 8, \"pre_existing_in_base\": {\"n\": 0, \"elements\": []}, \"note\": \"Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix.\"}"
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "call_g6pwhzb4ZgVHfKeGU2v9EZC6",
+   "content": "{\"disconnected_buses\": [], \"connected_buses\": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], \"message\": \"All buses connected.\"}"
+  },
+  {
+   "role": "assistant",
+   "content": "```json\n{\n  \"diagnosis\": {\n    \"fault_type\": \"generation_loss\",\n    \"components\": {\n      \"gen\": [1, 2, 3]\n    },\n    \"explanation\": \"The generation capacity was insufficient to meet the load demand, leading to voltage and loading violations.\"\n  },\n  \"actions\": [\n    {\n      \"tool\": \"adjust_generation\",\n      \"args\": {\n        \"gen_index\": 1,\n        \"p_mw_new\": 100.0\n      }\n    },\n    {\n      \"tool\": \"adjust_generation\",\n      \"args\": {\n        \"gen_index\": 2,\n        \"p_mw_new\": 100.0\n      }\n    },\n    {\n      \"tool\": \"adjust_generation\",\n      \"args\": {\n        \"gen_index\": 3,\n        \"p_mw_new\": 100.0\n      }\n    }\n  ],\n  \"final_state\": {\n    \"converged\": true,\n    \"n_new_violations\": 1,\n    \"islanded_load_buses\": []\n  },\n  \"status\": \"not_repaired\",\n  \"remaining_violations\": [\n    \"bus 13 at 0.9107 p.u.\",\n    \"line 7 at 387.0 %\",\n    \"line 8 at 271.6 %\",\n    \"line 9 at 285.2 %\",\n    \"line 10 at 110.4 %\",\n    \"line 11 at 209.5 %\",\n    \"line 12 at 516.4 %\",\n    \"line 13 at 356.5 %\",\n    \"line 14 at 385.8 %\"\n  ],\n  \"summary\": \"The network initially had insufficient generation to meet the load demand, resulting in voltage and line loading violations. After increasing the generation at three generators, the power flow converged, but violations remain at bus 13 and several lines. The network is not yet secure.\"\n}\n```"
+  }
+ ],
+ "rounds": [
+  {
+   "round": 1,
+   "role": "assistant",
+   "llm": {
+    "content": null,
+    "tool_calls": [
+     {
+      "id": "call_Dfo4U5h1omC3E59mtdwZ0LZL",
+      "name": "get_gen_data",
+      "arguments": "{}"
+     },
+     {
+      "id": "call_cV7nTmYP87gkF61l8rBsbEuG",
+      "name": "get_loading_profile",
+      "arguments": "{}"
+     },
+     {
+      "id": "call_6EqgusrxUkubSkm0bEchjjp7",
+      "name": "get_bus_data",
+      "arguments": "{}"
+     },
+     {
+      "id": "call_cwQDAJ3khOWmLGFqzVPQSa5b",
+      "name": "get_line_data",
+      "arguments": "{}"
+     }
+    ],
+    "usage": {
+     "prompt_tokens": 3219,
+     "completion_tokens": 66,
+     "total_tokens": 3285
+    },
+    "with_tools": true,
+    "latency_s": 2.2892
+   },
+   "tools": [
+    {
+     "n": 1,
+     "name": "get_gen_data",
+     "kind": "query",
+     "args": {},
+     "output": {
+      "generators": [
+       {
+        "index": 0,
+        "name": null,
+        "bus": 1,
+        "p_mw": 40.0,
+        "vm_pu": 1.045,
+        "sn_mva": null,
+        "min_q_mvar": -40.0,
+        "max_q_mvar": 50.0,
+        "scaling": 1.0,
+        "slack": false,
+        "in_service": true,
+        "slack_weight": 0.0,
+        "type": null,
+        "controllable": true,
+        "max_p_mw": 140.0,
+        "min_p_mw": 0.0,
+        "id_q_capability_characteristic": null,
+        "reactive_capability_curve": false,
+        "curve_style": null
+       },
+       {
+        "index": 1,
+        "name": null,
+        "bus": 2,
+        "p_mw": 0.0,
+        "vm_pu": 1.01,
+        "sn_mva": null,
+        "min_q_mvar": 0.0,
+        "max_q_mvar": 40.0,
+        "scaling": 1.0,
+        "slack": false,
+        "in_service": true,
+        "slack_weight": 0.0,
+        "type": null,
+        "controllable": true,
+        "max_p_mw": 100.0,
+        "min_p_mw": 0.0,
+        "id_q_capability_characteristic": null,
+        "reactive_capability_curve": false,
+        "curve_style": null
+       },
+       {
+        "index": 2,
+        "name": null,
+        "bus": 5,
+        "p_mw": 0.0,
+        "vm_pu": 1.07,
+        "sn_mva": null,
+        "min_q_mvar": -6.0,
+        "max_q_mvar": 24.0,
+        "scaling": 1.0,
+        "slack": false,
+        "in_service": true,
+        "slack_weight": 0.0,
+        "type": null,
+        "controllable": true,
+        "max_p_mw": 100.0,
+        "min_p_mw": 0.0,
+        "id_q_capability_characteristic": null,
+        "reactive_capability_curve": false,
+        "curve_style": null
+       },
+       {
+        "index": 3,
+        "name": null,
+        "bus": 7,
+        "p_mw": 0.0,
+        "vm_pu": 1.09,
+        "sn_mva": null,
+        "min_q_mvar": -6.0,
+        "max_q_mvar": 24.0,
+        "scaling": 1.0,
+        "slack": false,
+        "in_service": true,
+        "slack_weight": 0.0,
+        "type": null,
+        "controllable": true,
+        "max_p_mw": 100.0,
+        "min_p_mw": 0.0,
+        "id_q_capability_characteristic": null,
+        "reactive_capability_curve": false,
+        "curve_style": null
+       }
+      ]
+     },
+     "ok": true,
+     "latency_s": 0.0029
+    },
+    {
+     "n": 2,
+     "name": "get_loading_profile",
+     "kind": "query",
+     "args": {},
+     "output": {
+      "available": true,
+      "lines": [
+       {
+        "line_index": 0,
+        "loading_percent": 67.3
+       },
+       {
+        "line_index": 1,
+        "loading_percent": 31.2
+       },
+       {
+        "line_index": 2,
+        "loading_percent": 28.3
+       },
+       {
+        "line_index": 3,
+        "loading_percent": 22.1
+       },
+       {
+        "line_index": 4,
+        "loading_percent": 16.1
+       },
+       {
+        "line_index": 5,
+        "loading_percent": 10.3
+       },
+       {
+        "line_index": 6,
+        "loading_percent": 26.4
+       },
+       {
+        "line_index": 7,
+        "loading_percent": 213.8
+       },
+       {
+        "line_index": 8,
+        "loading_percent": 239.2
+       },
+       {
+        "line_index": 9,
+        "loading_percent": 231.7
+       },
+       {
+        "line_index": 10,
+        "loading_percent": 214.9
+       },
+       {
+        "line_index": 11,
+        "loading_percent": 240.8
+       },
+       {
+        "line_index": 12,
+        "loading_percent": 202.5
+       },
+       {
+        "line_index": 13,
+        "loading_percent": 215.8
+       },
+       {
+        "line_index": 14,
+        "loading_percent": 226.5
+       }
+      ],
+      "trafos": [
+       {
+        "trafo_index": 0,
+        "loading_percent": 0.9
+       },
+       {
+        "trafo_index": 1,
+        "loading_percent": 0.5
+       },
+       {
+        "trafo_index": 2,
+        "loading_percent": 1.3
+       },
+       {
+        "trafo_index": 3,
+        "loading_percent": 0.0
+       },
+       {
+        "trafo_index": 4,
+        "loading_percent": 0.9
+       }
+      ]
+     },
+     "ok": true,
+     "latency_s": 0.0015
+    },
+    {
+     "n": 3,
+     "name": "get_bus_data",
+     "kind": "query",
+     "args": {},
+     "output": {
+      "buses": [
+       {
+        "index": 0,
+        "name": 1,
+        "vn_kv": 135.0,
+        "type": "b",
+        "zone": 1.0,
+        "in_service": true,
+        "max_vm_pu": 1.06,
+        "min_vm_pu": 0.94,
+        "geo": "{\"coordinates\": [1.9673949894, -0.9610198739], \"type\": \"Point\"}"
+       },
+       {
+        "index": 1,
+        "name": 2,
+        "vn_kv": 135.0,
+        "type": "b",
+        "zone": 1.0,
+        "in_service": true,
+        "max_vm_pu": 1.06,
+        "min_vm_pu": 0.94,
+        "geo": "{\"coordinates\": [2.9779852289, -1.0412882366], \"type\": \"Point\"}"
+       },
+       {
+        "index": 2,
+        "name": 3,
+        "vn_kv": 135.0,
+        "type": "b",
+        "zone": 1.0,
+        "in_service": true,
+        "max_vm_pu": 1.06,
+        "min_vm_pu": 0.94,
+        "geo": "{\"coordinates\": [3.780660539, -1.6066859687], \"type\": \"Point\"}"
+       },
+       {
+        "index": 3,
+        "name": 4,
+        "vn_kv": 135.0,
+        "type": "b",
+        "zone": 1.0,
+        "in_service": true,
+        "max_vm_pu": 1.06,
+        "min_vm_pu": 0.94,
+        "geo": "{\"coordinates\": [3.8337344898, -0.4914657254], \"type\": \"Point\"}"
+       },
+       {
+        "index": 4,
+        "name": 5,
+        "vn_kv": 135.0,
+        "type": "b",
+        "zone": 1.0,
+        "in_service": true,
+        "max_vm_pu": 1.06,
+        "min_vm_pu": 0.94,
+        "geo": "{\"coordinates\": [2.6937067209, -0.095882852], \"type\": \"Point\"}"
+       },
+       {
+        "index": 5,
+        "name": 6,
+        "vn_kv": 0.208,
+        "type": "b",
+        "zone": 1.0,
+        "in_service": true,
+        "max_vm_pu": 1.06,
+        "min_vm_pu": 0.94,
+        "geo": "{\"coordinates\": [2.5321180205, 1.2056156419], \"type\": \"Point\"}"
+       },
+       {
+        "index": 6,
+        "name": 7,
+        "vn_kv": 14.0,
+        "type": "b",
+        "zone": 1.0,
+        "in_service": true,
+        "max_vm_pu": 1.06,
+        "min_vm_pu": 0.94,
+        "geo": "{\"coordinates\": [4.8721406581, -0.2692952825], \"type\": \"Point\"}"
+       },
+       {
+        "index": 7,
+        "name": 8,
+        "vn_kv": 12.0,
+        "type": "b",
+        "zone": 1.0,
+        "in_service": true,
+        "max_vm_pu": 1.06,
+        "min_vm_pu": 0.94,
+        "geo": "{\"coordinates\": [5.9042747731, -0.5402149495], \"type\": \"Point\"}"
+       },
+       {
+        "index": 8,
+        "name": 9,
+        "vn_kv": 0.208,
+        "type": "b",
+        "zone": 1.0,
+        "in_service": true,
+        "max_vm_pu": 1.06,
+        "min_vm_pu": 0.94,
+        "geo": "{\"coordinates\": [4.274948799, 0.5335379916], \"type\": \"Point\"}"
+       },
+       {
+        "index": 9,
+        "name": 10,
+        "vn_kv": 0.208,
+        "type": "b",
+        "zone": 1.0,
+        "in_service": true,
+        "max_vm_pu": 1.06,
+        "min_vm_pu": 0.94,
+        "geo": "{\"coordinates\": [3.2723067024, 0.9619849305], \"type\": \"Point\"}"
+       },
+       {
+        "index": 10,
+        "name": 11,
+        "vn_kv": 0.208,
+        "type": "b",
+        "zone": 1.0,
+        "in_service": true,
+        "max_vm_pu": 1.06,
+        "min_vm_pu": 0.94,
+        "geo": "{\"coordinates\": [1.8366837619, 1.0890065149], \"type\": \"Point\"}"
+       },
+       {
+        "index": 11,
+        "name": 12,
+        "vn_kv": 0.208,
+        "type": "b",
+        "zone": 1.0,
+        "in_service": true,
+        "max_vm_pu": 1.06,
+        "min_vm_pu": 0.94,
+        "geo": "{\"coordinates\": [2.3371166416, 2.3091630377], \"type\": \"Point\"}"
+       },
+       {
+        "index": 12,
+        "name": 13,
+        "vn_kv": 0.208,
+        "type": "b",
+        "zone": 1.0,
+        "in_service": true,
+        "max_vm_pu": 1.06,
+        "min_vm_pu": 0.94,
+        "geo": "{\"coordinates\": [3.3094922817, 2.1179802998], \"type\": \"Point\"}"
+       },
+       {
+        "index": 13,
+        "name": 14,
+        "vn_kv": 0.208,
+        "type": "b",
+        "zone": 1.0,
+        "in_service": true,
+        "max_vm_pu": 1.06,
+        "min_vm_pu": 0.94,
+        "geo": "{\"coordinates\": [4.3962052866, 1.6847581464], \"type\": \"Point\"}"
+       }
+      ]
+     },
+     "ok": true,
+     "latency_s": 0.0022
+    },
+    {
+     "n": 4,
+     "name": "get_line_data",
+     "kind": "query",
+     "args": {},
+     "output": {
+      "lines": [
+       {
+        "index": 0,
+        "from_bus": 0,
+        "to_bus": 1,
+        "in_service": true,
+        "length_km": 1.0,
+        "max_i_ka": 3.106322282994911
+       },
+       {
+        "index": 1,
+        "from_bus": 0,
+        "to_bus": 4,
+        "in_service": true,
+        "length_km": 1.0,
+        "max_i_ka": 3.106322282994911
+       },
+       {
+        "index": 2,
+        "from_bus": 1,
+        "to_bus": 2,
+        "in_service": true,
+        "length_km": 1.0,
+        "max_i_ka": 3.106322282994911
+       },
+       {
+        "index": 3,
+        "from_bus": 1,
+        "to_bus": 3,
+        "in_service": true,
+        "length_km": 1.0,
+        "max_i_ka": 3.106322282994911
+       },
+       {
+        "index": 4,
+        "from_bus": 1,
+        "to_bus": 4,
+        "in_service": true,
+        "length_km": 1.0,
+        "max_i_ka": 3.106322282994911
+       },
+       {
+        "index": 5,
+        "from_bus": 2,
+        "to_bus": 3,
+        "in_service": true,
+        "length_km": 1.0,
+        "max_i_ka": 3.106322282994911
+       },
+       {
+        "index": 6,
+        "from_bus": 3,
+        "to_bus": 4,
+        "in_service": true,
+        "length_km": 1.0,
+        "max_i_ka": 3.106322282994911
+       },
+       {
+        "index": 7,
+        "from_bus": 5,
+        "to_bus": 10,
+        "in_service": true,
+        "length_km": 1.0,
+        "max_i_ka": 26.49233654746893
+       },
+       {
+        "index": 8,
+        "from_bus": 5,
+        "to_bus": 11,
+        "in_service": true,
+        "length_km": 1.0,
+        "max_i_ka": 26.520555653803672
+       },
+       {
+        "index": 9,
+        "from_bus": 5,
+        "to_bus": 12,
+        "in_service": true,
+        "length_km": 1.0,
+        "max_i_ka": 62.12644565989822
+       },
+       {
+        "index": 10,
+        "from_bus": 8,
+        "to_bus": 9,
+        "in_service": true,
+        "length_km": 1.0,
+        "max_i_ka": 22.07370935220393
+       },
+       {
+        "index": 11,
+        "from_bus": 8,
+        "to_bus": 13,
+        "in_service": true,
+        "length_km": 1.0,
+        "max_i_ka": 33.16755417640142
+       },
+       {
+        "index": 12,
+        "from_bus": 9,
+        "to_bus": 10,
+        "in_service": true,
+        "length_km": 1.0,
+        "max_i_ka": 13.586548203079625
+       },
+       {
+        "index": 13,
+        "from_bus": 11,
+        "to_bus": 12,
+        "in_service": true,
+        "length_km": 1.0,
+        "max_i_ka": 5.858396583811924
+       },
+       {
+        "index": 14,
+        "from_bus": 12,
+        "to_bus": 13,
+        "in_service": true,
+        "length_km": 1.0,
+        "max_i_ka": 19.515823790366554
+       }
+      ]
+     },
+     "ok": true,
+     "latency_s": 0.0029
+    }
+   ]
+  },
+  {
+   "round": 2,
+   "role": "assistant",
+   "llm": {
+    "content": null,
+    "tool_calls": [
+     {
+      "id": "call_4Pp2vX57PR62dv2EpPPzwpbc",
+      "name": "adjust_generation",
+      "arguments": "{\"gen_index\": 1, \"p_mw_new\": 100.0}"
+     },
+     {
+      "id": "call_jiaww3s0OSkidbNQRpyjrVU3",
+      "name": "adjust_generation",
+      "arguments": "{\"gen_index\": 2, \"p_mw_new\": 100.0}"
+     },
+     {
+      "id": "call_vTBId9Ke4snItf5xivNpTTlR",
+      "name": "adjust_generation",
+      "arguments": "{\"gen_index\": 3, \"p_mw_new\": 100.0}"
+     }
+    ],
+    "usage": {
+     "prompt_tokens": 6346,
+     "completion_tokens": 88,
+     "total_tokens": 6434
+    },
+    "with_tools": true,
+    "latency_s": 1.808
+   },
+   "tools": [
+    {
+     "n": 5,
+     "name": "adjust_generation",
+     "kind": "action",
+     "args": {
+      "gen_index": 1,
+      "p_mw_new": 100.0
+     },
+     "output": {
+      "action": "adjust_generation",
+      "success": true,
+      "gen_type": "gen",
+      "gen_index": 1,
+      "old_state": {
+       "p_mw": 0.0
+      },
+      "new_state": {
+       "p_mw": 100.0
+      }
+     },
+     "ok": true,
+     "latency_s": 0.0005
+    },
+    {
+     "n": 6,
+     "name": "adjust_generation",
+     "kind": "action",
+     "args": {
+      "gen_index": 2,
+      "p_mw_new": 100.0
+     },
+     "output": {
+      "action": "adjust_generation",
+      "success": true,
+      "gen_type": "gen",
+      "gen_index": 2,
+      "old_state": {
+       "p_mw": 0.0
+      },
+      "new_state": {
+       "p_mw": 100.0
+      }
+     },
+     "ok": true,
+     "latency_s": 0.0002
+    },
+    {
+     "n": 7,
+     "name": "adjust_generation",
+     "kind": "action",
+     "args": {
+      "gen_index": 3,
+      "p_mw_new": 100.0
+     },
+     "output": {
+      "action": "adjust_generation",
+      "success": true,
+      "gen_type": "gen",
+      "gen_index": 3,
+      "old_state": {
+       "p_mw": 0.0
+      },
+      "new_state": {
+       "p_mw": 100.0
+      }
+     },
+     "ok": true,
+     "latency_s": 0.0001
+    }
+   ]
+  },
+  {
+   "round": 3,
+   "role": "assistant",
+   "llm": {
+    "content": null,
+    "tool_calls": [
+     {
+      "id": "call_XCU8nRgaFTjjiyWKl5ZSdFcV",
+      "name": "run_power_flow",
+      "arguments": "{}"
+     }
+    ],
+    "usage": {
+     "prompt_tokens": 6608,
+     "completion_tokens": 11,
+     "total_tokens": 6619
+    },
+    "with_tools": true,
+    "latency_s": 1.1378
+   },
+   "tools": [
+    {
+     "n": 8,
+     "name": "run_power_flow",
+     "kind": "simulation",
+     "args": {},
+     "output": {
+      "converged": true,
+      "message": "AC power flow (Newton-Raphson) converged."
+     },
+     "ok": true,
+     "latency_s": 0.1552
+    }
+   ]
+  },
+  {
+   "round": 4,
+   "role": "assistant",
+   "llm": {
+    "content": null,
+    "tool_calls": [
+     {
+      "id": "call_yJOM2faq3QoMF7yhnuBNxN8T",
+      "name": "check_voltage_violations",
+      "arguments": "{}"
+     },
+     {
+      "id": "call_0qKTwGgNww2ETkh1K0Vklewq",
+      "name": "check_overloads",
+      "arguments": "{}"
+     },
+     {
+      "id": "call_g6pwhzb4ZgVHfKeGU2v9EZC6",
+      "name": "find_disconnected_areas",
+      "arguments": "{}"
+     }
+    ],
+    "usage": {
+     "prompt_tokens": 6652,
+     "completion_tokens": 57,
+     "total_tokens": 6709
+    },
+    "with_tools": true,
+    "latency_s": 1.2338
+   },
+   "tools": [
+    {
+     "n": 9,
+     "name": "check_voltage_violations",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "limits_pu": {
+       "min": 0.95,
+       "max": 1.05
+      },
+      "new_violations": [
+       {
+        "bus": 13,
+        "vm_pu": 0.9107,
+        "limit": 0.94,
+        "kind": "under"
+       }
+      ],
+      "n_new_violations": 1,
+      "pre_existing_in_base": {
+       "n": 2,
+       "buses": [
+        5,
+        7
+       ]
+      },
+      "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.0018
+    },
+    {
+     "n": 10,
+     "name": "check_overloads",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "converged": true,
+      "threshold_percent": 100.0,
+      "new_overloads": [
+       {
+        "element": "line",
+        "index": 7,
+        "loading_percent": 387.0,
+        "from_bus": 5,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 8,
+        "loading_percent": 271.6,
+        "from_bus": 5,
+        "to_bus": 11
+       },
+       {
+        "element": "line",
+        "index": 9,
+        "loading_percent": 285.2,
+        "from_bus": 5,
+        "to_bus": 12
+       },
+       {
+        "element": "line",
+        "index": 10,
+        "loading_percent": 110.4,
+        "from_bus": 8,
+        "to_bus": 9
+       },
+       {
+        "element": "line",
+        "index": 11,
+        "loading_percent": 209.5,
+        "from_bus": 8,
+        "to_bus": 13
+       },
+       {
+        "element": "line",
+        "index": 12,
+        "loading_percent": 516.4,
+        "from_bus": 9,
+        "to_bus": 10
+       },
+       {
+        "element": "line",
+        "index": 13,
+        "loading_percent": 356.5,
+        "from_bus": 11,
+        "to_bus": 12
+       },
+       {
+        "element": "line",
+        "index": 14,
+        "loading_percent": 385.8,
+        "from_bus": 12,
+        "to_bus": 13
+       }
+      ],
+      "n_new_overloads": 8,
+      "pre_existing_in_base": {
+       "n": 0,
+       "elements": []
+      },
+      "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+     },
+     "ok": true,
+     "latency_s": 0.002
+    },
+    {
+     "n": 11,
+     "name": "find_disconnected_areas",
+     "kind": "diagnostic",
+     "args": {},
+     "output": {
+      "disconnected_buses": [],
+      "connected_buses": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5,
+       6,
+       7,
+       8,
+       9,
+       10,
+       11,
+       12,
+       13
+      ],
+      "message": "All buses connected."
+     },
+     "ok": true,
+     "latency_s": 0.0021
+    }
+   ]
+  },
+  {
+   "round": 5,
+   "role": "assistant",
+   "llm": {
+    "content": "```json\n{\n  \"diagnosis\": {\n    \"fault_type\": \"generation_loss\",\n    \"components\": {\n      \"gen\": [1, 2, 3]\n    },\n    \"explanation\": \"The generation capacity was insufficient to meet the load demand, leading to voltage and loading violations.\"\n  },\n  \"actions\": [\n    {\n      \"tool\": \"adjust_generation\",\n      \"args\": {\n        \"gen_index\": 1,\n        \"p_mw_new\": 100.0\n      }\n    },\n    {\n      \"tool\": \"adjust_generation\",\n      \"args\": {\n        \"gen_index\": 2,\n        \"p_mw_new\": 100.0\n      }\n    },\n    {\n      \"tool\": \"adjust_generation\",\n      \"args\": {\n        \"gen_index\": 3,\n        \"p_mw_new\": 100.0\n      }\n    }\n  ],\n  \"final_state\": {\n    \"converged\": true,\n    \"n_new_violations\": 1,\n    \"islanded_load_buses\": []\n  },\n  \"status\": \"not_repaired\",\n  \"remaining_violations\": [\n    \"bus 13 at 0.9107 p.u.\",\n    \"line 7 at 387.0 %\",\n    \"line 8 at 271.6 %\",\n    \"line 9 at 285.2 %\",\n    \"line 10 at 110.4 %\",\n    \"line 11 at 209.5 %\",\n    \"line 12 at 516.4 %\",\n    \"line 13 at 356.5 %\",\n    \"line 14 at 385.8 %\"\n  ],\n  \"summary\": \"The network initially had insufficient generation to meet the load demand, resulting in voltage and line loading violations. After increasing the generation at three generators, the power flow converged, but violations remain at bus 13 and several lines. The network is not yet secure.\"\n}\n```",
+    "tool_calls": [],
+    "usage": {
+     "prompt_tokens": 7285,
+     "completion_tokens": 408,
+     "total_tokens": 7693
+    },
+    "with_tools": true,
+    "latency_s": 5.7198
+   },
+   "tools": []
+  }
+ ],
+ "n_llm_calls": 5,
+ "n_tool_calls": 11,
+ "prompt_tokens": 30110,
+ "completion_tokens": 630,
+ "n_missing_usage": 0,
+ "wall_time_s": 12.3649,
+ "gate": null,
+ "gate_history": [],
+ "harness_declared": null,
+ "budget_exhausted": false,
+ "system_prompt_hash": "4b8459433e97",
+ "request": {
+  "request_id": "case14-heavy_loading_undervoltage-v0",
+  "network": "case14",
+  "scenario_id": "heavy_loading_undervoltage",
+  "variant": 0,
+  "category": "voltage",
+  "label": "Heavy loading under-voltage (3x)",
+  "text": "The AC power flow on the IEEE 14-bus system (case14) converged with 11 new limit violation(s). Diagnose the cause and restore a secure operating point: the power flow converges, no in-service load is on an islanded bus, every bus voltage is within [0.95, 1.05] p.u., and no line or transformer is above 100 % loading, apart from the violations the base network already has. Use only the actions available. Report the diagnosis, the actions taken, and the final state.",
+  "injected": {
+   "fault_type": "load_increase",
+   "components": {
+    "load": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10
+    ]
+   },
+   "description": "All loads scaled by 3.0\u00d7; Increased reactive power demand causes voltage drop",
+   "also_accepted": []
+  },
+  "initial_state": {
+   "converged": true,
+   "label": "violations",
+   "n_violations": 16,
+   "n_new_violations": 11,
+   "n_voltage": 8,
+   "n_thermal": 8,
+   "voltage": [
+    {
+     "bus": 0,
+     "vm_pu": 1.06,
+     "limit": 1.05,
+     "kind": "over"
+    },
+    {
+     "bus": 3,
+     "vm_pu": 0.9175,
+     "limit": 0.95,
+     "kind": "under"
+    },
+    {
+     "bus": 4,
+     "vm_pu": 0.917,
+     "limit": 0.95,
+     "kind": "under"
+    },
+    {
+     "bus": 5,
+     "vm_pu": 1.07,
+     "limit": 1.05,
+     "kind": "over"
+    },
+    {
+     "bus": 7,
+     "vm_pu": 1.09,
+     "limit": 1.05,
+     "kind": "over"
+    },
+    {
+     "bus": 8,
+     "vm_pu": 0.9258,
+     "limit": 0.95,
+     "kind": "under"
+    },
+    {
+     "bus": 9,
+     "vm_pu": 0.9259,
+     "limit": 0.95,
+     "kind": "under"
+    },
+    {
+     "bus": 13,
+     "vm_pu": 0.8895,
+     "limit": 0.95,
+     "kind": "under"
+    }
+   ],
+   "thermal": [
+    {
+     "element": "line",
+     "index": 7,
+     "loading_percent": 418.9
+    },
+    {
+     "element": "line",
+     "index": 8,
+     "loading_percent": 275.1
+    },
+    {
+     "element": "line",
+     "index": 9,
+     "loading_percent": 289.6
+    },
+    {
+     "element": "line",
+     "index": 10,
+     "loading_percent": 169.4
+    },
+    {
+     "element": "line",
+     "index": 11,
+     "loading_percent": 225.0
+    },
+    {
+     "element": "line",
+     "index": 12,
+     "loading_percent": 593.4
+    },
+    {
+     "element": "line",
+     "index": 13,
+     "loading_percent": 380.9
+    },
+    {
+     "element": "line",
+     "index": 14,
+     "loading_percent": 412.3
+    }
+   ],
+   "new": [
+    "bus:13",
+    "bus:3",
+    "bus:4",
+    "line:10",
+    "line:11",
+    "line:12",
+    "line:13",
+    "line:14",
+    "line:7",
+    "line:8",
+    "line:9"
+   ],
+   "islanded_load_buses": [],
+   "nan_buses": [],
+   "vm_min": 0.8895,
+   "vm_max": 1.09,
+   "max_loading": 593.4,
+   "secure": false
+  },
+  "base_violations": [
+   "bus:0",
+   "bus:10",
+   "bus:11",
+   "bus:12",
+   "bus:5",
+   "bus:6",
+   "bus:7",
+   "bus:8",
+   "bus:9"
+  ],
+  "network_hash": "a33592bb8346d13b",
+  "base_load_mw": 259.0
+ },
+ "tool_log": [
+  {
+   "n": 1,
+   "name": "get_gen_data",
+   "kind": "query",
+   "args": {},
+   "output": {
+    "generators": [
+     {
+      "index": 0,
+      "name": null,
+      "bus": 1,
+      "p_mw": 40.0,
+      "vm_pu": 1.045,
+      "sn_mva": null,
+      "min_q_mvar": -40.0,
+      "max_q_mvar": 50.0,
+      "scaling": 1.0,
+      "slack": false,
+      "in_service": true,
+      "slack_weight": 0.0,
+      "type": null,
+      "controllable": true,
+      "max_p_mw": 140.0,
+      "min_p_mw": 0.0,
+      "id_q_capability_characteristic": null,
+      "reactive_capability_curve": false,
+      "curve_style": null
+     },
+     {
+      "index": 1,
+      "name": null,
+      "bus": 2,
+      "p_mw": 0.0,
+      "vm_pu": 1.01,
+      "sn_mva": null,
+      "min_q_mvar": 0.0,
+      "max_q_mvar": 40.0,
+      "scaling": 1.0,
+      "slack": false,
+      "in_service": true,
+      "slack_weight": 0.0,
+      "type": null,
+      "controllable": true,
+      "max_p_mw": 100.0,
+      "min_p_mw": 0.0,
+      "id_q_capability_characteristic": null,
+      "reactive_capability_curve": false,
+      "curve_style": null
+     },
+     {
+      "index": 2,
+      "name": null,
+      "bus": 5,
+      "p_mw": 0.0,
+      "vm_pu": 1.07,
+      "sn_mva": null,
+      "min_q_mvar": -6.0,
+      "max_q_mvar": 24.0,
+      "scaling": 1.0,
+      "slack": false,
+      "in_service": true,
+      "slack_weight": 0.0,
+      "type": null,
+      "controllable": true,
+      "max_p_mw": 100.0,
+      "min_p_mw": 0.0,
+      "id_q_capability_characteristic": null,
+      "reactive_capability_curve": false,
+      "curve_style": null
+     },
+     {
+      "index": 3,
+      "name": null,
+      "bus": 7,
+      "p_mw": 0.0,
+      "vm_pu": 1.09,
+      "sn_mva": null,
+      "min_q_mvar": -6.0,
+      "max_q_mvar": 24.0,
+      "scaling": 1.0,
+      "slack": false,
+      "in_service": true,
+      "slack_weight": 0.0,
+      "type": null,
+      "controllable": true,
+      "max_p_mw": 100.0,
+      "min_p_mw": 0.0,
+      "id_q_capability_characteristic": null,
+      "reactive_capability_curve": false,
+      "curve_style": null
+     }
+    ]
+   },
+   "ok": true,
+   "latency_s": 0.0029
+  },
+  {
+   "n": 2,
+   "name": "get_loading_profile",
+   "kind": "query",
+   "args": {},
+   "output": {
+    "available": true,
+    "lines": [
+     {
+      "line_index": 0,
+      "loading_percent": 67.3
+     },
+     {
+      "line_index": 1,
+      "loading_percent": 31.2
+     },
+     {
+      "line_index": 2,
+      "loading_percent": 28.3
+     },
+     {
+      "line_index": 3,
+      "loading_percent": 22.1
+     },
+     {
+      "line_index": 4,
+      "loading_percent": 16.1
+     },
+     {
+      "line_index": 5,
+      "loading_percent": 10.3
+     },
+     {
+      "line_index": 6,
+      "loading_percent": 26.4
+     },
+     {
+      "line_index": 7,
+      "loading_percent": 213.8
+     },
+     {
+      "line_index": 8,
+      "loading_percent": 239.2
+     },
+     {
+      "line_index": 9,
+      "loading_percent": 231.7
+     },
+     {
+      "line_index": 10,
+      "loading_percent": 214.9
+     },
+     {
+      "line_index": 11,
+      "loading_percent": 240.8
+     },
+     {
+      "line_index": 12,
+      "loading_percent": 202.5
+     },
+     {
+      "line_index": 13,
+      "loading_percent": 215.8
+     },
+     {
+      "line_index": 14,
+      "loading_percent": 226.5
+     }
+    ],
+    "trafos": [
+     {
+      "trafo_index": 0,
+      "loading_percent": 0.9
+     },
+     {
+      "trafo_index": 1,
+      "loading_percent": 0.5
+     },
+     {
+      "trafo_index": 2,
+      "loading_percent": 1.3
+     },
+     {
+      "trafo_index": 3,
+      "loading_percent": 0.0
+     },
+     {
+      "trafo_index": 4,
+      "loading_percent": 0.9
+     }
+    ]
+   },
+   "ok": true,
+   "latency_s": 0.0015
+  },
+  {
+   "n": 3,
+   "name": "get_bus_data",
+   "kind": "query",
+   "args": {},
+   "output": {
+    "buses": [
+     {
+      "index": 0,
+      "name": 1,
+      "vn_kv": 135.0,
+      "type": "b",
+      "zone": 1.0,
+      "in_service": true,
+      "max_vm_pu": 1.06,
+      "min_vm_pu": 0.94,
+      "geo": "{\"coordinates\": [1.9673949894, -0.9610198739], \"type\": \"Point\"}"
+     },
+     {
+      "index": 1,
+      "name": 2,
+      "vn_kv": 135.0,
+      "type": "b",
+      "zone": 1.0,
+      "in_service": true,
+      "max_vm_pu": 1.06,
+      "min_vm_pu": 0.94,
+      "geo": "{\"coordinates\": [2.9779852289, -1.0412882366], \"type\": \"Point\"}"
+     },
+     {
+      "index": 2,
+      "name": 3,
+      "vn_kv": 135.0,
+      "type": "b",
+      "zone": 1.0,
+      "in_service": true,
+      "max_vm_pu": 1.06,
+      "min_vm_pu": 0.94,
+      "geo": "{\"coordinates\": [3.780660539, -1.6066859687], \"type\": \"Point\"}"
+     },
+     {
+      "index": 3,
+      "name": 4,
+      "vn_kv": 135.0,
+      "type": "b",
+      "zone": 1.0,
+      "in_service": true,
+      "max_vm_pu": 1.06,
+      "min_vm_pu": 0.94,
+      "geo": "{\"coordinates\": [3.8337344898, -0.4914657254], \"type\": \"Point\"}"
+     },
+     {
+      "index": 4,
+      "name": 5,
+      "vn_kv": 135.0,
+      "type": "b",
+      "zone": 1.0,
+      "in_service": true,
+      "max_vm_pu": 1.06,
+      "min_vm_pu": 0.94,
+      "geo": "{\"coordinates\": [2.6937067209, -0.095882852], \"type\": \"Point\"}"
+     },
+     {
+      "index": 5,
+      "name": 6,
+      "vn_kv": 0.208,
+      "type": "b",
+      "zone": 1.0,
+      "in_service": true,
+      "max_vm_pu": 1.06,
+      "min_vm_pu": 0.94,
+      "geo": "{\"coordinates\": [2.5321180205, 1.2056156419], \"type\": \"Point\"}"
+     },
+     {
+      "index": 6,
+      "name": 7,
+      "vn_kv": 14.0,
+      "type": "b",
+      "zone": 1.0,
+      "in_service": true,
+      "max_vm_pu": 1.06,
+      "min_vm_pu": 0.94,
+      "geo": "{\"coordinates\": [4.8721406581, -0.2692952825], \"type\": \"Point\"}"
+     },
+     {
+      "index": 7,
+      "name": 8,
+      "vn_kv": 12.0,
+      "type": "b",
+      "zone": 1.0,
+      "in_service": true,
+      "max_vm_pu": 1.06,
+      "min_vm_pu": 0.94,
+      "geo": "{\"coordinates\": [5.9042747731, -0.5402149495], \"type\": \"Point\"}"
+     },
+     {
+      "index": 8,
+      "name": 9,
+      "vn_kv": 0.208,
+      "type": "b",
+      "zone": 1.0,
+      "in_service": true,
+      "max_vm_pu": 1.06,
+      "min_vm_pu": 0.94,
+      "geo": "{\"coordinates\": [4.274948799, 0.5335379916], \"type\": \"Point\"}"
+     },
+     {
+      "index": 9,
+      "name": 10,
+      "vn_kv": 0.208,
+      "type": "b",
+      "zone": 1.0,
+      "in_service": true,
+      "max_vm_pu": 1.06,
+      "min_vm_pu": 0.94,
+      "geo": "{\"coordinates\": [3.2723067024, 0.9619849305], \"type\": \"Point\"}"
+     },
+     {
+      "index": 10,
+      "name": 11,
+      "vn_kv": 0.208,
+      "type": "b",
+      "zone": 1.0,
+      "in_service": true,
+      "max_vm_pu": 1.06,
+      "min_vm_pu": 0.94,
+      "geo": "{\"coordinates\": [1.8366837619, 1.0890065149], \"type\": \"Point\"}"
+     },
+     {
+      "index": 11,
+      "name": 12,
+      "vn_kv": 0.208,
+      "type": "b",
+      "zone": 1.0,
+      "in_service": true,
+      "max_vm_pu": 1.06,
+      "min_vm_pu": 0.94,
+      "geo": "{\"coordinates\": [2.3371166416, 2.3091630377], \"type\": \"Point\"}"
+     },
+     {
+      "index": 12,
+      "name": 13,
+      "vn_kv": 0.208,
+      "type": "b",
+      "zone": 1.0,
+      "in_service": true,
+      "max_vm_pu": 1.06,
+      "min_vm_pu": 0.94,
+      "geo": "{\"coordinates\": [3.3094922817, 2.1179802998], \"type\": \"Point\"}"
+     },
+     {
+      "index": 13,
+      "name": 14,
+      "vn_kv": 0.208,
+      "type": "b",
+      "zone": 1.0,
+      "in_service": true,
+      "max_vm_pu": 1.06,
+      "min_vm_pu": 0.94,
+      "geo": "{\"coordinates\": [4.3962052866, 1.6847581464], \"type\": \"Point\"}"
+     }
+    ]
+   },
+   "ok": true,
+   "latency_s": 0.0022
+  },
+  {
+   "n": 4,
+   "name": "get_line_data",
+   "kind": "query",
+   "args": {},
+   "output": {
+    "lines": [
+     {
+      "index": 0,
+      "from_bus": 0,
+      "to_bus": 1,
+      "in_service": true,
+      "length_km": 1.0,
+      "max_i_ka": 3.106322282994911
+     },
+     {
+      "index": 1,
+      "from_bus": 0,
+      "to_bus": 4,
+      "in_service": true,
+      "length_km": 1.0,
+      "max_i_ka": 3.106322282994911
+     },
+     {
+      "index": 2,
+      "from_bus": 1,
+      "to_bus": 2,
+      "in_service": true,
+      "length_km": 1.0,
+      "max_i_ka": 3.106322282994911
+     },
+     {
+      "index": 3,
+      "from_bus": 1,
+      "to_bus": 3,
+      "in_service": true,
+      "length_km": 1.0,
+      "max_i_ka": 3.106322282994911
+     },
+     {
+      "index": 4,
+      "from_bus": 1,
+      "to_bus": 4,
+      "in_service": true,
+      "length_km": 1.0,
+      "max_i_ka": 3.106322282994911
+     },
+     {
+      "index": 5,
+      "from_bus": 2,
+      "to_bus": 3,
+      "in_service": true,
+      "length_km": 1.0,
+      "max_i_ka": 3.106322282994911
+     },
+     {
+      "index": 6,
+      "from_bus": 3,
+      "to_bus": 4,
+      "in_service": true,
+      "length_km": 1.0,
+      "max_i_ka": 3.106322282994911
+     },
+     {
+      "index": 7,
+      "from_bus": 5,
+      "to_bus": 10,
+      "in_service": true,
+      "length_km": 1.0,
+      "max_i_ka": 26.49233654746893
+     },
+     {
+      "index": 8,
+      "from_bus": 5,
+      "to_bus": 11,
+      "in_service": true,
+      "length_km": 1.0,
+      "max_i_ka": 26.520555653803672
+     },
+     {
+      "index": 9,
+      "from_bus": 5,
+      "to_bus": 12,
+      "in_service": true,
+      "length_km": 1.0,
+      "max_i_ka": 62.12644565989822
+     },
+     {
+      "index": 10,
+      "from_bus": 8,
+      "to_bus": 9,
+      "in_service": true,
+      "length_km": 1.0,
+      "max_i_ka": 22.07370935220393
+     },
+     {
+      "index": 11,
+      "from_bus": 8,
+      "to_bus": 13,
+      "in_service": true,
+      "length_km": 1.0,
+      "max_i_ka": 33.16755417640142
+     },
+     {
+      "index": 12,
+      "from_bus": 9,
+      "to_bus": 10,
+      "in_service": true,
+      "length_km": 1.0,
+      "max_i_ka": 13.586548203079625
+     },
+     {
+      "index": 13,
+      "from_bus": 11,
+      "to_bus": 12,
+      "in_service": true,
+      "length_km": 1.0,
+      "max_i_ka": 5.858396583811924
+     },
+     {
+      "index": 14,
+      "from_bus": 12,
+      "to_bus": 13,
+      "in_service": true,
+      "length_km": 1.0,
+      "max_i_ka": 19.515823790366554
+     }
+    ]
+   },
+   "ok": true,
+   "latency_s": 0.0029
+  },
+  {
+   "n": 5,
+   "name": "adjust_generation",
+   "kind": "action",
+   "args": {
+    "gen_index": 1,
+    "p_mw_new": 100.0
+   },
+   "output": {
+    "action": "adjust_generation",
+    "success": true,
+    "gen_type": "gen",
+    "gen_index": 1,
+    "old_state": {
+     "p_mw": 0.0
+    },
+    "new_state": {
+     "p_mw": 100.0
+    }
+   },
+   "ok": true,
+   "latency_s": 0.0005
+  },
+  {
+   "n": 6,
+   "name": "adjust_generation",
+   "kind": "action",
+   "args": {
+    "gen_index": 2,
+    "p_mw_new": 100.0
+   },
+   "output": {
+    "action": "adjust_generation",
+    "success": true,
+    "gen_type": "gen",
+    "gen_index": 2,
+    "old_state": {
+     "p_mw": 0.0
+    },
+    "new_state": {
+     "p_mw": 100.0
+    }
+   },
+   "ok": true,
+   "latency_s": 0.0002
+  },
+  {
+   "n": 7,
+   "name": "adjust_generation",
+   "kind": "action",
+   "args": {
+    "gen_index": 3,
+    "p_mw_new": 100.0
+   },
+   "output": {
+    "action": "adjust_generation",
+    "success": true,
+    "gen_type": "gen",
+    "gen_index": 3,
+    "old_state": {
+     "p_mw": 0.0
+    },
+    "new_state": {
+     "p_mw": 100.0
+    }
+   },
+   "ok": true,
+   "latency_s": 0.0001
+  },
+  {
+   "n": 8,
+   "name": "run_power_flow",
+   "kind": "simulation",
+   "args": {},
+   "output": {
+    "converged": true,
+    "message": "AC power flow (Newton-Raphson) converged."
+   },
+   "ok": true,
+   "latency_s": 0.1552
+  },
+  {
+   "n": 9,
+   "name": "check_voltage_violations",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "limits_pu": {
+     "min": 0.95,
+     "max": 1.05
+    },
+    "new_violations": [
+     {
+      "bus": 13,
+      "vm_pu": 0.9107,
+      "limit": 0.94,
+      "kind": "under"
+     }
+    ],
+    "n_new_violations": 1,
+    "pre_existing_in_base": {
+     "n": 2,
+     "buses": [
+      5,
+      7
+     ]
+    },
+    "note": "Only new_violations count against the repair. The buses under pre_existing_in_base were already outside their limits in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.0018
+  },
+  {
+   "n": 10,
+   "name": "check_overloads",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "converged": true,
+    "threshold_percent": 100.0,
+    "new_overloads": [
+     {
+      "element": "line",
+      "index": 7,
+      "loading_percent": 387.0,
+      "from_bus": 5,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 8,
+      "loading_percent": 271.6,
+      "from_bus": 5,
+      "to_bus": 11
+     },
+     {
+      "element": "line",
+      "index": 9,
+      "loading_percent": 285.2,
+      "from_bus": 5,
+      "to_bus": 12
+     },
+     {
+      "element": "line",
+      "index": 10,
+      "loading_percent": 110.4,
+      "from_bus": 8,
+      "to_bus": 9
+     },
+     {
+      "element": "line",
+      "index": 11,
+      "loading_percent": 209.5,
+      "from_bus": 8,
+      "to_bus": 13
+     },
+     {
+      "element": "line",
+      "index": 12,
+      "loading_percent": 516.4,
+      "from_bus": 9,
+      "to_bus": 10
+     },
+     {
+      "element": "line",
+      "index": 13,
+      "loading_percent": 356.5,
+      "from_bus": 11,
+      "to_bus": 12
+     },
+     {
+      "element": "line",
+      "index": 14,
+      "loading_percent": 385.8,
+      "from_bus": 12,
+      "to_bus": 13
+     }
+    ],
+    "n_new_overloads": 8,
+    "pre_existing_in_base": {
+     "n": 0,
+     "elements": []
+    },
+    "note": "Only new_overloads count against the repair. The elements under pre_existing_in_base were already above their rating in the unmodified network and are not yours to fix."
+   },
+   "ok": true,
+   "latency_s": 0.002
+  },
+  {
+   "n": 11,
+   "name": "find_disconnected_areas",
+   "kind": "diagnostic",
+   "args": {},
+   "output": {
+    "disconnected_buses": [],
+    "connected_buses": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13
+    ],
+    "message": "All buses connected."
+   },
+   "ok": true,
+   "latency_s": 0.0021
+  }
+ ],
+ "scored": {
+  "common_json_ok": true,
+  "common_status": "not_repaired",
+  "common_claims_repaired": false,
+  "common_declares_failure": true,
+  "common_converged": true,
+  "common_secure": false,
+  "common_islanded": [],
+  "common_n_violations": 12,
+  "common_n_new_violations": 9,
+  "common_load_served_mw": 777.0,
+  "common_load_served_pct": 300.0,
+  "common_repaired": false,
+  "common_improved": true,
+  "common_feasible": true,
+  "common_formulation_exact": false,
+  "common_formulation_error_type": "wrong_type",
+  "common_formulation_detail": "answer generation_loss, injected load_increase",
+  "common_n_numbers": 19,
+  "common_n_untraceable": 0,
+  "common_traceable": true,
+  "common_escalated": true,
+  "common_escalation_reason": "declared not_repaired",
+  "common_escalation_kind": "declared, after improving the network",
+  "common_solved": false,
+  "common_reason": "escalated: declared not_repaired",
+  "common_outcome": "escalated",
+  "common_gate_passed": null,
+  "common_gate_failed": null
+ }
+}

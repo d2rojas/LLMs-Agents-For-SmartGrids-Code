@@ -16,13 +16,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import methods  # noqa: E402
 
-# Recorded 2026-09-27 when the texts were written; no run has been made with them yet.
+# Recorded 2026-09-27 when the texts were written. Updated on purpose 2026-09-28: the answer
+# contract now tells the model that the actions it lists are checked against the trace (gate G7).
+# The smoke run of 2026-09-27 was made with the previous contract; no paper run exists yet.
 PINNED_TEXTS = {
-    "_shared/agent_system_prompt.txt": "33438f79a08f",
-    "_shared/common_rules.txt": "f77d5920ff05",
-    "_shared/gate_retry_instruction.txt": "2fbccbe68547",
+    "_shared/agent_system_prompt.txt": "55f4e3c29cdd",
+    "_shared/common_rules.txt": "8c0f85ea1170",
+    "_shared/gate_retry_instruction.txt": "81e0764be9cb",
     "_shared/llm_only_system_prompt.txt": "687705944e54",
-    "_shared/output_contract.txt": "c88d0afbddb7",
+    "_shared/output_contract.txt": "32ab6c8f3a3d",
     "llm_only_cot/reasoning_section.txt": "e6b046ab723e",
     "plan_act_nogate/plan_system_prompt.txt": "a08bfb652562",
 }

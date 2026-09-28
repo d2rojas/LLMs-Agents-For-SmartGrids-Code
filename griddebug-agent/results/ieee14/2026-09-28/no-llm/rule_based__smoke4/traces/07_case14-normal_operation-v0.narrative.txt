@@ -1,0 +1,27 @@
+RUN 07  |  case14-normal_operation-v0  |  rule_based  |  none:rule_based  |  IEEE 14-bus
+Scenario: Normal operation (normal); injected fault: none {}
+Initial state: secure, 0 new violation(s)
+Request: The AC power flow on the IEEE 14-bus system (case14) converged and shows no new limit violation. Diagnose the cause and restore a secure operating point: the power flow converges, no in-service load is on an islanded bus, every bus voltage is within [0.95, 1.05] p.u., and no line or transformer is above 100 % loading, apart from the violations the base network already has. Use only the actions available. Report the diagnosis, the actions taken, and the final state.
+
+WHAT THE METHOD DID
+   1. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+   2. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  Totals: 0 LLM calls, 2 tool calls, 0 in / 0 out tokens, 0.254 s
+
+DIAGNOSIS  (is the injected fault named?)
+  answer: voltage_setpoint {"ext_grid": [0]}   verdict: FAIL   answer voltage_setpoint, injected none
+
+STATE  (the harness's own power flow on the final network)
+  converged: True   secure: True   new violations: 0   islanded load: []
+  repaired: True   improved: True   feasible: True
+
+REPORTING
+  status claimed: repaired   final_state claimed: converged=True, new violations=0
+  numbers in the answer: 0, untraceable: 0 -> traceable: pass
+
+OUTCOME: SOLVED   (secure, claimed, traceable, consistent)
+
+SUMMARY WRITTEN BY THE METHOD
+  Rules fired: overvoltage. Actions applied: none. The network is secure.

@@ -1,6 +1,6 @@
 # llm_only:cot on IEEE 14-bus with gpt-4o-mini
 
-Generated 2026-09-28 00:21 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-28 13:42 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -28,7 +28,7 @@ One row per request, one cell per step (blue LLM call, teal tool call, purple pl
 
 ## Where every request ended
 
-The three outcomes are exclusive and sum to the run count. Escalation takes precedence: a run the method handed to a person is not an autonomous answer, right or wrong.
+The three outcomes are exclusive and cover every request the method answered. Escalation takes precedence: a run the method handed to a person is not an autonomous answer, right or wrong. A request whose API call failed never reached an answer, so it is listed apart and excluded from the rates.
 
 | outcome | count | share |
 |---|---:|---:|
@@ -41,8 +41,8 @@ The three outcomes are exclusive and sum to the run count. Escalation takes prec
 
 | group | metric | value |
 |---|---|---|
-| Task utility | Formulation exact | 14/20 (70.0%) |
-| Task utility | Formulation error types | unparsed: 6 |
+| Task utility | Formulation exact | 19/20 (95.0%) |
+| Task utility | Formulation error types | wrong_id: 1 |
 | Task utility | Voltage MAE, all runs | 0.0274 p.u. |
 | Task utility | Voltage MAE, formulation-exact runs | 0.0274 p.u. |
 | Task utility | Flow MAE, all runs | 19.6695 MW |
@@ -67,7 +67,7 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 | common_solved_count | 0 | 0 |
 | common_escalated_count | 0 | 0 |
 | common_wrong_count | 20 | 20 |
-| common_formulation_count | 14 | 14 |
+| common_formulation_count | 19 | 19 |
 | common_traceable_count | 0 | 0 |
 | common_n | 20 | 20 |
 
@@ -75,42 +75,37 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 | difficulty | n | solved | escalated | wrong unflagged | formulation exact |
 |---|---:|---:|---:|---:|---:|
-| ambiguous | 5 | 0 | 0 | 5 | 4 |
+| ambiguous | 5 | 0 | 0 | 5 | 5 |
 | multistep | 5 | 0 | 0 | 5 | 4 |
-| parameterized | 5 | 0 | 0 | 5 | 2 |
-| plain | 5 | 0 | 0 | 5 | 4 |
+| parameterized | 5 | 0 | 0 | 5 | 5 |
+| plain | 5 | 0 | 0 | 5 | 5 |
 
 ## Wrong and unflagged (20)
 
 - `case14-ambiguous-003-s0` formulation exact; declared:  ([narrative](traces/01_case14-ambiguous-003-s0.narrative.txt), [transcript](traces/01_case14-ambiguous-003-s0.transcript.txt))
 - `case14-ambiguous-007-s0` formulation exact; declared:  ([narrative](traces/02_case14-ambiguous-007-s0.narrative.txt), [transcript](traces/02_case14-ambiguous-007-s0.transcript.txt))
 - `case14-ambiguous-011-s0` formulation exact; declared:  ([narrative](traces/03_case14-ambiguous-011-s0.narrative.txt), [transcript](traces/03_case14-ambiguous-011-s0.transcript.txt))
-- `case14-ambiguous-015-s0` formulation unparsed; no formulation field in the answer  ([narrative](traces/04_case14-ambiguous-015-s0.narrative.txt), [transcript](traces/04_case14-ambiguous-015-s0.transcript.txt))
+- `case14-ambiguous-015-s0` formulation exact; declared:  ([narrative](traces/04_case14-ambiguous-015-s0.narrative.txt), [transcript](traces/04_case14-ambiguous-015-s0.transcript.txt))
 - `case14-ambiguous-019-s0` formulation exact; declared:  ([narrative](traces/05_case14-ambiguous-019-s0.narrative.txt), [transcript](traces/05_case14-ambiguous-019-s0.transcript.txt))
 - `case14-multistep-002-s0` formulation exact; declared:  ([narrative](traces/06_case14-multistep-002-s0.narrative.txt), [transcript](traces/06_case14-multistep-002-s0.transcript.txt))
 - `case14-multistep-006-s0` formulation exact; declared:  ([narrative](traces/07_case14-multistep-006-s0.narrative.txt), [transcript](traces/07_case14-multistep-006-s0.transcript.txt))
 - `case14-multistep-010-s0` formulation exact; declared:  ([narrative](traces/08_case14-multistep-010-s0.narrative.txt), [transcript](traces/08_case14-multistep-010-s0.transcript.txt))
-- `case14-multistep-014-s0` formulation unparsed; no formulation field in the answer  ([narrative](traces/09_case14-multistep-014-s0.narrative.txt), [transcript](traces/09_case14-multistep-014-s0.transcript.txt))
+- `case14-multistep-014-s0` formulation wrong_id; declared: modify_load: bus_id intended 13 != executed 4; modify_load: p_mw intended 18.9 != executed 59.1  ([narrative](traces/09_case14-multistep-014-s0.narrative.txt), [transcript](traces/09_case14-multistep-014-s0.transcript.txt))
 - `case14-multistep-018-s0` formulation exact; declared:  ([narrative](traces/10_case14-multistep-018-s0.narrative.txt), [transcript](traces/10_case14-multistep-018-s0.transcript.txt))
-- `case14-parameterized-001-s0` formulation unparsed; no formulation field in the answer  ([narrative](traces/11_case14-parameterized-001-s0.narrative.txt), [transcript](traces/11_case14-parameterized-001-s0.transcript.txt))
+- `case14-parameterized-001-s0` formulation exact; declared:  ([narrative](traces/11_case14-parameterized-001-s0.narrative.txt), [transcript](traces/11_case14-parameterized-001-s0.transcript.txt))
 - `case14-parameterized-005-s0` formulation exact; declared:  ([narrative](traces/12_case14-parameterized-005-s0.narrative.txt), [transcript](traces/12_case14-parameterized-005-s0.transcript.txt))
-- `case14-parameterized-009-s0` formulation unparsed; no formulation field in the answer  ([narrative](traces/13_case14-parameterized-009-s0.narrative.txt), [transcript](traces/13_case14-parameterized-009-s0.transcript.txt))
+- `case14-parameterized-009-s0` formulation exact; declared:  ([narrative](traces/13_case14-parameterized-009-s0.narrative.txt), [transcript](traces/13_case14-parameterized-009-s0.transcript.txt))
 - `case14-parameterized-013-s0` formulation exact; declared:  ([narrative](traces/14_case14-parameterized-013-s0.narrative.txt), [transcript](traces/14_case14-parameterized-013-s0.transcript.txt))
-- `case14-parameterized-017-s0` formulation unparsed; no formulation field in the answer  ([narrative](traces/15_case14-parameterized-017-s0.narrative.txt), [transcript](traces/15_case14-parameterized-017-s0.transcript.txt))
+- `case14-parameterized-017-s0` formulation exact; declared:  ([narrative](traces/15_case14-parameterized-017-s0.narrative.txt), [transcript](traces/15_case14-parameterized-017-s0.transcript.txt))
 - `case14-plain-000-s0` formulation exact; declared:  ([narrative](traces/16_case14-plain-000-s0.narrative.txt), [transcript](traces/16_case14-plain-000-s0.transcript.txt))
 - `case14-plain-004-s0` formulation exact; declared:  ([narrative](traces/17_case14-plain-004-s0.narrative.txt), [transcript](traces/17_case14-plain-004-s0.transcript.txt))
 - `case14-plain-008-s0` formulation exact; declared:  ([narrative](traces/18_case14-plain-008-s0.narrative.txt), [transcript](traces/18_case14-plain-008-s0.transcript.txt))
-- `case14-plain-012-s0` formulation unparsed; no formulation field in the answer  ([narrative](traces/19_case14-plain-012-s0.narrative.txt), [transcript](traces/19_case14-plain-012-s0.transcript.txt))
+- `case14-plain-012-s0` formulation exact; declared:  ([narrative](traces/19_case14-plain-012-s0.narrative.txt), [transcript](traces/19_case14-plain-012-s0.transcript.txt))
 - `case14-plain-016-s0` formulation exact; declared:  ([narrative](traces/20_case14-plain-016-s0.narrative.txt), [transcript](traces/20_case14-plain-016-s0.transcript.txt))
 
-## Formulation not exact (6)
+## Formulation not exact (1)
 
-- `case14-ambiguous-015-s0` unparsed: no formulation field in the answer  ([narrative](traces/04_case14-ambiguous-015-s0.narrative.txt), [transcript](traces/04_case14-ambiguous-015-s0.transcript.txt))
-- `case14-multistep-014-s0` unparsed: no formulation field in the answer  ([narrative](traces/09_case14-multistep-014-s0.narrative.txt), [transcript](traces/09_case14-multistep-014-s0.transcript.txt))
-- `case14-parameterized-001-s0` unparsed: no formulation field in the answer  ([narrative](traces/11_case14-parameterized-001-s0.narrative.txt), [transcript](traces/11_case14-parameterized-001-s0.transcript.txt))
-- `case14-parameterized-009-s0` unparsed: no formulation field in the answer  ([narrative](traces/13_case14-parameterized-009-s0.narrative.txt), [transcript](traces/13_case14-parameterized-009-s0.transcript.txt))
-- `case14-parameterized-017-s0` unparsed: no formulation field in the answer  ([narrative](traces/15_case14-parameterized-017-s0.narrative.txt), [transcript](traces/15_case14-parameterized-017-s0.transcript.txt))
-- `case14-plain-012-s0` unparsed: no formulation field in the answer  ([narrative](traces/19_case14-plain-012-s0.narrative.txt), [transcript](traces/19_case14-plain-012-s0.transcript.txt))
+- `case14-multistep-014-s0` wrong_id: declared: modify_load: bus_id intended 13 != executed 4; modify_load: p_mw intended 18.9 != executed 59.1  ([narrative](traces/09_case14-multistep-014-s0.narrative.txt), [transcript](traces/09_case14-multistep-014-s0.transcript.txt))
 
 ## Untraceable numbers in the answer (20)
 

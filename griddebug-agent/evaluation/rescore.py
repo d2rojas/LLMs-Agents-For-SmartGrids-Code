@@ -41,7 +41,7 @@ def rescore(dir_: Path) -> None:
     for r in rows:
         trace_p = dir_ / "raw" / "traces" / f"{r['request_id']}.json"
         trace = json.loads(trace_p.read_text(encoding="utf-8")) if trace_p.is_file() else {}
-        req = build_request(r["network"], r["scenario_id"])
+        req = build_request(r["network"], r["scenario_id"], int(r.get("variant") or 0))
         tool_log = trace.get("tool_log") or []
         run = MethodRun(method=r["method"], answer_text=r.get("answer_text") or "", answer=parse_answer(r.get("answer_text") or ""),
                         final_net=replay_final_net(req, tool_log), tool_log=tool_log, trace=trace, gate=r.get("gate"),
@@ -50,7 +50,7 @@ def rescore(dir_: Path) -> None:
                         prompt_tokens=int(r.get("prompt_tokens") or 0), completion_tokens=int(r.get("completion_tokens") or 0),
                         wall_time_s=float(r.get("wall_time_s") or 0))
         scored = scoring.score_run(run, injected=req.injected, initial=req.initial, base_keys=req.base_keys,
-                                   evidence_text=req.evidence_text, request_text=req.text)
+                                   evidence_text=req.evidence_text, request_text=req.text, base_load_mw=req.base_load_mw)
         r2 = {k: v for k, v in r.items() if not k.startswith("common_")}
         r2["answer"] = run.answer.as_dict()
         r2.update(scored)

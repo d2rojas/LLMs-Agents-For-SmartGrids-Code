@@ -24,7 +24,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT.parent))  # so `visuals` is importable
 
-from visuals.shell import E, card, chip, diagram_row, kv, note, pipeline, prompt_block, table, verdict  # noqa: E402
+from visuals.shell import (  # noqa: E402
+    DASH, GROUP_CORRECTNESS, GROUP_COST, GROUP_UTILITY, Count, E, NA, card, chip, comparison_table, counted,
+    clip, diagram_row, kv, note, pipeline, prompt_block, request_rows, table, verdict,
+)
 
 import methods  # noqa: E402
 from config import (  # noqa: E402
@@ -33,6 +36,7 @@ from config import (  # noqa: E402
 
 CASE_ID = "wind"
 CASE_TITLE = "Wind"
+ABNORMAL_SHARE = "some"
 
 DIAGRAMS: Dict[str, Dict[str, Any]] = {
     "rule_based": {"steps": [("request", "input"), ("regex parser", "code"), ("GRU tool", "solver"), ("template answer", "out")],
@@ -67,7 +71,9 @@ ROWS: Tuple[Dict[str, str], ...] = (
 
 COLUMNS: Tuple[Dict[str, str], ...] = (
     {"group": "Task utility", "name": "Formulation", "what": "the turbine, history window and horizon declared in the answer match the request; with tools, also the call that produced the series", "why": "whether the request was understood, kept apart from whether the series is any good"},
-    {"group": "Task utility", "name": "MAE, RMSE", "what": "forecast error in kW on the target days under the KDD Cup abnormal-data rules, per horizon, over the requests whose series is valid", "why": "the quality of the forecast; the only place accuracy enters, because no method can see the target"},
+    {"group": "Task utility", "name": "MAE, RMSE", "what": "forecast error in kW against the target days under the KDD Cup abnormal-data rules, per horizon, over the requests whose series was valid", "why": "the KDD Cup's own score on this dataset is the mean of the two, kept so the numbers stay comparable with the submitted table"},
+    {"group": "Task utility", "name": "NBIAS, NMAE, NRMSE", "what": "the same errors divided by the 1500 kW installed capacity, in per cent", "why": "the minimum set the ANEMOS evaluation protocol asks every wind power forecast to report (Madsen et al. 2005, sec. 5.1); kW alone cannot be compared across turbines or between a windy and a calm window"},
+    {"group": "Task utility", "name": "Imp.", "what": "the protocol's improvement score, 100 (NMAE_ref - NMAE) / NMAE_ref, against its reference model a_k P(t) + (1 - a_k) Pbar fitted on the training period", "why": "an NMAE of 26 % means nothing on its own. This says whether a method beats what costs nothing. The reference is not persistence on purpose: the protocol states that comparing with persistence flatters a model, and the numbers here show it, 53 % improvement against persistence and -6 % against the proper reference for the same forecast"},
     {"group": "Task utility", "name": "Answer", "what": "the answer to the request's question (peak hour, energy) agrees with what the reported series implies", "why": "whether the report is consistent with itself"},
     {"group": "Solver-grounded correctness", "name": "Solved", "what": "a valid series in range, an answer coherent with it, and, with tools, a series traceable to a tool output", "why": "the end-to-end verdict on what can be verified without the future"},
     {"group": "Solver-grounded correctness", "name": "Escalated", "what": "the method declared cannot_forecast, or the budget ran out, or the gate rejected two attempts", "why": "how much work goes back to a person; under the stress condition it is the correct outcome"},
@@ -87,12 +93,9 @@ def manifest() -> Optional[Dict[str, Any]]:
 
 
 def gru_meta() -> Optional[Dict[str, Any]]:
-    from solver.gru import WEIGHTS_PATH
+    from solver import gru
 
-    if not WEIGHTS_PATH.exists():
-        return None
-    d = json.loads(WEIGHTS_PATH.read_text(encoding="utf-8"))
-    return {k: v for k, v in d.items() if k != "state"}
+    return gru.metadata() if gru.WEIGHTS_PATH.exists() else None
 
 
 def method_dirs() -> List[Path]:
@@ -120,16 +123,33 @@ def sample_request() -> Any:
 # ------------------------------------------------------------------ tabs
 
 
+def abnormal_share_text() -> str:
+    """The share of target points the KDD Cup rules exclude, over the frozen set."""
+    m = manifest()
+    if not m:
+        return "some"
+    tot = sum(int(e["abnormal_points_target"]) for e in m["instances"])
+    n = len(m["instances"]) * 288
+    return f"{100.0 * tot / n:.1f} %" if n else "some"
+
+
 def tab_home() -> str:
     m = manifest()
     n_inst = len(m["instances"]) if m else 0
+    global ABNORMAL_SHARE
+    ABNORMAL_SHARE = abnormal_share_text()
     body = [
         card(
             "The task",
-            "<p>A wind turbine's SCADA history for the last fourteen days is on the table: wind speed, wind direction, temperature and "
-            "active power every ten minutes. Somebody has to write down the next 3, 6 or 48 hours of active power, one value per ten-minute "
-            "step, and answer a question about that series. Today that somebody is a forecasting model an engineer chose and trained. This "
-            "case study asks what happens when it is a language model, and measures six ways of doing it on the same windows.</p>",
+            "<p>A wind farm has to tell the system operator how much power a turbine will produce over the next 3, 6 or 48 hours, at the "
+            "ten-minute resolution dispatch and the market settle on. So the answer to one request is a series of numbers in kW: 18 of them "
+            "at 3 hours, 36 at 6, 288 at 48. The only evidence is that turbine's own SCADA history for the fourteen days before the forecast "
+            "starts, ten minutes apart: wind speed, wind direction, temperature and active power.</p>"
+            "<p>Today a forecasting model an engineer chose, trained and validated produces that series. This case study asks what happens "
+            "when a language model is put in charge of the task, and measures six ways of producing the same series on the same windows. Three "
+            "of them call a trained forecaster and report what it returned; two write the numbers themselves, which is what the LLM-forecasting "
+            "literature proposes; one has no language model at all. Each request also asks one thing about the series returned, the hour it "
+            "peaks or the energy it carries, because a forecast nobody can read a decision off is not yet an answer.</p>",
             pipeline(
                 [("Request", "turbine, window, horizon, question"),
                  ("Read the history", "14 days of SCADA, nothing later"),
@@ -143,14 +163,24 @@ def tab_home() -> str:
         ),
         card(
             "No future information, for anyone",
-            "<p>The experiment behind the submitted paper fed the model reanalysis wind for the very hours it was asked to forecast. Here nothing "
-            "after the last history day exists for any method: no weather forecast, no later measurements. That is the protocol of the KDD Cup "
-            "2022 on this same dataset, and the dataset's location and calendar dates are not published, so no forecast product could be "
-            "attached honestly anyway. The conventional forecaster is a GRU trained in this repository on days 1 to "
-            f"{TRAIN_LAST_DAY} of the benchmark turbines; every evaluation window ends after day {TRAIN_LAST_DAY}, and the GRU receives exactly "
-            "the same history every other row receives.</p>"
-            f"<p>Active power lives in [0, {RATED_KW:.0f}] kW; a reported value is in range up to {POWER_MAX_KW:.0f} kW. The target points that the "
-            "KDD Cup rules call abnormal (a stopped turbine with wind, a feathered blade, a missing value) are not scored, for every method alike.</p>",
+            "<p>This is the point the case study exists to settle. The experiment behind the submitted paper gave its best variant reanalysis "
+            "wind speed <i>for the very hours it had to forecast</i>: a measurement of the future, not a forecast, and the reason a reviewer "
+            "asked for the experiment to be repeated. Here nothing after the last history day exists for any method. There is no weather input, "
+            "no later measurement, and no tool that could return one, so the question cannot be answered by leakage in any row.</p>"
+            "<p>That is also the protocol of the KDD Cup 2022 on this same dataset, which forecasts from history alone. The farm's location and "
+            "calendar dates are not published with the data, so no operational forecast product could be attached honestly even if it were "
+            f"wanted. The conventional forecaster, a GRU, is trained in this repository on days 1 to {TRAIN_LAST_DAY} and every scenario's target "
+            f"lies after day {TRAIN_LAST_DAY}, so it never saw what it is asked to predict, and it reads exactly the history every other row reads.</p>",
+        ),
+        card(
+            "What a value may be, and which points are scored",
+            f"<p>Active power lives in [0, {RATED_KW:.0f}] kW, the turbine's rating; a reported value counts as in range up to {POWER_MAX_KW:.0f} kW, "
+            "and anything outside that is a wrong answer rather than a bad one. A recorded negative value is the turbine's own consumption while "
+            "stopped and is read as zero.</p>"
+            "<p>A target point the KDD Cup rules call abnormal is not scored, identically for every method: the turbine stopped while the wind "
+            "blew above 2.5 m/s, a blade feathered past 89 degrees, a reading missing, a direction out of its physical range. In these twenty "
+            f"windows that removes {ABNORMAL_SHARE} of the target points, four fifths of them blades feathered during curtailment, which is an operator's "
+            "decision and not something a forecast can be blamed for.</p>",
         ),
         "<div class='grid g3'>"
         + card("What a correct answer needs",
@@ -166,7 +196,7 @@ def tab_home() -> str:
                f"{verdict('solved')} + {verdict('escalated')} = 100 %, {verdict('wrong')} = 0.</p>")
         + "</div>",
         card("Identical for every method",
-             chip(f"{n_inst} instances, frozen and hashed") + chip(f"{len(HORIZONS_H)} horizons: " + ", ".join(f"{h} h" for h in HORIZONS_H)) + chip("one request generator, seeded")
+             chip(f"{n_inst} scenarios, frozen and hashed") + chip(f"{len(HORIZONS_H)} horizons: " + ", ".join(f"{h} h" for h in HORIZONS_H)) + chip("one request generator, seeded")
              + chip("one tool catalogue") + chip(f"{MAX_LLM_CALLS} model calls, {MAX_TOOL_CALLS} tool calls, {REQUEST_TIMEOUT_S:.0f} s per request")
              + chip("temperature 0") + chip("one answer contract") + chip("one scorer") + chip("every message kept in the trace")),
     ]
@@ -223,13 +253,29 @@ def tab_scenarios() -> str:
                          + f"<div class='muted'>history: {e['abnormal_points_history']} abnormal rows of {HISTORY_DAYS * 144}</div>")
         rows.append(cells)
     g = gru_meta()
-    gru_txt = ("<p class='muted'>No GRU trained yet.</p>" if not g else
-               f"<p>{E(g['model'])}. Trained on days {g['training']['train_days'][0]} to {g['training']['train_days'][1]} of the five turbines "
-               f"({', '.join(g['training']['turbines'])}), validated on days {g['training']['val_days'][0]} to {g['training']['val_days'][1]}, "
-               f"seed {g['training']['seed']}, {g['training']['epochs']} epochs; best validation MAE {g['training']['best_val_mae_kw']} kW. "
-               f"Weights and training log in <code>data/gru/gru_v1.json</code>; its hash is stamped on every run's config.</p>")
+    if not g:
+        gru_txt = "<p class='muted'>No forecaster trained yet.</p>"
+    else:
+        t = g["training"]
+        rows_g = [[f"{h} h", f"{v['best_val_mae_kw']} kW", f"{v['reference_val_mae_kw']} kW", f"{v['best_val_improvement_pct']:+.1f} %"]
+                  for h, v in sorted(g["horizons"].items(), key=lambda kv: int(kv[0]))]
+        gru_txt = (f"<p>{E(g['model'])}, one per horizon. Trained on days {t['train_days'][0]} to {t['train_days'][1]} of "
+                   f"{t['n_turbines']} complete turbines of the farm, with days {t['val_days'][0]} to {t['val_days'][1]} held out to choose "
+                   f"the stopping epoch. No target day is read anywhere in training. Weights, the training log and the hashes of every "
+                   f"training file are in <code>data/gru/gru_v1.json</code>, and that file's hash is stamped on every run's config.</p>"
+                   "<p>It does not predict the power level. It predicts the <b>correction to the protocol's reference model</b>, so a model "
+                   "that learns nothing reproduces the reference and anything it learns is measurable added value. The held-out numbers:</p>"
+                   + table(["horizon", "validation MAE", "the reference on the same windows", "improvement"], rows_g)
+                   + "<p class='muted'>Measured on days 201 to 214, which no method is ever asked about. The test windows begin at day 215.</p>")
     return "".join([
-        card("Twenty instances: five turbines, four windows, three horizons",
+        card("What a scenario is, and how many there are",
+             "<p><b>One scenario is one turbine and one 14-day window of its history.</b> Five turbines times four windows makes twenty "
+             "scenarios, and each one is asked at three horizons (3, 6 and 48 hours ahead from the same starting moment), so every method "
+             "answers <b>sixty requests</b>: the same sixty, in the same order, generated once with a fixed seed and hashed into every result "
+             "row. The table below is the twenty scenarios; the horizons are what multiplies them.</p>"
+             "<p>What varies between scenarios is the turbine and the weather of those particular days, which is what a forecaster meets in "
+             "service. What never varies is the amount of evidence: fourteen days, 2,016 rows, four columns.</p>"),
+        card("The twenty scenarios",
              f"<p>The raw SDWPF file holds {len(turbines)} turbines chosen by the rule in the manifest: seed {m['choice_rule']['seed']}, among the turbines "
              f"whose target days carry at most {m['choice_rule']['max_abnormal_target_points']} abnormal points, with base days fixed so that every "
              f"target day lies in the KDD Cup test period (days {m['choice_rule']['test_period'][0]} to {m['choice_rule']['test_period'][1]}) on days the "
@@ -372,6 +418,24 @@ def tab_gate() -> str:
                  [verdict("escalated"), "the answer declares cannot_forecast, or the budget ran out, or the gate rejected two attempts. Takes precedence. Under the stress condition, the correct outcome"],
                  [verdict("wrong"), "a wrong number of values, a value out of range, an unsupported series (with tools), or an answer that contradicts the series, presented as valid"]])),
         card("The columns", "<p>Three groups, the same three in every case study.</p>", table(["group", "column", "what it measures", "why it is there"], crow)),
+        card("Where the error measures come from",
+             "<p>None of them is ours. Forecast quality is reported with the minimum set of the evaluation protocol the wind power forecasting "
+             "field standardised on: <b>NBIAS, NMAE and NRMSE</b>, each normalised by the installed capacity, plus the <b>improvement score</b> "
+             "against a reference model. That is Madsen, Pinson, Kariniotakis, Nielsen and Nielsen, <i>Standardizing the Performance Evaluation "
+             "of Short-Term Wind Power Prediction Models</i>, Wind Engineering 29(6):475-489, 2005, written for the EU ANEMOS project and used "
+             "there to evaluate more than ten prediction models. MAE and RMSE in kW are kept beside them because the KDD Cup 2022 on this "
+             "dataset scored with their mean, and the submitted paper's table is in kW.</p>"
+             "<p>The reference model is the protocol's, not persistence: "
+             "<code>P(t+k|t) = a<sub>k</sub> P(t) + (1 - a<sub>k</sub>) P&#772;</code> (eq. 4, after Nielsen et al.), with "
+             "<code>a<sub>k</sub></code> the correlation between power now and power k steps later and <code>P&#772;</code> the mean production, "
+             "both fitted on the training period alone and frozen in <code>data/reference/reference_model.json</code>. It is persistence at ten "
+             "minutes (a<sub>k</sub> = 0.97) and the long-run mean at two days (a<sub>k</sub> = 0.02), so neither end of the horizon is "
+             "flattered. The protocol's own words for why: <i>comparison with Persistence does not give a fair measure of the performance of an "
+             "advanced model, since even the use of the global mean as predictor leads to a 50% reduction in the variance of the error compared "
+             "to the error obtained with Persistence.</i></p>",
+             note("This is not a formality. The conventional forecaster of this case study improves on persistence by 53 % at 3 hours and is "
+                  "<b>5.7 % worse than the protocol's reference</b> on the same forecasts. Reporting only the first number would have put a "
+                  "claim in the paper that the field's own protocol calls unfair.", "warn")),
     ])
 
 
@@ -420,34 +484,348 @@ def tab_results() -> str:
         tag = h["header"].get("tag") or "main"
         by_set.setdefault(f"{h['header']['date']} · {tag}", {})[h["header"]["method"]] = (d, read_summary(d), h)
 
+    # Every rate is printed over the number of requests it was computed on, never
+    # on its own. The three outcomes share one denominator: the requests the
+    # method completed. A request the harness could not run at all is not
+    # evidence about the method, so it is excluded here and counted separately.
+    COMPLETED = "requests this method completed; a request that failed to run is not counted"
+    SCORED = "scenarios this method returned a valid series for at this horizon"
+
     def pct(rows: List[Dict[str, str]], kind: str) -> str:
+        if not rows:
+            return DASH
         k = sum(1 for r in rows if r.get("outcome") == kind)
-        return f"{100.0 * k / len(rows):.0f} % <span class='muted'>({k}/{len(rows)})</span>" if rows else "-"
+        return counted(f"{100.0 * k / len(rows):.0f}", Count(k, len(rows), COMPLETED))
+
+    # The same three column groups as every other case study. Inside Task utility
+    # there is one pair of columns per horizon rather than three numbers in one
+    # cell: a 48 h forecast is a different problem from a 3 h one, and stacking
+    # them hid that. The per-horizon count now sits on the number it qualifies
+    # instead of in a column of its own, which is the same information in three
+    # fewer columns.
+    GROUPS = (
+        (GROUP_UTILITY, ["Form. %"] + [f"{h} h {c}" for h in HORIZONS_H for c in ("NMAE %", "Imp. %")]),
+        (GROUP_CORRECTNESS, ["Solved %", "Escalated %", "Wrong-unflagged %", "Traceable %"]),
+        (GROUP_COST, ["Tokens", "Cost $", "Time s"]),
+    )
 
     for set_name, per in by_set.items():
-        split = []
+        rows_out: List[Tuple[str, List[str], List[str]]] = []
         for row in ROWS:
-            if row["name"] in per:
-                d, rows, h = per[row["name"]]
-                a = h["aggregate"]
-                bh = a.get("by_horizon") or {}
-                mae = " / ".join(f"{bh[k]['mae']}" for k in sorted(bh, key=int)) if bh else str(a.get("mae"))
-                split.append([f"<b>{E(row['label'])}</b>", f"{d.parts[-2]}", str(len(rows)), f"{a.get('form')} %", mae, pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged"),
-                              f"{a.get('trace') if a.get('trace') is not None else '—'} %", f"{a.get('tokens')}", f"{a.get('cost')}"])
-            else:
-                split.append([f"<b>{E(row['label'])}</b>", "<span class='muted'>not run</span>"] + [""] * 9)
-        body.append(card(f"Run set {E(set_name)}",
-                         table(["method", "model", "n", "formulation", "MAE kW by horizon (" + " / ".join(f"{h} h" for h in HORIZONS_H) + ")", verdict("solved"), verdict("escalated"), verdict("wrong"), "traceable", "tokens", "cost $"], split)))
+            if row["name"] not in per:
+                continue
+            d, rows, h = per[row["name"]]
+            a = h["aggregate"]
+            bh = a.get("by_horizon") or {}
+            cells: List[str] = [f"{a.get('form')}" if a.get("form") is not None else DASH]
+            for hz in HORIZONS_H:
+                e = bh.get(str(hz)) or {}
+                n_sc, n_all = int(e.get("n_scored", 0) or 0), int(e.get("n", 0) or 0)
+                for value, fmt in ((e.get("nmae_pct"), "{:.2f}"), (e.get("improvement_pct"), "{:+.1f}")):
+                    if not e or value is None:
+                        # not a missing measurement: the method returned no valid
+                        # series at this horizon, so there was nothing to score
+                        cells.append(counted(DASH, Count(n_sc, n_all, SCORED)) if e else DASH)
+                    else:
+                        cells.append(counted(fmt.format(value), Count(n_sc, n_all, SCORED)))
+            cells += [pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged"),
+                      f"{a.get('trace')}" if a.get("trace") is not None else NA]
+            cells += [f"{a.get('tokens'):,}" if a.get("tokens") is not None else NA,
+                      f"{a.get('cost'):.3f}" if a.get("cost") is not None else NA,
+                      f"{a.get('wall_time_mean_s'):.0f}" if a.get("wall_time_mean_s") is not None else DASH]
+            label = (f"<b>{E(row['label'])}</b><div class='muted'><code>{E(row['name'])}</code></div>")
+            rows_out.append((d.parts[-2], [label, str(len(rows))], cells, str(d.relative_to(PROJECT_ROOT / "results"))))
+        missing = [r for r in ROWS if r["name"] not in per]
+        body.append(card(
+            f"Run set {E(set_name)}",
+            comparison_table(GROUPS, rows_out, lead=("Model", "Method", "n")),
+            (f"<p class='muted'>Not in this run set: {E(', '.join(r['label'] for r in missing))}.</p>" if missing else ""),
+            note("The three column groups are the same three in every case study of this site. Every rate carries, above it, "
+                 "the number of requests it was computed over: the three outcomes share the requests the method completed, and "
+                 "each horizon's NMAE and Imp. are averaged over the scenarios that method returned a valid series for at that "
+                 "horizon. A method that answered 7 of 20 kept the ones it found easy, so its NMAE is not comparable with a "
+                 "method that answered all 20, even when the number is smaller. A dash is not a missing measurement: it means "
+                 "the method returned no valid series there, which is itself the result. NMAE is the error as a per cent of the "
+                 "1500 kW installed capacity, and Imp. is the improvement over the protocol's reference model on the same "
+                 "points: 0 means no better than a model that costs nothing, negative means worse.", "info")))
+
+    body.append(request_section())
+
     det = []
-    cols = [("nn", "nn"), ("instance_id", "instance"), ("horizon_hours", "h"), ("question", "question"), ("outcome", "outcome"), ("solved_reason", "why"),
-            ("formulation_exact", "form."), ("n_values", "values"), ("mae_kw", "MAE"), ("rmse_kw", "RMSE"), ("answer_ok", "answer"), ("source", "source"), ("gate_pass", "gate"),
+    cols = [("nn", "nn"), ("instance_id", "scenario"), ("horizon_hours", "h"), ("question", "question"), ("outcome", "outcome"), ("solved_reason", "why"),
+            ("formulation_exact", "form."), ("n_values", "values"), ("mae_kw", "MAE kW"), ("nmae_pct", "NMAE %"), ("improvement_pct", "Imp. %"), ("answer_ok", "answer"), ("source", "source"), ("gate_pass", "gate"),
             ("n_llm_calls", "llm"), ("n_tool_calls", "tools"), ("cost_usd", "cost $")]
     for d in dirs:
         rows = read_summary(d)
-        det.append(f"<details><summary>{E(d.parts[-3])} / {E(d.parts[-2])} / {E(d.name)} — every request</summary>"
+        det.append(f"<details><summary>{E(d.parts[-3])} / {E(d.parts[-2])} / {E(d.name)} — every request, every metric</summary>"
                    + table([l for _k, l in cols], [[verdict(r["outcome"]) if k == "outcome" else E(r.get(k, "")) for k, _l in cols] for r in rows]) + "</details>")
-    body.append(card("Request by request", *det))
+    body.append(card("Every metric of every request", *det))
     return "".join(body)
+
+
+def _traces_by_request() -> Tuple[str, Dict[str, Dict[str, Dict[str, Any]]]]:
+    """Every trace of the newest run set, indexed by request and then by method."""
+    dirs = method_dirs()
+    if not dirs:
+        return "", {}
+    latest = max(d.parts[-3] for d in dirs)
+    out: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    for d in dirs:
+        if d.parts[-3] != latest or "__" in d.name:
+            continue
+        for f in sorted((d / "traces").glob("*.json")):
+            # iCloud leaves copies called "<name> 2.json" beside the files the run
+            # wrote. They are older than the rescores, so a number taken out of one
+            # is a number that has already been withdrawn.
+            if " " in f.stem:
+                continue
+            out.setdefault(f.stem.split("_", 1)[-1], {})[d.name] = json.loads(f.read_text(encoding="utf-8"))
+    return latest, out
+
+
+def request_section() -> str:
+    """Every request of the newest run set, each unfolding into the six methods.
+
+    This is what puts the traces on the results page. A verdict in the table
+    above is a count of these rows, and the run behind any one of them is one
+    click away, with the prompt that method actually received and every step it
+    took, rather than in another section that has to be searched by hand.
+    """
+    latest, by_request = _traces_by_request()
+    if not by_request:
+        return ""
+    methods = [(r["name"], r["label"]) for r in ROWS]
+    requests: List[Dict[str, Any]] = []
+    for rid in sorted(by_request):
+        per = by_request[rid]
+        req = next((t.get("request") or {} for t in per.values() if t.get("request")), {})
+        cells: Dict[str, str] = {}
+        columns: List[Dict[str, Any]] = []
+        for row in ROWS:
+            t = per.get(row["name"])
+            if not t:
+                columns.append({"label": row["label"], "empty": "no run in this set"})
+                continue
+            sc = t.get("scored") or {}
+            oc = str(sc.get("common_outcome") or "")
+            form = ("exact" if sc.get("common_formulation_exact")
+                    else E(str(sc.get("common_formulation_error_type") or "not declared")))
+            nmae = sc.get("common_nmae_pct")
+            cells[row["name"]] = (verdict(oc) + f"<span class='why'>formulation {form}</span>"
+                                  + (f"<span class='why'>NMAE {nmae:.2f} %</span>" if nmae is not None else ""))
+            columns.append({
+                "label": row["label"], "model": t.get("model") or "", "verdict": oc,
+                "prompt": _example_prompt(t), "lines": _example_lines(t),
+                "footer": (f"{t.get('n_llm_calls')} model calls · {t.get('n_tool_calls')} tool calls · "
+                           f"{t.get('wall_time_s', 0):.0f} s<br><span class='muted'>formulation {form}</span>"),
+            })
+        requests.append({
+            "id": rid, "tag": f"{req.get('horizon_hours')} h · {req.get('question')}",
+            "text": req.get("text", ""), "cells": cells, "columns": columns,
+        })
+    return card(
+        "Every request, under each of the six methods",
+        f"<p>The runs of {E(latest)}, not re-scored here. Click a request to unfold the six methods side by side. "
+        "Each column opens with the prompt that method really received, split into the blocks it is built from with "
+        "the file each block comes from, and then lists what it did: <span class='k call'>call</span> a tool, "
+        "<span class='k tool'>tool</span> what came back, <span class='k gate'>gate</span> the verdict, "
+        "<span class='k retry'>retry</span> what was handed back, <span class='k final'>final</span> what was "
+        "surfaced. Click any line to expand it to the whole thing.</p>"
+        f"<p class='muted'>{len(requests)} requests, every one of them, not a chosen few. Grey in a prompt is the "
+        "part built at run time: the request, the history, the tool catalogue.</p>",
+        request_rows(requests, methods))
+
+
+# --------------------------------------------------------------- the six methods side by side
+
+# What is left of this case study's own stylesheet. The columns, the step log and
+# the prompt panel moved to visuals/shell.py when every case study got them, so
+# only the method selector of the Prompts section is still local.
+EXAMPLE_CSS = """
+.ex{display:none}
+.ex.on{display:block}
+"""
+
+
+def _short(text: str, n: int = 150) -> str:
+    return " ".join(str(text).split())[:n]
+
+
+def _example_lines(t: Dict[str, Any]) -> List[Tuple[str, str, str]]:
+    """One line per step of a run: what it called, what came back, what the gate said, what went out."""
+    out: List[Tuple[str, str, str]] = []
+    msgs = t.get("messages") or []
+    if not msgs:  # the parser writes no conversation; its steps are its tool calls
+        for c in t.get("tool_log") or []:
+            out.append(("tool", f"{c.get('name')}({_short(json.dumps(c.get('args') or {}), 60)})",
+                        json.dumps(c.get("output"), indent=1)[:4000]))
+        out.append(("final", _short(t.get("answer") or ""), str(t.get("answer") or "")[:6000]))
+        return out
+    for m in msgs:
+        role = m.get("role")
+        if role in ("system", "user"):
+            continue  # both live in the prompt panel above, identical for every request of a method
+        if role == "assistant" and m.get("tool_calls"):
+            for c in m["tool_calls"]:
+                f = c.get("function") or {}
+                out.append(("call", f"{f.get('name')}({_short(f.get('arguments') or '', 70)})",
+                            f"{f.get('name')}\n{f.get('arguments')}"))
+        elif role == "assistant" and m.get("content"):
+            out.append(("final" if m is msgs[-1] else "model", _short(m["content"]), str(m["content"])[:6000]))
+        elif role == "tool":
+            body = str(m.get("content") or "")
+            out.append(("tool", _short(body, 120), body[:4000]))
+        elif role == "plan":
+            out.append(("plan", _short(m.get("content") or ""), str(m.get("content") or "")[:6000]))
+    g = t.get("gate") or {}
+    if g:
+        cond = g.get("conditions") or {}
+        failed = [k for k, v in cond.items() if not v.get("passed")]
+        detail = "\n".join(f"{k}: {'pass' if v.get('passed') else 'FAIL'} — {v.get('detail')}" for k, v in cond.items())
+        out.append(("gate", ("passed all five conditions" if not failed else "rejected: " + ", ".join(failed)), detail))
+    for h in (t.get("gate_history") or [])[1:]:
+        out.append(("retry", "handed back to the model, it tried again", json.dumps(h, indent=1)[:4000]))
+    return out
+
+
+# the fixed texts a prompt can be built from, so a prompt that was actually sent can be shown
+# as the blocks it is made of rather than as a wall of characters
+_FILE_BLOCKS: Tuple[Tuple[str, str], ...] = (
+    ("_shared/agent_system_prompt.txt", "sys_agent"),
+    ("_shared/llm_only_system_prompt.txt", "sys_llm"),
+    ("plan_act_nogate/plan_system_prompt.txt", "sys_plan"),
+    ("_shared/common_rules.txt", "rules"),
+    ("_shared/output_contract.txt", "contract"),
+    ("llm_only_cot/reasoning_section.txt", "u_reason"),
+)
+
+
+def _split_blocks(text: str) -> List[Tuple[Optional[str], str]]:
+    """Locate the known prompt files inside a prompt that was really sent.
+
+    Returns (block kind, text) in order; a kind of ``None`` is the part built at run time,
+    which is the request, the history or the catalogue, and is shown as itself."""
+    spans: List[Tuple[int, int, str]] = []
+    for rel, kind in _FILE_BLOCKS:
+        try:
+            body = methods.read_text(rel).strip()
+        except Exception:
+            continue
+        i = text.find(body)
+        if i >= 0 and body:
+            spans.append((i, i + len(body), kind))
+    spans.sort()
+    out: List[Tuple[Optional[str], str]] = []
+    at = 0
+    for a, b, kind in spans:
+        if a < at:
+            continue
+        if text[at:a].strip():
+            out.append((None, text[at:a].strip()))
+        out.append((kind, text[a:b]))
+        at = b
+    if text[at:].strip():
+        out.append((None, text[at:].strip()))
+    return out or [(None, text)]
+
+
+def _example_prompt(t: Dict[str, Any]) -> str:
+    msgs = t.get("messages") or []
+    sysm = next((m["content"] for m in msgs if m.get("role") == "system"), None)
+    usr = next((m["content"] for m in msgs if m.get("role") == "user"), None)
+    if sysm is None and usr is None:
+        return ("<p class='muted' style='padding:0 10px 8px'>No prompt. This row is a parser: it reads the request with a "
+                "regular expression, calls the forecaster and fills the same answer object. It is here to show what the "
+                "task costs without a model.</p>")
+    parts = []
+    for label, body, hashed in (("system prompt", sysm, True), ("user message", usr, False)):
+        if not body:
+            continue
+        h = f" · hash {E(str(t.get('system_prompt_hash')))}" if hashed else ""
+        parts.append(f"<div class='muted' style='padding:2px 10px'>{label}{h}</div>")
+        for kind, chunk in _split_blocks(body):
+            if kind:
+                parts.append(_block(kind, chunk, collapse=True))
+            else:
+                # The run-time block of an llm_only prompt is a fortnight of
+                # ten-minute SCADA readings, seventy thousand characters of CSV.
+                # It is per-request, so it cannot be hoisted into the Prompts
+                # section, and embedding it whole for sixty requests under six
+                # methods was twelve of the fourteen megabytes of this page. The
+                # beginning and the end are kept, and the page says what it cut.
+                parts.append(prompt_block("built at run time", f"<details><summary>show the {len(chunk):,} characters</summary><pre>{clip(chunk)}</pre></details>",
+                                          color="#94a3b8", source="evaluation/requests.py, solver/data.py, solver/tools.py", pre=False)
+                             if len(chunk) > 1500 else
+                             prompt_block("built at run time", chunk, color="#94a3b8", source="evaluation/requests.py, solver/data.py, solver/tools.py"))
+    return "".join(parts)
+
+
+def examples_section() -> str:
+    """The same request under each of the six methods, prompt and steps, side by side."""
+    dirs = method_dirs()
+    if not dirs:
+        return ""
+    latest = max(d.parts[-3] for d in dirs)
+    by_method: Dict[str, Path] = {}
+    for d in dirs:
+        if d.parts[-3] == latest and "__" not in d.name:
+            by_method[d.name] = d
+    if not by_method:
+        return ""
+
+    def trace_of(d: Path, rid: str) -> Optional[Dict[str, Any]]:
+        for f in sorted((d / "traces").glob("*.json")):
+            if " " in f.stem.split("_", 1)[-1]:
+                continue  # an iCloud copy, never the file we wrote
+            if f.stem.split("_", 1)[-1] == rid:
+                return json.loads(f.read_text(encoding="utf-8"))
+        return None
+
+    # one request per horizon, all from the same scenario, so the columns differ by method and nothing else
+    rids: List[Tuple[str, str]] = []
+    any_dir = next(iter(by_method.values()))
+    for f in sorted((any_dir / "traces").glob("*.json")):
+        rid = f.stem.split("_", 1)[-1]
+        if " " in rid:
+            continue
+        t = json.loads(f.read_text(encoding="utf-8"))
+        r = t.get("request") or {}
+        if r.get("instance_id") and rids and r["instance_id"] != rids[0][1].split("|")[0]:
+            continue
+        rids.append((rid, f"{r.get('instance_id')}|{r.get('horizon_hours')} h · question: {r.get('question')}"))
+        if len(rids) == len(HORIZONS_H):
+            break
+
+    opts = "".join(f"<option value='{E(rid)}'>{E(lab.split('|')[1])}</option>" for rid, lab in rids)
+    out = [card("The same request under each of the six methods",
+                "<p>Real runs of " + E(latest) + " on " + E(next(iter(by_method.values())).parts[-2]) +
+                ", not re-scored here. One scenario, the three horizons, every method side by side. Each column opens with the "
+                "prompt that method received and then lists what it did: <span class='k call'>call</span> a tool, "
+                "<span class='k tool'>tool</span> what came back, <span class='k gate'>gate</span> the verdict, "
+                "<span class='k final'>final</span> what was surfaced. Click any line to expand it.</p>"
+                "<p class='muted'>The prompt of each column is split into the blocks it is built from, the same colours and the same "
+                "source files as the Prompts section, so the columns can be compared block by block and not as walls of text. "
+                "Grey is the part built at run time: the request, the history, the tool catalogue.</p>"
+                "<p><label>Request <select id='exs'>" + opts + "</select></label></p>")]
+    for n, (rid, _lab) in enumerate(rids):
+        cols = []
+        for row in ROWS:
+            d = by_method.get(row["name"])
+            t = trace_of(d, rid) if d else None
+            if not t:
+                cols.append(f"<div class='col'><h4>{E(row['label'])}</h4><p class='muted' style='padding:8px 10px'>no run</p></div>")
+                continue
+            lines = "".join(f"<div class='ln' data-full='{E(full)}'><span class='k {k}'>{k}</span><span class='s'>{E(short)}</span></div>"
+                            for k, short, full in _example_lines(t))
+            sc = t.get("scored") or {}
+            cols.append(f"<div class='col'><h4>{E(row['label'])}<br><span class='muted'>{E(t.get('model') or '')}</span></h4>"
+                        f"<details class='pr'><summary>the prompt this method received</summary>{_example_prompt(t)}</details>"
+                        f"<div class='log'>{lines}</div>"
+                        f"<div class='vt'>{t.get('n_llm_calls')} model calls · {t.get('n_tool_calls')} tool calls · "
+                        f"{t.get('wall_time_s', 0):.0f} s<br><span class='muted'>formulation "
+                        f"{'exact' if sc.get('common_formulation_exact') else E(str(sc.get('common_formulation_error_type') or 'not declared'))}</span></div></div>")
+        out.append(f"<div class='ex{' on' if n == 0 else ''}' data-scn='{E(rid)}'><div class='cols6'>" + "".join(cols) + "</div></div>")
+    return "".join(out)
 
 
 def tab_traces() -> str:
@@ -490,7 +868,7 @@ def tab_status() -> str:
                 "<p class='muted'>Not part of the evaluation: the original replication scripts and notebooks under <code>_legacy/</code>, kept as they were.</p>")
 
 
-GROUPS = (("Design", (("home", "Home"), ("methods", "Methods"), ("scenarios", "Instances"), ("prompts", "Prompts"), ("tools", "Tools"), ("gate", "Gate & scoring"), ("plan", "Run plan"))),
+GROUPS = (("Design", (("home", "Home"), ("methods", "Methods"), ("scenarios", "Scenarios"), ("prompts", "Prompts"), ("tools", "Tools"), ("gate", "Gate & scoring"), ("plan", "Run plan"))),
           ("Results", (("results", "Results"), ("traces", "Traces"), ("analysis", "Analysis"), ("status", "Implementation"))))
 BUILDERS = {"home": tab_home, "methods": tab_methods, "scenarios": tab_scenarios, "prompts": tab_prompts, "tools": tab_tools, "gate": tab_gate,
             "plan": tab_plan, "results": tab_results, "traces": tab_traces, "analysis": tab_analysis, "status": tab_status}
@@ -509,12 +887,13 @@ def payload() -> Dict[str, Any]:
     n = len(m["instances"]) if m else 0
     return {
         "id": CASE_ID, "title": CASE_TITLE, "brand": "WindAgent · wind power forecasting",
-        "note": f"{n} frozen instances of the SDWPF farm, {len(HORIZONS_H)} horizons",
+        "note": f"{n} frozen scenarios of the SDWPF farm, {len(HORIZONS_H)} horizons",
         "blurb": "Write the next 3, 6 or 48 hours of a turbine's active power from its 14-day SCADA history alone, and answer a question about the series.",
-        "summary": [("task", "forecast, no future inputs"), ("trusted tool", "GRU, persistence, power curve"), ("data", f"{n} frozen instances, KDD Cup test period")],
+        "summary": [("task", "forecast, no future inputs"), ("trusted tool", "GRU, persistence, power curve"), ("data", f"{n} frozen scenarios, KDD Cup test period")],
         "groups": [[label, [list(e) for e in entries]] for label, entries in GROUPS],
         "tabs": {key: BUILDERS[key]() for _l, entries in GROUPS for key, _t in entries},
         "script": SCRIPT,
+        "css": EXAMPLE_CSS,
     }
 
 

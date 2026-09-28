@@ -1,6 +1,6 @@
 # llm_only_cot on IEEE 14-bus with gpt-4o-mini
 
-Generated 2026-09-27 18:40 by evaluation/postprocess.py from `raw/rows.jsonl`. Scenarios: 3. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the harness's own power flow, the same way for every method.
+Generated 2026-09-28 13:37 by evaluation/postprocess.py from `raw/rows.jsonl`. Scenarios: 3. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the harness's own power flow, the same way for every method.
 
 ## Run
 
@@ -42,10 +42,12 @@ The three outcomes are exclusive and sum to the scenario count. Escalation takes
 | Task utility | Repaired (secure final network) | 0/3 (0.0%) |
 | Task utility | Improved | 2/3 (66.7%) |
 | Task utility | New violations, before -> after (scenarios converged at both ends, n=2) | 16 -> 15 |
+| Task utility | Load served, mean / worst | None % / None % of the base network's demand (a scenario that still carries the injected load increase counts as 100, not more) |
+| Solver-grounded correctness | Solved autonomously | 0/3 (0.0%) |
+| Solver-grounded correctness | Escalated to a person | 2/3 (66.7%) |
+| Solver-grounded correctness | Wrong, unflagged | 1/3 (33.3%) |
 | Solver-grounded correctness | Feasible (final power flow converges) | 3/3 (100.0%) |
 | Solver-grounded correctness | Traceable answers | 3/3 (100.0%) |
-| Solver-grounded correctness | Wrong, unflagged | 1/3 (33.3%) |
-| Cost and operation | Escalated | 2/3 (66.7%) |
 | Cost and operation | LLM calls / tool calls, mean | 1.0 / 0.0 |
 | Cost and operation | Prompt / completion tokens, mean | 2542.67 / 674.0 |
 | Cost and operation | Cost, total | $0.0024 |
@@ -66,6 +68,14 @@ The three outcomes are exclusive and sum to the scenario count. Escalation takes
 | not_converged | 1 | 0 | 1 | 0 | 0 | 0 |
 | violations | 2 | 0 | 1 | 1 | 0 | 0 |
 
+## Why it escalated
+
+An escalation after a real improvement is not the same as a refusal, and one caused by the budget ending on an action is not the same as either. The column counts them together because a person still has to act; this table says which kind they were.
+
+| kind | count |
+|---|---:|
+| unlabelled | 2 |
+
 ## Wrong and unflagged (1)
 
 - `03_case14-line_contingency_overload` line_contingency_overload: claimed repaired but the solver's final network 5 violation(s) beyond the base network
@@ -79,8 +89,8 @@ The three outcomes are exclusive and sum to the scenario count. Escalation takes
 
 | nn | scenario | initial | outcome | diagnosis | final | actions | LLM/tool calls | tokens | why |
 |---|---|---|---|---|---|---:|---|---|---|
-| 01 | extreme_load_scaling | not_converged (None) | escalated | wrong_type | 8 new | 1 | 1/0 | 2915 | escalated: declared cannot_repair |
-| 02 | heavy_loading_undervoltage | violations (11) | escalated | wrong_type | 10 new | 3 | 1/0 | 3505 | escalated: declared not_repaired |
-| 03 | line_contingency_overload | violations (5) | wrong_unflagged | wrong_type | 5 new | 3 | 1/0 | 3230 | claimed repaired but the solver's final network 5 violation(s) beyond the base network |
+| 01 | extreme_load_scaling-v0 | not_converged (None) | escalated | wrong_type | 8 new | 1 | 1/0 | 2915 | escalated: declared cannot_repair |
+| 02 | heavy_loading_undervoltage-v0 | violations (11) | escalated | wrong_type | 10 new | 3 | 1/0 | 3505 | escalated: declared not_repaired |
+| 03 | line_contingency_overload-v0 | violations (5) | wrong_unflagged | wrong_type | 5 new | 3 | 1/0 | 3230 | claimed repaired but the solver's final network 5 violation(s) beyond the base network |
 
 Traces: `traces/NN_<request-id>.narrative.txt` (what happened), `.transcript.txt` (the raw exchange), `.json` (the trace).

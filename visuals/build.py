@@ -33,7 +33,9 @@ Writes ``site/index.html`` and ``site/<case>.html``.
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -194,6 +196,98 @@ def placeholder(case_title: str, key: str, label: str, purpose: str) -> str:
     )
 
 
+# --------------------------------------------------------------- one document
+
+# Four case studies in one HTML document means four sets of element ids, four
+# stylesheets and four scripts in one global namespace. They collide: wind and
+# power flow both name a selector ``exs``, both define ``.col`` and ``.ln``.
+# Rather than ask four case studies to agree on prefixes for ever, the ids and
+# the selectors are rewritten here, at assembly time, so each case study goes on
+# writing its fragment as though it owned the page. The per-case pages still
+# exist and are built from the same fragments, so nothing below changes what a
+# case study has to produce.
+
+_ID_ATTR = re.compile(r"""\bid=(['"])([A-Za-z][\w:.-]*)\1""")
+_FOR_ATTR = re.compile(r"""\bfor=(['"])([A-Za-z][\w:.-]*)\1""")
+_HREF_HASH = re.compile(r"""\bhref=(['"])#([A-Za-z][\w:.-]*)\1""")
+_GET_BY_ID = re.compile(r"""getElementById\(\s*(['"])([A-Za-z][\w:.-]*)\1\s*\)""")
+_QUERY_ID = re.compile(r"""(querySelector(?:All)?\(\s*(['"]))#([A-Za-z][\w:.-]*)""")
+
+
+def namespace(text: str, case_id: str) -> str:
+    """Prefix every element id in a fragment, and every lookup of one, with the case.
+
+    Applied to the markup and to the script alike: a case study's script reaches
+    its own markup through ``getElementById`` and ``querySelector('#x')``, and an
+    inline ``onclick`` does it from inside the markup, so both passes run over
+    both. Class names are left alone; the stylesheet is scoped instead, which
+    keeps the rewriting to a handful of patterns that cannot match prose.
+    """
+    p = f"{case_id}-"
+    text = _ID_ATTR.sub(lambda m: f"id={m.group(1)}{p}{m.group(2)}{m.group(1)}", text)
+    text = _FOR_ATTR.sub(lambda m: f"for={m.group(1)}{p}{m.group(2)}{m.group(1)}", text)
+    text = _HREF_HASH.sub(lambda m: f"href={m.group(1)}#{p}{m.group(2)}{m.group(1)}", text)
+    text = _GET_BY_ID.sub(lambda m: f"getElementById({m.group(1)}{p}{m.group(2)}{m.group(1)})", text)
+    text = _QUERY_ID.sub(lambda m: f"{m.group(1)}#{p}{m.group(3)}", text)
+    return text
+
+
+def _css_rules(css: str) -> List[Tuple[str, str, bool]]:
+    """Split a stylesheet into (selector, body, is_at_rule), braces balanced."""
+    out: List[Tuple[str, str, bool]] = []
+    sel: List[str] = []
+    i, n = 0, len(css)
+    while i < n:
+        if css[i] == "{":
+            depth, j = 1, i + 1
+            while j < n and depth:
+                if css[j] == "{":
+                    depth += 1
+                elif css[j] == "}":
+                    depth -= 1
+                j += 1
+            selector = "".join(sel).strip()
+            out.append((selector, css[i + 1: j - 1], selector.startswith("@")))
+            sel, i = [], j
+            continue
+        sel.append(css[i])
+        i += 1
+    return out
+
+
+def scope_css(css: str, case_id: str) -> str:
+    """Confine a case study's stylesheet to its own part of the document.
+
+    Every selector is prefixed with ``.case[data-case=<id>]``, so wind's ``.col``
+    and power flow's ``.col`` stop being the same rule. An at-rule keeps its
+    wrapper and has its inner selectors scoped, which is what keeps the
+    responsive breakpoints working. A selector that targets the document root
+    (``:root``, ``body``, ``html``) is dropped: it describes a standalone page
+    and can only fight the shared chrome, which is the same reason the power
+    flow adapter already drops them.
+    """
+    root = f".case[data-case='{case_id}']"
+    drop = {":root", "html", "body", "*", "main", "header", "aside"}
+    out: List[str] = []
+    for selector, body, at_rule in _css_rules(css):
+        if at_rule:
+            head = selector
+            if body.strip().startswith("@") or "{" not in body:
+                out.append(f"{head}{{{body}}}")          # @font-face, @keyframes: no selectors
+            else:
+                out.append(f"{head}{{{scope_css(body, case_id)}}}")
+            continue
+        parts = []
+        for part in selector.split(","):
+            part = part.strip()
+            if not part or part.split(":")[0].split(" ")[0] in drop:
+                continue
+            parts.append(f"{root} {part}")
+        if parts:
+            out.append(",".join(parts) + "{" + body.strip() + "}")
+    return "\n".join(out)
+
+
 def render(payload: Dict[str, Any], built: Dict[str, Dict[str, Any]]) -> str:
     """One case study's page. Every section of SECTIONS, filled in or not."""
     tabs = payload.get("tabs", {})
@@ -216,27 +310,128 @@ def render(payload: Dict[str, Any], built: Dict[str, Dict[str, Any]]) -> str:
     ).replace("</body></html>", f"<script>{extra}</script></body></html>" if extra else "</body></html>")
 
 
-def landing(built: Dict[str, Dict[str, Any]]) -> str:
-    """The front door: the protocol, and one card per case study."""
-    cards: List[str] = []
+FRAGMENTS = SITE / "_fragments"
+
+
+def cache_put(case_id: str, payload: Dict[str, Any]) -> None:
+    """Keep this case study's fragment so a build of another one can render it."""
+    FRAGMENTS.mkdir(parents=True, exist_ok=True)
+    stamped = dict(payload)
+    stamped["_at"] = _dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+    (FRAGMENTS / f"{case_id}.json").write_text(json.dumps(stamped), encoding="utf-8")
+
+
+def cache_get(case_id: str) -> Optional[Dict[str, Any]]:
+    """The last fragment this checkout managed to build for a case study, if any."""
+    f = FRAGMENTS / f"{case_id}.json"
+    if not f.exists():
+        return None
+    try:
+        return json.loads(f.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+
+def unified(pages: Dict[str, Dict[str, Any]], fresh: Sequence[str] = ()) -> str:
+    """Every case study in one document, the sections of each under its own name.
+
+    Daniela reads the site by opening the file, so the site is one file. The
+    sidebar lists the four case studies expanded rather than one expanded and
+    three as links, and a section key becomes ``<case>-<section>``: four
+    ``results`` sections can coexist because they are four different ids, while
+    the eleven names under each case study stay the same eleven, in the same
+    order, which is the thing that makes the cases comparable.
+
+    Ids, scripts and stylesheets are isolated per case study by ``namespace``
+    and ``scope_css``. A case study that serves a section as a page of its own
+    keeps that link; the page is copied next to this one as before.
+    """
+    nav: List[Dict[str, Any]] = []
+    body: List[str] = []
+    css: List[str] = []
+    scripts: List[str] = []
+    # The protocol is site-level, not a case study's section, so it sits above
+    # the four rather than inside one of them. It is the page that opens.
+    body.append(shell.tab("overview", protocol_card(), on=True))
+    nav.append({"title": "The evaluation", "subtitle": "the protocol the four share",
+                "href": "#overview", "current": True, "available": True,
+                "entries": [("overview", "Protocol")]})
+    first = False
     for case in CASES:
-        p = built.get(case["id"])
+        p = pages.get(case["id"])
         if p is None:
-            # The page exists and has every section, all of them empty. Saying
-            # "not yet" and refusing to open it would hide the skeleton, which
-            # is the thing that makes the case studies comparable.
-            cards.append(
-                f"<a class='stg off' href='{E(case['id'])}.html'><h3>{E(case['title'])}</h3>"
-                f"<p>{E(case['subtitle'])}</p><div class='st'>the sections, still empty →</div></a>"
-            )
             continue
-        cards.append(
-            f"<a class='stg' href='{E(p['id'])}.html'><h3>{E(p['title'])}</h3>"
-            f"<p>{E(p.get('blurb', ''))}</p>"
-            + "".join(chip(f"{k}: {v}") for k, v in p.get("summary", []))
-            + "<div class='st'>Open →</div></a>"
-        )
-    intro = card(
+        cid = case["id"]
+        stale_note = "" if cid in fresh else shell.note(
+            f"This case study was not rebuilt by the build that wrote this page. What follows is the "
+            f"fragment of {E(str(p.get('_at', 'an earlier build')))}, kept because no interpreter in this "
+            f"checkout can import all four projects. Rebuild it from a checkout that can, with "
+            f"<code>python -m visuals.build --require {E(cid)}</code>.", "warn")
+        labels = {k: t for _g, entries in p.get("groups", []) for k, t in entries}
+        links = p.get("links", {})
+        tabs = p.get("tabs", {})
+        entries: List[Tuple[str, ...]] = []
+        parts: List[str] = []
+        for key, label, purpose in SECTIONS:
+            text = labels.get(key, label)
+            if key in links:
+                entries.append((f"{cid}-{key}", links[key].get("label", text), f"{cid}/{links[key]['href']}"))
+                continue
+            entries.append((f"{cid}-{key}", text))
+            content = tabs.get(key)
+            content = namespace(content, cid) if content else placeholder(p["title"], key, text, purpose)
+            # One document is rewritten on every build, including the parts of
+            # it this build could not rebuild. Without this the file's date
+            # would vouch for content that is older than the file, which is the
+            # failure the per-case pages avoided by simply not being rewritten.
+            parts.append(shell.tab(f"{cid}-{key}", stale_note + content, on=first))
+            first = False
+        body.append(f"<div class='case' data-case='{E(cid)}'>" + "".join(parts) + "</div>")
+        if p.get("css"):
+            css.append(scope_css(p["css"], cid))
+        if p.get("script"):
+            # wrapped, so a case study's `var` and `function` stay out of the
+            # way of the next one's, and a throw in one does not stop the rest
+            scripts.append("try{(function(){" + namespace(p["script"], cid) + "})()}catch(e){"
+                           f"console.error('{E(cid)} script:',e)}}")
+        nav.append({
+            "title": case["title"], "subtitle": case["subtitle"], "href": f"#{cid}-home",
+            "current": True, "available": has_generator(case["folder"]), "entries": entries,
+        })
+    cases = len(nav) - 1                              # the protocol entry is not a case study
+    html = shell.page(
+        title="Evaluation · four case studies",
+        brand="LLMs and agentic AI for smart grids · evaluation",
+        note_text=f"{cases} case studies, {len(SECTIONS)} sections each",
+        nav=nav,
+        tabs_html="".join(body),
+        extra_css="\n".join(css),
+    )
+    # Every case study is expanded in the sidebar, so the highlight has to follow
+    # the section being read rather than mark all four at once.
+    scripts.insert(0, """
+(function(){
+  var items=Array.prototype.slice.call(document.querySelectorAll('aside .cs, aside a.sub'));
+  function sync(){
+    var k=(location.hash||'').slice(1)||FIRST, last=null;
+    document.querySelectorAll('aside .cs').forEach(function(c){c.classList.remove('on');});
+    items.forEach(function(el){
+      if(el.classList.contains('cs')) last=el;
+      else if(el.dataset.t===k && last) last.classList.add('on');
+    });
+  }
+  window.addEventListener('hashchange',sync);
+  document.querySelectorAll('aside a.sub').forEach(function(a){
+    a.addEventListener('click',function(){setTimeout(sync,0);});});
+  sync();
+})();""")
+    tail = "".join(scripts)
+    return html.replace("</body></html>", f"<script>{tail}</script></body></html>" if tail else "</body></html>")
+
+
+def protocol_card() -> str:
+    """The protocol every case study shares, stated once for the whole site."""
+    return card(
         "Evaluation protocol",
         "<p>Each case study poses a grid task in natural language and evaluates whether a language model can "
         "produce the answer an engineer currently obtains with a trusted numerical tool. The reference solution "
@@ -286,26 +481,28 @@ def landing(built: Dict[str, Dict[str, Any]]) -> str:
         "builders and the recorded results. No description on these pages is maintained separately from the code "
         "it describes.</p>",
     )
-    return shell.page(
-        title="Case studies · Evaluation",
-        brand="Solver-grounded LLM agents · case studies",
-        note_text=f"{sum(1 for c in CASES if has_generator(c['folder']))} of {len(CASES)} case studies",
-        nav=nav_for(None, built),
-        tabs_html=shell.tab("home", intro + "<div class='grid g4'>" + "".join(cards) + "</div>", on=True),
-        extra_css=(
-            ".stg{display:block;background:var(--panel);border:1px solid var(--line);border-radius:12px;"
-            "padding:18px 20px;text-decoration:none;color:var(--text);box-shadow:var(--shadow)}"
-            ".stg:hover{border-color:var(--acc)}.stg h3{margin:0 0 6px;font-size:16px}"
-            ".stg p{margin:0 0 8px;color:var(--muted);font-size:13.5px}"
-            ".stg .st{margin-top:10px;font-size:12px;font-weight:600;color:var(--acc)}"
-            ".stg.off{opacity:.5}.stg.off .st{color:var(--muted)}"
-        ),
-    )
 
 
-def build(only: Optional[str] = None, python: str = PYTHON) -> List[Path]:
-    """Collect every case study and write the site. Returns the files written."""
+def build(only: Optional[str] = None, python: str = PYTHON,
+          require: Optional[Sequence[str]] = None) -> List[Path]:
+    """Collect every case study and write the site. Returns the files written.
+
+    A case study whose generator fails keeps the page it already has, which used to
+    be indistinguishable from a case study nobody changed: the page was still there,
+    still had every section, and the build still exited 0. So the run said nothing
+    while the page showed yesterday's numbers. Now every failure prints the page it
+    is keeping and the date on it.
+
+    Failing the whole build is not the answer, because no worktree can import all
+    four projects: a global strictness would fire on every build for everyone, and a
+    flag to switch it off would be typed reflexively within a day. Instead the exit
+    code is scoped to what the caller asked for. ``require`` names the case studies
+    this build must produce, and ``only`` is an implicit one. A failure outside that
+    set is printed and does not fail the build, because it is somebody else's project
+    that this checkout was never able to build.
+    """
     built: Dict[str, Dict[str, Any]] = {}
+    failed: List[str] = []
     for case in CASES:
         if only and case["id"] != only:
             continue
@@ -315,8 +512,24 @@ def build(only: Optional[str] = None, python: str = PYTHON) -> List[Path]:
         p = collect(case["id"], case["folder"], python)
         if p is not None:
             built[case["id"]] = p
+            cache_put(case["id"], p)
+        else:
+            failed.append(case["id"])
     if not built:
         raise SystemExit("no case study produced a fragment")
+
+    # One document holds all four case studies, so a build of one of them still
+    # has to render the other three. Their fragments come from the cache the
+    # last build that could run them left behind. A case study that has never
+    # been built here has no cached fragment and shows the empty skeleton, which
+    # is the same thing its own page shows.
+    fresh = set(built)
+    for case in CASES:
+        if case["id"] in built:
+            continue
+        cached = cache_get(case["id"])
+        if cached is not None:
+            built[case["id"]] = cached
 
     # A case study with no generator still gets a page: the same sections, all
     # of them empty and saying so. The skeleton is the standard; filling it in
@@ -338,6 +551,12 @@ def build(only: Optional[str] = None, python: str = PYTHON) -> List[Path]:
     SITE.mkdir(parents=True, exist_ok=True)
     written: List[Path] = []
     for case_id, p in pages.items():
+        # The per-case page is only rewritten when this build actually produced
+        # the case study, so its date keeps meaning what it meant: when these
+        # numbers were read. A case rendered from the cache is rewritten only
+        # inside index.html, where it carries a banner saying so.
+        if case_id not in fresh and (SITE / f"{case_id}.html").exists():
+            continue
         out = SITE / f"{case_id}.html"
         out.write_text(render(p, pages), encoding="utf-8")
         written.append(out)
@@ -348,9 +567,29 @@ def build(only: Optional[str] = None, python: str = PYTHON) -> List[Path]:
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(Path(src).read_bytes())
             written.append(dest)
+    # One file holds the four case studies, because that is how the site is read:
+    # by opening it. The per-case pages above stay as they were, so a case study
+    # can still be looked at on its own, and so a stale one keeps its own date.
     index = SITE / "index.html"
-    index.write_text(landing(built), encoding="utf-8")
+    index.write_text(unified(pages, fresh), encoding="utf-8")
     written.append(index)
+    if failed:
+        wanted = {c for c in (require or ())} | ({only} if only else set())
+        print()
+        for case_id in failed:
+            page = SITE / f"{case_id}.html"
+            when = (_dt.datetime.fromtimestamp(page.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+                    if page.exists() else "no page at all")
+            mark = "FAILED" if case_id in wanted else "failed"
+            print(f"  {case_id}: generator {mark}, keeping the page from {when}")
+        print("  the usual cause is the interpreter: <project>/.venv/bin/python when it exists,")
+        print("  otherwise the python running this build, which may not have that project's")
+        print("  dependencies. Pass --python, or build that case from its own checkout.")
+        stale = [c for c in failed if c in wanted]
+        if stale:
+            for path in written:
+                print(f"wrote {path.relative_to(ROOT)} ({path.stat().st_size // 1024} KB)")
+            raise SystemExit(f"stale: {', '.join(stale)} did not rebuild and was required")
     return written
 
 
@@ -358,8 +597,10 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--case", help="build only this case study")
     ap.add_argument("--python", default=PYTHON, help="interpreter that can import every case study")
+    ap.add_argument("--require", action="append", metavar="CASE",
+                    help="fail the build if this case study does not rebuild (repeatable; --case implies it)")
     args = ap.parse_args()
-    for path in build(args.case, args.python):
+    for path in build(args.case, args.python, args.require):
         print(f"wrote {path.relative_to(ROOT)} ({path.stat().st_size // 1024} KB)")
 
 

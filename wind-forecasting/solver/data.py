@@ -23,8 +23,8 @@ import numpy as np
 import pandas as pd
 
 from config import (
-    ABNORMAL_PAB_DEG, ABNORMAL_WSPD, FEATURES, HISTORY_DAYS, NDIR_RANGE_DEG, PROJECT_ROOT, STEPS_PER_DAY,
-    TARGET_DAYS, WDIR_RANGE_DEG,
+    ABNORMAL_PAB_DEG, ABNORMAL_WSPD, FEATURES, HISTORY_DAYS, NDIR_RANGE_DEG, PROJECT_ROOT, RANGE_MARGIN, RATED_KW,
+    SCALE_RANGE, STEPS_PER_DAY, TARGET_DAYS, WDIR_RANGE_DEG,
 )
 
 BENCHMARK_DIR = PROJECT_ROOT / "data" / "benchmark"
@@ -63,7 +63,18 @@ class Window:
     frame: pd.DataFrame      # sixteen days, COLUMNS plus 'abnormal'
     path: Path
     file_hash: str
-    condition: str = "normal"   # normal | stress (the last history day is blank)
+    condition: str = "normal"   # normal | stress (the last history day is blank) | scaled (the memorisation check)
+    scale: float = 1.0          # the factor the whole window was multiplied by, 1.0 unless scaled
+
+    @property
+    def rating_kw(self) -> float:
+        """This turbine's rated power. It is data, not a constant: a scaled window is a turbine of another size."""
+        return round(RATED_KW * self.scale, 1)
+
+    @property
+    def power_max_kw(self) -> float:
+        """The largest value that counts as in range for this turbine."""
+        return round(self.rating_kw * RANGE_MARGIN, 1)
 
     @property
     def history_end_day(self) -> int:
@@ -128,6 +139,13 @@ def instances(manifest: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]
     return list(m["instances"])
 
 
+def scale_for(turbine: int, base_day: int) -> float:
+    """The factor of the scaled condition for one instance: drawn once, from the instance itself, never random at run time."""
+    import random
+
+    return round(random.Random(f"wind-scale-{int(turbine)}-{int(base_day)}").uniform(*SCALE_RANGE), 4)
+
+
 def load_window(turbine: int, base_day: int, *, condition: str = "normal", check_hash: bool = True, manifest: Optional[Dict[str, Any]] = None) -> Window:
     m = manifest or load_manifest()
     key = f"t{int(turbine):03d}-d{int(base_day):03d}"
@@ -139,7 +157,12 @@ def load_window(turbine: int, base_day: int, *, condition: str = "normal", check
     if check_hash and h != entry["content_hash"]:
         raise ValueError(f"{path.name} was edited after freezing: hash {h} != manifest {entry['content_hash']}")
     frame = read_frame(path)
-    if condition == "stress":
+    scale = 1.0
+    if condition == "scaled":
+        # history and target together, so the ground truth transforms with the data and stays exact
+        scale = scale_for(turbine, base_day)
+        frame["Patv"] = pd.to_numeric(frame["Patv"], errors="coerce") * scale
+    elif condition == "stress":
         # the SCADA feed stopped on the last history day: every feature of that day is missing
         last = int(base_day) + HISTORY_DAYS - 1
         sel = frame["Day"] == last
@@ -148,7 +171,7 @@ def load_window(turbine: int, base_day: int, *, condition: str = "normal", check
         frame["abnormal"] = abnormal_mask(frame)
     elif condition != "normal":
         raise ValueError(f"unknown condition {condition!r}")
-    return Window(turbine=int(turbine), base_day=int(base_day), frame=frame, path=path, file_hash=h, condition=condition)
+    return Window(turbine=int(turbine), base_day=int(base_day), frame=frame, path=path, file_hash=h, condition=condition, scale=scale)
 
 
 def history_csv(window: Window, days: Optional[int] = None) -> str:

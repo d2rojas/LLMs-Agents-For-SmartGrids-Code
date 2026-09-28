@@ -20,18 +20,19 @@ import random
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional, Sequence
 
-from config import HORIZONS_H, STEPS_PER_HOUR
-from solver.data import Window, instances, load_manifest, load_window
+from config import HORIZONS_H, RATED_KW, STEPS_PER_HOUR
+from solver.data import Window, instances, load_manifest, load_window, scale_for
 
 QUESTIONS = ("peak_hour", "energy_kwh", "none")
 
 _OPENINGS = (
-    "Turbine {T} of the SDWPF wind farm. Its SCADA history covers days {a} to {b} at 10-minute sampling (144 rows per day). "
+    "Turbine {T} of the SDWPF wind farm, rated {P:.0f} kW. Its SCADA history covers days {a} to {b} at 10-minute sampling (144 rows per day). "
     "Forecast its active power in kW for the next {H} hours at 10-minute resolution, that is {N} values starting right after the last history row.",
-    "For turbine {T}, using the 14-day SCADA record ending on day {b} (days {a} through {b}, 10-minute sampling), produce a {H}-hour-ahead "
-    "forecast of active power: {N} values in kW, one per 10-minute step, beginning with the first step after the last row of the history.",
-    "We need a {H} h active-power forecast for turbine {T} in the SDWPF farm, starting immediately after the last row of its history "
-    "(days {a} to {b}, 10-minute SCADA). Return the {N} forecast values in kW in time order.",
+    "For turbine {T} (rated power {P:.0f} kW), using the 14-day SCADA record ending on day {b} (days {a} through {b}, 10-minute sampling), "
+    "produce a {H}-hour-ahead forecast of active power: {N} values in kW, one per 10-minute step, beginning with the first step after the last "
+    "row of the history.",
+    "We need a {H} h active-power forecast for turbine {T} in the SDWPF farm, a {P:.0f} kW machine, starting immediately after the last row of "
+    "its history (days {a} to {b}, 10-minute SCADA). Return the {N} forecast values in kW in time order.",
 )
 _QUESTION_TEXT = {
     "peak_hour": " Also report the hour of the horizon, counted 1 to {H}, in which the mean forecast power is highest.",
@@ -50,6 +51,7 @@ class Request:
     horizon_hours: int
     question: str
     condition: str
+    rating_kw: float
     variant: int
     text: str
     seed: int
@@ -58,9 +60,9 @@ class Request:
         return asdict(self)
 
 
-def request_text(turbine: int, history_days: Sequence[int], horizon_hours: int, question: str, variant: int) -> str:
+def request_text(turbine: int, history_days: Sequence[int], horizon_hours: int, question: str, variant: int, rating_kw: float = RATED_KW) -> str:
     a, b = int(history_days[0]), int(history_days[1])
-    body = _OPENINGS[variant % len(_OPENINGS)].format(T=turbine, a=a, b=b, H=horizon_hours, N=horizon_hours * STEPS_PER_HOUR)
+    body = _OPENINGS[variant % len(_OPENINGS)].format(T=turbine, a=a, b=b, H=horizon_hours, N=horizon_hours * STEPS_PER_HOUR, P=rating_kw)
     return body + _QUESTION_TEXT[question].format(H=horizon_hours)
 
 
@@ -81,10 +83,11 @@ def generate_requests(*, instance_ids: Optional[Sequence[str]] = None, horizons:
             q = qs[k % len(qs)]
             v = rng.randrange(len(_OPENINGS))
             k += 1
-            rid = f"wind-{e['instance_id']}-h{int(h):02d}-{q}-s{seed}" + ("-stress" if condition != "normal" else "")
+            rid = f"wind-{e['instance_id']}-h{int(h):02d}-{q}-s{seed}" + ("" if condition == "normal" else f"-{condition}")
+            rating = round(RATED_KW * (scale_for(int(e["turbine"]), int(e["base_day"])) if condition == "scaled" else 1.0), 1)
             out.append(Request(request_id=rid, instance_id=e["instance_id"], turbine=int(e["turbine"]), base_day=int(e["base_day"]),
-                               history_days=list(e["history_days"]), horizon_hours=int(h), question=q, condition=condition, variant=v,
-                               text=request_text(e["turbine"], e["history_days"], int(h), q, v), seed=seed))
+                               history_days=list(e["history_days"]), horizon_hours=int(h), question=q, condition=condition, rating_kw=rating,
+                               variant=v, text=request_text(e["turbine"], e["history_days"], int(h), q, v, rating), seed=seed))
     return out
 
 

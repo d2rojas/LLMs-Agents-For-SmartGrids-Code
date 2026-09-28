@@ -15,11 +15,11 @@ class ThermalOverloadScenarios:
     """Factory for thermal overload scenarios."""
 
     @staticmethod
-    def all_scenarios(network_name: str = "case14") -> list[FailureScenario]:
+    def all_scenarios(network_name: str = "case14", variant: int = 0) -> list[FailureScenario]:
         return [
-            ConcentratedLoading(network_name),
-            ReducedThermalLimits(network_name),
-            TopologyRedirection(network_name),
+            ConcentratedLoading(network_name, variant),
+            ReducedThermalLimits(network_name, variant),
+            TopologyRedirection(network_name, variant),
         ]
 
 
@@ -48,9 +48,8 @@ class ConcentratedLoading(FailureScenario):
             for b in [int(row["from_bus"]), int(row["to_bus"])]:
                 bus_connections[b] = bus_connections.get(b, 0) + 1
 
-        # Choose the bus with fewest connections (not slack)
-        candidates = {b: c for b, c in bus_connections.items() if b != slack_bus}
-        target_bus = min(candidates, key=candidates.get) if candidates else slack_bus + 1
+        # variant: which weak bus. Fewest branch connections first.
+        target_bus = self.pick(self.buses_by_degree(), self.variant, fallback=slack_bus + 1)
 
         pp.create_load(
             self.net, bus=target_bus,
@@ -84,6 +83,7 @@ class ConcentratedLoading(FailureScenario):
             ),
             metadata={
                 "extra_load_mw": self.EXTRA_LOAD_MW,
+                "variant": self.variant,
                 "target_bus": target_bus,
                 "converged": converged,
                 "overloaded_lines": overloaded,
@@ -100,6 +100,7 @@ class ReducedThermalLimits(FailureScenario):
     """
 
     LIMIT_FACTOR = 0.3  # Reduce to 30% of original rating
+    N_LINES = 3
 
     def describe(self) -> str:
         return (
@@ -109,9 +110,11 @@ class ReducedThermalLimits(FailureScenario):
         )
 
     def apply(self) -> ScenarioResult:
-        # Run baseline PF to find the most loaded lines
-        self.run_pf()
-        top_loaded = self.net.res_line.nlargest(3, "loading_percent").index.tolist()
+        # variant: which three lines are de-rated. Ranked by base loading, so
+        # variant 0 de-rates ranks 1-3 and variant 1 ranks 4-6.
+        ranked = self.lines_by_loading()
+        start = (self.variant * self.N_LINES) % max(1, len(ranked))
+        top_loaded = ranked[start : start + self.N_LINES] or ranked[: self.N_LINES]
 
         for line_idx in top_loaded:
             original = self.net.line.at[line_idx, "max_i_ka"]
@@ -141,6 +144,7 @@ class ReducedThermalLimits(FailureScenario):
             ),
             metadata={
                 "limit_factor": self.LIMIT_FACTOR,
+                "variant": self.variant,
                 "modified_lines": top_loaded,
                 "converged": converged,
                 "overloaded_lines": overloaded,
@@ -164,10 +168,13 @@ class TopologyRedirection(FailureScenario):
         )
 
     def apply(self) -> ScenarioResult:
-        # Run baseline to find the most loaded line
-        self.run_pf()
-        most_loaded = int(self.net.res_line["loading_percent"].idxmax())
+        from .contingency import topology_line
 
+        # The most loaded line whose outage actually leaves the network converged and
+        # worse than it was. On IEEE-118 the most loaded line's outage changes nothing,
+        # and a scenario that injects nothing measures nothing.
+        most_loaded = topology_line(self.net, self.variant)
+        self.reset()
         self.net.line.at[most_loaded, "in_service"] = False
 
         converged = self.run_pf()
@@ -195,6 +202,7 @@ class TopologyRedirection(FailureScenario):
             ),
             metadata={
                 "removed_line": most_loaded,
+                "variant": self.variant,
                 "converged": converged,
                 "overloaded_lines": overloaded,
             },

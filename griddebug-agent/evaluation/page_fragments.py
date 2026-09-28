@@ -24,10 +24,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT.parent))  # so `visuals` is importable
 
-from visuals.shell import E, card, chip, diagram_row, kv, note, pipeline, prompt_block, table, verdict  # noqa: E402
+from visuals.shell import (  # noqa: E402
+    Count, DASH, E, GROUP_CORRECTNESS, GROUP_COST, GROUP_UTILITY, NA, card, chip, clip, comparison_table, counted, diagram_row, kv, note, pipeline, prompt_block, request_rows, table, verdict,
+)
 
 import methods  # noqa: E402
-from config import MAX_LLM_CALLS, MAX_LOADING_PERCENT, MAX_TOOL_CALLS, NETWORK_LABELS, NETWORKS, SCENARIO_TIMEOUT_S, V_MAX_PU, V_MIN_PU  # noqa: E402
+from config import ALL_NETWORKS, MAX_LLM_CALLS, MAX_LOADING_PERCENT, MAX_TOOL_CALLS, NETWORK_LABELS, NETWORKS, SCENARIO_TIMEOUT_S, V_MAX_PU, V_MIN_PU  # noqa: E402
 
 CASE_ID = "griddebug"
 CASE_TITLE = "GridDebug"
@@ -43,7 +45,7 @@ DIAGRAMS: Dict[str, Dict[str, Any]] = {
                         "note": "Plans once. The whole sequence of tool calls is committed before any result comes back."},
     "react_nogate": {"steps": [("failed network", "input"), ("LLM decides a tool call", "llm"), ("tool runs on the network", "solver"), ("LLM writes the answer", "llm")],
                      "loop": 2, "note": f"Up to {MAX_LLM_CALLS} model calls and {MAX_TOOL_CALLS} tool calls. The model sees every result; nothing checks the answer."},
-    "griddebug": {"steps": [("failed network", "input"), ("LLM decides a tool call", "llm"), ("tool runs on the network", "solver"), ("gate G1-G6", "gate")],
+    "griddebug": {"steps": [("failed network", "input"), ("LLM decides a tool call", "llm"), ("tool runs on the network", "solver"), ("gate G1-G7", "gate")],
                   "loop": 2, "branch": ("report", "escalate"),
                   "note": "The same loop, then six conditions on the answer. A claim the solver contradicts leaves as an escalation, not as a repair."},
 }
@@ -59,7 +61,7 @@ ROWS: Tuple[Dict[str, str], ...] = (
      "isolates": "solver access through a plan. One call emits the whole sequence, executed without the model seeing the results in between."},
     {"block": "Multi-step agents", "name": "react_nogate", "label": "ReAct, no gate", "llm": "yes", "tools": "the catalogue, through function calling", "gate": "none",
      "isolates": "iteration. The model sees each tool output and may call again, inside the same budget as the row above and the row below."},
-    {"block": "Multi-step agents", "name": "griddebug", "label": "GridDebugAgent, solver-grounded", "llm": "yes", "tools": "the catalogue, through function calling", "gate": "six conditions on the answer",
+    {"block": "Multi-step agents", "name": "griddebug", "label": "GridDebugAgent, solver-grounded", "llm": "yes", "tools": "the catalogue, through function calling", "gate": "seven conditions on the answer",
      "isolates": "the verification gate, and nothing else. Same tools, same budget and same scenarios as ReAct, so any difference between the two rows is the gate."},
 )
 
@@ -67,13 +69,16 @@ COLUMNS: Tuple[Dict[str, str], ...] = (
     {"group": "Task utility", "name": "Diagnosis", "what": "the fault type and at least one injected component named in the answer match what the scenario injected", "why": "whether the initiating event was understood, not just the symptom (the formulation column of this case study)"},
     {"group": "Task utility", "name": "Repaired", "what": "the harness's own power flow on the final network converges, no load is islanded, no violation beyond the base network", "why": "the paper's repair definition, made relative to the base network"},
     {"group": "Task utility", "name": "Improved", "what": "converged and fewer new violations than at the start, or a solution where there was none", "why": "partial repairs, honestly reported, are worth something"},
+    {"group": "Task utility", "name": "Load served", "what": "the active demand still in service after the repair, against the base network's demand",
+     "why": "a network with every load curtailed is secure; without this column the table would call that a repair"},
     {"group": "Task utility", "name": "Violations", "what": "new violations before and after, over scenarios converged at both ends", "why": "a non-converged state is never a count of zero"},
-    {"group": "Task utility", "name": "Solved", "what": "repaired, claimed as repaired, every number traceable, final_state consistent with the solver", "why": "the end-to-end verdict"},
+    {"group": "Solver-grounded correctness", "name": "Solved", "what": "repaired, claimed as repaired, every number traceable, final_state consistent with the solver", "why": "the end-to-end verdict, and the first of the three exclusive outcomes"},
+    {"group": "Solver-grounded correctness", "name": "Escalated", "what": "the method declared not_repaired or cannot_repair, listing what remains, or the harness had to write the answer", "why": "the second outcome: how much work goes back to a person"},
+    {"group": "Solver-grounded correctness", "name": "Wrong, unflagged", "what": "a repair claim the solver contradicts, or an unsupported number, presented as valid", "why": "the third outcome, and the quantity a solver-grounded design exists to drive to zero. The three add up to 100 %"},
     {"group": "Solver-grounded correctness", "name": "Feasible", "what": "the final power flow converges", "why": "the solver status column of the other case studies"},
     {"group": "Solver-grounded correctness", "name": "Traceable", "what": "every number in the answer appears in a tool output or in the evidence", "why": "the reported numbers have an origin that can be checked"},
-    {"group": "Solver-grounded correctness", "name": "Wrong, unflagged", "what": "a repair claim the solver contradicts, or an unsupported number, presented as valid", "why": "the quantity a solver-grounded design exists to drive to zero"},
-    {"group": "Cost and operation", "name": "Escalated", "what": "the method declared not_repaired or cannot_repair, listing what remains, or the harness had to write the answer", "why": "how much work goes back to a person"},
-    {"group": "Cost and operation", "name": "Calls, Tokens", "what": "model calls, tool calls, prompt and completion tokens per scenario", "why": "what the architecture costs to run"},
+    {"group": "Cost and operation", "name": "Tokens", "what": "prompt and completion tokens per scenario", "why": "what the architecture costs to run"},
+    {"group": "Cost and operation", "name": "Cost, Time", "what": "dollars for the whole run set, and wall time per scenario", "why": "the operating cost of each architecture, on the same scenarios"},
 )
 
 
@@ -111,6 +116,12 @@ def sample_request() -> Any:
 # ------------------------------------------------------------------ tabs
 
 
+def S_N() -> int:
+    from evaluation.scenarios import N_INSTANCES
+
+    return N_INSTANCES
+
+
 def tab_home() -> str:
     m = manifest()
     n_inst = len(m["entries"]) if m else 0
@@ -126,7 +137,7 @@ def tab_home() -> str:
                 [("Failed network", "injected fault, solver evidence"),
                  ("Diagnose", "the event, not the symptom"),
                  ("Act", "actions from one catalogue"),
-                 ("Verify", "power flow, then G1-G6 (gated row)"),
+                 ("Verify", "power flow, then G1-G7 (gated row)"),
                  ("Report", "diagnosis, actions, state")],
                 loop=(3, 1, "one retry, then escalate"),
             ),
@@ -160,7 +171,7 @@ def tab_home() -> str:
                f"{verdict('solved')} + {verdict('escalated')} = 100 %, {verdict('wrong')} = 0.</p>")
         + "</div>",
         card("Identical for every method",
-             chip(f"{len(NETWORKS)} IEEE networks") + chip(f"{n_inst} scenario instances, frozen and hashed") + chip("one request template")
+             chip(f"{len(NETWORKS)} IEEE networks") + chip(f"{S_N()} scenarios per network, from 13 fault classes") + chip("one request template")
              + chip("one evidence block") + chip("one tool catalogue") + chip(f"{MAX_LLM_CALLS} model calls, {MAX_TOOL_CALLS} tool calls, {SCENARIO_TIMEOUT_S:.0f} s per scenario")
              + chip("temperature 0") + chip("one answer contract") + chip("one scorer") + chip("every message kept in the trace")),
     ]
@@ -185,6 +196,42 @@ def tab_methods() -> str:
              table(["Block", "Method", "LLM", "Tools", "Gate", "What it adds over the row above"], rows),
              note("<b>The step the design rests on is the last one.</b> ReAct and GridDebugAgent receive the same tools, the same budget and the "
                   "same scenarios. The only difference is that GridDebugAgent's answer has to pass the verification gate before anyone sees it.", "info")),
+        card(
+            "Where this design leaves Section 6.4 as submitted",
+            "<p>Section 6.4 describes verification <b>inside</b> the loop: the agent re-runs the power flow and checks the "
+            "violations before its next step, and the harness re-runs PandaPower at scoring time so a fabricated repair does "
+            "not count. It describes no gate on the answer and no way for the agent to escalate. Section 2, on the other "
+            "hand, states the rule the whole paper turns on: a reported number passes an explicit verification before it is "
+            "surfaced. On GridDebugAgent the two sections disagree, and this implementation resolves them in favour of "
+            "Section 2.</p>",
+            table(
+                ["Section 6.4 as submitted", "what runs here", "why"],
+                [
+                    ["verification inside the loop only; no answer gate, no escalation",
+                     "the same loop, then G1-G7 on the final answer, one retry, then a declared failure",
+                     "the row is otherwise not solver-grounded in the sense Section 2 claims, and R3.2 and R4.3 ask for "
+                     "verification as a factor that can be isolated, which needs the ungated twin <code>react_nogate</code>"],
+                    ["the rule engine's classification is fed into the agent's prompt",
+                     "the rule engine is the deterministic row's policy and reaches no method with a language model",
+                     "otherwise every row is rules plus a model, and the non-LLM baseline R4.5 asks for does not exist as a "
+                     "separate arm"],
+                    ["five tool categories, memory management among them",
+                     "four kinds, 21 tools; snapshots, OPF, short circuit and DC flow are out",
+                     "OPF would solve the repair for the method; the snapshots were used three times in 447 calls and leaked "
+                     "state between scenarios through a module-level dictionary"],
+                    ["GPT-4o, temperature 0.3, max 50 iterations",
+                     f"gpt-4o-mini and gpt-5.6-sol, temperature 0, {MAX_LLM_CALLS} model calls and {MAX_TOOL_CALLS} tool calls",
+                     "temperature 0 for reproducibility, the two models the advisor fixed for the main table, and one budget "
+                     "shared by the three loop rows so the comparison is matched"],
+                    ["one agent against one diagnosis-only baseline",
+                     "six methods, the same six as every other case study",
+                     "R3.2, R4.3 and R4.5"],
+                ],
+            ),
+            note("Section 6.4 has to be rewritten around this design; the numbers it prints today come from a run that is "
+                 "not reproducible from the repository, which is the finding of the September audit. That rewrite is the "
+                 "editor's work, not this case study's.", "warn"),
+        ),
         card("What the original GridDebugAgent was, and what changed",
              "<p>The code behind the submitted table had one architecture: a ReAct loop with OpenAI function calling, gpt-4o at temperature 0.3, "
              "up to 30 model calls, no verification of the answer, and a baseline that only diagnosed and never acted. It is the <code>react_nogate</code> "
@@ -195,6 +242,224 @@ def tab_methods() -> str:
     ])
 
 
+
+# ---------------------------------------------------- the same fault, every method
+
+
+SBS_METHODS = [r["name"] for r in ROWS]
+SBS_PER_NETWORK = 3          # scenarios shown per system, as in the power-flow case study
+_SBS_TEXT = 1200             # characters kept of a tool output
+_SBS_SAY = 1000              # characters kept of what the model said
+
+
+def _sbs_clip(s: Any, n: int) -> str:
+    t = s if isinstance(s, str) else json.dumps(s, indent=1, ensure_ascii=False)
+    t = t or ""
+    return t if len(t) <= n else t[:n] + "\n… (" + str(len(t) - n) + " more characters, in the trace file)"
+
+
+def _sbs_digest(o: Any) -> str:
+    """One line a control-room reader can scan, from whatever the tool returned."""
+    if not isinstance(o, dict):
+        return _sbs_clip(o, 120)
+    p: List[str] = []
+    if "converged" in o:
+        p.append("converged" if o["converged"] else "DID NOT CONVERGE")
+    if "n_new_violations" in o:
+        p.append(f"{o['n_new_violations']} new violation(s)")
+    if "n_new_overloads" in o:
+        p.append(f"{o['n_new_overloads']} new overload(s)")
+    if "success" in o:
+        p.append("applied" if o["success"] else "REFUSED")
+    stranded = o.get("islanded_load_buses_after")
+    if isinstance(stranded, list) and stranded:
+        p.append("strands load on bus " + ", ".join(str(b) for b in stranded))
+    if o.get("error"):
+        p.append("error: " + _sbs_clip(o["error"], 90))
+    if not p:
+        return " · ".join(f"{k}={_sbs_clip(v, 60)}" for k, v in list(o.items())[:3])
+    return " · ".join(p)
+
+
+def _sbs_runs() -> Tuple[str, List[Path]]:
+    """The newest run set that has the most methods: (tag, its method folders)."""
+    groups: Dict[Tuple[str, str], List[Path]] = {}
+    for d in method_dirs():
+        tag = d.name.split("__")[1] if "__" in d.name else ""
+        groups.setdefault((d.parts[-3], tag), []).append(d)
+    if not groups:
+        return "", []
+    (date, tag), _ = max(groups.items(), key=lambda kv: (len({p.name.split("__")[0] for p in kv[1]}), kv[0][0]))
+    return tag, [d for (dt, tg), ds in groups.items() if dt == date and tg == tag for d in ds]
+
+
+def _sbs_pick(rows: List[Dict[str, str]]) -> List[str]:
+    """Up to three scenarios, from different categories, preferring the ones the methods disagree on."""
+    seen: Dict[str, str] = {}
+    for r in rows:
+        seen.setdefault(r.get("category", ""), r["request_id"])
+    order = ["contingency", "voltage", "thermal", "nonconvergence", "normal"]
+    out = [seen[c] for c in order if c in seen]
+    out += [rid for rid in (r["request_id"] for r in rows) if rid not in out]
+    return out[:SBS_PER_NETWORK]
+
+
+def _sbs_trace(d: Path, row: Dict[str, str]) -> Optional[Dict[str, Any]]:
+    stem = f"{int(row['nn']):02d}_{row['request_id']}"
+    p = d / "traces" / f"{stem}.json"
+    if not p.is_file():
+        return None
+    t = json.loads(p.read_text(encoding="utf-8"))
+    steps = []
+    for i, rd in enumerate(t.get("rounds") or [], 1):
+        llm = rd.get("llm") or {}
+        tools = []
+        for x in rd.get("tools") or []:
+            tools.append({"name": x.get("name"), "kind": x.get("kind"),
+                          "args": ", ".join(f"{k}={_sbs_clip(v, 60)}" for k, v in (x.get("args") or {}).items()),
+                          "says": _sbs_digest(x.get("output")), "raw": _sbs_clip(x.get("output"), _SBS_TEXT),
+                          "bad": x.get("ok") is False or (isinstance(x.get("output"), dict)
+                                                          and (x["output"].get("success") is False or x["output"].get("converged") is False))})
+        steps.append({"n": i, "say": _sbs_clip(llm.get("content") or "", _SBS_SAY),
+                      "acted": any(x.get("kind") == "action" for x in rd.get("tools") or []), "tools": tools})
+    msgs = t.get("messages") or []
+    user = next((m.get("content") for m in msgs if m.get("role") == "user"), None)
+    return {
+        "outcome": row.get("outcome", ""), "steps": steps,
+        "llm_calls": t.get("n_llm_calls"), "tool_calls": t.get("n_tool_calls"),
+        "tokens": (t.get("prompt_tokens") or 0) + (t.get("completion_tokens") or 0),
+        "seconds": round(float(t.get("wall_time_s") or 0), 1),
+        "final": ("did not converge" if row.get("final_converged") != "True"
+                  else "secure" if row.get("final_secure") == "True" else f"{row.get('final_n_new')} new violation(s)"),
+        "islanded": row.get("final_islanded") if row.get("final_islanded") not in ("", "[]", None) else "",
+        "attempts": [{"n": g.get("attempt"), "passed": bool(g.get("passed")), "failed": g.get("failed") or []}
+                     for g in (t.get("gate_history") or [])],
+        "gate": (None if not t.get("gate") else
+                 {"passed": bool(t["gate"].get("passed")), "failed": t["gate"].get("failed") or [],
+                  "attempts": len(t.get("gate_history") or [])}),
+        "budget": bool(t.get("budget_exhausted")), "declared": t.get("harness_declared") or "",
+        "answer": _sbs_clip(t.get("answer") or "not stored", 3000),
+        "user": _sbs_clip(user or (t.get("request") or {}).get("text") or "not stored", 2500),
+        "sys_hash": t.get("system_prompt_hash") or "",
+    }
+
+
+def _sbs_lines(t: Dict[str, Any]) -> List[Tuple[str, str, str]]:
+    """One line per thing that happened, tagged the way every case study tags them.
+
+    Returns (kind, one-line summary, the whole thing) for ``shell.steps_log``, so
+    the four case studies render their step logs from one piece of code and a
+    column of this one can be read by someone who learned another.
+    """
+    out: List[Tuple[str, str, str]] = []
+
+    def ln(kind: str, summary: str, full: str = "") -> None:
+        out.append((kind, summary, full or summary))
+
+    # the deterministic row and Plan-and-Act both commit to everything before seeing a result
+    planning = t.get("method") in ("plan_act_nogate", "rule_based")
+    for i, st in enumerate(t["steps"]):
+        kind = "plan" if (planning and i == 0) else "model"
+        if st["say"]:
+            ln(kind, st["say"].replace("\n", " ")[:400], st["say"])
+        elif st["tools"]:
+            ln(kind, (("the fixed policy, as tool calls" if t.get("method") == "rule_based" else "the whole plan, as tool calls")
+                      if kind == "plan" else f"no words, called {len(st['tools'])} tool(s)"),
+               "The model returned tool calls and no text.")
+        for x in st["tools"]:
+            call = f"{x['name']}({x['args']})"
+            ln("tool", f"{call} → {x['says']}", f"{call}\n\n{x['raw']}")
+    attempts = t.get("attempts") or []
+    for j, a in enumerate(attempts):
+        ln("gate", (f"attempt {a['n']}: " + ("passed all seven conditions" if a["passed"]
+                                             else "failed on " + ", ".join(a["failed"]))),
+           "The harness re-ran the power flow on the final network and checked the answer against it.\n"
+           + ("passed" if a["passed"] else "failed: " + ", ".join(a["failed"])))
+        if not a["passed"] and j + 1 < len(attempts):
+            ln("retry", "sent back to the model with what failed, one retry inside the same budget",
+               "The gate returns its verdict to the model and asks for a corrected answer. "
+               "The retry spends a call from the same budget the ungated rows have.")
+    if not attempts and t["gate"]:
+        g = t["gate"]
+        ln("gate", "passed all seven conditions" if g["passed"] else "failed on " + ", ".join(g["failed"]))
+    if t["budget"]:
+        ln("status", "tool or model budget exhausted")
+    if t["declared"]:
+        ln("status", "the harness wrote the answer: " + t["declared"])
+    ln("final", (t["answer"].replace("\n", " ")[:400] or "no answer"), t["answer"])
+    return out
+
+
+def side_by_side() -> str:
+    """Every scenario of the newest run, each unfolding into the six methods.
+
+    Lives under the results table, not in a section of its own: a verdict in
+    that table is a count of these rows, and the run behind any one of them
+    should be one click below the number, not in another section.
+    """
+    tag, dirs = _sbs_runs()
+    if not dirs:
+        return card("Every scenario, under each method",
+                    "<p class='muted'>No run yet. This section fills itself from the trace files as soon as one exists.</p>")
+    data: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    label_of: Dict[Tuple[str, str], str] = {}
+    for d in dirs:
+        case, method = d.parts[-4], d.name.split("__")[0]
+        for row in read_summary(d):
+            key = (case, row["request_id"])
+            label_of.setdefault(key, f"{NETWORK_LABELS.get('case' + case.replace('ieee', ''), case)} · "
+                                     f"{row['scenario_id']}-v{row['variant']} · {row['category']}")
+            tr = _sbs_trace(d, row)
+            if tr:
+                tr["method"] = method
+                tr["row"] = row
+                data.setdefault(key, {})[method] = tr
+    if not data:
+        return card("Every scenario, under each method",
+                    "<p class='muted'>The runs exist but stored no traces.</p>")
+
+    methods = [(r["name"], r["label"]) for r in ROWS]
+    requests: List[Dict[str, Any]] = []
+    for key in sorted(data, key=lambda k: (int(k[0].replace("ieee", "")), k[1])):
+        per = data[key]
+        cells: Dict[str, str] = {}
+        columns: List[Dict[str, Any]] = []
+        for r in ROWS:
+            t = per.get(r["name"])
+            if not t:
+                columns.append({"label": r["label"], "empty": "no stored trace for this scenario"})
+                continue
+            row = t.get("row") or {}
+            cells[r["name"]] = (verdict(t["outcome"])
+                                + f"<span class='why'>diagnosis {E(str(row.get('formulation_exact', '')))}</span>"
+                                + f"<span class='why'>{E(str(row.get('final_n_new', '')))} new violations left</span>")
+            prompt = (f"<div class='gprb'><pre>{clip(t['user'])}</pre>"
+                      + (f"<p class='muted'>system prompt hash {E(t['sys_hash'])}, shown in full in the Prompts section</p>"
+                         if t["sys_hash"] else "<p class='muted'>no system prompt: this method uses no language model</p>")
+                      + "</div>")
+            columns.append({
+                "label": r["label"], "model": t.get("model") or "", "verdict": t["outcome"],
+                "prompt": prompt, "lines": _sbs_lines(t),
+                "footer": (f"{len(t['steps'])} steps · {t['llm_calls'] or 0} model calls · "
+                           f"{t['tool_calls'] or 0} tool calls · {t['tokens']} tokens · {t['seconds']} s<br>"
+                           f"<span class='muted'>final network: {E(t['final'])}"
+                           + (f" · load stranded on {E(t['islanded'])}" if t["islanded"] else "") + "</span>"),
+            })
+        requests.append({"id": key[1], "tag": label_of[key], "text": "", "cells": cells, "columns": columns})
+
+    which = "the run set of the paper" if not tag else f"run set <code>{E(tag)}</code>"
+    return card(
+        "Every scenario, under each of the six methods",
+        f"<p>Real runs, not re-scored here: {which}, every scenario, every method, on the model each run used. Click a "
+        "scenario to unfold the six methods side by side. Each column opens with the prompt that method received and "
+        "then lists what it did: <span class='k plan'>plan</span> what it committed to, <span class='k model'>model</span> "
+        "what it said, <span class='k tool'>tool</span> what the solver returned, <span class='k gate'>gate</span> the "
+        "verdict, <span class='k retry'>retry</span> what was handed back, <span class='k final'>final</span> what was "
+        "surfaced. Click any line to expand it.</p>"
+        f"<p class='muted'>{len(requests)} scenarios, every one of them.</p>",
+        request_rows(requests, methods))
+
+
 def tab_scenarios() -> str:
     from evaluation import scenarios as S
 
@@ -202,42 +467,78 @@ def tab_scenarios() -> str:
     if not m:
         return card("Scenarios", "<p class='muted'>No manifest frozen yet: run <code>run.py freeze-scenarios</code>.</p>")
     ent = m["entries"]
-    head = ["scenario", "category", "injected fault"] + [NETWORK_LABELS[n] for n in NETWORKS]
+    shown = [n for n in ALL_NETWORKS if any(e["network"] == n for e in ent.values())]
+    head = (["#", "scenario", "category", "injected fault"]
+            + [NETWORK_LABELS[n] + ("" if n in NETWORKS else " <span class='muted'>(not in the plan yet)</span>") for n in shown])
     rows = []
-    for s in S.SCENARIOS:
-        cells = [f"<code>{E(s['id'])}</code><div class='muted'>{E(s['label'])}</div>", E(s["category"]), E(S.FAULT_TYPE_OF[s["id"]])]
-        for n in NETWORKS:
-            e = ent.get(f"{n}-{s['id']}")
+    for i, (sid, v) in enumerate(S.INSTANCES, 1):
+        nvar = S.VARIANTS_OF[sid]
+        name = f"<code>{E(sid)}</code>" + (f"<span class='muted'> · v{v}</span>" if nvar > 1 else "")
+        cells = [f"<b>{i}</b>", f"{name}<div class='muted'>{E(S.LABEL_OF[sid])}</div>", E(S.CATEGORY_OF[sid]), E(S.FAULT_TYPE_OF[sid])]
+        for n in shown:
+            e = ent.get(S.instance_id(n, sid, v))
             if e is None:
                 cells.append("<span class='muted'>—</span>")
                 continue
             st = e["initial_state"]
             k = {"not_converged": "bad", "islanded_load": "warn", "violations": "warn", "secure": "ok"}[st]
             extra = "" if e["initial_n_new_violations"] is None else f" {e['initial_n_new_violations']} new"
-            comps = ", ".join(f"{t} {v[:3]}{'…' if len(v) > 3 else ''}" for t, v in e["injected"]["components"].items())
+            comps = ", ".join(f"{t} {x[:3]}{'…' if len(x) > 3 else ''}" for t, x in e["injected"]["components"].items())
             cells.append(chip(st.replace("_", " ") + extra, k) + f"<div class='muted'>{E(comps)}</div>")
         rows.append(cells)
-    base = {n: len(ent[f"{n}-normal_operation"]["base_violations"]) for n in NETWORKS if f"{n}-normal_operation" in ent}
-    return "".join([
-        card("Thirteen fault injections on each network",
-             f"<p>The scenario set of the submitted paper, kept, with two things fixed. The two contingency scenarios now take the worst N-1 element "
-             f"out of service (they used to run the analysis and leave the network untouched), and every instance carries two labels: the category "
-             f"the generator set out to cause, and the state the solver measured on the injected network relative to the base. Frozen on "
-             f"{E(str(m.get('frozen_at_utc'))[:10])} with pandapower {E(m.get('pandapower'))}; each injected network has a content hash and a run refuses to "
-             f"start on an instance whose hash changed.</p>",
-             table(head, rows),
-             f"<p class='muted'>Base networks already violate the band at: " + ", ".join(f"{NETWORK_LABELS[n]} {k}" for n, k in base.items())
-             + " element(s). Those never count against a method.</p>"),
-        card("What the diagnosis is scored against",
-             "<p>The injected fault, not the symptom: the fault type of the generator and the components it changed. A load scaled by 20x is "
-             "<code>load_increase</code> on the loads, not <code>nonconvergence</code>; a line outage is the line that was switched out, not the lines that "
-             "overloaded because of it. An answer is exact when its fault type matches and it names at least one injected component.</p>",
-             table(["fault type", "scenarios"], [[f"<code>{E(ft)}</code>", E(", ".join(sid for sid, f in S.FAULT_TYPE_OF.items() if f == ft))] for ft in S.FAULT_TYPES if any(f == ft for f in S.FAULT_TYPE_OF.values())])),
-        card("Where a stress set would go",
-             "<p>The other case studies add a set of requests built to be unanswerable, so the escalation column measures something on ordinary days. "
-             "Here the ordinary set already contains scenarios no method can make secure with the catalogue (a line with near-zero impedance cannot be "
-             "restored by any action in it), so the escalation column has content without a separate set. A stress set is not planned.</p>"),
-    ])
+    base = {n: len(ent[S.instance_id(n, "normal_operation", 0)]["base_violations"]) for n in shown
+            if S.instance_id(n, "normal_operation", 0) in ent}
+    by_cat: Dict[str, int] = {}
+    for sid, _v in S.INSTANCES:
+        by_cat[S.CATEGORY_OF[sid]] = by_cat.get(S.CATEGORY_OF[sid], 0) + 1
+
+    body = [
+        card(
+            f"{S.N_INSTANCES} scenarios per network, built from {len(S.SCENARIOS)} fault classes",
+            f"<p><b>A run poses {S.N_INSTANCES} scenarios on each network, and every method answers the same "
+            f"{S.N_INSTANCES}.</b> They come from thirteen fault classes, the taxonomy of the submitted paper. "
+            f"Six classes are posed once, because they perturb the whole network and there is only one way to do it; "
+            f"seven can place their fault at different points and are posed twice, at two different points. "
+            f"6 × 1 + 7 × 2 = {S.N_INSTANCES}. By failure mode: "
+            + ", ".join(f"{k} {c}" for k, c in sorted(by_cat.items(), key=lambda kv: -kv[1]))
+            + ".</p>"
+            "<p>Two things were fixed with respect to the submitted set. The two contingency classes now take the worst N-1 "
+            "element out of service, where they used to run the analysis and leave the network untouched; and every scenario "
+            "carries two labels, the category the generator set out to cause and the state the solver measured on the injected "
+            f"network relative to the base. Frozen on {E(str(m.get('frozen_at_utc'))[:10])} with pandapower {E(m.get('pandapower'))}; "
+            "each injected network has a content hash and a run refuses to start on a scenario whose hash changed.</p>",
+            table(head, rows),
+            "<p class='muted'>Base networks already violate the band at: "
+            + ", ".join(f"{NETWORK_LABELS[n]} {k}" for n, k in base.items())
+            + " element(s). Those never count against a method.</p>",
+        ),
+        card(
+            "What a variant changes, and what it never changes",
+            "<p>Posing a class twice moves the fault, it does not make it harder. Each class ranks the places it could "
+            "strike, by base loading, by hop distance from the slack bus, or by how bad the outage is, and takes the first "
+            "or the second. The two scenarios of one class are therefore the same kind of fault at two different points, "
+            "which is what separates a method that handles line outages from one that memorized a line.</p>",
+            table(
+                ["class", "scenarios", "what the second one moves"],
+                [[f"<code>{E(sid)}</code>", str(S.VARIANTS_OF[sid]),
+                  E(S.VARIES_BY[sid]) if sid in S.VARIES_BY
+                  else f"<span class='muted'>{E(S.POSED_ONCE.get(sid, 'posed once'))}</span>"]
+                 for sid, _v in S.INSTANCES if _v == 0],
+                escape=False,
+            ),
+            note("The ranking is a property of the network, so the second scenario of a class means the same thing on every "
+                 "system: the second worst place for that fault. Nothing is drawn at random and no seed is stored; the same "
+                 "code on the same pandapower version produces the same twenty scenarios, which is what the content hashes "
+                 "pin. In the results they are told apart by the suffix <code>v0</code> and <code>v1</code>.", "info"),
+        ),
+        card(
+            "Where a stress set would go",
+            "<p>The other case studies add a set of requests built to be unanswerable, so the escalation column measures "
+            "something on ordinary days. Here the ordinary set already contains scenarios no method can make secure with the "
+            "catalogue, a line with near-zero impedance cannot be restored by any action in it, so the escalation column has "
+            "content without a separate set. A stress set is not planned.</p>"),
+    ]
+    return "".join(body)
 
 
 BLOCKS: Dict[str, Tuple[str, str, str]] = {
@@ -345,10 +646,14 @@ def tab_gate() -> str:
         card("What the gate catches and what it cannot",
              "<div class='grid g2'><div><h3>It catches</h3><ul><li>a repair claimed while the solver's final network still violates a limit or does not converge</li>"
              "<li>a load left on an islanded bus</li><li>an action taken after the last power flow, so the reported numbers are stale</li>"
-             "<li>a number that appears in no tool output</li><li>a final_state that contradicts the solver</li></ul></div>"
+             "<li>a number that appears in no tool output</li><li>a final_state that contradicts the solver</li>"
+             "<li>an action claimed that errored, and an action taken and not reported</li></ul></div>"
              "<div><h3>It cannot catch</h3><ul><li>a wrong diagnosis. A network can be made secure by curtailing loads without ever naming the line that "
              "was lost; the gate passes it and the diagnosis column says the fault was not understood.</li>"
-             "<li>a repair that is secure but crude. Shedding every load is secure; the actions column shows it.</li></ul></div></div>",
+             "<li>a repair that is secure but crude. Shedding every load is secure, and the smoke test showed a method doing exactly that. "
+             "How much load a repair may shed is an operator's judgement, not a threshold a harness can set, so it is reported as the "
+             "<b>Load served</b> column beside Repaired rather than gated, the same way the EV case study puts undelivered energy beside "
+             "the cost gap.</li></ul></div></div>",
              note("That is why diagnosis is a column of its own and never a term of Solved: the gate measures whether the report is true, the diagnosis "
                   "column whether the fault was understood.", "warn")),
         card("Where a scenario ends up",
@@ -358,35 +663,73 @@ def tab_gate() -> str:
                  [verdict("escalated"), "the answer declares not_repaired or cannot_repair and lists what remains, or the budget ran out, or the gate rejected two attempts. Takes precedence"],
                  [verdict("wrong"), "a repair claim the solver contradicts, an unsupported number, or no answer with the contract, presented as valid"]])),
         card("The columns", "<p>Three groups, the same three in every case study.</p>", table(["group", "column", "what it measures", "why it is there"], crow)),
+        card(
+            "How the Diagnosis column is scored",
+            "<p>Against the injected fault, never against the symptom. A load scaled by twenty times is "
+            "<code>load_increase</code> on the loads, not <code>nonconvergence</code>; a line outage is the line that was "
+            "switched out, not the lines that overloaded because of it. An answer is exact when its <code>fault_type</code> "
+            "matches the injected one and it names at least one injected component; the normal case needs only the type.</p>",
+            table(["injected fault type", "the classes that inject it"],
+                  [[f"<code>{E(ft)}</code>", E(", ".join(sid for sid, f in _FAULT_TYPE_OF().items() if f == ft))]
+                   for ft in _FAULT_TYPES() if any(f == ft for f in _FAULT_TYPE_OF().values())]),
+            note("Diagnosis is scored on every scenario and is deliberately not a term of Solved. A network can be made "
+                 "secure by curtailing loads without ever naming the line that was lost: the gate passes that answer and this "
+                 "column says the fault was not understood.", "warn"),
+        ),
     ])
+
+
+def _FAULT_TYPES():
+    from evaluation.scenarios import FAULT_TYPES
+
+    return FAULT_TYPES
+
+
+def _FAULT_TYPE_OF():
+    from evaluation.scenarios import FAULT_TYPE_OF
+
+    return FAULT_TYPE_OF
 
 
 def tab_plan() -> str:
     from config import load_pricing, parse_model_spec
     from evaluation.runner import estimate
+    from evaluation.scenarios import N_INSTANCES
 
+    ALL = ALL_NETWORKS
     pricing = load_pricing()
-    rows = []
-    for spec_s in ("openrouter:openai/gpt-4o-mini", "openrouter:openai/gpt-4o", "openrouter:openai/gpt-5.6-sol"):
+    rows, cost = [], {}
+    for spec_s in ("openrouter:openai/gpt-4o-mini", "openrouter:openai/gpt-5.6-sol"):
         spec = parse_model_spec(spec_s)
-        per_net = []
-        tot = 0.0
-        for n in NETWORKS:
-            s = sum((estimate(m, n, spec, 13, pricing) or 0.0) for m in methods.ORDER)
-            per_net.append(f"{s:.2f}")
-            tot += s
-        rows.append([f"<code>{E(spec.short)}</code>"] + per_net + [f"<b>{tot:.2f}</b>"])
+        per_net, tot, tot3 = [], 0.0, 0.0
+        for n in ALL:
+            v = sum((estimate(m, n, spec, N_INSTANCES, pricing) or 0.0) for m in methods.ORDER)
+            per_net.append(f"{v:.2f}")
+            cost[(spec.short, n)] = v
+            tot += v
+            if n in NETWORKS:
+                tot3 += v
+        cost[(spec.short, "three")] = tot3
+        cost[(spec.short, "five")] = tot
+        rows.append([f"<code>{E(spec.short)}</code>"] + per_net + [f"{tot3:.2f}", f"<b>{tot:.2f}</b>"])
     return "".join([
         card("Phases",
              table(["phase", "what", "estimated cost", "state"], [
-                 ["0", "layout, scenarios frozen, page, tests without a key", "0", chip("done", "ok")],
-                 ["smoke", "3 scenarios × IEEE-14 × the five model-backed methods, gpt-4o-mini", "≈ 0.15 USD", chip("awaiting go", "warn")],
-                 ["1", "39 scenarios × 6 methods, gpt-4o-mini", "≈ 1.7 USD", chip("after the smoke", "warn")],
-                 ["2", "gpt-5.6-sol, IEEE-14 first, the rest with a top-up", "≈ 5 + 15 USD", chip("after phase 1", "warn")]])),
-        card("Cost estimate per model, 13 scenarios × 6 methods",
-             "<p>From the April 2026 traces: about 15 model calls with a growing context on the loop rows, scaled by network size. "
-             "<code>run.py run --dry-run</code> prints the same estimate for any selection.</p>",
-             table(["model"] + [NETWORK_LABELS[n] for n in NETWORKS] + ["total USD"], rows)),
+                 ["0", "layout, twenty scenarios frozen on five systems, pages, tests without a key", "0", chip("done", "ok")],
+                 ["smoke", "3 scenarios × IEEE-14 × 6 methods, gpt-4o-mini", "0.09 USD measured", chip("done 2026-09-27", "ok")],
+                 ["1", f"{N_INSTANCES} scenarios × 6 methods, gpt-4o-mini, on the systems Daniela picks",
+                  f"{cost[('gpt-4o-mini', 'three')]:.2f} USD on the three of the paper, {cost[('gpt-4o-mini', 'five')]:.2f} on all five",
+                  chip("awaiting her go", "warn")],
+                 ["2", "gpt-5.6-sol, IEEE-14 first, more only with a top-up",
+                  f"{cost[('gpt-5.6-sol', 'case14')]:.2f} USD for IEEE-14 alone", chip("after phase 1", "warn")]])),
+        card(f"Cost estimate per model, {N_INSTANCES} scenarios × 6 methods per network",
+             "<p>Scaled from the smoke test, which measured 0.09 USD for three IEEE-14 scenarios across the six methods. The "
+             "two loop rows carry almost all of it: a growing conversation over about fifteen model calls, and the tool "
+             "outputs grow with the network. <code>run.py run --dry-run</code> prints the same estimate for any selection.</p>",
+             table(["model"] + [NETWORK_LABELS[n] for n in ALL] + ["14+30+57", "all five"], rows),
+             note("The three systems of the submitted paper are IEEE-14, 30 and 57. IEEE-118 and IEEE-300 are the sizes R4.4 "
+                  "calls realistic and the ones the power-flow case study runs; all twenty scenarios build on them, and adding "
+                  "them costs about 3.9 USD more on the small model. Which systems the paper table carries is still open.", "info")),
         card("Budget per scenario", kv([("model calls", str(MAX_LLM_CALLS)), ("tool calls", str(MAX_TOOL_CALLS)), ("wall clock", f"{SCENARIO_TIMEOUT_S:.0f} s"),
                                         ("temperature", "0"), ("retry after the gate", "1, inside the same budget")])),
     ])
@@ -404,30 +747,80 @@ def tab_results() -> str:
         h = read_header(d)
         by_net.setdefault(h["header"]["case"], {})[h["header"]["method"]] = (d, read_summary(d), h)
 
-    def pct(rows: List[Dict[str, str]], kind: str) -> str:
-        k = sum(1 for r in rows if r.get("outcome") == kind)
-        return f"{100.0 * k / len(rows):.0f} % <span class='muted'>({k}/{len(rows)})</span>" if rows else "-"
+    # This case study has four denominators, not one, and they differ for a
+    # reason, so each figure is printed over the one it was computed on.
+    OUTCOMES = "scenarios this method completed; a scenario the harness could not run is not counted"
+    DIAGNOSED = "the runs that returned a diagnosis at all; a run with no valid JSON has none to judge"
+    COMPARABLE = "the runs whose network converged both before and after; one that does not converge has no countable violations"
+    SERVED = "the runs that left a network with measurable load"
+
+    GROUPS = (
+        (GROUP_UTILITY, ["Diagnosis exact %", "New violations initial &rarr; final", "Load served %",
+                         "Repaired %", "Improved %", "Feasible %"]),
+        (GROUP_CORRECTNESS, ["Solved %", "Escalated %", "Wrong-unflagged %", "Traceable %"]),
+        (GROUP_COST, ["Tokens", "Cost $", "Time s"]),
+    )
 
     for net_name, per in by_net.items():
-        split = []
+        rows_out: List[Tuple[str, List[str], List[str]]] = []
         for row in ROWS:
-            if row["name"] in per:
-                d, rows, h = per[row["name"]]
-                a = h["aggregate"]
-                split.append([f"<b>{E(row['label'])}</b>", str(len(rows)), pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged"),
-                              f"{a.get('form')} %", f"{a.get('repaired')}/{len(rows)}", f"{a.get('trace')} %", f"{a.get('tokens')}", f"{a.get('cost')}"])
-            else:
-                split.append([f"<b>{E(row['label'])}</b>", "<span class='muted'>not run</span>"] + [""] * 8)
-        body.append(card(f"{NETWORK_LABELS.get(net_name, net_name)} · run of {E(newest)}",
-                         table(["method", "n", verdict("solved"), verdict("escalated"), verdict("wrong"), "diagnosis", "repaired", "traceable", "tokens", "cost $"], split)))
+            if row["name"] not in per:
+                continue
+            d, rows, h = per[row["name"]]
+            a = h["aggregate"]
+            n = int(a.get("n") or len(rows))
+            out = lambda k, c: counted(f"{100.0 * c / n:.0f}" if n else DASH, Count(int(c), n, OUTCOMES))  # noqa: E731
+            n_diag = int(a.get("common_formulation_total") or 0)
+            n_cmp = int(a.get("violations_comparable_n") or 0)
+            # no field of its own yet; counted from the rows that reported one
+            n_served = sum(1 for r in rows if str(r.get("load_served_pct", "")).strip() not in ("", "None"))
+            viol = (f"{a.get('violations_initial_new')} &rarr; {a.get('violations_final_new')}"
+                    if a.get("violations_final_new") is not None else DASH)
+            cells = [
+                counted(f"{a.get('form')}" if a.get("form") is not None else DASH,
+                        Count(int(a.get("common_formulation_count") or 0), n_diag, DIAGNOSED)),
+                counted(viol, Count(n_cmp, n, COMPARABLE)),
+                counted(f"{a.get('load_served_pct_mean'):.1f}" if a.get("load_served_pct_mean") is not None else DASH,
+                        Count(n_served, n, SERVED)),
+                out("repaired", a.get("repaired") or 0),
+                out("improved", a.get("improved") or 0),
+                out("feasible", a.get("feasible") or 0),
+                out("solved", a.get("solved") or 0),
+                out("escalated", a.get("escalated") or 0),
+                out("wrong", a.get("wrong") or 0),
+                counted(f"{a.get('trace')}" if a.get("trace") is not None else DASH,
+                        Count(int(a.get("common_traceable_count") or 0), n, OUTCOMES)),
+                f"{a.get('tokens'):,}" if a.get("tokens") else NA,
+                f"{a.get('cost'):.3f}" if a.get("cost") is not None else NA,
+                f"{a.get('wall_time_mean_s'):.0f}" if a.get("wall_time_mean_s") is not None else DASH,
+            ]
+            label = f"<b>{E(row['label'])}</b><div class='muted'><code>{E(row['name'])}</code></div>"
+            errs = int(a.get("run_error") or 0)
+            n_cell = str(n) + (f"<br><span class='cnt'>{errs} run error{'s' if errs > 1 else ''}</span>" if errs else "")
+            rows_out.append((d.parts[-2], [label, n_cell], cells, str(d.relative_to(PROJECT_ROOT / "results"))))
+        missing = [r for r in ROWS if r["name"] not in per]
+        body.append(card(
+            f"{NETWORK_LABELS.get(net_name, net_name)} · run of {E(newest)}",
+            comparison_table(GROUPS, rows_out, lead=("Model", "Method", "n")),
+            (f"<p class='muted'>Not in this run: {E(', '.join(r['label'] for r in missing))}.</p>" if missing else ""),
+            note("The three column groups are the same three in every case study of this site. Every figure carries, above it, "
+                 "the number of runs it was computed over, and in this case study those differ on purpose: the outcomes are "
+                 "over the scenarios the method completed, the diagnosis over the runs that returned a diagnosis at all, and "
+                 "the violations over the runs whose network converged both before and after, because a network that does not "
+                 "converge has no countable violations rather than none. <b>Violations are counted as new</b>, that is beyond "
+                 "the ones the base network already has: IEEE-14 has three buses out of band before anything is touched and "
+                 "IEEE-57 has thirty-nine, so an absolute count would make the system look like the method's doing.", "info")))
+
+    body.append(side_by_side())
+
     det = []
     cols = [("nn", "nn"), ("scenario_id", "scenario"), ("initial_state", "initial"), ("outcome", "outcome"), ("solved_reason", "why"), ("formulation_exact", "diag."),
             ("final_secure", "secure"), ("final_n_new", "new viol."), ("gate_pass", "gate"), ("n_actions", "actions"), ("n_llm_calls", "llm"), ("n_tool_calls", "tools"), ("cost_usd", "cost $")]
     for d in latest:
         rows = read_summary(d)
-        det.append(f"<details><summary>{E(d.parts[-4])} / {E(d.parts[-2])} / {E(d.name)} — every scenario</summary>"
+        det.append(f"<details><summary>{E(d.parts[-4])} / {E(d.parts[-2])} / {E(d.name)} — every scenario, every metric</summary>"
                    + table([l for _k, l in cols], [[verdict(r["outcome"]) if k == "outcome" else E(r.get(k, "")) for k, _l in cols] for r in rows]) + "</details>")
-    body.append(card("Scenario by scenario", *det))
+    body.append(card("Every metric of every scenario", *det))
     return "".join(body)
 
 
@@ -481,11 +874,15 @@ BUILDERS = {"home": tab_home, "methods": tab_methods, "scenarios": tab_scenarios
 
 SCRIPT = """
 (function(){
-  var mth=document.getElementById('mth'); if(!mth) return;
-  function apply(){ document.querySelectorAll('.pm').forEach(function(p){ p.style.display = p.dataset.mth===mth.value ? '' : 'none'; }); }
-  mth.onchange=apply; apply();
+  var mth=document.getElementById('mth');
+  if(mth){ var apply=function(){ document.querySelectorAll('.pm').forEach(function(p){ p.style.display = p.dataset.mth===mth.value ? '' : 'none'; }); };
+    mth.onchange=apply; apply(); }
 })();
 """
+# The two selectors that used to choose which of three scenarios to show are
+# gone: every scenario is a row of the results table now, and unfolding one is
+# a click. Expanding a step line is handled once, in visuals/shell.py, for all
+# four case studies.
 
 
 def payload() -> Dict[str, Any]:
@@ -493,9 +890,9 @@ def payload() -> Dict[str, Any]:
     n = len(m["entries"]) if m else 0
     return {
         "id": CASE_ID, "title": CASE_TITLE, "brand": "GridDebugAgent · contingency diagnosis and repair",
-        "note": f"{n} scenario instances on {len(NETWORKS)} IEEE networks",
+        "note": f"{S_N()} scenarios on each of {len(NETWORKS)} IEEE networks",
         "blurb": "Diagnose a fault injected into an IEEE test network and restore a secure operating point with control-room actions, verified by the power flow.",
-        "summary": [("task", "diagnose and repair"), ("solver", "pandapower AC power flow"), ("data", f"{n} frozen scenario instances")],
+        "summary": [("task", "diagnose and repair"), ("solver", "pandapower AC power flow"), ("data", f"{S_N()} frozen scenarios per network")],
         "groups": [[label, [list(e) for e in entries]] for label, entries in GROUPS],
         "tabs": {key: BUILDERS[key]() for _l, entries in GROUPS for key, _t in entries},
         "script": SCRIPT,

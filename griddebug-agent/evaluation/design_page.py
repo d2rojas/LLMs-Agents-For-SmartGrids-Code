@@ -123,6 +123,7 @@ def index_html() -> str:
         "<a href='#design/gate' data-r='design/gate'>Gate &amp; scoring</a><a href='#design/plan' data-r='design/plan'>Run plan &amp; cost</a><hr>"
         "<div class='grp'><span class='n'>2</span>Results</div>"
         "<a href='#results/table' data-r='results/table'>Table &amp; scenarios</a><a href='#results/traces' data-r='results/traces'>Trace viewer</a>"
+        
         "<a href='#results/failures' data-r='results/failures'>Failure report</a><hr>"
         "<div class='grp'><span class='n'>3</span>Analysis</div><span class='off'>Comparisons &amp; conclusions<small>written after the results exist</small></span>"
         "</aside><main><section id='home'>"

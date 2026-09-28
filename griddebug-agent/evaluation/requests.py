@@ -20,14 +20,15 @@ from config import MAX_LOADING_PERCENT, NETWORK_LABELS, V_MAX_PU, V_MIN_PU
 from evaluation import scenarios as S
 from solver.evidence import EvidenceCollector
 from solver.network import load_network, network_hash
-from solver.violations import Key, State, base_violation_keys, observe
+from solver.violations import Key, State, base_violation_keys, observe, served_load_mw
 
 
 @dataclass
 class Request:
-    request_id: str            # case14-line_contingency_overload
+    request_id: str            # case14-line_contingency_overload-v0
     network: str
     scenario_id: str
+    variant: int
     category: str
     label: str
     text: str
@@ -37,14 +38,16 @@ class Request:
     base_keys: FrozenSet[Key]
     net: pp.pandapowerNet      # the injected network, power flow attempted
     network_hash: str
+    base_load_mw: float = 0.0  # the unmodified network's active demand, the load-served denominator
     truth: Any = None
 
     def as_record(self) -> Dict[str, Any]:
         return {
             "request_id": self.request_id, "network": self.network, "scenario_id": self.scenario_id,
-            "category": self.category, "label": self.label, "text": self.text,
+            "variant": self.variant, "category": self.category, "label": self.label, "text": self.text,
             "injected": self.injected.as_dict(), "initial_state": self.initial.as_dict(),
             "base_violations": sorted(f"{k}:{i}" for k, i in self.base_keys), "network_hash": self.network_hash,
+            "base_load_mw": self.base_load_mw,
         }
 
 
@@ -99,25 +102,27 @@ def evidence_block(net: pp.pandapowerNet, base_keys: FrozenSet[Key], initial: St
     return "\n".join(lines)
 
 
-def build_request(network: str, scenario_id: str) -> Request:
+def build_request(network: str, scenario_id: str, variant: int = 0) -> Request:
     base = load_network(network)
     base_keys = base_violation_keys(base)
-    net, truth, injected = S.build(network, scenario_id)
+    net, truth, injected = S.build(network, scenario_id, variant)
     h = network_hash(net)
     initial = observe(net, base_keys, in_place=True)  # leaves the power-flow results on the net the method receives
     return Request(
-        request_id=f"{network}-{scenario_id}",
-        network=network, scenario_id=scenario_id,
+        request_id=S.instance_id(network, scenario_id, variant),
+        network=network, scenario_id=scenario_id, variant=variant,
         category=S.CATEGORY_OF[scenario_id], label=S.LABEL_OF[scenario_id],
         text=request_text(network, initial),
         evidence_text=evidence_block(net, base_keys, initial),
-        injected=injected, initial=initial, base_keys=base_keys, net=net, network_hash=h, truth=truth,
+        injected=injected, initial=initial, base_keys=base_keys, net=net, network_hash=h,
+        base_load_mw=round(served_load_mw(base), 2), truth=truth,
     )
 
 
 def build_requests(networks: List[str], scenario_ids: Optional[List[str]] = None) -> List[Request]:
-    ids = list(scenario_ids or S.SCENARIO_IDS)
-    return [build_request(n, s) for n in networks for s in ids]
+    """Every instance of the given networks, in table order. ``scenario_ids`` filters by class."""
+    keep = set(scenario_ids) if scenario_ids else None
+    return [build_request(n, sid, v) for n in networks for sid, v in S.INSTANCES if keep is None or sid in keep]
 
 
 def fresh_network(req: Request) -> pp.pandapowerNet:

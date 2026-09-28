@@ -1,0 +1,32 @@
+RUN 10  |  case300-multistep-018-s0  |  plan_act_nogate  |  gpt-4o-mini  |  IEEE 300-bus  |  seed 0  |  difficulty multistep
+Request: Load the IEEE 300-bus system, disconnect the line between bus 99 and bus 110, then rerun the power flow, then list every line whose loading is above 90%.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 4-step plan: load_case(case_name="case300") -> disconnect_line(from_bus=99, to_bus=110) -> run_powerflow() -> get_most_loaded_branch()
+  2. LLM replied without tool calls: {"plan":[{"tool":"load_case","args":{"case_name":"case300"}},{"tool":"disconnect_line","args":{"from_bus":99,"to_bus":110}},{"tool":"run_powerflow","args":{}},{   (706 in / 59 out tokens, 1.0 s)
+  3. parser called load_case(case_name="case300")
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=23782.767
+  4. parser called disconnect_line(from_bus=99, to_bus=110)
+       tool disconnect_line -> converged=true, total_load_mw=23782.767, total_generation_mw=24220.614, total_loss_mw=437.847  [gate pass]
+  5. parser called run_powerflow()
+       tool run_powerflow -> case_name="case300", converged=true, total_load_mw=23782.767, total_generation_mw=24220.614, total_loss_mw=437.847, bus_voltages[300], line_flows[345], voltage_violations[73], thermal_violations[11]  [gate pass]
+  6. parser called get_most_loaded_branch()
+       tool get_most_loaded_branch -> {"branch_id": 54, "branch_type": "line", "from_bus": 37, "to_bus": 41, "loading_percent": 141.47}
+  7. LLM wrote the final answer   (38527 in / 10667 out tokens, 150.6 s)
+  Totals: 2 LLM calls, 4 tool calls, 1 tool rounds, 39233 in / 10726 out tokens, $0.0123, 151.8 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> disconnect_line(from_bus=99, to_bus=110) -> run_powerflow()
+  executed: load_case(case_name="case300") -> disconnect_line(from_bus=99, to_bus=110) -> run_powerflow() -> get_most_loaded_branch()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 709, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1, 2] after disconnect_line at call 1)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: incomplete_coverage
+  against the reference: voltage MAE 0.0418 p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case300-multistep-018-s0_run0.json

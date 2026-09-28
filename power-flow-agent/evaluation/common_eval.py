@@ -203,6 +203,12 @@ def score_common(
         out["common_escalated"] = False
         out["common_reason"] = "run_error"
         out["common_run_error"] = str(run_error)[:200]
+        # Nothing the method produced is scored on an API failure: the stored text is the error
+        # message, not an answer, so formulation and traceability have nothing to read.
+        out["common_formulation_exact"] = None
+        out["common_formulation_error_type"] = None
+        out["common_formulation_detail"] = "not scored: the request failed before the method answered"
+        out["common_traceable"] = None
     return out
 
 

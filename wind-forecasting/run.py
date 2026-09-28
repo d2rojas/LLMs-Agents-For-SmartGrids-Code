@@ -5,6 +5,7 @@
     python run.py show-prompt --method windagent              a method's card, its texts and the assembled system prompt
     python run.py freeze-data --source <wtbdata_245days.csv>  write data/benchmark/ and its manifest (on purpose only)
     python run.py train-gru [--force]                         train the conventional forecaster on the frozen training slices
+    python run.py freeze-reference [--force]                  fit the evaluation protocol's reference model (Madsen et al. 2005) on the training period
     python run.py run --dry-run                               the plan and the cost estimate; spends nothing
     python run.py run --method windagent --n 3 --horizon 48 --tag smoke --model openrouter:openai/gpt-4o-mini
     python run.py postprocess results/sdwpf/<date>/<model>/<method>   re-render after a scoring change
@@ -94,6 +95,13 @@ def cmd_freeze(argv: List[str]) -> int:
     return int(freeze.main(argv) or 0)
 
 
+def cmd_freeze_reference(args: argparse.Namespace) -> int:
+    from solver import reference
+
+    reference.freeze(force=args.force)
+    return 0
+
+
 def cmd_train_gru(args: argparse.Namespace) -> int:
     from solver import gru
 
@@ -135,7 +143,7 @@ def cmd_index(_args: argparse.Namespace) -> int:
 def cmd_serve(args: argparse.Namespace) -> int:
     site = PROJECT_ROOT.parent / "site"
     if not (site / "index.html").exists():
-        print("no site yet: run `python -m visuals.build` from the repository root first")
+        print("no site yet: run `python -m visuals.build --require wind` from the repository root first")
         return 1
     handler = http.server.SimpleHTTPRequestHandler
     with socketserver.TCPServer(("127.0.0.1", args.port), lambda *a, **k: handler(*a, directory=str(site), **k)) as httpd:
@@ -160,6 +168,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     sp = sub.add_parser("show-prompt", help="a method's card and the texts it is built from")
     sp.add_argument("--method", required=True)
     sp.set_defaults(func=cmd_show_prompt)
+    fr = sub.add_parser("freeze-reference", help="fit and freeze the evaluation protocol's reference model on the training period")
+    fr.add_argument("--force", action="store_true")
+    fr.set_defaults(func=cmd_freeze_reference)
     tg = sub.add_parser("train-gru", help="train the conventional forecaster on data/gru/train_t*.csv")
     tg.add_argument("--force", action="store_true")
     tg.add_argument("--epochs", type=int, default=12)

@@ -1,0 +1,43 @@
+RUN 01  |  case14-disconnected_subnetwork-v0  |  plan_act_nogate  |  openrouter:openai/gpt-4o-mini  |  IEEE 14-bus
+Scenario: Disconnected sub-network (nonconvergence); injected fault: islanding {"bus": [1], "line": [0, 2, 3, 4]}
+Initial state: islanded_load, 7 new violation(s)
+Request: The AC power flow on the IEEE 14-bus system (case14) converged, but 1 bus(es) with load are islanded and 7 new limit violation(s) appeared. Diagnose the cause and restore a secure operating point: the power flow converges, no in-service load is on an islanded bus, every bus voltage is within [0.95, 1.05] p.u., and no line or transformer is above 100 % loading, apart from the violations the base network already has. Use only the actions available. Report the diagnosis, the actions taken, and the final state.
+
+WHAT THE METHOD DID
+   1. switch_element({"element_type": "line", "element_index": 0, "in_service": true})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 0, "old_in_service": false, "new_in_service": true, "islanded_load_buses_after": [], "note": "This switching left no load stranded."}
+   2. switch_element({"element_type": "line", "element_index": 2, "in_service": true})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 2, "old_in_service": false, "new_in_service": true, "islanded_load_buses_after": [], "note": "This switching left no load stranded."}
+   3. switch_element({"element_type": "line", "element_index": 3, "in_service": true})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 3, "old_in_service": false, "new_in_service": true, "islanded_load_buses_after": [], "note": "This switching left no load stranded."}
+   4. switch_element({"element_type": "line", "element_index": 4, "in_service": true})
+       -> {"action": "switch_element", "success": true, "element_type": "line", "element_index": 4, "old_in_service": false, "new_in_service": true, "islanded_load_buses_after": [], "note": "This switching left no load stranded."}
+   5. adjust_generation({"gen_index": 1, "gen_type": "generator", "p_mw_new": 40.0, "vm_pu_new": 1.0})
+       -> {"error": "Invalid gen_type 'generator'. Must be 'gen', 'sgen', or 'ext_grid'."}
+   6. curtail_load({"load_index": 1, "scale_factor": 0.5})
+       -> {"action": "curtail_load", "success": true, "load_index": 1, "old_p_mw": 94.2, "new_p_mw": 47.1, "scale_factor": 0.5}
+   7. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+   8. check_voltage_violations({"v_min": 0.95, "v_max": 1.05})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [], "n_new_violations": 0, "pre_existing_in_base": {"n": 3, "buses": [5, 6, 7]}, "note": "Only new_violations count against the repair. The b… (339 chars)
+   9. check_overloads({"threshold_percent": 100})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [], "n_new_overloads": 0, "pre_existing_in_base": {"n": 0, "elements": []}, "note": "Only new_overloads count against the repair. The elements under pre_ex… (320 chars)
+  10. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  Totals: 2 LLM calls, 10 tool calls, 5842 in / 823 out tokens, 9.766 s
+
+DIAGNOSIS  (is the injected fault named?)
+  answer: line_outage {"line": [0, 2, 3, 4]}   verdict: FAIL   answer line_outage, injected islanding
+
+STATE  (the harness's own power flow on the final network)
+  converged: True   secure: True   new violations: 0   islanded load: []
+  repaired: True   improved: True   feasible: True
+
+REPORTING
+  status claimed: repaired   final_state claimed: converged=True, new violations=0
+  numbers in the answer: 1, untraceable: 0 -> traceable: pass
+
+OUTCOME: SOLVED   (secure, claimed, traceable, consistent)
+
+SUMMARY WRITTEN BY THE METHOD
+  The network had an islanded bus with in-service load due to line outages. After switching the lines back in service and curtailing a load, the power flow converged with no new violations and no islanded load. The network is now secure.

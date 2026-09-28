@@ -1,0 +1,66 @@
+RUN 02  |  case14-extreme_load_scaling-v0  |  griddebug  |  openrouter:openai/gpt-4o-mini  |  IEEE 14-bus
+Scenario: Extreme load scaling (20x) (nonconvergence); injected fault: load_increase {"load": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}
+Initial state: not_converged, None new violation(s)
+Request: The AC power flow on the IEEE 14-bus system (case14) did not converge. Diagnose the cause and restore a secure operating point: the power flow converges, no in-service load is on an islanded bus, every bus voltage is within [0.95, 1.05] p.u., and no line or transformer is above 100 % loading, apart from the violations the base network already has. Use only the actions available. Report the diagnosis, the actions taken, and the final state.
+
+WHAT THE METHOD DID
+   1. scale_all_loads({"factor": 0.1})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.1, "old_total_p_mw": 5180.0, "new_total_p_mw": 518.0}
+   2. get_power_balance({})
+       -> {"total_load_p_mw": 518.0, "total_load_q_mvar": 147.0, "total_gen_p_mw": 5180.0, "total_gen_q_mvar": 0.0, "total_active_power_loss_mw": 4662.0, "gen_capacity_mw": 440.0, "load_gen_ratio": 1.18}
+   3. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+   4. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [], "n_new_violations": 0, "pre_existing_in_base": {"n": 2, "buses": [5, 7]}, "note": "Only new_violations count against the repair. The buse… (336 chars)
+   5. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [{"element": "line", "index": 7, "loading_percent": 222.6, "from_bus": 5, "to_bus": 10}, {"element": "line", "index": 8, "loading_percent": 171.5, "from_bu… (1028 chars)
+   6. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+   7. curtail_load({"load_index": 0, "scale_factor": 0.5})
+       -> {"action": "curtail_load", "success": true, "load_index": 0, "old_p_mw": 43.4, "new_p_mw": 21.7, "scale_factor": 0.5}
+   8. curtail_load({"load_index": 1, "scale_factor": 0.5})
+       -> {"action": "curtail_load", "success": true, "load_index": 1, "old_p_mw": 188.4, "new_p_mw": 94.2, "scale_factor": 0.5}
+   9. curtail_load({"load_index": 2, "scale_factor": 0.5})
+       -> {"action": "curtail_load", "success": true, "load_index": 2, "old_p_mw": 95.6, "new_p_mw": 47.8, "scale_factor": 0.5}
+  10. curtail_load({"load_index": 3, "scale_factor": 0.5})
+       -> {"action": "curtail_load", "success": true, "load_index": 3, "old_p_mw": 15.2, "new_p_mw": 7.6, "scale_factor": 0.5}
+  11. curtail_load({"load_index": 4, "scale_factor": 0.5})
+       -> {"action": "curtail_load", "success": true, "load_index": 4, "old_p_mw": 22.4, "new_p_mw": 11.2, "scale_factor": 0.5}
+  12. curtail_load({"load_index": 5, "scale_factor": 0.5})
+       -> {"action": "curtail_load", "success": true, "load_index": 5, "old_p_mw": 59.0, "new_p_mw": 29.5, "scale_factor": 0.5}
+  13. curtail_load({"load_index": 6, "scale_factor": 0.5})
+       -> {"action": "curtail_load", "success": true, "load_index": 6, "old_p_mw": 18.0, "new_p_mw": 9.0, "scale_factor": 0.5}
+  14. curtail_load({"load_index": 7, "scale_factor": 0.5})
+       -> {"action": "curtail_load", "success": true, "load_index": 7, "old_p_mw": 7.0, "new_p_mw": 3.5, "scale_factor": 0.5}
+  15. curtail_load({"load_index": 8, "scale_factor": 0.5})
+       -> {"action": "curtail_load", "success": true, "load_index": 8, "old_p_mw": 12.2, "new_p_mw": 6.1, "scale_factor": 0.5}
+  16. curtail_load({"load_index": 9, "scale_factor": 0.5})
+       -> {"action": "curtail_load", "success": true, "load_index": 9, "old_p_mw": 27.0, "new_p_mw": 13.5, "scale_factor": 0.5}
+  17. curtail_load({"load_index": 10, "scale_factor": 0.5})
+       -> {"action": "curtail_load", "success": true, "load_index": 10, "old_p_mw": 29.8, "new_p_mw": 14.9, "scale_factor": 0.5}
+  18. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+  19. check_voltage_violations({})
+       -> {"converged": true, "limits_pu": {"min": 0.95, "max": 1.05}, "new_violations": [], "n_new_violations": 0, "pre_existing_in_base": {"n": 3, "buses": [5, 6, 7]}, "note": "Only new_violations count against the repair. The b… (339 chars)
+  20. check_overloads({})
+       -> {"converged": true, "threshold_percent": 100.0, "new_overloads": [], "n_new_overloads": 0, "pre_existing_in_base": {"n": 0, "elements": []}, "note": "Only new_overloads count against the repair. The elements under pre_ex… (320 chars)
+  21. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  Totals: 7 LLM calls, 21 tool calls, 27809 in / 1089 out tokens, 18.346 s
+
+DIAGNOSIS  (is the injected fault named?)
+  answer: generation_loss {"gen": [0, 1, 2, 3]}   verdict: FAIL   answer generation_loss, injected load_increase
+
+STATE  (the harness's own power flow on the final network)
+  converged: True   secure: True   new violations: 0   islanded load: []
+  repaired: True   improved: True   feasible: True
+
+REPORTING
+  status claimed: repaired   final_state claimed: converged=True, new violations=0
+  numbers in the answer: 0, untraceable: 0 -> traceable: pass
+  gate: passed
+
+OUTCOME: SOLVED   (secure, claimed, traceable, consistent)
+
+SUMMARY WRITTEN BY THE METHOD
+  The network initially faced a generation loss issue, with load demand far exceeding generation capacity. After scaling down the loads significantly and curtailing additional loads, the power flow converged successfully with no new violations.

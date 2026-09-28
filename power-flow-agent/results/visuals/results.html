@@ -9,14 +9,30 @@ table{border-collapse:collapse;width:100%;font-size:13px;background:#fff}th,td{b
 th.g{text-align:center;background:#eef2fb}
 .pill{display:inline-block;padding:1px 8px;border-radius:999px;color:#fff;font-size:11px;font-weight:600}.pill.solved{background:var(--ok)}.pill.escalated{background:var(--esc)}.pill.wrong_unflagged{background:var(--bad)}.pill.na{background:#94a3b8}.pill.run_error{background:#64748b}
 .sc td{vertical-align:top;text-align:left;font-size:12.5px}.sc a{color:var(--acc);text-decoration:none}.sc a:hover{text-decoration:underline}.sc .why{color:var(--muted);font-size:11.5px}
+.sc tr.req{cursor:pointer}.sc tr.req:hover td:first-child{background:#f6f8fb}
+.cols6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;align-items:start;margin:6px 0 2px}
+.col{background:#fff;border:1px solid var(--line);border-radius:10px;min-width:0;overflow:hidden}
+.col h4{margin:0;padding:8px 10px;border-bottom:1px solid var(--line);font-size:12.5px;background:#fafbfd;display:flex;justify-content:space-between;gap:6px;align-items:center}
+.vd{display:inline-block;padding:1px 8px;border-radius:999px;color:#fff;font-size:10.5px;font-weight:600;white-space:nowrap}
+.vd.solved{background:var(--ok)}.vd.escalated{background:var(--esc)}.vd.wrong_unflagged{background:var(--bad)}.vd.run_error{background:var(--muted)}
+.log{font:11.5px/1.4 'JetBrains Mono',ui-monospace,Menlo,monospace;max-height:460px;overflow:auto}
+.ln{display:grid;grid-template-columns:44px 1fr;gap:6px;padding:4px 8px;border-bottom:1px solid #f0f2f5;cursor:pointer}
+.ln .k{font-weight:600;font-size:10.5px}
+.ln .k.model{color:var(--acc)}.ln .k.solver{color:#0f8f84}.ln .k.plan{color:#6d4fc4}
+.ln .k.gate{color:#c99a06}.ln .k.final{color:var(--acc)}.ln .k.status{color:var(--muted)}
+.ln .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ln.open .s{white-space:pre-wrap;overflow:visible;word-break:break-word}
+.vt{padding:8px 10px;border-top:1px solid var(--line);font-size:11.5px;background:#fbfcfe}
+@media(max-width:1200px){.cols6{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .kpi{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 10px}.kpi div{background:#fafbfd;border:1px solid var(--line);border-radius:10px;padding:6px 12px;font-size:12.5px}.kpi b{display:block;font-size:16px}
 </style></head><body>
-<header><h1>PFAgent · Results</h1><label>Run set <select id='set'></select></label><label>System <select id='sys'></select></label><label>Model <select id='model'></select></label><span class='muted' id='status'></span></header>
+<header><h1>PFAgent · Results</h1><label>Run set <select id='set'></select></label><label>System <select id='sys'></select></label><label>Model <select id='model'></select></label><a class='muted' href='design.html' style='color:var(--acc)'>design: the six architectures as diagrams &#8599;</a><span class='muted' id='status'></span></header>
 <main>
 <div class='card'><h2>The table, as the paper prints it</h2><p class='muted'>One row per method, computed from the per-request lines (summary.csv) of the selected runs. Task utility, solver-grounded correctness, cost and time. Percentages are over the n requests of the run set; Formulation is scored over the requests the method answered (a method that declares it cannot complete a request reports no formulation; that is counted under Escalated). V_MAE (p.u.) and B_mean (MW) are shown as solved / all: the mean over the solved requests, then over every request that reported a state; tokens and time are means per request.</p><div id='table'></div></div>
-<div class='card'><h2>Every request, under each method</h2><p class='muted'>The verdict of each run, its formulation check, and a link to the real trace in the viewer. Click a request to open it.</p><div id='scen'></div></div>
+<div class='card'><h2>Every request, under each method</h2><p class='muted'>The verdict of each run, its formulation check, and a link to the real trace in the viewer. Click a request to unfold the six methods side by side, each with the narrative of what it actually did.</p><div id='scen'></div></div>
 </main>
 <script>
+let SCEN={};
 const METHODS=[['rule_based','Deterministic parser'],['llm_only_structured','Structured prompting'],['llm_only_cot','Chain-of-thought prompting'],['plan_act_nogate','Plan-and-Act'],['react_nogate','ReAct'],['pfagent','PFAgent']];
 const SYS={ieee14:'IEEE 14-bus',ieee30:'IEEE 30-bus',ieee57:'IEEE 57-bus',ieee118:'IEEE 118-bus',ieee300:'IEEE 300-bus'};
 const $=s=>document.querySelector(s);let INDEX=null,ROWS={};
@@ -43,13 +59,80 @@ async function render(){const runs=runsOf();const byM={};for(const r of runs){by
   const tok=r.model==='no-llm'?null:mean(rows.map(x=>(num(x.prompt_tokens)||0)+(num(x.completion_tokens)||0)));const tm=mean(rows.map(x=>num(x.wall_time_s)).filter(x=>x!=null));
   h+=`<tr><td><b>${label}</b><br><span class='muted'>${r.model} · ${r.date}</span></td><td>${fmtP(form)}${frows.length&&frows.length<rows.length?`<br><span class='muted'>of ${frows.length} answered</span>`:''}</td><td>${fmtE(vSol)} / ${fmtE(vAll)}</td><td>${fmtE(bSol)} / ${fmtE(bAll)}</td><td>${fmtP(pct('solved'))}</td><td>${fmtP(pct('escalated'))}</td><td>${fmtP(pct('wrong_unflagged'))}</td><td>${r.model==='no-llm'?'100.0':fmtP(tr)}</td><td>${tok==null?'–':Math.round(tok)}</td><td>${tm==null?'–':tm.toFixed(1)}</td><td>${rows.length}${errs.length?`<br><span class='pill run_error'>${errs.length} run error${errs.length>1?'s':''}</span>`:''}</td></tr>`;
   all.forEach(x=>{(scen[x.request_id]=scen[x.request_id]||{text:x.request_text,difficulty:x.difficulty,cells:{}}).cells[key]={run:r,row:x};});}
+ SCEN=scen;
  h+="</table>";$('#table').innerHTML=h;
  let s="<table class='sc'><tr><th style='text-align:left'>request</th>"+METHODS.map(m=>`<th style='text-align:left'>${m[1]}</th>`).join('')+"</tr>";
- for(const [rid,sc] of Object.entries(scen)){s+=`<tr><td><b>${sc.difficulty}</b><br>${sc.text}<br><span class='why'>${rid}</span></td>`;
+ for(const [rid,sc] of Object.entries(scen)){s+=`<tr class='req' data-rid='${rid}'><td><b>${sc.difficulty}</b><br>${sc.text}<br><span class='why'>${rid}</span><br><span class='why' style='color:var(--acc)'>click: the six methods side by side &#9662;</span></td>`;
   for(const [key] of METHODS){const c=sc.cells[key];if(!c){s+="<td><span class='pill na'>no run</span></td>";continue;}const x=c.row;const st=`${String(x.nn).padStart(2,'0')}_${rid.replace(/[^A-Za-z0-9_.-]+/g,'_')}`;
    s+=`<td><a href='viewer.html#run=${encodeURIComponent(c.run.path)}&req=${encodeURIComponent(rid)}'><span class='pill ${outcome(x)}'>${outcome(x).replace('_',' ')}</span></a><br><span class='why'>formulation ${T(x.formulation_exact)?'exact':'not exact ('+x.formulation_error_type+')'}${x.solved_reason?' · '+x.solved_reason:''}${x.verification_outcome?' · gate '+x.verification_outcome:''}</span><br><a class='why' href='../${c.run.path}/traces/${st}.transcript.txt'>transcript</a> · <a class='why' href='../${c.run.path}/traces/${st}.narrative.txt'>narrative</a></td>`;}
-  s+="</tr>";}
+  s+=`</tr><tr class='panel' id="p_${rid}" hidden><td colspan="${METHODS.length+1}"><div class="cols6" id="c_${rid}"></div></td></tr>`;}
  s+="</table>";$('#scen').innerHTML=s;
+ // The same request under each method, in the shape design.html uses: one column per method, the
+ // run's own steps as a log, each line expandable. Built from the per-request trace JSON the run
+ // wrote, so it is the real trace and not a retelling (2026-09-28).
+ const E=t=>String(t==null?'':t).replace(/[&<>']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;'}[m]));
+ const fmtArgs=a=>{if(!a)return'()';let o=a;if(typeof o==='string'){try{o=JSON.parse(o)}catch(e){return'('+o+')'}}
+   return '('+Object.entries(o||{}).map(([k,v])=>`${k}=${typeof v==='string'?JSON.stringify(v):JSON.stringify(v)}`).join(', ')+')';};
+ const short=(t,n)=>{t=String(t==null?'':t).split(/\s+/).join(' ');return t.length>n?t.slice(0,n)+'…':t;};
+ const toolShort=o=>short(o,110);
+ function exampleRows(pl,row){                     // mirrors evaluation/design_page.py example_rows
+   const tr=pl.trace||{}, L=[];
+   if(tr.plan&&tr.plan.length) L.push(['plan','plan: '+tr.plan.map(c=>c.tool+fmtArgs(c.args)).join(' \u2192 '),JSON.stringify(tr.plan,null,1)]);
+   const rounds=tr.rounds||[];
+   for(const rd of rounds){
+     const llm=(rd.llm&&typeof rd.llm==='object')?rd.llm:null;
+     if(llm){
+       const calls=(llm.tool_calls||[]).map(tc=>tc.name+fmtArgs(tc.arguments)), u=llm.usage||{};
+       if(rd.final) L.push(['model','final answer: '+short(llm.content,150),String(llm.content||'')]);
+       else if(calls.length) L.push(['model','calls \u2192 '+calls.join('; '),(llm.content||'')+'\n\ntool calls:\n'+calls.join('\n')+`\n\n[${u.prompt_tokens??'?'} in / ${u.completion_tokens??'?'} out tokens]`]);
+       else L.push(['model','text: '+short(llm.content,150),String(llm.content||'')]);
+     }
+     for(const tool of rd.tools||[]){
+       let out=typeof tool.output==='string'?tool.output:JSON.stringify(tool.output);
+       out=String(out||'').replace(/"figure_json"\s*:\s*"(?:[^"\\]|\\.)*"/g,'"figure_json": "<plot omitted>"');
+       const g=tool.gate==null?'':((typeof tool.gate==='object'?tool.gate.passed:tool.gate)?' [gate: pass]':' [gate: FAIL]');
+       L.push(['solver',tool.name+fmtArgs(tool.arguments)+' \u2192 '+toolShort(out)+g,tool.name+fmtArgs(tool.arguments)+'\n\n'+out]);
+     }
+   }
+   if(!rounds.length) L.push(['model','answer: '+short(pl.answer||row.raw_response,150),String(pl.answer||row.raw_response||'')]);
+   else if(!rounds.some(r=>r.final)&&pl.answer) L.push(['final',short(pl.answer,150),String(pl.answer)]);
+   for(const [i,v] of (tr.verification||[]).entries()){
+     const cs=v.conditions||{};
+     L.push(['gate',`gate attempt ${i+1}: ${v.passed?'PASS':'FAIL'} \u00b7 `+Object.entries(cs).map(([k,c])=>`${c.label||k}${c.passed?'\u2713':(c.applicable===false?'\u00b7':'\u2717')}`).join(' '),
+       Object.entries(cs).map(([k,c])=>`${c.label||k} ${k}: ${c.passed?'pass':'FAIL'}${c.detail?' \u00b7 '+c.detail:''}`).join('\n')]);
+   }
+   for(const m of tr.verification_retry_messages||[]) L.push(['gate','retry message: '+short(m,150),String(m)]);
+   if(tr.status&&tr.status!=='ok') L.push(['status','engine status: '+tr.status,String(tr.status)]);
+   return L;
+ }
+ $('#scen').querySelectorAll('tr.req').forEach(tr=>tr.addEventListener('click',async ev=>{
+   if(ev.target.closest('a')) return;
+   const rid=tr.dataset.rid, pan=document.getElementById('p_'+rid), box=document.getElementById('c_'+rid);
+   pan.hidden=!pan.hidden; if(pan.hidden||box.dataset.done) return;
+   box.dataset.done='1'; box.innerHTML="<div class='muted'>loading the six traces…</div>";
+   const sc=SCEN[rid]; let h='';
+   for(const [key,label] of METHODS){
+     const c=sc.cells[key];
+     if(!c){h+=`<div class='col'><h4>${label}</h4><div class='vt muted'>no run</div></div>`;continue;}
+     const x=c.row, st=`${String(x.nn).padStart(2,'0')}_${rid.replace(/[^A-Za-z0-9_.-]/g,'_')}`;
+     let pl=null;
+     try{const r=await fetch(`../${c.run.path}/traces/${st}.json`);if(r.ok)pl=await r.json();}catch(e){}
+     const oc=outcome(x);
+     let body;
+     if(!pl) body="<div class='vt muted'>trace not readable</div>";
+     else body="<div class='log'>"+exampleRows(pl,x).map(([k,sh,full])=>
+         `<div class='ln' data-full='${E(full)}'><span class='k ${k}'>${k}</span><span class='s'>${E(sh)}</span></div>`).join('')+"</div>"+
+       `<div class='vt'>${x.n_llm_calls??'?'} model calls, ${x.n_tool_calls??'?'} solver calls · formulation ${x.formulation_exact==='True'||x.formulation_exact===true?'exact':(x.formulation_error_type||'–')}`+
+       `${x.verification_outcome?` · gate ${x.verification_outcome}`:''}<br><a href='../${c.run.path}/traces/${st}.transcript.txt'>transcript</a> · <a href='../${c.run.path}/traces/${st}.narrative.txt'>narrative</a></div>`;
+     h+=`<div class='col'><h4>${label}<span class='vd ${oc}'>${oc.replace('_',' ')}</span></h4>${body}</div>`;
+   }
+   box.innerHTML=h;
+   box.querySelectorAll('.ln').forEach(ln=>ln.addEventListener('click',e=>{
+     e.stopPropagation();
+     const open=ln.classList.toggle('open');
+     ln.querySelector('.s').textContent=open?ln.dataset.full:ln.dataset.full.split(/\s+/).join(' ').slice(0,150);
+   }));
+ }));
  $('#status').textContent=`${runs.length} runs · index ${INDEX.generated}`;}
 async function init(){INDEX=await (await fetch('../INDEX.json?t='+Date.now())).json();
  const sets=[...new Set(INDEX.runs.filter(r=>r.kind==='run').map(r=>tagOf(r)||'main'))].sort((a,b)=>(a==='main'?-1:b==='main'?1:a.localeCompare(b)));

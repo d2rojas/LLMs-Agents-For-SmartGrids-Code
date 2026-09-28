@@ -1,6 +1,6 @@
 # llm_only_structured on SDWPF with gpt-4o-mini
 
-Generated 2026-09-27 23:32 by evaluation/postprocess.py from `raw/rows.jsonl`. Requests: 3. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the frozen target days, the same way for every method.
+Generated 2026-09-28 00:18 by evaluation/postprocess.py from `raw/rows.jsonl`. Requests: 3. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the frozen target days, the same way for every method.
 
 ## Run
 
@@ -43,6 +43,9 @@ The three outcomes are exclusive and sum to the request count. Escalation takes 
 | Task utility | Formulation exact | 0/3 (0.0%) |
 | Task utility | Formulation error types | {'no_formulation': 3} |
 | Task utility | MAE / RMSE / overall, kW, over valid series (n=0) | None / None / None |
+| Task utility | NBIAS / NMAE / NRMSE, % of installed capacity (ANEMOS protocol) | None / None / None |
+| Task utility | Improvement over the protocol's reference model, % (its NMAE None %) | None |
+| Task utility | Improvement over persistence, % (its NMAE None %) | None |
 | Task utility | MAE / RMSE, kW, over solved requests | None / None |
 | Task utility | Answer coherent with the series | 0/0 |
 | Solver-grounded correctness | Valid series (schema and range) | 0/3 (0.0%) |
@@ -56,9 +59,11 @@ The three outcomes are exclusive and sum to the request count. Escalation takes 
 
 ## By horizon
 
-| horizon | n | solved | valid series scored | MAE kW | RMSE kW | overall kW |
-|---|---:|---:|---:|---:|---:|---:|
-| 48 h | 3 | 0 | 0 | None | None | None |
+Every error is the mean over the requests of that horizon whose series was valid; a method that returns no valid series at a horizon has nothing to average, which is itself the finding. NMAE and NRMSE are normalised by the 1500 kW installed capacity, and Imp. is the improvement score of the ANEMOS protocol (Madsen et al. 2005) over its reference model, `a_k P(t) + (1-a_k) Pbar`, fitted on the training period; the improvement over plain persistence is beside it because persistence is the reference most readers know, and the protocol warns it flatters a model at long horizons.
+
+| horizon | n | solved | scored | MAE kW | RMSE kW | NMAE % | NRMSE % | reference NMAE % | Imp. % | persistence NMAE % | Imp. vs pers. % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 48 h | 3 | 0 | 0 | None | None | None | None | None | None | None | None |
 
 ## Wrong and unflagged (3)
 

@@ -36,6 +36,8 @@ PINNED_TEXTS = {
     "single_call_cot/reasoning_section.txt": "e0bd7a11b9d9",
     "plan_act_nogate/plan_system_prompt_structured.txt": "5e9fee34a0db",
     "plan_act_nogate/plan_system_prompt_prefix.txt": "ba6b922e3d64",
+    # New 2026-09-28 with the replanning-on-failure implementation; no prior run used it.
+    "plan_act_nogate/replan_instruction.txt": "a14144e663b0",
     "_shared/common_rules.txt": "95a47a1faefe",
     "_shared/output_contract.txt": "53e5da46b7ad",
     "_shared/operations_section.txt": "d66817c9b4d3",
