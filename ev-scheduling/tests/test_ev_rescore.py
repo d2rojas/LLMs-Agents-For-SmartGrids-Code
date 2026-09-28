@@ -67,7 +67,7 @@ def run_dir(tmp_path_factory) -> Path:
     client = StubClient()
     client.day = pairs[0][1].day
     rows = matrix.run_matrix(
-        arms=matrix.resolve_arms(None),
+        arms=matrix.resolve_arms(list(matrix.DEFAULT_ARMS) + ["optimum", "charge_asap"]),
         pairs=pairs,
         spec=matrix.parse_model_spec(MODEL),
         model_requested=MODEL,
@@ -100,7 +100,7 @@ def run_dir(tmp_path_factory) -> Path:
         "seeds": [0],
         "repeats": 1,
         "items_per_arm": len(pairs),
-        "arms": list(matrix.DEFAULT_ARMS),
+        "arms": list(matrix.DEFAULT_ARMS) + ["optimum", "charge_asap"],
         "pending_arms": {},
         "model_requested": MODEL,
         "model_spec": MODEL,

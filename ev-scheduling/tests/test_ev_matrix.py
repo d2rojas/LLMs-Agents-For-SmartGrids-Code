@@ -445,7 +445,7 @@ def test_dry_run_estimate_is_measured_from_the_real_prompt(requests_two_days):
     estimates = {
         e["arm"]: e
         for e in matrix.estimate_run(
-            matrix.resolve_arms(None),
+            matrix.resolve_arms(list(matrix.DEFAULT_ARMS) + ["optimum", "charge_asap"]),
             [r for _s, r in requests_two_days],
             repeats=1,
             price_in=2.5,
@@ -514,7 +514,7 @@ def matrix_run(tmp_path_factory, requests_two_days):
     client = StubClient()
     client.day = requests_two_days[0][1].day
     rows = matrix.run_matrix(
-        arms=matrix.resolve_arms(None),
+        arms=matrix.resolve_arms(list(matrix.DEFAULT_ARMS) + ["optimum", "charge_asap"]),
         pairs=requests_two_days,
         spec=matrix.parse_model_spec(MODEL),
         model_requested=MODEL,
@@ -536,12 +536,13 @@ def matrix_run(tmp_path_factory, requests_two_days):
 
 def test_every_arm_produced_a_row_for_every_day(matrix_run, requests_two_days):
     _out_dir, rows, _client = matrix_run
-    expected = len(matrix.DEFAULT_ARMS) * len(requests_two_days)
-    assert len(rows) == expected
+    # the fixture runs the defaults plus the two free arms the harness tests use
+    arms = list(matrix.DEFAULT_ARMS) + ["optimum", "charge_asap"]
+    assert len(rows) == len(arms) * len(requests_two_days)
     by_arm = {}
     for row in rows:
         by_arm.setdefault(row["arm"], []).append(row)
-    assert set(by_arm) == set(matrix.DEFAULT_ARMS)
+    assert set(by_arm) == set(arms)
     for arm, arm_rows in by_arm.items():
         assert len(arm_rows) == len(requests_two_days), arm
 

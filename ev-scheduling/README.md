@@ -2,7 +2,7 @@
 
 A site operator describes a day of charging in plain language: the cars, when each one arrives and
 leaves, how much energy it needs, what its charger can deliver. The task is to turn that into the
-parameters of an optimisation problem, solve it under the site's power cap and its time-of-use
+parameters of an optimization problem, solve it under the site's power cap and its time-of-use
 tariff, and answer what was asked. This case study measures six ways of doing that, from a parser
 with no language model to the solver-grounded agent, on twenty days of real charging sessions from
 the ACN-Data portal, with one scorer for all six.
@@ -19,7 +19,7 @@ It follows the layout every case study in this repository follows; see [`../LAYO
 | `evaluation/` | `requests.py` (the scenario generator), `stress.py` (the unanswerable days), `outcome.py` (solved / escalated / wrong-unflagged), `formulation.py`, `traceability.py`, `metrics/`, `runner.py` (the benchmark matrix), `rescore.py`, `report.py`, `page_fragments.py` (this case study's sections of the shared site) |
 | `data/` | the session schema, the loader, and `data/benchmark/` with the twenty frozen days and their manifest of content hashes |
 | `config/` | site constants and tariff (`site.py`), model resolution and the client (`llm.py`) |
-| `results/` | one directory per run set, each with `rows.csv`, `scoreboard.md`, `run_manifest.json`, `traces/` and `REPORT.md`; `INDEX.md` lists them |
+| `results/` | `<instance>/<date>/<model>/<method>/` with `REPORT.md`, `summary.csv`, `config.json`, `traces/` and `raw/`; `INDEX.md` lists every method folder. See `results/README.md` |
 | `tests/` | API-key-free; `test_methods_prompts.py` pins the hash of every prompt text |
 | `ui/` | the FastAPI chat demo |
 | `viz/` | schedule and load-profile plots |
@@ -37,9 +37,8 @@ The same six, with the same names and in the same order, as every other case stu
 | `react_nogate` — tool call, observation, repeat, inside the round budget | yes | yes | none | not yet |
 | `evagent` — the ReAct loop plus the verification gate E1–E6 | yes | yes | final | yes |
 
-`python run.py list-methods` prints this from `methods/`. Two quantities are computed on every day
-and printed beside the table rather than scored as methods: the CVXPY optimum (the cost gap is
-measured against it) and charge-as-soon-as-possible (the uncontrolled rule).
+`python run.py list-methods` prints this from `methods/`. The cost gap of every row is measured
+against the CVXPY optimum of the same day, computed per request by the scorer; it is not a row.
 
 ## Setup
 
