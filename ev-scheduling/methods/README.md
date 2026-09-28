@@ -25,6 +25,37 @@ These six are the design, in this order, and they are the same six with the same
 other case study in the paper. A method that exists in one case study and not another cannot be
 compared, so the set does not vary.
 
+## One skeleton for the five methods that send a prompt
+
+Every method that talks to a model sends the same four sections, in this order, built by the same
+functions in `methods/prompting/strategies.py`:
+
+| section | who writes it | differs between methods? |
+|---|---|---|
+| `## Role` | `_shared/llm_only_role.txt` or `_shared/agent_role.txt` | only in whether a solver exists |
+| `## System Data` | `strategies.py::_context_section` | no, byte-identical |
+| `## Task` | the request text, verbatim | no |
+| `## Output Requirements` | `_shared/llm_only_output_contract.txt` or `_shared/agent_output_contract.txt`, both with `_shared/answer_rule.txt` filled in | only in what the architecture makes true |
+
+Chain-of-thought adds `## Reasoning Instructions` between the task and the output requirements, and
+that one section is the whole difference between the two prompting rows.
+
+**Corrected on 2026-09-28.** Until that date the three agent rows were sent something else entirely:
+a `GOAL` section stating the objective and a "serve at least 70 %" target, the constraint list in
+index form, the whole session table, and the solver's own algorithm in three steps. The no-tools rows
+were sent none of it, and a test asserts they still are not. Three of six rows were being helped by
+their prompt, so a difference between those rows and these would have measured the scaffolding as
+much as the architecture, which is precisely what reviewers R3.2 and R4.3 asked us to rule out.
+Plan-and-Act, meanwhile, had been sent the bare request text with no sections at all, so the three
+agent rows did not even match each other. All of that is gone; `tests/test_prompting.py` pins it.
+
+The extraction prompt was corrected in the same commit. It used to give 50.0 kW, $0.45 and $0.12 per
+kWh with the 4pm-9pm window, and 7.0 kW per plug, as defaults. Eighteen of the twenty frozen days
+state a 50 kW cap and all twenty state those two prices, so a model that never read those sentences
+would have got them right anyway, and the Formulation column would have been measuring the prompt.
+Every field of the schema is `null` now, and the rules say to read the request and never to supply a
+value from what is usual.
+
 ## What is in a `.txt` and what is not
 
 The `.txt` files hold every fixed sentence. Three parts of a prompt are still built by code at run

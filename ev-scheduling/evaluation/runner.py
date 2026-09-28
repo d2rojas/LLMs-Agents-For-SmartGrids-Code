@@ -362,8 +362,8 @@ register_arm(
             basis=(
                 "parse call, one tool-calling round, one explanation turn, and one gate retry "
                 "budgeted; prompt measured offline from the parse system prompt and "
-                "methods/prompting/prompt.py::build_prompt_for_agent; the conversation is re-sent every "
-                "turn, so prompt tokens are doubled"
+                "methods/prompting/strategies.py::build_agent_user_message; the conversation is "
+                "re-sent every turn, so prompt tokens are doubled"
             ),
         ),
         description=(
@@ -1654,13 +1654,13 @@ def measure_prompt_tokens(arm: Arm, request: EVRequest) -> Tuple[int, str]:
         messages = prompt_strategies.build_messages(arm.strategy, request)
         total = sum(estimate_tokens(m["content"]) for m in messages)
         return total, f"methods/prompting/strategies.py::build_messages({arm.strategy!r})"
-    from methods.prompting.prompt import build_prompt_for_agent
+    from methods.prompting.strategies import build_agent_user_message
 
     site, tou = build_site_tou(request)
-    text = build_prompt_for_agent(request.day, site, tou, request.text)
+    text = build_agent_user_message(request.text, request.day)
     total = estimate_tokens(text) + estimate_tokens(request.text) + AGENT_FIXED_PROMPT_TOKENS
     return total, (
-        "methods/prompting/prompt.py::build_prompt_for_agent + the request text + "
+        "methods/prompting/strategies.py::build_agent_user_message + "
         f"{AGENT_FIXED_PROMPT_TOKENS} tokens for the system prompts and the tool schema"
     )
 
