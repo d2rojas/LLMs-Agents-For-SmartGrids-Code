@@ -143,7 +143,7 @@ def cmd_index(_args: argparse.Namespace) -> int:
 def cmd_serve(args: argparse.Namespace) -> int:
     site = PROJECT_ROOT.parent / "site"
     if not (site / "index.html").exists():
-        print("no site yet: run `python -m visuals.build` from the repository root first")
+        print("no site yet: run `python -m visuals.build --require wind` from the repository root first")
         return 1
     handler = http.server.SimpleHTTPRequestHandler
     with socketserver.TCPServer(("127.0.0.1", args.port), lambda *a, **k: handler(*a, directory=str(site), **k)) as httpd:

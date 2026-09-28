@@ -1,0 +1,652 @@
+{
+ "case_study": "wind",
+ "method": "plan_act_nogate",
+ "model": "openrouter:openai/gpt-4o-mini",
+ "request_id": "wind-t008-d212-h06-energy_kwh-s0",
+ "status": "ok",
+ "error": null,
+ "answer": "{\n  \"formulation\": {\n    \"turbine\": 8,\n    \"history_days\": [212, 225],\n    \"horizon_hours\": 6\n  },\n  \"forecast\": [\n    94.0,\n    113.9,\n    135.4,\n    177.1,\n    160.2,\n    171.7,\n    149.1,\n    193.2,\n    219.8,\n    214.7,\n    189.3,\n    219.5,\n    220.5,\n    198.4,\n    219.0,\n    212.5,\n    183.1,\n    219.8,\n    180.8,\n    198.9,\n    204.3,\n    197.3,\n    209.3,\n    237.1,\n    239.1,\n    283.9,\n    271.5,\n    255.6,\n    251.0,\n    276.0,\n    296.7,\n    308.4,\n    276.2,\n    286.5,\n    236.3,\n    258.7\n  ],\n  \"source\": \"gru_forecast\",\n  \"answer\": 204.3,\n  \"status\": \"forecast\",\n  \"cannot_forecast\": null,\n  \"summary\": \"For turbine 8, using the SCADA record from days 212 to 225, a 6-hour-ahead forecast was produced using the GRU forecaster, with an implied energy of 204.3 kWh over the horizon.\"\n}",
+ "messages": [
+  {
+   "role": "system",
+   "content": "You are a wind power forecasting assistant planning how to answer a forecasting request with tools. You will not see any tool result while planning: write the whole sequence of tool calls now, in order, and it will be executed exactly as written. After execution you will receive every result and write the final answer.\n\nPlan from the request: the turbine, the last day of the history window and the horizon in hours are the arguments every tool needs, and the tools refuse any other turbine or window. Include get_history_summary first, then at least one forecast tool for the requested horizon (gru_forecast is the conventional forecaster).\n\nReply with one JSON object and nothing else:\n{\"reading\": \"<one sentence: turbine, window, horizon, question>\", \"plan\": [{\"tool\": \"<tool name>\", \"args\": {<arguments>}}]}\n\n## Rules\n\n- The SCADA history is sampled every 10 minutes, 144 rows per day. Columns: Day, Tmstamp, Wspd (wind speed, m/s), Wdir (wind direction, degrees), Etmp (external temperature, C), Patv (active power, kW). A blank cell is a missing measurement.\n- Active power is between 0 and the turbine's rated power, which the request states and the tools report; it is not the same for every machine. Power is near zero below about 3 m/s and saturates near rated power at high wind speeds. Negative recorded values are the turbine's own consumption while stopped and count as 0.\n- Nothing after the last history day is known to anyone. Do not assume weather forecasts, later measurements, or the outcome of any other day.\n- A forecast for H hours is exactly H*6 values in kW, in time order, starting with the first 10-minute step after the last history row.\n- Do not invent numbers. Every number you report must come from the history you were given or from a tool output (methods with tools), or be your own explicit computation on the history (methods without tools).\n- A history in which every day has its 144 rows is complete, even if some cells are blank or the turbine was stopped for part of a day; only a whole missing day prevents a forecast. If the history does not support a forecast (the last day is missing or the tools cannot produce one), say so: set status to cannot_forecast and leave the forecast empty. A series presented as a forecast that no evidence supports is the worst possible outcome.\n\n## Tools\n\n### query tools\n- get_history_summary(turbine: integer (required), history_end_day: integer (required)): Per-day means, maxima and valid-row counts of the 14-day SCADA history of a turbine, plus its last hour. Call this first to see what the data looks like and whether the last day is complete.\n- get_history_rows(turbine: integer (required), history_end_day: integer (required), days: integer): The raw 10-minute rows (Day, Tmstamp, Wspd, Wdir, Etmp, Patv) of the last N days of the history, as CSV. Up to 14 days; each day is 144 rows.\n- fit_power_curve(turbine: integer (required), history_end_day: integer (required)): Fit the wind-speed-to-power curve of the turbine on its 14-day history: median power per 0.5 m/s bin, the cut-in speed and the highest median. Abnormal rows (curtailed, missing) are excluded.\n\n### forecast tools\n- persistence_forecast(turbine: integer (required), history_end_day: integer (required), horizon_hours: integer (required)): Forecast the next horizon_hours of active power by repeating the last history day's power. The simplest reference; exactly horizon_hours*6 values in kW.\n- power_curve_forecast(turbine: integer (required), history_end_day: integer (required), horizon_hours: integer (required)): Forecast the next horizon_hours by applying the fitted power curve to the last history day's wind speeds, repeated. Exactly horizon_hours*6 values in kW.\n- gru_forecast(turbine: integer (required), history_end_day: integer (required), horizon_hours: integer (required)): Forecast the next horizon_hours with the GRU trained on this farm's training period (days 1-214) from the last 24 h of the four SCADA features. The conventional forecaster of this case study. Exactly horizon_hours*6 values in kW.\n- foundation_forecast(turbine: integer (required), history_end_day: integer (required), horizon_hours: integer (required)): Forecast the next horizon_hours with a pretrained time-series foundation model (Chronos-Bolt), used zero shot: it was never trained on this farm and it reads the power history only, not the wind. Exactly horizon_hours*6 values in kW."
+  },
+  {
+   "role": "user",
+   "content": "## Request\nFor turbine 8 (rated power 1500 kW), using the 14-day SCADA record ending on day 225 (days 212 through 225, 10-minute sampling), produce a 6-hour-ahead forecast of active power: 36 values in kW, one per 10-minute step, beginning with the first step after the last row of the history. Also report the energy the forecast implies over the horizon, in kWh: the sum of the 10-minute values divided by 6."
+  },
+  {
+   "role": "assistant",
+   "content": "{\"reading\": \"turbine 8, window ending on day 225, horizon 6 hours, request for a 6-hour-ahead forecast of active power and implied energy.\", \"plan\": [{\"tool\": \"get_history_summary\", \"args\": {\"turbine\": 8, \"history_end_day\": 225}}, {\"tool\": \"gru_forecast\", \"args\": {\"turbine\": 8, \"history_end_day\": 225, \"horizon_hours\": 6}}]}"
+  },
+  {
+   "role": "user",
+   "content": "## Executed plan and results\n\n[\n {\n  \"tool\": \"get_history_summary\",\n  \"args\": {\n   \"turbine\": 8,\n   \"history_end_day\": 225\n  },\n  \"output\": {\n   \"turbine\": 8,\n   \"history_days\": [\n    212,\n    225\n   ],\n   \"rows\": 2016,\n   \"sampling_minutes\": 10,\n   \"rated_kw\": 1500.0,\n   \"per_day\": [\n    {\n     \"day\": 212,\n     \"rows\": 144,\n     \"rows_with_data\": 143,\n     \"rows_turbine_stopped_or_curtailed\": 112,\n     \"mean_kw\": 168.8,\n     \"max_kw\": 1312.2,\n     \"mean_wspd\": 2.69\n    },\n    {\n     \"day\": 213,\n     \"rows\": 144,\n     \"rows_with_data\": 144,\n     \"rows_turbine_stopped_or_curtailed\": 55,\n     \"mean_kw\": 400.5,\n     \"max_kw\": 1520.2,\n     \"mean_wspd\": 4.2\n    },\n    {\n     \"day\": 214,\n     \"rows\": 144,\n     \"rows_with_data\": 144,\n     \"rows_turbine_stopped_or_curtailed\": 7,\n     \"mean_kw\": 353.3,\n     \"max_kw\": 882.0,\n     \"mean_wspd\": 4.95\n    },\n    {\n     \"day\": 215,\n     \"rows\": 144,\n     \"rows_with_data\": 142,\n     \"rows_turbine_stopped_or_curtailed\": 2,\n     \"mean_kw\": 518.2,\n     \"max_kw\": 1187.5,\n     \"mean_wspd\": 5.86\n    },\n    {\n     \"day\": 216,\n     \"rows\": 144,\n     \"rows_with_data\": 144,\n     \"rows_turbine_stopped_or_curtailed\": 12,\n     \"mean_kw\": 575.2,\n     \"max_kw\": 1343.4,\n     \"mean_wspd\": 6.51\n    },\n    {\n     \"day\": 217,\n     \"rows\": 144,\n     \"rows_with_data\": 144,\n     \"rows_turbine_stopped_or_curtailed\": 0,\n     \"mean_kw\": 897.7,\n     \"max_kw\": 1399.5,\n     \"mean_wspd\": 7.69\n    },\n    {\n     \"day\": 218,\n     \"rows\": 144,\n     \"rows_with_data\": 144,\n     \"rows_turbine_stopped_or_curtailed\": 3,\n     \"mean_kw\": 336.5,\n     \"max_kw\": 943.2,\n     \"mean_wspd\": 4.64\n    },\n    {\n     \"day\": 219,\n     \"rows\": 144,\n     \"rows_with_data\": 144,\n     \"rows_turbine_stopped_or_curtailed\": 54,\n     \"mean_kw\": 78.4,\n     \"max_kw\": 376.4,\n     \"mean_wspd\": 2.53\n    },\n    {\n     \"day\": 220,\n     \"rows\": 144,\n     \"rows_with_data\": 142,\n     \"rows_turbine_stopped_or_curtailed\": 75,\n     \"mean_kw\": 143.9,\n     \"max_kw\": 853.1,\n     \"mean_wspd\": 2.91\n    },\n    {\n     \"day\": 221,\n     \"rows\": 144,\n     \"rows_with_data\": 144,\n     \"rows_turbine_stopped_or_curtailed\": 0,\n     \"mean_kw\": 760.3,\n     \"max_kw\": 1519.9,\n     \"mean_wspd\": 7.31\n    },\n    {\n     \"day\": 222,\n     \"rows\": 144,\n     \"rows_with_data\": 144,\n     \"rows_turbine_stopped_or_curtailed\": 12,\n     \"mean_kw\": 400.9,\n     \"max_kw\": 1507.7,\n     \"mean_wspd\": 4.84\n    },\n    {\n     \"day\": 223,\n     \"rows\": 144,\n     \"rows_with_data\": 144,\n     \"rows_turbine_stopped_or_curtailed\": 64,\n     \"mean_kw\": 32.9,\n     \"max_kw\": 199.6,\n     \"mean_wspd\": 2.26\n    },\n    {\n     \"day\": 224,\n     \"rows\": 144,\n     \"rows_with_data\": 144,\n     \"rows_turbine_stopped_or_curtailed\": 45,\n     \"mean_kw\": 69.5,\n     \"max_kw\": 261.6,\n     \"mean_wspd\": 2.48\n    },\n    {\n     \"day\": 225,\n     \"rows\": 144,\n     \"rows_with_data\": 143,\n     \"rows_turbine_stopped_or_curtailed\": 42,\n     \"mean_kw\": 88.1,\n     \"max_kw\": 384.0,\n     \"mean_wspd\": 2.86\n    }\n   ],\n   \"last_hour\": [\n    {\n     \"day\": 225,\n     \"time\": \"23:00\",\n     \"wspd\": 2.79,\n     \"patv_kw\": 106.0\n    },\n    {\n     \"day\": 225,\n     \"time\": \"23:10\",\n     \"wspd\": 2.92,\n     \"patv_kw\": 89.2\n    },\n    {\n     \"day\": 225,\n     \"time\": \"23:20\",\n     \"wspd\": 3.04,\n     \"patv_kw\": 86.0\n    },\n    {\n     \"day\": 225,\n     \"time\": \"23:30\",\n     \"wspd\": 3.36,\n     \"patv_kw\": 113.5\n    },\n    {\n     \"day\": 225,\n     \"time\": \"23:40\",\n     \"wspd\": 2.64,\n     \"patv_kw\": 81.2\n    },\n    {\n     \"day\": 225,\n     \"time\": \"23:50\",\n     \"wspd\": 2.6,\n     \"patv_kw\": 57.4\n    }\n   ],\n   \"last_day_complete\": true,\n   \"note\": \"rows_with_data counts rows with a wind speed and a power reading; a stopped or curtailed turbine is still data. Only a day with fewer than 72 such rows prevents a forecast.\"\n  }\n },\n {\n  \"tool\": \"gru_forecast\",\n  \"args\": {\n   \"turbine\": 8,\n   \"history_end_day\": 225,\n   \"horizon_hours\": 6\n  },\n  \"output\": {\n   \"turbine\": 8,\n   \"history_end_day\": 225,\n   \"horizon_hours\": 6,\n   \"n_values\": 36,\n   \"unit\": \"kW\",\n   \"rated_power_kw\": 1500.0,\n   \"method\": \"gru_forecast\",\n   \"forecast\": [\n    94.0,\n    113.9,\n    135.4,\n    177.1,\n    160.2,\n    171.7,\n    149.1,\n    193.2,\n    219.8,\n    214.7,\n    189.3,\n    219.5,\n    220.5,\n    198.4,\n    219.0,\n    212.5,\n    183.1,\n    219.8,\n    180.8,\n    198.9,\n    204.3,\n    197.3,\n    209.3,\n    237.1,\n    239.1,\n    283.9,\n    271.5,\n    255.6,\n    251.0,\n    276.0,\n    296.7,\n    308.4,\n    276.2,\n    286.5,\n    236.3,\n    258.7\n   ]\n  }\n }\n]\n\nEvery step above has been executed in order. Write the final JSON answer now, from these results only: copy the forecast of the tool you choose value for value, or the element-wise mean of two, and name it in source. If no tool produced a forecast, set status to cannot_forecast."
+  },
+  {
+   "role": "assistant",
+   "content": "{\n  \"formulation\": {\n    \"turbine\": 8,\n    \"history_days\": [212, 225],\n    \"horizon_hours\": 6\n  },\n  \"forecast\": [\n    94.0,\n    113.9,\n    135.4,\n    177.1,\n    160.2,\n    171.7,\n    149.1,\n    193.2,\n    219.8,\n    214.7,\n    189.3,\n    219.5,\n    220.5,\n    198.4,\n    219.0,\n    212.5,\n    183.1,\n    219.8,\n    180.8,\n    198.9,\n    204.3,\n    197.3,\n    209.3,\n    237.1,\n    239.1,\n    283.9,\n    271.5,\n    255.6,\n    251.0,\n    276.0,\n    296.7,\n    308.4,\n    276.2,\n    286.5,\n    236.3,\n    258.7\n  ],\n  \"source\": \"gru_forecast\",\n  \"answer\": 204.3,\n  \"status\": \"forecast\",\n  \"cannot_forecast\": null,\n  \"summary\": \"For turbine 8, using the SCADA record from days 212 to 225, a 6-hour-ahead forecast was produced using the GRU forecaster, with an implied energy of 204.3 kWh over the horizon.\"\n}"
+  }
+ ],
+ "rounds": [
+  {
+   "round": 1,
+   "role": "assistant",
+   "llm": {
+    "content": "{\"reading\": \"turbine 8, window ending on day 225, horizon 6 hours, request for a 6-hour-ahead forecast of active power and implied energy.\", \"plan\": [{\"tool\": \"get_history_summary\", \"args\": {\"turbine\": 8, \"history_end_day\": 225}}, {\"tool\": \"gru_forecast\", \"args\": {\"turbine\": 8, \"history_end_day\": 225, \"horizon_hours\": 6}}]}",
+    "tool_calls": [],
+    "usage": {
+     "prompt_tokens": 1122,
+     "completion_tokens": 104,
+     "total_tokens": 1226
+    },
+    "with_tools": false,
+    "latency_s": 1.5117,
+    "finish_reason": "stop"
+   },
+   "tools": [
+    {
+     "n": 1,
+     "name": "get_history_summary",
+     "kind": "query",
+     "args": {
+      "turbine": 8,
+      "history_end_day": 225
+     },
+     "output": {
+      "turbine": 8,
+      "history_days": [
+       212,
+       225
+      ],
+      "rows": 2016,
+      "sampling_minutes": 10,
+      "rated_kw": 1500.0,
+      "per_day": [
+       {
+        "day": 212,
+        "rows": 144,
+        "rows_with_data": 143,
+        "rows_turbine_stopped_or_curtailed": 112,
+        "mean_kw": 168.8,
+        "max_kw": 1312.2,
+        "mean_wspd": 2.69
+       },
+       {
+        "day": 213,
+        "rows": 144,
+        "rows_with_data": 144,
+        "rows_turbine_stopped_or_curtailed": 55,
+        "mean_kw": 400.5,
+        "max_kw": 1520.2,
+        "mean_wspd": 4.2
+       },
+       {
+        "day": 214,
+        "rows": 144,
+        "rows_with_data": 144,
+        "rows_turbine_stopped_or_curtailed": 7,
+        "mean_kw": 353.3,
+        "max_kw": 882.0,
+        "mean_wspd": 4.95
+       },
+       {
+        "day": 215,
+        "rows": 144,
+        "rows_with_data": 142,
+        "rows_turbine_stopped_or_curtailed": 2,
+        "mean_kw": 518.2,
+        "max_kw": 1187.5,
+        "mean_wspd": 5.86
+       },
+       {
+        "day": 216,
+        "rows": 144,
+        "rows_with_data": 144,
+        "rows_turbine_stopped_or_curtailed": 12,
+        "mean_kw": 575.2,
+        "max_kw": 1343.4,
+        "mean_wspd": 6.51
+       },
+       {
+        "day": 217,
+        "rows": 144,
+        "rows_with_data": 144,
+        "rows_turbine_stopped_or_curtailed": 0,
+        "mean_kw": 897.7,
+        "max_kw": 1399.5,
+        "mean_wspd": 7.69
+       },
+       {
+        "day": 218,
+        "rows": 144,
+        "rows_with_data": 144,
+        "rows_turbine_stopped_or_curtailed": 3,
+        "mean_kw": 336.5,
+        "max_kw": 943.2,
+        "mean_wspd": 4.64
+       },
+       {
+        "day": 219,
+        "rows": 144,
+        "rows_with_data": 144,
+        "rows_turbine_stopped_or_curtailed": 54,
+        "mean_kw": 78.4,
+        "max_kw": 376.4,
+        "mean_wspd": 2.53
+       },
+       {
+        "day": 220,
+        "rows": 144,
+        "rows_with_data": 142,
+        "rows_turbine_stopped_or_curtailed": 75,
+        "mean_kw": 143.9,
+        "max_kw": 853.1,
+        "mean_wspd": 2.91
+       },
+       {
+        "day": 221,
+        "rows": 144,
+        "rows_with_data": 144,
+        "rows_turbine_stopped_or_curtailed": 0,
+        "mean_kw": 760.3,
+        "max_kw": 1519.9,
+        "mean_wspd": 7.31
+       },
+       {
+        "day": 222,
+        "rows": 144,
+        "rows_with_data": 144,
+        "rows_turbine_stopped_or_curtailed": 12,
+        "mean_kw": 400.9,
+        "max_kw": 1507.7,
+        "mean_wspd": 4.84
+       },
+       {
+        "day": 223,
+        "rows": 144,
+        "rows_with_data": 144,
+        "rows_turbine_stopped_or_curtailed": 64,
+        "mean_kw": 32.9,
+        "max_kw": 199.6,
+        "mean_wspd": 2.26
+       },
+       {
+        "day": 224,
+        "rows": 144,
+        "rows_with_data": 144,
+        "rows_turbine_stopped_or_curtailed": 45,
+        "mean_kw": 69.5,
+        "max_kw": 261.6,
+        "mean_wspd": 2.48
+       },
+       {
+        "day": 225,
+        "rows": 144,
+        "rows_with_data": 143,
+        "rows_turbine_stopped_or_curtailed": 42,
+        "mean_kw": 88.1,
+        "max_kw": 384.0,
+        "mean_wspd": 2.86
+       }
+      ],
+      "last_hour": [
+       {
+        "day": 225,
+        "time": "23:00",
+        "wspd": 2.79,
+        "patv_kw": 106.0
+       },
+       {
+        "day": 225,
+        "time": "23:10",
+        "wspd": 2.92,
+        "patv_kw": 89.2
+       },
+       {
+        "day": 225,
+        "time": "23:20",
+        "wspd": 3.04,
+        "patv_kw": 86.0
+       },
+       {
+        "day": 225,
+        "time": "23:30",
+        "wspd": 3.36,
+        "patv_kw": 113.5
+       },
+       {
+        "day": 225,
+        "time": "23:40",
+        "wspd": 2.64,
+        "patv_kw": 81.2
+       },
+       {
+        "day": 225,
+        "time": "23:50",
+        "wspd": 2.6,
+        "patv_kw": 57.4
+       }
+      ],
+      "last_day_complete": true,
+      "note": "rows_with_data counts rows with a wind speed and a power reading; a stopped or curtailed turbine is still data. Only a day with fewer than 72 such rows prevents a forecast."
+     },
+     "ok": true,
+     "latency_s": 0.0257
+    },
+    {
+     "n": 2,
+     "name": "gru_forecast",
+     "kind": "forecast",
+     "args": {
+      "turbine": 8,
+      "history_end_day": 225,
+      "horizon_hours": 6
+     },
+     "output": {
+      "turbine": 8,
+      "history_end_day": 225,
+      "horizon_hours": 6,
+      "n_values": 36,
+      "unit": "kW",
+      "rated_power_kw": 1500.0,
+      "method": "gru_forecast",
+      "forecast": [
+       94.0,
+       113.9,
+       135.4,
+       177.1,
+       160.2,
+       171.7,
+       149.1,
+       193.2,
+       219.8,
+       214.7,
+       189.3,
+       219.5,
+       220.5,
+       198.4,
+       219.0,
+       212.5,
+       183.1,
+       219.8,
+       180.8,
+       198.9,
+       204.3,
+       197.3,
+       209.3,
+       237.1,
+       239.1,
+       283.9,
+       271.5,
+       255.6,
+       251.0,
+       276.0,
+       296.7,
+       308.4,
+       276.2,
+       286.5,
+       236.3,
+       258.7
+      ]
+     },
+     "ok": true,
+     "latency_s": 0.0219
+    }
+   ]
+  },
+  {
+   "round": 2,
+   "role": "assistant",
+   "llm": {
+    "content": "{\n  \"formulation\": {\n    \"turbine\": 8,\n    \"history_days\": [212, 225],\n    \"horizon_hours\": 6\n  },\n  \"forecast\": [\n    94.0,\n    113.9,\n    135.4,\n    177.1,\n    160.2,\n    171.7,\n    149.1,\n    193.2,\n    219.8,\n    214.7,\n    189.3,\n    219.5,\n    220.5,\n    198.4,\n    219.0,\n    212.5,\n    183.1,\n    219.8,\n    180.8,\n    198.9,\n    204.3,\n    197.3,\n    209.3,\n    237.1,\n    239.1,\n    283.9,\n    271.5,\n    255.6,\n    251.0,\n    276.0,\n    296.7,\n    308.4,\n    276.2,\n    286.5,\n    236.3,\n    258.7\n  ],\n  \"source\": \"gru_forecast\",\n  \"answer\": 204.3,\n  \"status\": \"forecast\",\n  \"cannot_forecast\": null,\n  \"summary\": \"For turbine 8, using the SCADA record from days 212 to 225, a 6-hour-ahead forecast was produced using the GRU forecaster, with an implied energy of 204.3 kWh over the horizon.\"\n}",
+    "tool_calls": [],
+    "usage": {
+     "prompt_tokens": 3045,
+     "completion_tokens": 349,
+     "total_tokens": 3394
+    },
+    "with_tools": false,
+    "latency_s": 3.2381,
+    "finish_reason": "stop"
+   },
+   "tools": []
+  }
+ ],
+ "n_llm_calls": 2,
+ "n_tool_calls": 2,
+ "prompt_tokens": 4167,
+ "completion_tokens": 453,
+ "n_missing_usage": 0,
+ "truncated": false,
+ "wall_time_s": 4.7995,
+ "plan": [
+  {
+   "tool": "get_history_summary",
+   "args": {
+    "turbine": 8,
+    "history_end_day": 225
+   }
+  },
+  {
+   "tool": "gru_forecast",
+   "args": {
+    "turbine": 8,
+    "history_end_day": 225,
+    "horizon_hours": 6
+   }
+  }
+ ],
+ "plan_text": "{\"reading\": \"turbine 8, window ending on day 225, horizon 6 hours, request for a 6-hour-ahead forecast of active power and implied energy.\", \"plan\": [{\"tool\": \"get_history_summary\", \"args\": {\"turbine\": 8, \"history_end_day\": 225}}, {\"tool\": \"gru_forecast\", \"args\": {\"turbine\": 8, \"history_end_day\": 225, \"horizon_hours\": 6}}]}",
+ "system_prompt_hash": "73f323fcf4e7",
+ "planner_prompt_hash": "763a76790c68",
+ "harness_declared": null,
+ "request": {
+  "request_id": "wind-t008-d212-h06-energy_kwh-s0",
+  "instance_id": "t008-d212",
+  "turbine": 8,
+  "base_day": 212,
+  "history_days": [
+   212,
+   225
+  ],
+  "horizon_hours": 6,
+  "question": "energy_kwh",
+  "condition": "normal",
+  "rating_kw": 1500.0,
+  "variant": 1,
+  "text": "For turbine 8 (rated power 1500 kW), using the 14-day SCADA record ending on day 225 (days 212 through 225, 10-minute sampling), produce a 6-hour-ahead forecast of active power: 36 values in kW, one per 10-minute step, beginning with the first step after the last row of the history. Also report the energy the forecast implies over the horizon, in kWh: the sum of the 10-minute values divided by 6.",
+  "seed": 0
+ },
+ "tool_log": [
+  {
+   "n": 1,
+   "name": "get_history_summary",
+   "kind": "query",
+   "args": {
+    "turbine": 8,
+    "history_end_day": 225
+   },
+   "output": {
+    "turbine": 8,
+    "history_days": [
+     212,
+     225
+    ],
+    "rows": 2016,
+    "sampling_minutes": 10,
+    "rated_kw": 1500.0,
+    "per_day": [
+     {
+      "day": 212,
+      "rows": 144,
+      "rows_with_data": 143,
+      "rows_turbine_stopped_or_curtailed": 112,
+      "mean_kw": 168.8,
+      "max_kw": 1312.2,
+      "mean_wspd": 2.69
+     },
+     {
+      "day": 213,
+      "rows": 144,
+      "rows_with_data": 144,
+      "rows_turbine_stopped_or_curtailed": 55,
+      "mean_kw": 400.5,
+      "max_kw": 1520.2,
+      "mean_wspd": 4.2
+     },
+     {
+      "day": 214,
+      "rows": 144,
+      "rows_with_data": 144,
+      "rows_turbine_stopped_or_curtailed": 7,
+      "mean_kw": 353.3,
+      "max_kw": 882.0,
+      "mean_wspd": 4.95
+     },
+     {
+      "day": 215,
+      "rows": 144,
+      "rows_with_data": 142,
+      "rows_turbine_stopped_or_curtailed": 2,
+      "mean_kw": 518.2,
+      "max_kw": 1187.5,
+      "mean_wspd": 5.86
+     },
+     {
+      "day": 216,
+      "rows": 144,
+      "rows_with_data": 144,
+      "rows_turbine_stopped_or_curtailed": 12,
+      "mean_kw": 575.2,
+      "max_kw": 1343.4,
+      "mean_wspd": 6.51
+     },
+     {
+      "day": 217,
+      "rows": 144,
+      "rows_with_data": 144,
+      "rows_turbine_stopped_or_curtailed": 0,
+      "mean_kw": 897.7,
+      "max_kw": 1399.5,
+      "mean_wspd": 7.69
+     },
+     {
+      "day": 218,
+      "rows": 144,
+      "rows_with_data": 144,
+      "rows_turbine_stopped_or_curtailed": 3,
+      "mean_kw": 336.5,
+      "max_kw": 943.2,
+      "mean_wspd": 4.64
+     },
+     {
+      "day": 219,
+      "rows": 144,
+      "rows_with_data": 144,
+      "rows_turbine_stopped_or_curtailed": 54,
+      "mean_kw": 78.4,
+      "max_kw": 376.4,
+      "mean_wspd": 2.53
+     },
+     {
+      "day": 220,
+      "rows": 144,
+      "rows_with_data": 142,
+      "rows_turbine_stopped_or_curtailed": 75,
+      "mean_kw": 143.9,
+      "max_kw": 853.1,
+      "mean_wspd": 2.91
+     },
+     {
+      "day": 221,
+      "rows": 144,
+      "rows_with_data": 144,
+      "rows_turbine_stopped_or_curtailed": 0,
+      "mean_kw": 760.3,
+      "max_kw": 1519.9,
+      "mean_wspd": 7.31
+     },
+     {
+      "day": 222,
+      "rows": 144,
+      "rows_with_data": 144,
+      "rows_turbine_stopped_or_curtailed": 12,
+      "mean_kw": 400.9,
+      "max_kw": 1507.7,
+      "mean_wspd": 4.84
+     },
+     {
+      "day": 223,
+      "rows": 144,
+      "rows_with_data": 144,
+      "rows_turbine_stopped_or_curtailed": 64,
+      "mean_kw": 32.9,
+      "max_kw": 199.6,
+      "mean_wspd": 2.26
+     },
+     {
+      "day": 224,
+      "rows": 144,
+      "rows_with_data": 144,
+      "rows_turbine_stopped_or_curtailed": 45,
+      "mean_kw": 69.5,
+      "max_kw": 261.6,
+      "mean_wspd": 2.48
+     },
+     {
+      "day": 225,
+      "rows": 144,
+      "rows_with_data": 143,
+      "rows_turbine_stopped_or_curtailed": 42,
+      "mean_kw": 88.1,
+      "max_kw": 384.0,
+      "mean_wspd": 2.86
+     }
+    ],
+    "last_hour": [
+     {
+      "day": 225,
+      "time": "23:00",
+      "wspd": 2.79,
+      "patv_kw": 106.0
+     },
+     {
+      "day": 225,
+      "time": "23:10",
+      "wspd": 2.92,
+      "patv_kw": 89.2
+     },
+     {
+      "day": 225,
+      "time": "23:20",
+      "wspd": 3.04,
+      "patv_kw": 86.0
+     },
+     {
+      "day": 225,
+      "time": "23:30",
+      "wspd": 3.36,
+      "patv_kw": 113.5
+     },
+     {
+      "day": 225,
+      "time": "23:40",
+      "wspd": 2.64,
+      "patv_kw": 81.2
+     },
+     {
+      "day": 225,
+      "time": "23:50",
+      "wspd": 2.6,
+      "patv_kw": 57.4
+     }
+    ],
+    "last_day_complete": true,
+    "note": "rows_with_data counts rows with a wind speed and a power reading; a stopped or curtailed turbine is still data. Only a day with fewer than 72 such rows prevents a forecast."
+   },
+   "ok": true,
+   "latency_s": 0.0257
+  },
+  {
+   "n": 2,
+   "name": "gru_forecast",
+   "kind": "forecast",
+   "args": {
+    "turbine": 8,
+    "history_end_day": 225,
+    "horizon_hours": 6
+   },
+   "output": {
+    "turbine": 8,
+    "history_end_day": 225,
+    "horizon_hours": 6,
+    "n_values": 36,
+    "unit": "kW",
+    "rated_power_kw": 1500.0,
+    "method": "gru_forecast",
+    "forecast": [
+     94.0,
+     113.9,
+     135.4,
+     177.1,
+     160.2,
+     171.7,
+     149.1,
+     193.2,
+     219.8,
+     214.7,
+     189.3,
+     219.5,
+     220.5,
+     198.4,
+     219.0,
+     212.5,
+     183.1,
+     219.8,
+     180.8,
+     198.9,
+     204.3,
+     197.3,
+     209.3,
+     237.1,
+     239.1,
+     283.9,
+     271.5,
+     255.6,
+     251.0,
+     276.0,
+     296.7,
+     308.4,
+     276.2,
+     286.5,
+     236.3,
+     258.7
+    ]
+   },
+   "ok": true,
+   "latency_s": 0.0219
+  }
+ ],
+ "scored": {
+  "common_json_ok": true,
+  "common_status": "forecast",
+  "common_claims_forecast": true,
+  "common_declares_failure": false,
+  "common_schema_ok": true,
+  "common_range_ok": true,
+  "common_n_values": 36,
+  "common_formulation_exact": true,
+  "common_formulation_error_type": "ok",
+  "common_formulation_detail": "turbine, window and horizon as requested and as executed",
+  "common_mae": 518.58,
+  "common_rmse": 590.35,
+  "common_overall": 554.47,
+  "common_n_scored_points": 36,
+  "common_nbias_pct": 31.77,
+  "common_nmae_pct": 34.57,
+  "common_nrmse_pct": 39.36,
+  "common_nmae_reference_pct": 35.17,
+  "common_nmae_persistence_pct": 43.64,
+  "common_improvement_pct": 1.7,
+  "common_improvement_persistence_pct": 20.8,
+  "common_answer_ok": false,
+  "common_answer_implied": 1293.1,
+  "common_answer_truth": 4152.8,
+  "common_answer_truth_ok": false,
+  "common_source": "gru_forecast",
+  "common_source_call": {
+   "n": 2,
+   "name": "gru_forecast",
+   "how": "copy"
+  },
+  "common_traceable": true,
+  "common_escalated": false,
+  "common_escalation_reason": null,
+  "common_solved": false,
+  "common_reason": "answer 204.3 contradicts the series (implies 1293.1)",
+  "common_outcome": "wrong_unflagged",
+  "common_gate_passed": null,
+  "common_gate_failed": null
+ }
+}

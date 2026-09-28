@@ -483,27 +483,73 @@ def tab_results() -> str:
 
     def pct(rows: List[Dict[str, str]], kind: str) -> str:
         k = sum(1 for r in rows if r.get("outcome") == kind)
-        return f"{100.0 * k / len(rows):.0f} % <span class='muted'>({k}/{len(rows)})</span>" if rows else "-"
+        return f"{100.0 * k / len(rows):.0f} <span class='muted'>({k}/{len(rows)})</span>" if rows else "—"
+
+    # The comparison table, laid out like every other case study's: the same three column groups,
+    # and one column per horizon instead of three numbers packed into a cell. A 48 h forecast is a
+    # different problem from a 3 h one, and reading them stacked in the same cell hid that.
+    # Model leads, so the rows of one model sit together and the table reads as one block per
+    # model rather than one per method. The ladder order is kept inside each model.
+    LEAD = ("Model", "Method", "n")
+    GROUPS = (
+        ("Task utility", ["Form. %"] + [f"{h} h {c}" for h in HORIZONS_H for c in ("scored", "NMAE %", "Imp. %")]),
+        ("Solver-grounded correctness", ["Solved %", "Escalated %", "Wrong-unflagged %", "Traceable %"]),
+        ("Cost and time", ["Tokens", "Cost $", "Time s"]),
+    )
+    NCOL = sum(len(c) for _g, c in GROUPS)
+    head = ("<tr>" + "".join(f"<th rowspan='2'>{E(x)}</th>" for x in LEAD)
+            + "".join(f"<th class='g' colspan='{len(c)}'>{E(g)}</th>" for g, c in GROUPS) + "</tr>"
+            + "<tr>" + "".join(f"<th>{E(lab)}</th>" for _g, c in GROUPS for lab in c) + "</tr>")
+    R = lambda v: f"<td style='text-align:right'>{v}</td>"          # noqa: E731
+    DASH = "<td style='text-align:right;color:var(--muted)'>—</td>"
+
+    def model_of(row_name: str, per: Dict[str, Any]) -> str:
+        return per[row_name][0].parts[-2] if row_name in per else ""
 
     for set_name, per in by_set.items():
-        split = []
-        for row in ROWS:
-            if row["name"] in per:
-                d, rows, h = per[row["name"]]
-                a = h["aggregate"]
-                bh = a.get("by_horizon") or {}
-                fmt = lambda key: " / ".join("—" if bh[k].get(key) is None else f"{bh[k][key]}" for k in sorted(bh, key=int)) if bh else "—"  # noqa: E731
-                split.append([f"<b>{E(row['label'])}</b>", f"{d.parts[-2]}", str(len(rows)), f"{a.get('form')} %", fmt("nmae_pct"), fmt("improvement_pct"), pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged"),
-                              f"{a.get('trace') if a.get('trace') is not None else '—'} %", f"{a.get('tokens')}", f"{a.get('cost')}"])
-            else:
-                split.append([f"<b>{E(row['label'])}</b>", "<span class='muted'>not run</span>"] + [""] * 10)
-        hs = " / ".join(f"{h} h" for h in HORIZONS_H)
+        # no-llm first, then the language models; inside each, the ladder order of ROWS
+        models = sorted({model_of(r["name"], per) for r in ROWS if r["name"] in per},
+                        key=lambda m: (m != "no-llm", m))
+        ordered = [r for m in models for r in ROWS if model_of(r["name"], per) == m]
+        ordered += [r for r in ROWS if r["name"] not in per]
+        trs, shown = [], None
+        for row in ordered:
+            if row["name"] not in per:
+                trs.append(f"<tr><td class='muted'>—</td><td><b>{E(row['label'])}</b></td>"
+                           f"<td colspan='{1 + NCOL}' class='muted'>not run</td></tr>")
+                continue
+            d, rows, h = per[row["name"]]
+            a = h["aggregate"]
+            bh = a.get("by_horizon") or {}
+            num = lambda v, f="{:.2f}": DASH if v is None else R(f.format(v))  # noqa: E731
+            tds = [R(f"{a.get('form')}")]
+            for hz in HORIZONS_H:
+                e = bh.get(str(hz)) or {}
+                # the count first, then the errors it produced: a row scored on 7 of 20 scenarios
+                # answered only what it found easy, so its NMAE is not comparable with a full row
+                tds += [R(f"{e.get('n_scored', 0)}/{e.get('n', 0)}") if e else DASH,
+                        num(e.get("nmae_pct")), num(e.get("improvement_pct"), "{:+.1f}")]
+            tds += [R(pct(rows, "solved")), R(pct(rows, "escalated")), R(pct(rows, "wrong_unflagged")),
+                    R(f"{a.get('trace')}") if a.get("trace") is not None else DASH]
+            tds += [R(f"{a.get('tokens'):,}") if a.get("tokens") is not None else DASH,
+                    num(a.get("cost"), "{:.3f}"), num(a.get("wall_time_mean_s"), "{:.0f}")]
+            model = d.parts[-2]
+            # the model is named once per block, so the eye groups the rows without a repeated cell
+            cell = f"<b>{E(model)}</b>" if model != shown else "<span class='muted'>&#8220;</span>"
+            shown = model
+            trs.append(f"<tr><td>{cell}</td>"
+                       f"<td><b>{E(row['label'])}</b><div class='muted'><code>{E(row['name'])}</code></div></td>"
+                       f"{R(len(rows))}" + "".join(tds) + "</tr>")
         body.append(card(f"Run set {E(set_name)}",
-                         table(["method", "model", "n", "formulation", f"NMAE % ({hs})", f"Imp. % over the reference ({hs})", verdict("solved"), verdict("escalated"), verdict("wrong"), "traceable", "tokens", "cost $"], split),
-                         note("A dash in an error column is not a missing measurement: it means the method returned no valid series at that "
-                              "horizon, so there was nothing to score. NMAE is the error as a per cent of the 1500 kW installed capacity, and "
-                              "Imp. is the improvement over the protocol's reference model on the same points: 0 means no better than a model "
-                              "that costs nothing, negative means worse.", "info")))
+                         "<div class='tw'><table class='cmp'>" + head + "".join(trs) + "</table></div>",
+                         note("The three column groups are the same three in every case study of this site. Inside Task utility, read each "
+                              "horizon's <b>scored</b> column before its two error columns: it gives how many of the 20 scenarios the method "
+                              "returned a valid series for, and the NMAE and Imp. beside it are averages over exactly those. A method that "
+                              "answered 7 scenarios kept the ones it found easy, so its NMAE is not comparable with a method that answered all "
+                              "20, even when the number is smaller. A dash is not a missing measurement: it means the method returned no valid "
+                              "series at that horizon, so there was nothing to score, which is itself the result. NMAE is the error as a per "
+                              "cent of the 1500 kW installed capacity, and Imp. is the improvement over the protocol's reference model on the "
+                              "same points: 0 means no better than a model that costs nothing, negative means worse.", "info")))
     det = []
     cols = [("nn", "nn"), ("instance_id", "scenario"), ("horizon_hours", "h"), ("question", "question"), ("outcome", "outcome"), ("solved_reason", "why"),
             ("formulation_exact", "form."), ("n_values", "values"), ("mae_kw", "MAE kW"), ("nmae_pct", "NMAE %"), ("improvement_pct", "Imp. %"), ("answer_ok", "answer"), ("source", "source"), ("gate_pass", "gate"),
@@ -516,12 +562,219 @@ def tab_results() -> str:
     return "".join(body)
 
 
+# --------------------------------------------------------------- the six methods side by side
+
+EXAMPLE_CSS = """
+.cols6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;align-items:start}
+@media(max-width:1400px){.cols6{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:900px){.cols6{grid-template-columns:1fr}}
+.col{background:#fff;border:1px solid var(--line);border-radius:10px;min-width:0;overflow:hidden}
+.col h4{margin:0;padding:8px 10px;border-bottom:1px solid var(--line);font-size:12.5px;background:#fafbfd}
+.col h4 .muted{font-weight:400}
+.log{font:11.5px/1.4 'JetBrains Mono',ui-monospace,Menlo,monospace}
+.ln{display:grid;grid-template-columns:46px 1fr;gap:6px;padding:4px 8px;border-bottom:1px solid #f0f2f5;cursor:pointer}
+.ln:hover{background:#f7f9fc}
+.ln .k{font-weight:600;font-size:10.5px}
+.ln .k.model{color:#2f5fd0}
+.ln .k.call{color:#2f5fd0}
+.ln .k.tool{color:#0f8f84}
+.ln .k.plan{color:#6d4fc4}
+.ln .k.gate{color:#c99a06}
+.ln .k.retry{color:#c99a06}
+.ln .k.final{color:#1f9d55}
+.ln .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ln.open .s{white-space:pre-wrap;overflow:visible;word-break:break-word}
+.pr{border-bottom:1px solid var(--line)}
+.pr summary{padding:6px 10px;font-size:12px;cursor:pointer}
+.pr pre{max-height:300px;overflow:auto;font-size:11px;margin:0 8px 8px}
+.vt{padding:6px 10px;border-top:1px solid var(--line);font-size:11.5px;background:#fafbfd}
+.ex{display:none}
+.ex.on{display:block}
+"""
+
+
+def _short(text: str, n: int = 150) -> str:
+    return " ".join(str(text).split())[:n]
+
+
+def _example_lines(t: Dict[str, Any]) -> List[Tuple[str, str, str]]:
+    """One line per step of a run: what it called, what came back, what the gate said, what went out."""
+    out: List[Tuple[str, str, str]] = []
+    msgs = t.get("messages") or []
+    if not msgs:  # the parser writes no conversation; its steps are its tool calls
+        for c in t.get("tool_log") or []:
+            out.append(("tool", f"{c.get('name')}({_short(json.dumps(c.get('args') or {}), 60)})",
+                        json.dumps(c.get("output"), indent=1)[:4000]))
+        out.append(("final", _short(t.get("answer") or ""), str(t.get("answer") or "")[:6000]))
+        return out
+    for m in msgs:
+        role = m.get("role")
+        if role in ("system", "user"):
+            continue  # both live in the prompt panel above, identical for every request of a method
+        if role == "assistant" and m.get("tool_calls"):
+            for c in m["tool_calls"]:
+                f = c.get("function") or {}
+                out.append(("call", f"{f.get('name')}({_short(f.get('arguments') or '', 70)})",
+                            f"{f.get('name')}\n{f.get('arguments')}"))
+        elif role == "assistant" and m.get("content"):
+            out.append(("final" if m is msgs[-1] else "model", _short(m["content"]), str(m["content"])[:6000]))
+        elif role == "tool":
+            body = str(m.get("content") or "")
+            out.append(("tool", _short(body, 120), body[:4000]))
+        elif role == "plan":
+            out.append(("plan", _short(m.get("content") or ""), str(m.get("content") or "")[:6000]))
+    g = t.get("gate") or {}
+    if g:
+        cond = g.get("conditions") or {}
+        failed = [k for k, v in cond.items() if not v.get("passed")]
+        detail = "\n".join(f"{k}: {'pass' if v.get('passed') else 'FAIL'} — {v.get('detail')}" for k, v in cond.items())
+        out.append(("gate", ("passed all five conditions" if not failed else "rejected: " + ", ".join(failed)), detail))
+    for h in (t.get("gate_history") or [])[1:]:
+        out.append(("retry", "handed back to the model, it tried again", json.dumps(h, indent=1)[:4000]))
+    return out
+
+
+# the fixed texts a prompt can be built from, so a prompt that was actually sent can be shown
+# as the blocks it is made of rather than as a wall of characters
+_FILE_BLOCKS: Tuple[Tuple[str, str], ...] = (
+    ("_shared/agent_system_prompt.txt", "sys_agent"),
+    ("_shared/llm_only_system_prompt.txt", "sys_llm"),
+    ("plan_act_nogate/plan_system_prompt.txt", "sys_plan"),
+    ("_shared/common_rules.txt", "rules"),
+    ("_shared/output_contract.txt", "contract"),
+    ("llm_only_cot/reasoning_section.txt", "u_reason"),
+)
+
+
+def _split_blocks(text: str) -> List[Tuple[Optional[str], str]]:
+    """Locate the known prompt files inside a prompt that was really sent.
+
+    Returns (block kind, text) in order; a kind of ``None`` is the part built at run time,
+    which is the request, the history or the catalogue, and is shown as itself."""
+    spans: List[Tuple[int, int, str]] = []
+    for rel, kind in _FILE_BLOCKS:
+        try:
+            body = methods.read_text(rel).strip()
+        except Exception:
+            continue
+        i = text.find(body)
+        if i >= 0 and body:
+            spans.append((i, i + len(body), kind))
+    spans.sort()
+    out: List[Tuple[Optional[str], str]] = []
+    at = 0
+    for a, b, kind in spans:
+        if a < at:
+            continue
+        if text[at:a].strip():
+            out.append((None, text[at:a].strip()))
+        out.append((kind, text[a:b]))
+        at = b
+    if text[at:].strip():
+        out.append((None, text[at:].strip()))
+    return out or [(None, text)]
+
+
+def _example_prompt(t: Dict[str, Any]) -> str:
+    msgs = t.get("messages") or []
+    sysm = next((m["content"] for m in msgs if m.get("role") == "system"), None)
+    usr = next((m["content"] for m in msgs if m.get("role") == "user"), None)
+    if sysm is None and usr is None:
+        return ("<p class='muted' style='padding:0 10px 8px'>No prompt. This row is a parser: it reads the request with a "
+                "regular expression, calls the forecaster and fills the same answer object. It is here to show what the "
+                "task costs without a model.</p>")
+    parts = []
+    for label, body, hashed in (("system prompt", sysm, True), ("user message", usr, False)):
+        if not body:
+            continue
+        h = f" · hash {E(str(t.get('system_prompt_hash')))}" if hashed else ""
+        parts.append(f"<div class='muted' style='padding:2px 10px'>{label}{h}</div>")
+        for kind, chunk in _split_blocks(body):
+            if kind:
+                parts.append(_block(kind, chunk, collapse=True))
+            else:
+                parts.append(prompt_block("built at run time", f"<details><summary>show the {len(chunk):,} characters</summary><pre>{E(chunk)}</pre></details>",
+                                          color="#94a3b8", source="evaluation/requests.py, solver/data.py, solver/tools.py", pre=False)
+                             if len(chunk) > 1500 else
+                             prompt_block("built at run time", chunk, color="#94a3b8", source="evaluation/requests.py, solver/data.py, solver/tools.py"))
+    return "".join(parts)
+
+
+def examples_section() -> str:
+    """The same request under each of the six methods, prompt and steps, side by side."""
+    dirs = method_dirs()
+    if not dirs:
+        return ""
+    latest = max(d.parts[-3] for d in dirs)
+    by_method: Dict[str, Path] = {}
+    for d in dirs:
+        if d.parts[-3] == latest and "__" not in d.name:
+            by_method[d.name] = d
+    if not by_method:
+        return ""
+
+    def trace_of(d: Path, rid: str) -> Optional[Dict[str, Any]]:
+        for f in sorted((d / "traces").glob("*.json")):
+            if " " in f.stem.split("_", 1)[-1]:
+                continue  # an iCloud copy, never the file we wrote
+            if f.stem.split("_", 1)[-1] == rid:
+                return json.loads(f.read_text(encoding="utf-8"))
+        return None
+
+    # one request per horizon, all from the same scenario, so the columns differ by method and nothing else
+    rids: List[Tuple[str, str]] = []
+    any_dir = next(iter(by_method.values()))
+    for f in sorted((any_dir / "traces").glob("*.json")):
+        rid = f.stem.split("_", 1)[-1]
+        if " " in rid:
+            continue
+        t = json.loads(f.read_text(encoding="utf-8"))
+        r = t.get("request") or {}
+        if r.get("instance_id") and rids and r["instance_id"] != rids[0][1].split("|")[0]:
+            continue
+        rids.append((rid, f"{r.get('instance_id')}|{r.get('horizon_hours')} h · question: {r.get('question')}"))
+        if len(rids) == len(HORIZONS_H):
+            break
+
+    opts = "".join(f"<option value='{E(rid)}'>{E(lab.split('|')[1])}</option>" for rid, lab in rids)
+    out = [card("The same request under each of the six methods",
+                "<p>Real runs of " + E(latest) + " on " + E(next(iter(by_method.values())).parts[-2]) +
+                ", not re-scored here. One scenario, the three horizons, every method side by side. Each column opens with the "
+                "prompt that method received and then lists what it did: <span class='k call'>call</span> a tool, "
+                "<span class='k tool'>tool</span> what came back, <span class='k gate'>gate</span> the verdict, "
+                "<span class='k final'>final</span> what was surfaced. Click any line to expand it.</p>"
+                "<p class='muted'>The prompt of each column is split into the blocks it is built from, the same colours and the same "
+                "source files as the Prompts section, so the columns can be compared block by block and not as walls of text. "
+                "Grey is the part built at run time: the request, the history, the tool catalogue.</p>"
+                "<p><label>Request <select id='exs'>" + opts + "</select></label></p>")]
+    for n, (rid, _lab) in enumerate(rids):
+        cols = []
+        for row in ROWS:
+            d = by_method.get(row["name"])
+            t = trace_of(d, rid) if d else None
+            if not t:
+                cols.append(f"<div class='col'><h4>{E(row['label'])}</h4><p class='muted' style='padding:8px 10px'>no run</p></div>")
+                continue
+            lines = "".join(f"<div class='ln' data-full='{E(full)}'><span class='k {k}'>{k}</span><span class='s'>{E(short)}</span></div>"
+                            for k, short, full in _example_lines(t))
+            sc = t.get("scored") or {}
+            cols.append(f"<div class='col'><h4>{E(row['label'])}<br><span class='muted'>{E(t.get('model') or '')}</span></h4>"
+                        f"<details class='pr'><summary>the prompt this method received</summary>{_example_prompt(t)}</details>"
+                        f"<div class='log'>{lines}</div>"
+                        f"<div class='vt'>{t.get('n_llm_calls')} model calls · {t.get('n_tool_calls')} tool calls · "
+                        f"{t.get('wall_time_s', 0):.0f} s<br><span class='muted'>formulation "
+                        f"{'exact' if sc.get('common_formulation_exact') else E(str(sc.get('common_formulation_error_type') or 'not declared'))}</span></div></div>")
+        out.append(f"<div class='ex{' on' if n == 0 else ''}' data-scn='{E(rid)}'><div class='cols6'>" + "".join(cols) + "</div></div>")
+    return "".join(out)
+
+
 def tab_traces() -> str:
     dirs = method_dirs()
     if not dirs:
         return card("Traces", "<p class='muted'>No run yet. Every run leaves <code>traces/NN_&lt;request-id&gt;.narrative.txt</code>, "
                               "<code>.transcript.txt</code> and <code>.png</code> next to its rows; this section shows them once they exist.</p>")
-    body = [card("Every run end to end", "<p>The narrative of each request of every run set, as written by evaluation/postprocess.py from the "
+    body = [examples_section(),
+            card("Every run end to end", "<p>The narrative of each request of every run set, as written by evaluation/postprocess.py from the "
                                           "trace: what the method did, the formulation verdict, the series and its error, the answer checks, the outcome. "
                                           "The transcript next to it in the results folder is the raw exchange, and the PNG the series against the target.</p>")]
     for d in dirs:
@@ -567,6 +820,14 @@ SCRIPT = """
   function apply(){ document.querySelectorAll('.pm').forEach(function(p){ p.style.display = p.dataset.mth===mth.value ? '' : 'none'; }); }
   mth.onchange=apply; apply();
 })();
+(function(){
+  var sel=document.getElementById('exs');
+  if(sel){ sel.onchange=function(){ document.querySelectorAll('.ex').forEach(function(e){
+      e.classList.toggle('on', e.dataset.scn===sel.value); }); }; }
+  document.querySelectorAll('.ln').forEach(function(l){ l.onclick=function(){
+      if(!l.dataset.done){ l.querySelector('.s').textContent=l.dataset.full; l.dataset.done='1'; }
+      l.classList.toggle('open'); }; });
+})();
 """
 
 
@@ -581,6 +842,7 @@ def payload() -> Dict[str, Any]:
         "groups": [[label, [list(e) for e in entries]] for label, entries in GROUPS],
         "tabs": {key: BUILDERS[key]() for _l, entries in GROUPS for key, _t in entries},
         "script": SCRIPT,
+        "css": EXAMPLE_CSS,
     }
 
 
