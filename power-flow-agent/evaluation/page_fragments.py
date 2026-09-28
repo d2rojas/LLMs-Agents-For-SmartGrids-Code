@@ -310,6 +310,20 @@ def _tag(run: Dict[str, Any]) -> str:
     return m.group(1) if m else "main"
 
 
+def _newest(runs: List[Dict[str, Any]]) -> Dict[Tuple[str, str], Dict[str, Any]]:
+    """The newest run per (model, method), so a re-run replaces rather than duplicates.
+
+    Picking whichever the index happened to list last is not a choice, and two
+    runs of one method in one table are two rows that look like two methods. The
+    GridDebug session hit the same shape in its own case study and found its
+    table mixing four run sets that shared a date.
+    """
+    best: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    for r in sorted(runs, key=lambda r: r["date"]):
+        best[(r["model"], r["method"])] = r
+    return best
+
+
 def tab_results() -> str:
     from visuals.shell import card, comparison_table, note
 
@@ -322,24 +336,31 @@ def tab_results() -> str:
         by_system.setdefault(r["case"], []).append(r)
 
     for system in sorted(by_system, key=lambda c: int(c.replace("ieee", ""))):
+        chosen = _newest(by_system[system])
         rows_out: List[Tuple[str, List[str], List[str]]] = []
         # the ladder order outside, the model inside: comparison_table groups the
         # rows by model and keeps the order it is given within each block, so the
         # six methods have to be iterated in ladder order or the block comes out
         # in whatever order the index happened to list the runs
         for key, label in METHOD_ROWS:
-            for run in sorted(by_system[system], key=lambda r: r["model"]):
-                if run["method"] != key:
+            for (model, method), run in sorted(chosen.items()):
+                if method != key:
                     continue
-                cells, n_cell = _cells(_rows(run), run["model"])
+                cells, n_cell = _cells(_rows(run), model)
                 if not cells:
                     continue
                 name = (f"<b>{E(label)}</b><div class='muted'><code>{E(key)}</code> · {E(run['date'])}</div>")
-                rows_out.append((run["model"], [name, n_cell], cells, run["path"]))
+                rows_out.append((model, [name, n_cell], cells, run["path"]))
         if not rows_out:
             continue
+        dates = sorted({r["date"] for r in chosen.values()})
+        # Six methods on one system were not run in one sitting, and a table that
+        # does not say so reads as one experiment. Each row carries its own date
+        # under the method name; this says it out loud as well.
+        when = (f"run of {E(dates[0])}" if len(dates) == 1
+                else f"runs of {E(', '.join(dates))}, one date per row")
         body.append(card(
-            f"{SYSTEM_LABELS.get(system, system)} · the table as the paper prints it",
+            f"{SYSTEM_LABELS.get(system, system)} · {when}",
             comparison_table(PF_GROUPS, rows_out, lead=("Model", "Method", "n")),
             note("The three column groups are the same three in every case study of this site, and every figure "
                  "carries above it the count it was computed over. The three outcomes are over the requests the "
@@ -347,7 +368,13 @@ def tab_results() -> str:
                  "inside their denominator, and is reported separately under n. Formulation is scored over the "
                  "requests whose answer declared one, which an escalated request does not. V_MAE and B_mean are "
                  "given over the solved requests and over every request that reported a state. Traceable is not "
-                 "applicable to a method that calls no tool, which is not the same as passing.", "info")))
+                 "applicable to a method that calls no tool, which is not the same as passing."
+                 + ("" if len(dates) == 1 else
+                    " <b>The rows of this table come from runs made on different days</b>, each named under its "
+                    "method: the six methods were not run in one sitting on this system. The requests are the "
+                    "same set for all of them, which is what makes the rows comparable, but a difference between "
+                    "two rows is a difference between two runs and not between two arms of one experiment."),
+                 "info")))
 
     body.append(_request_section())
     return "".join(body)
@@ -460,7 +487,9 @@ def _request_section() -> str:
     parser = [r for r in runs if r["model"] == "no-llm"]
 
     for model in sorted(m for m in by_model if m != "no-llm"):
-        per_method = {r["method"]: r for r in by_model[model] + parser}
+        # the newest run of each method, by the same rule the table above uses, so
+        # a row of that table and the runs unfolded under it are the same runs
+        per_method = {method: run for (_m, method), run in _newest(by_model[model] + parser).items()}
         rows_by_method = {k: {x["request_id"]: x for x in _rows(v)} for k, v in per_method.items()}
         ids: List[str] = []
         for k, _l in METHOD_ROWS:

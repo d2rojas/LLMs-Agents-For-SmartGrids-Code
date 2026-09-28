@@ -1293,10 +1293,15 @@ def expected_table() -> str:
     """The table, laid out the way every case study of this site lays out its own."""
     by_model: Dict[str, Dict[str, List[Dict[str, str]]]] = {}
     dir_of: Dict[Tuple[str, str], str] = {}
-    for d in method_dirs():
+    # The newest run of each (model, method) wins, rather than whichever the
+    # directory listing reached first. results/ holds several sets at once while
+    # a day's work is in flux, and first-seen is not a choice: the GridDebug
+    # session found its own table showing four different run sets as one
+    # experiment because of exactly this.
+    for d in sorted(method_dirs(), key=lambda p: p.parts[-3]):
         hdr = read_header(d)["header"]
-        by_model.setdefault(hdr["model"], {}).setdefault(hdr["method"], read_summary(d))
-        dir_of.setdefault((hdr["model"], hdr["method"]), str(d.relative_to(PROJECT_ROOT / "results")))
+        by_model.setdefault(hdr["model"], {})[hdr["method"]] = read_summary(d)
+        dir_of[(hdr["model"], hdr["method"])] = str(d.relative_to(PROJECT_ROOT / "results"))
 
     FMT = {"tokens": "{:,.0f}", "time": "{:.1f}", "gap_solved": "{:.3f}", "gap_all": "{:.3f}",
            "unmet_solved": "{:.1f}", "unmet_all": "{:.1f}"}

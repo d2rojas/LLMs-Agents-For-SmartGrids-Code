@@ -564,7 +564,14 @@ def tab_results() -> str:
 
 
 def _traces_by_request() -> Tuple[str, Dict[str, Dict[str, Dict[str, Any]]]]:
-    """Every trace of the newest run set, indexed by request and then by method."""
+    """Every trace of the newest untagged run set, indexed by request then method.
+
+    Named, not just dated. Two run sets can share a date -- 2026-09-28 carries
+    both the main set and ``rule_based__scaled`` -- so saying "the runs of
+    2026-09-28" would not identify which, and the table above groups its cards by
+    date *and* tag. This takes the untagged set of the newest date, which is the
+    one the "main" card shows, and returns that name so the section can say so.
+    """
     dirs = method_dirs()
     if not dirs:
         return "", {}
@@ -625,7 +632,9 @@ def request_section() -> str:
         })
     return card(
         "Every request, under each of the six methods",
-        f"<p>The runs of {E(latest)}, not re-scored here. Click a request to unfold the six methods side by side. "
+        f"<p>The runs of the <b>{E(latest)} · main</b> set, the card of that name above, not re-scored here. Another "
+        "run set can share a date, so the set is named rather than only dated. Click a request to unfold the six "
+        "methods side by side. "
         "Each column opens with the prompt that method really received, split into the blocks it is built from with "
         "the file each block comes from, and then lists what it did: <span class='k call'>call</span> a tool, "
         "<span class='k tool'>tool</span> what came back, <span class='k gate'>gate</span> the verdict, "
