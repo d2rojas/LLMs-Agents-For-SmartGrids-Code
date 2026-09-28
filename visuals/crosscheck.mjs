@@ -27,8 +27,12 @@
 //   node visuals/crosscheck.mjs <case-folder> <site/case.html> [spec.json]
 //
 // The spec names the case study's aggregate keys; without one, only 1 and 2 run.
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+
+// Exit 3, distinct from a disagreement: the page is older than the runs it would
+// be compared against, so there is nothing to conclude from comparing them.
+const STALE = 3;
 
 const [folder, pagePath, specPath] = process.argv.slice(2);
 if (!folder || !pagePath) {
@@ -94,6 +98,35 @@ const cmp = (where, what, page, py, tol = 0) => {
   if (page == null || py == null) return;
   if (Math.abs(page - py) > tol * Math.max(1, Math.abs(py))) note(where, what, page, py);
 };
+
+// A page older than the runs is worse than a missing one. `site/` is gitignored
+// and lives in each worktree, so every checkout keeps its own copy of whatever
+// age, and a checkout that simply did not rebuild regrows a stale one. Comparing
+// it against today's rows fails confusingly at best; at worst it passes, because
+// the runs it predates happened not to move the cells being checked. Found by
+// the power-flow session, whose two-day-old page failed once and then passed.
+function newestRun(dir) {
+  let newest = 0;
+  const walk = (d) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name === "summary.csv") newest = Math.max(newest, statSync(p).mtimeMs);
+    }
+  };
+  if (existsSync(dir)) walk(dir);
+  return newest;
+}
+
+const pageAt = statSync(pagePath).mtimeMs;
+const runsAt = newestRun(join(folder, "results"));
+if (runsAt && pageAt < runsAt) {
+  const when = (t) => new Date(t).toISOString().slice(0, 16).replace("T", " ");
+  console.log(`${pagePath} was written ${when(pageAt)}, and a run was scored ${when(runsAt)}.`);
+  console.log("The page is older than the rows it would be checked against, so nothing can be");
+  console.log(`concluded from comparing them. Rebuild it first: python -m visuals.build --require <case>`);
+  process.exit(STALE);
+}
 
 const html = readFileSync(pagePath, "utf8");
 const rowsOnPage = pageRows(html);
