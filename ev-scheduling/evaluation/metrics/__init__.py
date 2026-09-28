@@ -30,6 +30,20 @@ from data.format.schema import DaySessions
 # Under-delivery below this is solver slop, not a real trade of energy for cost.
 UNMET_TOL_KWH = 1e-3
 
+# The same thing, per session, for a comparison between two independent solves
+# of the same day (2026-09-28). ``cost_gap`` compares a method's unmet energy
+# with the optimum's, and each is the sum over the day's sessions of a quantity
+# CVXPY returns to its own tolerance, so the difference accumulates with the
+# number of cars: it cannot be held to one absolute figure. On the run of
+# 2026-09-28 the deterministic parser, which solves the identical problem with
+# the identical solver, differed from the optimum by at most 1.2 Wh per session,
+# and the flat 1 Wh day tolerance scored 19 of its 20 days as wrong-unflagged
+# with a cost gap of -0.00 % and no violated constraint. Five times the observed
+# worst case is the tolerance now, which on the largest day (87 cars) is 0.435
+# kWh against 158 kWh of unmet energy, or 0.3 %: far below any under-delivery a
+# method could trade for a cheaper bill, which is what this rule exists to catch.
+UNMET_TOL_KWH_PER_SESSION = 5e-3
+
 
 @dataclass
 class Metrics:
@@ -153,7 +167,8 @@ def cost_gap(
     *,
     unmet_kwh: float,
     unmet_star_kwh: float = 0.0,
-    unmet_tol_kwh: float = UNMET_TOL_KWH,
+    unmet_tol_kwh: Optional[float] = None,
+    n_sessions: int = 1,
 ) -> CostGap:
     """Cost gap against the optimum, paired with the unmet energy that explains it.
 
@@ -164,7 +179,14 @@ def cost_gap(
         unmet_star_kwh: Unmet energy of the optimum (kWh). Non-zero on days whose
             demand cannot be met inside the site cap; the comparison is against
             this, not against zero.
-        unmet_tol_kwh: Under-delivery below this counts as solver slop.
+        unmet_tol_kwh: Under-delivery below this counts as solver slop. Given
+            explicitly it is used as it stands; left None it is
+            ``UNMET_TOL_KWH_PER_SESSION`` times ``n_sessions``, with
+            ``UNMET_TOL_KWH`` as the floor, because the two sides of the
+            comparison are sums over sessions of a solver's own tolerance.
+        n_sessions: Number of sessions in the day, for that scaling. The
+            default of 1 keeps a caller that passes neither at the old
+            behaviour.
 
     Returns:
         CostGap with ``gap_pct`` (None when ``cost_star_usd <= 0``) and
@@ -172,8 +194,13 @@ def cost_gap(
         optimum. Callers must report the pair; ``gap_pct`` alone is not a
         statement about schedule quality (see the module docstring).
     """
+    tol = (
+        float(unmet_tol_kwh)
+        if unmet_tol_kwh is not None
+        else max(UNMET_TOL_KWH, UNMET_TOL_KWH_PER_SESSION * max(1, int(n_sessions)))
+    )
     extra_unmet = float(unmet_kwh) - float(unmet_star_kwh)
-    comparable = extra_unmet <= unmet_tol_kwh
+    comparable = extra_unmet <= tol
     if cost_star_usd is None or cost_star_usd <= 0:
         return CostGap(
             gap_pct=None,
@@ -190,7 +217,8 @@ def cost_gap(
         if comparable
         else (
             f"gap {gap_pct:+.2f}% is not comparable: the schedule leaves {extra_unmet:.3f} kWh "
-            "more energy unmet than the optimum, which is what makes it cheaper"
+            f"more energy unmet than the optimum (tolerance {tol:.3f} kWh over "
+            f"{max(1, int(n_sessions))} sessions), which is what makes it cheaper"
         )
     )
     return CostGap(

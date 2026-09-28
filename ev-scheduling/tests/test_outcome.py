@@ -392,3 +392,33 @@ def test_outcome_rates_sum_to_one() -> None:
     assert rates["wrong_unflagged_rate"] == pytest.approx(0.25)
     assert sum(rates[f"{name}_rate"] for name in OUTCOMES) == pytest.approx(1.0)
     assert outcome_rates([])["solved_rate"] is None
+
+
+def test_the_comparability_tolerance_scales_with_the_day(
+) -> None:
+    """The defect the run of 2026-09-28 exposed.
+
+    ``cost_gap`` compares the method's unmet energy with the optimum's, and each
+    is a sum over the day's sessions of a quantity CVXPY returns to its own
+    tolerance. The difference therefore grows with the number of cars. Held to a
+    flat 1 Wh, the deterministic parser, which solves the identical problem with
+    the identical solver, was scored wrong-unflagged on 19 of 20 days with a cost
+    gap of -0.00 % and no violated constraint: the tolerance was measuring the
+    solver, not the method.
+    """
+    from evaluation.metrics import UNMET_TOL_KWH_PER_SESSION, cost_gap
+
+    # 87 cars, the largest frozen day, with the slop that run actually showed.
+    slop = cost_gap(169.95708, 169.95648, unmet_kwh=158.462, unmet_star_kwh=158.450, n_sessions=87)
+    assert slop.comparable is True
+
+    # A real trade of energy for a cheaper bill is still caught, on the same day.
+    traded = cost_gap(150.0, 169.95648, unmet_kwh=170.0, unmet_star_kwh=158.450, n_sessions=87)
+    assert traded.comparable is False
+
+    # The scaling is per session, with the old absolute value as the floor.
+    assert cost_gap(10.0, 10.0, unmet_kwh=6 * UNMET_TOL_KWH_PER_SESSION, n_sessions=1).comparable is False
+    assert cost_gap(10.0, 10.0, unmet_kwh=6 * UNMET_TOL_KWH_PER_SESSION, n_sessions=10).comparable is True
+
+    # An explicit tolerance still wins, for a caller that knows better.
+    assert cost_gap(10.0, 10.0, unmet_kwh=1.0, unmet_tol_kwh=2.0, n_sessions=1).comparable is True
