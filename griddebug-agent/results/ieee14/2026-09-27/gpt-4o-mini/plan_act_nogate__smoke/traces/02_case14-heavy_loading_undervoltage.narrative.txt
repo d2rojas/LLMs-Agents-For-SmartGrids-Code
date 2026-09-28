@@ -1,0 +1,39 @@
+RUN 02  |  case14-heavy_loading_undervoltage  |  plan_act_nogate  |  openrouter:openai/gpt-4o-mini  |  IEEE 14-bus
+Scenario: Heavy loading under-voltage (3x) (voltage); injected fault: load_increase {"load": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}
+Initial state: violations, 11 new violation(s)
+Request: The AC power flow on the IEEE 14-bus system (case14) converged with 11 new limit violation(s). Diagnose the cause and restore a secure operating point: the power flow converges, no in-service load is on an islanded bus, every bus voltage is within [0.95, 1.05] p.u., and no line or transformer is above 100 % loading, apart from the violations the base network already has. Use only the actions available. Report the diagnosis, the actions taken, and the final state.
+
+WHAT THE METHOD DID
+   1. scale_all_loads({"factor": 0.75})
+       -> {"action": "scale_all_loads", "success": true, "factor": 0.75, "old_total_p_mw": 777.0, "new_total_p_mw": 582.75}
+   2. adjust_generation({"gen_index": 1, "gen_type": "generator", "p_mw_new": 200.0, "vm_pu_new": 1.0})
+       -> {"error": "Invalid gen_type 'generator'. Must be 'gen', 'sgen', or 'ext_grid'."}
+   3. adjust_generation({"gen_index": 2, "gen_type": "generator", "p_mw_new": 200.0, "vm_pu_new": 1.0})
+       -> {"error": "Invalid gen_type 'generator'. Must be 'gen', 'sgen', or 'ext_grid'."}
+   4. adjust_generation({"gen_index": 3, "gen_type": "generator", "p_mw_new": 200.0, "vm_pu_new": 1.0})
+       -> {"error": "Invalid gen_type 'generator'. Must be 'gen', 'sgen', or 'ext_grid'."}
+   5. run_power_flow({})
+       -> {"converged": true, "message": "AC power flow (Newton-Raphson) converged."}
+   6. check_voltage_violations({"v_min": 0.95, "v_max": 1.05})
+       -> {"v_min_pu_global": 0.95, "v_max_pu_global": 1.05, "undervoltage_buses": [], "overvoltage_buses": [{"bus": 5, "vm_pu": 1.07, "limit": 1.06, "in_base": true}, {"bus": 7, "vm_pu": 1.09, "limit": 1.06, "in_base": true}], "t… (388 chars)
+   7. check_overloads({"threshold_percent": 100})
+       -> {"threshold_percent": 100.0, "overloaded_lines": [{"line_index": 7, "loading_percent": 265.4, "from_bus": 5, "to_bus": 10, "in_base": false}, {"line_index": 8, "loading_percent": 196.0, "from_bus": 5, "to_bus": 11, "in_b… (967 chars)
+   8. find_disconnected_areas({})
+       -> {"disconnected_buses": [], "connected_buses": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], "message": "All buses connected."}
+  Totals: 2 LLM calls, 8 tool calls, 5711 in / 578 out tokens, 5.688 s
+
+DIAGNOSIS  (is the injected fault named?)
+  answer: load_increase {"load": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}   verdict: PASS   load_increase, 11 injected component(s) named
+
+STATE  (the harness's own power flow on the final network)
+  converged: True   secure: False   new violations: 8   islanded load: []
+  repaired: False   improved: True   feasible: True
+
+REPORTING
+  status claimed: not_repaired   final_state claimed: converged=True, new violations=8
+  numbers in the answer: 16, untraceable: 0 -> traceable: pass
+
+OUTCOME: ESCALATED   (escalated: declared not_repaired)
+
+SUMMARY WRITTEN BY THE METHOD
+  The network experienced a load increase that exceeded generation capacity, leading to multiple line overloads. Although loads were scaled down, the network remains insecure due to ongoing overloads on several lines.

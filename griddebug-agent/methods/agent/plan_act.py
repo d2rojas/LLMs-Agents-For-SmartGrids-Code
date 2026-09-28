@@ -97,6 +97,6 @@ def run_plan_act(ctx: Context) -> MethodRun:
     return MethodRun(
         method="plan_act_nogate", answer_text=answer_text, answer=answer, final_net=dispatcher.net, tool_log=dispatcher.log,
         trace=rec.to_dict(), harness_declared=harness_declared, budget_exhausted=dispatcher.exhausted, error=error,
-        n_llm_calls=rec.n_llm_calls, n_tool_calls=rec.n_tool_calls, prompt_tokens=rec.prompt_tokens,
+        n_llm_calls=rec.n_llm_calls, n_tool_calls=dispatcher.n_calls, prompt_tokens=rec.prompt_tokens,
         completion_tokens=rec.completion_tokens, wall_time_s=round(time.time() - t0, 3), system_prompt_hash=methods.prompt_hash(system),
     )

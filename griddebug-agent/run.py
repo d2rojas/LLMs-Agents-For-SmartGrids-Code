@@ -9,7 +9,8 @@
     .venv/bin/python run.py postprocess results/ieee14/<date>/<model>/<method>   re-render after a scoring change
     .venv/bin/python run.py rescore results/ieee14/<date>/<model>/<method>       re-score the rows from the traces, then re-render
     .venv/bin/python run.py index                                 rebuild results/INDEX.md and INDEX.json
-    .venv/bin/python run.py serve                                 the shared evaluation site, on a local server
+    .venv/bin/python run.py pages                                 results/visuals/: index, design, results, viewer, failures
+    .venv/bin/python run.py serve                                 serve results/ and open results/visuals/index.html
 
 Every verb delegates to the module that owns it: ``evaluation/runner.py``,
 ``evaluation/postprocess.py``, ``evaluation/rescore.py``, ``evaluation/scenarios/manifest.py``.
@@ -107,7 +108,7 @@ def cmd_index(_args: argparse.Namespace) -> int:
         cfg = json.loads(cfg_p.read_text(encoding="utf-8")) if cfg_p.exists() else {}
         rel = sj.parent.relative_to(root)
         rows.append({
-            "case": h.get("case"), "date": h.get("date"), "model": h.get("model_short"), "dir": sj.parent.name, "method": h.get("method"),
+            "case": rel.parts[0], "date": h.get("date"), "model": h.get("model_short"), "dir": sj.parent.name, "method": h.get("method"),
             "condition": h.get("condition", "normal"), "n": a.get("n"), "solved": a.get("solved"), "escalated": a.get("escalated"),
             "wrong": a.get("wrong"), "form": a.get("form"), "trace": a.get("trace"), "repaired": a.get("repaired"),
             "tokens": a.get("tokens"), "cost": a.get("cost"), "tool_variant": "v1", "kind": cfg.get("kind", "run"), "tag": cfg.get("tag"),
@@ -128,15 +129,25 @@ def cmd_index(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_pages(_args: argparse.Namespace) -> int:
+    """results/visuals/: index.html, design.html and the three results pages, in the power-flow format."""
+    from evaluation import design_page
+
+    out = design_page.build()
+    for f in sorted(out.glob("*.html")):
+        print(f"wrote {f.relative_to(PROJECT_ROOT)} ({f.stat().st_size // 1024} KB)")
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
-    site = PROJECT_ROOT.parent / "site"
-    if not (site / "index.html").exists():
-        print("no site yet: run `python -m visuals.build` from the repository root first")
-        return 1
+    """Serve results/ so results/visuals/*.html can fetch INDEX.json, summary.csv and the traces."""
+    root = PROJECT_ROOT / "results"
+    if not (root / "visuals" / "index.html").exists():
+        cmd_pages(args)
     handler = http.server.SimpleHTTPRequestHandler
-    with socketserver.TCPServer(("127.0.0.1", args.port), lambda *a, **k: handler(*a, directory=str(site), **k)) as httpd:
-        url = f"http://127.0.0.1:{args.port}/griddebug.html"
-        print(f"serving {site} at {url}  (Ctrl-C to stop)")
+    with socketserver.TCPServer(("127.0.0.1", args.port), lambda *a, **k: handler(*a, directory=str(root), **k)) as httpd:
+        url = f"http://127.0.0.1:{args.port}/visuals/index.html"
+        print(f"serving {root} at {url}  (Ctrl-C to stop)")
         webbrowser.open(url)
         try:
             httpd.serve_forever()
@@ -162,7 +173,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     for verb in passthrough:
         sub.add_parser(verb, help=f"see `python run.py {verb} --help`")
     sub.add_parser("index", help="rebuild results/INDEX.md and INDEX.json").set_defaults(func=cmd_index)
-    sv = sub.add_parser("serve", help="open the shared evaluation site on a local server")
+    sub.add_parser("pages", help="build results/visuals/ (index, design, results, viewer, failures)").set_defaults(func=cmd_pages)
+    sv = sub.add_parser("serve", help="serve results/ and open results/visuals/index.html")
     sv.add_argument("--port", type=int, default=8766)
     sv.set_defaults(func=cmd_serve)
     args = ap.parse_args(argv)

@@ -71,6 +71,18 @@ def evidence_block(net: pp.pandapowerNet, base_keys: FrozenSet[Key], initial: St
     """The solver's evidence for the injected network, with the base network's own violations listed apart."""
     report = EvidenceCollector(v_min=V_MIN_PU, v_max=V_MAX_PU, max_loading=MAX_LOADING_PERCENT).collect(net)
     lines = [report.to_text()]
+    # the switching state is visible network data, as it is on an operator's screen; the smoke
+    # test showed the model missing an out-of-service line it had queried and not read
+    out: List[str] = []
+    for el in ("line", "trafo", "gen", "sgen", "load", "shunt"):
+        df = getattr(net, el, None)
+        if df is not None and len(df):
+            idx = [int(i) for i in df.index if not bool(df.at[i, "in_service"])]
+            if idx:
+                out.append(f"{el} {idx}")
+    lines.append("")
+    lines.append("── SWITCHING STATE ──")
+    lines.append("  Elements out of service: " + ("; ".join(out) if out else "none"))
     base = sorted(base_keys)
     lines.append("")
     lines.append("── BASE NETWORK (before the fault) ──")
