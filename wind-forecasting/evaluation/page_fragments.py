@@ -634,6 +634,47 @@ def _example_lines(t: Dict[str, Any]) -> List[Tuple[str, str, str]]:
     return out
 
 
+# the fixed texts a prompt can be built from, so a prompt that was actually sent can be shown
+# as the blocks it is made of rather than as a wall of characters
+_FILE_BLOCKS: Tuple[Tuple[str, str], ...] = (
+    ("_shared/agent_system_prompt.txt", "sys_agent"),
+    ("_shared/llm_only_system_prompt.txt", "sys_llm"),
+    ("plan_act_nogate/plan_system_prompt.txt", "sys_plan"),
+    ("_shared/common_rules.txt", "rules"),
+    ("_shared/output_contract.txt", "contract"),
+    ("llm_only_cot/reasoning_section.txt", "u_reason"),
+)
+
+
+def _split_blocks(text: str) -> List[Tuple[Optional[str], str]]:
+    """Locate the known prompt files inside a prompt that was really sent.
+
+    Returns (block kind, text) in order; a kind of ``None`` is the part built at run time,
+    which is the request, the history or the catalogue, and is shown as itself."""
+    spans: List[Tuple[int, int, str]] = []
+    for rel, kind in _FILE_BLOCKS:
+        try:
+            body = methods.read_text(rel).strip()
+        except Exception:
+            continue
+        i = text.find(body)
+        if i >= 0 and body:
+            spans.append((i, i + len(body), kind))
+    spans.sort()
+    out: List[Tuple[Optional[str], str]] = []
+    at = 0
+    for a, b, kind in spans:
+        if a < at:
+            continue
+        if text[at:a].strip():
+            out.append((None, text[at:a].strip()))
+        out.append((kind, text[a:b]))
+        at = b
+    if text[at:].strip():
+        out.append((None, text[at:].strip()))
+    return out or [(None, text)]
+
+
 def _example_prompt(t: Dict[str, Any]) -> str:
     msgs = t.get("messages") or []
     sysm = next((m["content"] for m in msgs if m.get("role") == "system"), None)
@@ -643,10 +684,19 @@ def _example_prompt(t: Dict[str, Any]) -> str:
                 "regular expression, calls the forecaster and fills the same answer object. It is here to show what the "
                 "task costs without a model.</p>")
     parts = []
-    if sysm:
-        parts.append(f"<div class='muted' style='padding:2px 10px'>system prompt · hash {E(str(t.get('system_prompt_hash')))}</div><pre>{E(sysm)}</pre>")
-    if usr:
-        parts.append(f"<div class='muted' style='padding:2px 10px'>user message</div><pre>{E(usr)}</pre>")
+    for label, body, hashed in (("system prompt", sysm, True), ("user message", usr, False)):
+        if not body:
+            continue
+        h = f" · hash {E(str(t.get('system_prompt_hash')))}" if hashed else ""
+        parts.append(f"<div class='muted' style='padding:2px 10px'>{label}{h}</div>")
+        for kind, chunk in _split_blocks(body):
+            if kind:
+                parts.append(_block(kind, chunk, collapse=True))
+            else:
+                parts.append(prompt_block("built at run time", f"<details><summary>show the {len(chunk):,} characters</summary><pre>{E(chunk)}</pre></details>",
+                                          color="#94a3b8", source="evaluation/requests.py, solver/data.py, solver/tools.py", pre=False)
+                             if len(chunk) > 1500 else
+                             prompt_block("built at run time", chunk, color="#94a3b8", source="evaluation/requests.py, solver/data.py, solver/tools.py"))
     return "".join(parts)
 
 
@@ -693,6 +743,9 @@ def examples_section() -> str:
                 "prompt that method received and then lists what it did: <span class='k call'>call</span> a tool, "
                 "<span class='k tool'>tool</span> what came back, <span class='k gate'>gate</span> the verdict, "
                 "<span class='k final'>final</span> what was surfaced. Click any line to expand it.</p>"
+                "<p class='muted'>The prompt of each column is split into the blocks it is built from, the same colours and the same "
+                "source files as the Prompts section, so the columns can be compared block by block and not as walls of text. "
+                "Grey is the part built at run time: the request, the history, the tool catalogue.</p>"
                 "<p><label>Request <select id='exs'>" + opts + "</select></label></p>")]
     for n, (rid, _lab) in enumerate(rids):
         cols = []
