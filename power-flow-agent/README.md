@@ -124,7 +124,7 @@ piece lives. The evaluation design itself (methods, prompts, answer object, scor
 | Deterministic parser | `rule_based` | `methods/deterministic/rule_based.py` (`_parse_clause`, `run`, `contract_answer`) |
 | Structured prompting | `llm_only_structured` | `methods/prompting/prompt_variants.py` (`build_messages`), `methods/prompting/llm_only.py` (case tables), `evaluation/runner.py` (`evaluate_item`, kind `llm_only`) |
 | Chain-of-thought prompting | `llm_only_cot` | same as structured, with the reasoning section from `methods/_shared/` |
-| Plan-and-Act | `plan_act_nogate` | `methods/agent/engine.py` (`LLMEngine._run_plan_act`, planner prompt from `methods/plan_act_nogate/`) |
+| Plan-and-Act | `plan_act_nogate` | `methods/agent/engine.py` (`LLMEngine._run_plan_act` + `_act_with_replanning`, planner prompt from `methods/plan_act_nogate/`) |
 | ReAct | `react_nogate` | `methods/agent/engine.py` (`LLMEngine._run_react`) |
 | PFAgent | `pfagent` | `methods/agent/engine.py` (`LLMEngine._run_react` + `verify_final_answer`, the gate V1 to V11) |
 

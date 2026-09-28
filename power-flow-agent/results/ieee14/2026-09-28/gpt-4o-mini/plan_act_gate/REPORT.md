@@ -1,6 +1,6 @@
 # plan_act_gate on IEEE 14-bus with gpt-4o-mini
 
-Generated 2026-09-28 11:27 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-28 12:52 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -19,8 +19,8 @@ Generated 2026-09-28 11:27 by evaluation/postprocess.py from `report.rescored.js
 | plan_variant | text |
 | temperature | 0.0 |
 | system_prompt_hash | 43ef7eaadb12 |
-| description | Plan-and-Act with the task-level verification gate on the final answer. Ablation, not a table row: it asks whether the gate is better placed on a planner than on a ReAct loop. |
-| prompt files | _shared/agent_system_prompt.txt, _shared/final_answer_instruction.txt, plan_act_nogate/plan_system_prompt_prefix.txt, plan_act_nogate/plan_system_prompt_structured.txt |
+| description | Plan-and-Act with the task-level verification gate on the final answer. Ablation, not a table row: it asks whether the gate is better placed on a planner than on a ReAct loop. Replans on failure: when a planned step errors or a solve does not converge, one reasoning call revises the remaining plan and execution resumes, at most twice (EngineConfig.max_replans, main.tex Sec. 4). |
+| prompt files | _shared/agent_system_prompt.txt, _shared/final_answer_instruction.txt, plan_act_nogate/plan_system_prompt_prefix.txt, plan_act_nogate/plan_system_prompt_structured.txt, plan_act_nogate/replan_instruction.txt |
 
 ![overview of the runs](overview.png)
 
@@ -32,8 +32,8 @@ The three outcomes are exclusive and cover every request the method answered. Es
 
 | outcome | count | share |
 |---|---:|---:|
-| Solved autonomously | 13 | 65.0% |
-| Escalated to a person | 7 | 35.0% |
+| Solved autonomously | 12 | 60.0% |
+| Escalated to a person | 8 | 40.0% |
 | Wrong, unflagged | 0 | 0.0% |
 | **Total** | **20** | 100% |
 
@@ -41,21 +41,21 @@ The three outcomes are exclusive and cover every request the method answered. Es
 
 | group | metric | value |
 |---|---|---|
-| Task utility | Formulation exact | 13/13 (100.0%) |
-| Task utility | Voltage MAE, all runs | 2.58e-06 p.u. |
-| Task utility | Voltage MAE, formulation-exact runs | 2.58e-06 p.u. |
-| Task utility | Flow MAE, all runs | 2.36e-04 MW |
-| Task utility | Flow MAE, formulation-exact runs | 2.36e-04 MW |
-| Task utility | KCL mismatch, mean | 1.75e-04 MW |
-| Solver-grounded correctness | Solved (computation right, any path) | 13/20 (65.0%) |
+| Task utility | Formulation exact | 12/12 (100.0%) |
+| Task utility | Voltage MAE, all runs | 3.80e-06 p.u. |
+| Task utility | Voltage MAE, formulation-exact runs | 3.80e-06 p.u. |
+| Task utility | Flow MAE, all runs | 2.41e-04 MW |
+| Task utility | Flow MAE, formulation-exact runs | 2.41e-04 MW |
+| Task utility | KCL mismatch, mean | 1.76e-04 MW |
+| Solver-grounded correctness | Solved (computation right, any path) | 12/20 (60.0%) |
 | Solver-grounded correctness | V-pass (all conditions, offline) | 20/20 (100.0%) |
 | Reporting | Traceable answers | 20/20 (100.0%) |
 | Reporting | Traceable numbers, mean share | 1 |
 | Reporting | Stale state quoted | 0/20 |
-| Cost and time | LLM calls / tool calls, mean | 2.7 / 3.65 |
-| Cost and time | Prompt / completion tokens, mean | 10458 / 2021 |
-| Cost and time | Cost, total | $0.0556 |
-| Cost and time | Wall time, mean | 26.9 s |
+| Cost and time | LLM calls / tool calls, mean | 2.9 / 3.65 |
+| Cost and time | Prompt / completion tokens, mean | 11359 / 2059 |
+| Cost and time | Cost, total | $0.0588 |
+| Cost and time | Wall time, mean | 23.2 s |
 
 ### Cross-check against the runner's own scoreboard
 
@@ -63,10 +63,10 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 
 | metric | runner scoreboard | this report |
 |---|---:|---:|
-| common_solved_count | 13 | 13 |
-| common_escalated_count | 7 | 7 |
+| common_solved_count | 12 | 12 |
+| common_escalated_count | 8 | 8 |
 | common_wrong_count | 0 | 0 |
-| common_formulation_count | 13 | 13 |
+| common_formulation_count | 12 | 12 |
 | common_traceable_count | 20 | 20 |
 | common_n | 20 | 20 |
 
@@ -76,14 +76,15 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 |---|---:|---:|---:|---:|---:|
 | ambiguous | 5 | 5 | 0 | 0 | 5 |
 | multistep | 5 | 2 | 3 | 0 | 2 |
-| parameterized | 5 | 3 | 2 | 0 | 3 |
+| parameterized | 5 | 2 | 3 | 0 | 2 |
 | plain | 5 | 3 | 2 | 0 | 3 |
 
-## Escalated (7)
+## Escalated (8)
 
 - `case14-multistep-002-s0` detected via gate_abstained; formulation None; not scored: the answer declares no formulation (it reports that the request could not be completed)  ([narrative](traces/06_case14-multistep-002-s0.narrative.txt), [transcript](traces/06_case14-multistep-002-s0.transcript.txt))
 - `case14-multistep-006-s0` detected via gate_abstained; formulation None; not scored: the answer declares no formulation (it reports that the request could not be completed)  ([narrative](traces/07_case14-multistep-006-s0.narrative.txt), [transcript](traces/07_case14-multistep-006-s0.transcript.txt))
 - `case14-multistep-018-s0` detected via gate_abstained; formulation None; not scored: the answer declares no formulation (it reports that the request could not be completed)  ([narrative](traces/10_case14-multistep-018-s0.narrative.txt), [transcript](traces/10_case14-multistep-018-s0.transcript.txt))
+- `case14-parameterized-001-s0` detected via gate_abstained; formulation None; not scored: the answer declares no formulation (it reports that the request could not be completed)  ([narrative](traces/11_case14-parameterized-001-s0.narrative.txt), [transcript](traces/11_case14-parameterized-001-s0.transcript.txt))
 - `case14-parameterized-009-s0` detected via gate_abstained; formulation None; not scored: the answer declares no formulation (it reports that the request could not be completed)  ([narrative](traces/13_case14-parameterized-009-s0.narrative.txt), [transcript](traces/13_case14-parameterized-009-s0.transcript.txt))
 - `case14-parameterized-017-s0` detected via gate_abstained; formulation None; not scored: the answer declares no formulation (it reports that the request could not be completed)  ([narrative](traces/15_case14-parameterized-017-s0.narrative.txt), [transcript](traces/15_case14-parameterized-017-s0.transcript.txt))
 - `case14-plain-004-s0` detected via gate_abstained; formulation None; not scored: the answer declares no formulation (it reports that the request could not be completed)  ([narrative](traces/17_case14-plain-004-s0.narrative.txt), [transcript](traces/17_case14-plain-004-s0.transcript.txt))
