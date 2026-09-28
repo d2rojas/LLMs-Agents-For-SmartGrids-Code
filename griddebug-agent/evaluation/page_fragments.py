@@ -24,7 +24,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT.parent))  # so `visuals` is importable
 
-from visuals.shell import E, card, chip, diagram_row, kv, note, pipeline, prompt_block, table, verdict  # noqa: E402
+from visuals.shell import (  # noqa: E402
+    Count, DASH, E, GROUP_CORRECTNESS, GROUP_COST, GROUP_UTILITY, NA, card, chip, clip, comparison_table, counted, diagram_row, kv, note, pipeline, prompt_block, request_rows, table, verdict,
+)
 
 import methods  # noqa: E402
 from config import ALL_NETWORKS, MAX_LLM_CALLS, MAX_LOADING_PERCENT, MAX_TOOL_CALLS, NETWORK_LABELS, NETWORKS, SCENARIO_TIMEOUT_S, V_MAX_PU, V_MIN_PU  # noqa: E402
@@ -230,7 +232,6 @@ def tab_methods() -> str:
                  "not reproducible from the repository, which is the finding of the September audit. That rewrite is the "
                  "editor's work, not this case study's.", "warn"),
         ),
-        side_by_side(),
         card("What the original GridDebugAgent was, and what changed",
              "<p>The code behind the submitted table had one architecture: a ReAct loop with OpenAI function calling, gpt-4o at temperature 0.3, "
              "up to 30 model calls, no verification of the answer, and a baseline that only diagnosed and never acted. It is the <code>react_nogate</code> "
@@ -343,13 +344,17 @@ def _sbs_trace(d: Path, row: Dict[str, str]) -> Optional[Dict[str, Any]]:
     }
 
 
-def _sbs_lines(t: Dict[str, Any]) -> str:
-    """One log line per thing that happened, tagged the way the power-flow page tags them."""
-    out: List[str] = []
+def _sbs_lines(t: Dict[str, Any]) -> List[Tuple[str, str, str]]:
+    """One line per thing that happened, tagged the way every case study tags them.
+
+    Returns (kind, one-line summary, the whole thing) for ``shell.steps_log``, so
+    the four case studies render their step logs from one piece of code and a
+    column of this one can be read by someone who learned another.
+    """
+    out: List[Tuple[str, str, str]] = []
 
     def ln(kind: str, summary: str, full: str = "") -> None:
-        out.append(f"<div class='gln' data-full=\"{E(full or summary)}\"><span class='gk {kind}'>{kind}</span>"
-                   f"<span class='gs'>{E(summary)}</span></div>")
+        out.append((kind, summary, full or summary))
 
     # the deterministic row and Plan-and-Act both commit to everything before seeing a result
     planning = t.get("method") in ("plan_act_nogate", "rule_based")
@@ -363,7 +368,7 @@ def _sbs_lines(t: Dict[str, Any]) -> str:
                "The model returned tool calls and no text.")
         for x in st["tools"]:
             call = f"{x['name']}({x['args']})"
-            ln("solver", f"{call} → {x['says']}", f"{call}\n\n{x['raw']}")
+            ln("tool", f"{call} → {x['says']}", f"{call}\n\n{x['raw']}")
     attempts = t.get("attempts") or []
     for j, a in enumerate(attempts):
         ln("gate", (f"attempt {a['n']}: " + ("passed all seven conditions" if a["passed"]
@@ -382,98 +387,77 @@ def _sbs_lines(t: Dict[str, Any]) -> str:
     if t["declared"]:
         ln("status", "the harness wrote the answer: " + t["declared"])
     ln("final", (t["answer"].replace("\n", " ")[:400] or "no answer"), t["answer"])
-    return "".join(out)
+    return out
 
 
 def side_by_side() -> str:
+    """Every scenario of the newest run, each unfolding into the six methods.
+
+    Lives under the results table, not in a section of its own: a verdict in
+    that table is a count of these rows, and the run behind any one of them
+    should be one click below the number, not in another section.
+    """
     tag, dirs = _sbs_runs()
     if not dirs:
-        return card("The same fault under each method, step by step",
+        return card("Every scenario, under each method",
                     "<p class='muted'>No run yet. This section fills itself from the trace files as soon as one exists.</p>")
-    data: Dict[str, Dict[str, Dict[str, Any]]] = {}
-    labels: Dict[str, List[List[str]]] = {}
+    data: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    label_of: Dict[Tuple[str, str], str] = {}
     for d in dirs:
         case, method = d.parts[-4], d.name.split("__")[0]
-        rows = read_summary(d)
-        if not rows:
-            continue
-        wanted = labels.get(case)
-        if wanted is None:
-            picked = _sbs_pick(rows)
-            labels[case] = [[r["request_id"], f"{r['scenario_id']}-v{r['variant']} · {r['category']}"]
-                            for r in rows if r["request_id"] in picked]
-            wanted = labels[case]
-        for rid, _lab in wanted:
-            row = next((r for r in rows if r["request_id"] == rid), None)
-            if not row:
-                continue
+        for row in read_summary(d):
+            key = (case, row["request_id"])
+            label_of.setdefault(key, f"{NETWORK_LABELS.get('case' + case.replace('ieee', ''), case)} · "
+                                     f"{row['scenario_id']}-v{row['variant']} · {row['category']}")
             tr = _sbs_trace(d, row)
             if tr:
                 tr["method"] = method
-                data.setdefault(case, {}).setdefault(rid, {})[method] = tr
+                tr["row"] = row
+                data.setdefault(key, {})[method] = tr
     if not data:
-        return card("The same fault under each method, step by step",
+        return card("Every scenario, under each method",
                     "<p class='muted'>The runs exist but stored no traces.</p>")
 
-    cases = sorted(data, key=lambda c: int(c.replace("ieee", "")))
-    blocks: List[str] = []
-    for case in cases:
-        for rid, per in data[case].items():
-            cols = []
-            for r in ROWS:
-                t = per.get(r["name"])
-                if not t:
-                    cols.append(f"<div class='gcol'><h4>{E(r['label'])}</h4>"
-                                "<div class='gmeta'>no stored trace for this scenario</div></div>")
-                    continue
-                verdict_cls = {"solved": "ok", "escalated": "esc"}.get(t["outcome"], "bad")
-                cols.append(
-                    f"<div class='gcol'><h4>{E(r['label'])} <span class='tag {verdict_cls}'>{E(t['outcome'].replace('_', ' '))}</span></h4>"
-                    f"<details class='gpr'><summary>prompt sent to this method for this scenario</summary>"
-                    f"<div class='gprb'><pre>{E(t['user'])}</pre>"
-                    + (f"<p class='muted'>system prompt hash {E(t['sys_hash'])}, shown in full in the Prompts tab</p>" if t["sys_hash"]
-                       else "<p class='muted'>no system prompt: this method uses no language model</p>")
-                    + "</div></details>"
-                    f"<div class='gmeta'><b>{len(t['steps'])}</b> steps · <b>{t['llm_calls'] or 0}</b> model calls · "
-                    f"<b>{t['tool_calls'] or 0}</b> tool calls · {t['tokens']} tokens · {t['seconds']} s<br>"
-                    f"final network: {E(t['final'])}"
-                    + (f" · <b>load stranded on {E(t['islanded'])}</b>" if t["islanded"] else "") + "</div>"
-                    f"<div class='glog'>{_sbs_lines(t)}</div></div>")
-            blocks.append(f"<div class='gex' data-case='{E(case)}' data-scn='{E(rid)}'><div class='gcols'>{''.join(cols)}</div></div>")
+    methods = [(r["name"], r["label"]) for r in ROWS]
+    requests: List[Dict[str, Any]] = []
+    for key in sorted(data, key=lambda k: (int(k[0].replace("ieee", "")), k[1])):
+        per = data[key]
+        cells: Dict[str, str] = {}
+        columns: List[Dict[str, Any]] = []
+        for r in ROWS:
+            t = per.get(r["name"])
+            if not t:
+                columns.append({"label": r["label"], "empty": "no stored trace for this scenario"})
+                continue
+            row = t.get("row") or {}
+            cells[r["name"]] = (verdict(t["outcome"])
+                                + f"<span class='why'>diagnosis {E(str(row.get('formulation_exact', '')))}</span>"
+                                + f"<span class='why'>{E(str(row.get('final_n_new', '')))} new violations left</span>")
+            prompt = (f"<div class='gprb'><pre>{clip(t['user'])}</pre>"
+                      + (f"<p class='muted'>system prompt hash {E(t['sys_hash'])}, shown in full in the Prompts section</p>"
+                         if t["sys_hash"] else "<p class='muted'>no system prompt: this method uses no language model</p>")
+                      + "</div>")
+            columns.append({
+                "label": r["label"], "model": t.get("model") or "", "verdict": t["outcome"],
+                "prompt": prompt, "lines": _sbs_lines(t),
+                "footer": (f"{len(t['steps'])} steps · {t['llm_calls'] or 0} model calls · "
+                           f"{t['tool_calls'] or 0} tool calls · {t['tokens']} tokens · {t['seconds']} s<br>"
+                           f"<span class='muted'>final network: {E(t['final'])}"
+                           + (f" · load stranded on {E(t['islanded'])}" if t["islanded"] else "") + "</span>"),
+            })
+        requests.append({"id": key[1], "tag": label_of[key], "text": "", "cells": cells, "columns": columns})
 
-    sysopts = "".join(f"<option value='{E(c)}'>{E(NETWORK_LABELS.get('case' + c.replace('ieee', ''), c))}</option>" for c in cases)
     which = "the run set of the paper" if not tag else f"run set <code>{E(tag)}</code>"
     return card(
-        "The same fault under each method, step by step",
-        f"<p>Real runs, not scored here: {which}, {SBS_PER_NETWORK} of the twenty scenarios per system, every method, on "
-        "the model each run used. Each column is the log of what the method said, what it called and what the solver "
-        "returned; click a line to expand it, and open the prompt it received. The verdicts of these runs are on the "
-        "results pages, where scores belong.</p>"
-        "<style>"
-        ".gctl{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:10px 0 12px;font-size:12.5px;color:#64748b}"
-        ".gctl select{font:inherit;font-size:13px;padding:3px 7px;border:1px solid #e3e7ee;border-radius:8px;background:#fff;color:#0f172a}"
-        ".gex{display:none}.gex.on{display:block}"
-        ".gcols{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;align-items:start;overflow-x:auto}"
-        "@media(max-width:1200px){.gcols{grid-auto-flow:column;grid-auto-columns:minmax(300px,1fr);grid-template-columns:none}}"
-        ".gcol{background:#fff;border:1px solid #e3e7ee;border-radius:10px;min-width:0;overflow:hidden}"
-        ".gcol>h4{margin:0;padding:8px 10px;font-size:12.5px;border-bottom:1px solid #e3e7ee;background:#f8fafc}"
-        ".gmeta{padding:6px 10px;font-size:11px;color:#64748b;border-bottom:1px solid #e3e7ee}.gmeta b{color:#0f172a}"
-        ".gpr{border-bottom:1px solid #e3e7ee}.gpr>summary{padding:6px 10px;font-size:11px;color:#2f5fd0;cursor:pointer}"
-        ".gprb{padding:0 10px 8px}.gprb pre{white-space:pre-wrap;word-break:break-word;background:#f8fafc;border:1px solid #e3e7ee;"
-        "border-radius:7px;padding:8px 10px;font-size:11px;margin:0 0 6px;max-height:240px;overflow:auto}"
-        ".glog{font:11.5px/1.4 'JetBrains Mono',ui-monospace,Menlo,monospace;max-height:60vh;overflow:auto}"
-        ".gln{display:grid;grid-template-columns:44px 1fr;gap:6px;padding:4px 8px;border-bottom:1px solid #f0f2f5;cursor:pointer}"
-        ".gln:hover{background:#f8fafc}.gk{font-weight:600;font-size:10.5px}"
-        ".gk.model{color:#2f5fd0}.gk.solver{color:#0f8f84}.gk.plan{color:#6d4fc4}.gk.gate{color:#c99a06}"
-        ".gk.retry{color:#b45309}.gk.final{color:#2f5fd0}.gk.status{color:#64748b}"
-        ".gs{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
-        ".gln.open .gs{white-space:pre-wrap;overflow:visible;word-break:break-word}"
-        "</style>"
-        "<div class='gctl'><label>System <select id='gsys'>" + sysopts + "</select></label>"
-        "<label>Scenario <select id='gscn'></select></label>"
-        "<span class='muted'>every line is tagged: plan, model, solver, gate, retry, status, final.</span></div>"
-        + "".join(blocks)
-        + "<script>window.GEX=" + json.dumps(labels, ensure_ascii=False) + ";</script>")
+        "Every scenario, under each of the six methods",
+        f"<p>Real runs, not re-scored here: {which}, every scenario, every method, on the model each run used. Click a "
+        "scenario to unfold the six methods side by side. Each column opens with the prompt that method received and "
+        "then lists what it did: <span class='k plan'>plan</span> what it committed to, <span class='k model'>model</span> "
+        "what it said, <span class='k tool'>tool</span> what the solver returned, <span class='k gate'>gate</span> the "
+        "verdict, <span class='k retry'>retry</span> what was handed back, <span class='k final'>final</span> what was "
+        "surfaced. Click any line to expand it.</p>"
+        f"<p class='muted'>{len(requests)} scenarios, every one of them.</p>",
+        request_rows(requests, methods))
 
 
 def tab_scenarios() -> str:
@@ -763,30 +747,80 @@ def tab_results() -> str:
         h = read_header(d)
         by_net.setdefault(h["header"]["case"], {})[h["header"]["method"]] = (d, read_summary(d), h)
 
-    def pct(rows: List[Dict[str, str]], kind: str) -> str:
-        k = sum(1 for r in rows if r.get("outcome") == kind)
-        return f"{100.0 * k / len(rows):.0f} % <span class='muted'>({k}/{len(rows)})</span>" if rows else "-"
+    # This case study has four denominators, not one, and they differ for a
+    # reason, so each figure is printed over the one it was computed on.
+    OUTCOMES = "scenarios this method completed; a scenario the harness could not run is not counted"
+    DIAGNOSED = "the runs that returned a diagnosis at all; a run with no valid JSON has none to judge"
+    COMPARABLE = "the runs whose network converged both before and after; one that does not converge has no countable violations"
+    SERVED = "the runs that left a network with measurable load"
+
+    GROUPS = (
+        (GROUP_UTILITY, ["Diagnosis exact %", "New violations initial &rarr; final", "Load served %",
+                         "Repaired %", "Improved %", "Feasible %"]),
+        (GROUP_CORRECTNESS, ["Solved %", "Escalated %", "Wrong-unflagged %", "Traceable %"]),
+        (GROUP_COST, ["Tokens", "Cost $", "Time s"]),
+    )
 
     for net_name, per in by_net.items():
-        split = []
+        rows_out: List[Tuple[str, List[str], List[str]]] = []
         for row in ROWS:
-            if row["name"] in per:
-                d, rows, h = per[row["name"]]
-                a = h["aggregate"]
-                split.append([f"<b>{E(row['label'])}</b>", str(len(rows)), pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged"),
-                              f"{a.get('form')} %", f"{a.get('repaired')}/{len(rows)}", f"{a.get('trace')} %", f"{a.get('tokens')}", f"{a.get('cost')}"])
-            else:
-                split.append([f"<b>{E(row['label'])}</b>", "<span class='muted'>not run</span>"] + [""] * 8)
-        body.append(card(f"{NETWORK_LABELS.get(net_name, net_name)} · run of {E(newest)}",
-                         table(["method", "n", verdict("solved"), verdict("escalated"), verdict("wrong"), "diagnosis", "repaired", "traceable", "tokens", "cost $"], split)))
+            if row["name"] not in per:
+                continue
+            d, rows, h = per[row["name"]]
+            a = h["aggregate"]
+            n = int(a.get("n") or len(rows))
+            out = lambda k, c: counted(f"{100.0 * c / n:.0f}" if n else DASH, Count(int(c), n, OUTCOMES))  # noqa: E731
+            n_diag = int(a.get("common_formulation_total") or 0)
+            n_cmp = int(a.get("violations_comparable_n") or 0)
+            # no field of its own yet; counted from the rows that reported one
+            n_served = sum(1 for r in rows if str(r.get("load_served_pct", "")).strip() not in ("", "None"))
+            viol = (f"{a.get('violations_initial_new')} &rarr; {a.get('violations_final_new')}"
+                    if a.get("violations_final_new") is not None else DASH)
+            cells = [
+                counted(f"{a.get('form')}" if a.get("form") is not None else DASH,
+                        Count(int(a.get("common_formulation_count") or 0), n_diag, DIAGNOSED)),
+                counted(viol, Count(n_cmp, n, COMPARABLE)),
+                counted(f"{a.get('load_served_pct_mean'):.1f}" if a.get("load_served_pct_mean") is not None else DASH,
+                        Count(n_served, n, SERVED)),
+                out("repaired", a.get("repaired") or 0),
+                out("improved", a.get("improved") or 0),
+                out("feasible", a.get("feasible") or 0),
+                out("solved", a.get("solved") or 0),
+                out("escalated", a.get("escalated") or 0),
+                out("wrong", a.get("wrong") or 0),
+                counted(f"{a.get('trace')}" if a.get("trace") is not None else DASH,
+                        Count(int(a.get("common_traceable_count") or 0), n, OUTCOMES)),
+                f"{a.get('tokens'):,}" if a.get("tokens") else NA,
+                f"{a.get('cost'):.3f}" if a.get("cost") is not None else NA,
+                f"{a.get('wall_time_mean_s'):.0f}" if a.get("wall_time_mean_s") is not None else DASH,
+            ]
+            label = f"<b>{E(row['label'])}</b><div class='muted'><code>{E(row['name'])}</code></div>"
+            errs = int(a.get("run_error") or 0)
+            n_cell = str(n) + (f"<br><span class='cnt'>{errs} run error{'s' if errs > 1 else ''}</span>" if errs else "")
+            rows_out.append((d.parts[-2], [label, n_cell], cells, str(d.relative_to(PROJECT_ROOT / "results"))))
+        missing = [r for r in ROWS if r["name"] not in per]
+        body.append(card(
+            f"{NETWORK_LABELS.get(net_name, net_name)} · run of {E(newest)}",
+            comparison_table(GROUPS, rows_out, lead=("Model", "Method", "n")),
+            (f"<p class='muted'>Not in this run: {E(', '.join(r['label'] for r in missing))}.</p>" if missing else ""),
+            note("The three column groups are the same three in every case study of this site. Every figure carries, above it, "
+                 "the number of runs it was computed over, and in this case study those differ on purpose: the outcomes are "
+                 "over the scenarios the method completed, the diagnosis over the runs that returned a diagnosis at all, and "
+                 "the violations over the runs whose network converged both before and after, because a network that does not "
+                 "converge has no countable violations rather than none. <b>Violations are counted as new</b>, that is beyond "
+                 "the ones the base network already has: IEEE-14 has three buses out of band before anything is touched and "
+                 "IEEE-57 has thirty-nine, so an absolute count would make the system look like the method's doing.", "info")))
+
+    body.append(side_by_side())
+
     det = []
     cols = [("nn", "nn"), ("scenario_id", "scenario"), ("initial_state", "initial"), ("outcome", "outcome"), ("solved_reason", "why"), ("formulation_exact", "diag."),
             ("final_secure", "secure"), ("final_n_new", "new viol."), ("gate_pass", "gate"), ("n_actions", "actions"), ("n_llm_calls", "llm"), ("n_tool_calls", "tools"), ("cost_usd", "cost $")]
     for d in latest:
         rows = read_summary(d)
-        det.append(f"<details><summary>{E(d.parts[-4])} / {E(d.parts[-2])} / {E(d.name)} — every scenario</summary>"
+        det.append(f"<details><summary>{E(d.parts[-4])} / {E(d.parts[-2])} / {E(d.name)} — every scenario, every metric</summary>"
                    + table([l for _k, l in cols], [[verdict(r["outcome"]) if k == "outcome" else E(r.get(k, "")) for k, _l in cols] for r in rows]) + "</details>")
-    body.append(card("Scenario by scenario", *det))
+    body.append(card("Every metric of every scenario", *det))
     return "".join(body)
 
 
@@ -844,23 +878,11 @@ SCRIPT = """
   if(mth){ var apply=function(){ document.querySelectorAll('.pm').forEach(function(p){ p.style.display = p.dataset.mth===mth.value ? '' : 'none'; }); };
     mth.onchange=apply; apply(); }
 })();
-(function(){
-  var L=window.GEX; if(!L) return;
-  var sys=document.getElementById('gsys'), scn=document.getElementById('gscn');
-  if(!sys||!scn) return;
-  var esc=function(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
-  function fill(){ var l=L[sys.value]||[];
-    scn.innerHTML=l.map(function(p){return '<option value="'+esc(p[0])+'">'+esc(p[1])+'</option>';}).join(''); }
-  function show(){ document.querySelectorAll('.gex').forEach(function(b){
-      b.classList.toggle('on', b.dataset.case===sys.value && b.dataset.scn===scn.value); }); }
-  sys.onchange=function(){fill();show();}; scn.onchange=show;
-  document.addEventListener('click', function(e){ var ln=e.target.closest && e.target.closest('.gln'); if(!ln) return;
-    var s2=ln.querySelector('.gs'); if(!ln.classList.contains('open')){ ln.dataset.short=s2.textContent;
-      s2.textContent=ln.dataset.full; ln.classList.add('open'); }
-    else { s2.textContent=ln.dataset.short; ln.classList.remove('open'); } });
-  fill(); show();
-})();
 """
+# The two selectors that used to choose which of three scenarios to show are
+# gone: every scenario is a row of the results table now, and unfolding one is
+# a click. Expanding a step line is handled once, in visuals/shell.py, for all
+# four case studies.
 
 
 def payload() -> Dict[str, Any]:

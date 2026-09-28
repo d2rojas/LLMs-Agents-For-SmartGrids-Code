@@ -29,6 +29,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT.parent))  # so `visuals` is importable
 
 from visuals.shell import (  # noqa: E402
+    Count,
+    DASH,
+    GROUP_CORRECTNESS,
+    GROUP_COST,
+    GROUP_UTILITY,
+    NA,
+    clip,
+    comparison_table,
+    counted,
+    request_rows,
     E,
     card,
     chip,
@@ -1188,23 +1198,30 @@ def tab_gate() -> str:
 # carries the metrics of this task. Rows: the six methods, one block per model.
 TABLE_MODELS: Tuple[str, ...] = ("gpt-4o-mini", "gpt-5.6-sol")
 TABLE_GROUPS: Tuple[Tuple[str, Tuple[Tuple[str, str], ...]], ...] = (
-    ("Task utility", (
-        ("form", "Formulation %"),
+    (GROUP_UTILITY, (
+        ("form_sessions", "Formulation % (sessions)"),
+        ("form_days", "Formulation % (days)"),
+        ("answer", "Answer %"),
         ("gap_solved", "Gap % (solved)"),
         ("gap_all", "Gap % (all)"),
         ("unmet_solved", "Unmet kWh (solved)"),
         ("unmet_all", "Unmet kWh (all)"),
     )),
-    ("Solver-grounded correctness", (
+    (GROUP_CORRECTNESS, (
         ("solved", "Solved %"),
         ("escalated", "Escalated %"),
         ("wrong", "Wrong-unflagged %"),
         ("traceable", "Traceable %"),
     )),
-    ("Cost and time", (
+    (GROUP_COST, (
         ("tokens", "Tokens / request"),
         ("time", "Time (s) / request"),
     )),
+)
+
+# the same list in the shape visuals.shell.comparison_table takes
+TABLE_GROUPS_SHARED: Tuple[Tuple[str, Tuple[str, ...]], ...] = tuple(
+    (group, tuple(label for _key, label in cols)) for group, cols in TABLE_GROUPS
 )
 
 
@@ -1212,71 +1229,110 @@ def _mean(xs: List[float]) -> Optional[float]:
     return sum(xs) / len(xs) if xs else None
 
 
-def table_cells(rows: List[Dict[str, str]]) -> Dict[str, Optional[float]]:
-    """The eleven cells of one method on one model, from its summary.csv rows."""
-    n = len(rows)
+# What every figure of this case study is computed over. There are five, and they
+# differ on purpose; printing any of these rates over a flat 20 would be wrong in
+# four different ways, so each one carries its own.
+DEN_DAYS = "the days this method completed; a day the harness could not run is not counted"
+DEN_SESSIONS = "the charging sessions of those days, ten to eighty-seven per day, not the days"
+DEN_ANSWERED = "the days whose request asks a question with a verifiable answer"
+DEN_TRACED = "the days whose answer has tool output to trace it to"
+DEN_SOLVED = "the days this method solved"
+
+
+def table_cells(rows: List[Dict[str, str]]) -> Dict[str, Tuple[Optional[float], Count]]:
+    """One method's cells on one model, each with the count it was computed over.
+
+    Five denominators, because five different things are being counted. The days
+    the method completed carry the three outcomes. Formulation is scored per
+    charging session, and there are 894 of them across the twenty days, so a day
+    that is right in 86 of its 87 sessions is a day that is wrong; both numbers
+    are published, because neither answers the other's question. The answer check
+    runs on nineteen days, since one request prescribes an operation and asks
+    nothing verifiable, and folding "not checkable" into "correct" would inflate
+    that column. Traceability is scored where there is tool output to trace to,
+    which is nowhere at all for the two no-tools rows: that is "not applicable",
+    and it must never render as a pass.
+    """
+    fl = lambda r, k: float(r[k]) if r.get(k) not in (None, "") else None  # noqa: E731
+    done = [r for r in rows if r.get("outcome") != "run_error"]
+    n = len(done)
     if not n:
         return {}
-    fl = lambda r, k: float(r[k]) if r.get(k) not in (None, "") else None
-    solved_rows = [r for r in rows if r.get("outcome") == "solved"]
-    form_rows = [r for r in rows if str(r.get("formulation_exact")).lower() in ("true", "false") and r.get("formulation_error_type") is not None]
-    form_scored = [r for r in rows if r.get("n_sessions_truth") not in (None, "")]
-    trace_rows = [r for r in rows if r.get("traceable") in ("pass", "fail")]
+    days = Count(n, len(rows), DEN_DAYS)
+    solved_rows = [r for r in done if r.get("outcome") == "solved"]
+    solved_n = Count(len(solved_rows), n, DEN_SOLVED)
+    form_days = [r for r in done if r.get("n_sessions_truth") not in (None, "")]
+    sess_exact = sum(int(r["n_sessions_exact"] or 0) for r in form_days if r.get("n_sessions_exact"))
+    sess_truth = sum(int(r["n_sessions_truth"] or 0) for r in form_days)
+    ans_rows = [r for r in done if str(r.get("answer_ok", "")).lower() in ("true", "false")]
+    trace_rows = [r for r in done if r.get("traceable") in ("pass", "fail")]
+
+    def rate(k: int, tot: int, what: str) -> Tuple[Optional[float], Count]:
+        return (100.0 * k / tot if tot else None), Count(k, tot, what)
+
     return {
-        "form": 100.0 * sum(1 for r in form_scored if str(r.get("formulation_exact")).lower() == "true") / len(form_scored) if form_scored else None,
-        "gap_solved": _mean([abs(fl(r, "gap_pct") or 0.0) for r in solved_rows if fl(r, "gap_pct") is not None]),
-        "gap_all": _mean([abs(fl(r, "gap_pct") or 0.0) for r in rows if fl(r, "gap_pct") is not None]),
-        "unmet_solved": _mean([fl(r, "unmet_kwh") or 0.0 for r in solved_rows if fl(r, "unmet_kwh") is not None]),
-        "unmet_all": _mean([fl(r, "unmet_kwh") or 0.0 for r in rows if fl(r, "unmet_kwh") is not None]),
-        "solved": 100.0 * len(solved_rows) / n,
-        "escalated": 100.0 * sum(1 for r in rows if r.get("outcome") == "escalated") / n,
-        "wrong": 100.0 * sum(1 for r in rows if r.get("outcome") == "wrong_unflagged") / n,
-        "traceable": 100.0 * sum(1 for r in trace_rows if r["traceable"] == "pass") / len(trace_rows) if trace_rows else None,
-        "tokens": _mean([(fl(r, "prompt_tokens") or 0.0) + (fl(r, "completion_tokens") or 0.0) for r in rows]),
-        "time": _mean([fl(r, "wall_time_s") or 0.0 for r in rows]),
+        "form_sessions": rate(sess_exact, sess_truth, DEN_SESSIONS),
+        "form_days": rate(sum(1 for r in form_days if str(r.get("formulation_exact")).lower() == "true"),
+                          len(form_days), DEN_DAYS),
+        "answer": rate(sum(1 for r in ans_rows if str(r.get("answer_ok")).lower() == "true"),
+                       len(ans_rows), DEN_ANSWERED),
+        "gap_solved": (_mean([abs(fl(r, "gap_pct") or 0.0) for r in solved_rows if fl(r, "gap_pct") is not None]), solved_n),
+        "gap_all": (_mean([abs(fl(r, "gap_pct") or 0.0) for r in done if fl(r, "gap_pct") is not None]), days),
+        "unmet_solved": (_mean([fl(r, "unmet_kwh") or 0.0 for r in solved_rows if fl(r, "unmet_kwh") is not None]), solved_n),
+        "unmet_all": (_mean([fl(r, "unmet_kwh") or 0.0 for r in done if fl(r, "unmet_kwh") is not None]), days),
+        "solved": rate(len(solved_rows), n, DEN_DAYS),
+        "escalated": rate(sum(1 for r in done if r.get("outcome") == "escalated"), n, DEN_DAYS),
+        "wrong": rate(sum(1 for r in done if r.get("outcome") == "wrong_unflagged"), n, DEN_DAYS),
+        "traceable": rate(sum(1 for r in trace_rows if r["traceable"] == "pass"), len(trace_rows), DEN_TRACED),
+        "tokens": (_mean([(fl(r, "prompt_tokens") or 0.0) + (fl(r, "completion_tokens") or 0.0) for r in done]), days),
+        "time": (_mean([fl(r, "wall_time_s") or 0.0 for r in done]), days),
     }
 
 
 def expected_table() -> str:
-    """The table, its cells filled where a method has run on a model, dashes elsewhere."""
+    """The table, laid out the way every case study of this site lays out its own."""
     by_model: Dict[str, Dict[str, List[Dict[str, str]]]] = {}
+    dir_of: Dict[Tuple[str, str], str] = {}
     for d in method_dirs():
         hdr = read_header(d)["header"]
         by_model.setdefault(hdr["model"], {}).setdefault(hdr["method"], read_summary(d))
-    head = "<tr><th rowspan='2'>Method</th>" + "".join(
-        f"<th class='g' colspan='{len(cols)}'>{E(g)}</th>" for g, cols in TABLE_GROUPS
-    ) + "</tr><tr>" + "".join(f"<th>{E(label)}</th>" for _g, cols in TABLE_GROUPS for _k, label in cols) + "</tr>"
-    body: List[str] = []
-    for model in TABLE_MODELS:
-        body.append(f"<tr><td colspan='{1 + sum(len(c) for _g, c in TABLE_GROUPS)}' style='background:#f6f8fb'><b>{E(model)}</b></td></tr>")
+        dir_of.setdefault((hdr["model"], hdr["method"]), str(d.relative_to(PROJECT_ROOT / "results")))
+
+    FMT = {"tokens": "{:,.0f}", "time": "{:.1f}", "gap_solved": "{:.3f}", "gap_all": "{:.3f}",
+           "unmet_solved": "{:.1f}", "unmet_all": "{:.1f}"}
+    rows_out: List[Tuple[str, List[str], List[str]]] = []
+    for model in ("no-llm",) + TABLE_MODELS:
         for r in ROWS:
-            cells = table_cells(by_model.get(model, {}).get(r["name"], [])) if r["name"] != "rule_based" else table_cells(by_model.get("no-llm", {}).get("rule_based", []))
-            tds = []
+            if (model == "no-llm") != (r["name"] == "rule_based"):
+                continue                    # the parser has no model; the rest have no parser row
+            cells = table_cells(by_model.get(model, {}).get(r["name"], []))
+            tds: List[str] = []
             for _g, cols in TABLE_GROUPS:
                 for k, _label in cols:
-                    v = cells.get(k) if cells else None
-                    if v is None:
-                        tds.append("<td style='text-align:right;color:var(--muted)'>—</td>")
-                    elif k == "tokens":
-                        tds.append(f"<td style='text-align:right'>{v:,.0f}</td>")
-                    elif k in ("time",):
-                        tds.append(f"<td style='text-align:right'>{v:.1f}</td>")
-                    elif k.startswith("gap"):
-                        tds.append(f"<td style='text-align:right'>{v:.3f}</td>")
+                    value, count = cells.get(k, (None, None))
+                    if count is None:
+                        tds.append(DASH)                       # no run has filled this cell
+                    elif count.total == 0:
+                        tds.append(NA)                         # nothing of this kind to score
+                    elif value is None:
+                        tds.append(counted(DASH, count))
                     else:
-                        tds.append(f"<td style='text-align:right'>{v:.1f}</td>")
-            body.append(f"<tr><td><b>{E(r['label'])}</b><div class='muted'><code>{E(r['name'])}</code></div></td>" + "".join(tds) + "</tr>")
+                        tds.append(counted(FMT.get(k, "{:.1f}").format(value), count))
+            label = f"<b>{E(r['label'])}</b><div class='muted'><code>{E(r['name'])}</code></div>"
+            rows_out.append((model, [label], tds, dir_of.get((model, r["name"]), "")))
     return (
-        "<div class='tw'><table class='cmp'>" + head + "".join(body) + "</table></div>"
-        "<p class='muted' style='margin-top:8px'>Solved + Escalated + Wrong-unflagged = 100 on every row. "
-        "Formulation: share of requests whose sessions were all read within tolerance. "
-        "Gap: |cost − cost*| / cost*, in percent, over the solved requests and over all of them. "
-        "Unmet: kWh not delivered, over the solved requests and over all of them. "
-        "Traceable: share of answers whose every number appears in a tool output; not scored for the "
-        "no-tools methods. Tokens and time per request, every call. The parser row has no model and "
-        "sits in both blocks unchanged. A dash is a cell no run has filled.</p>"
+        comparison_table(TABLE_GROUPS_SHARED, rows_out, lead=("Model", "Method"))
+        + "<p class='muted' style='margin-top:8px'>Solved + Escalated + Wrong-unflagged = 100 on every row. "
+        "Every figure carries, above it, the count it was computed over, and in this case study they differ: "
+        "the three outcomes are over the days the method completed; <b>Formulation (sessions)</b> is over the "
+        "894 charging sessions of those days and <b>Formulation (days)</b> over the days, where a day counts "
+        "only when every one of its sessions is right, so the second is far below the first by construction and "
+        "neither replaces the other; <b>Answer</b> is over nineteen days, because one request prescribes an "
+        "operation and asks nothing verifiable, and counting it as correct would inflate the column; Gap and "
+        "Unmet are given over the solved days and over all of them. "
+        f"{NA} is not a zero and not a pass: it means the method has nothing of that kind to score, which is "
+        "what Traceable reads for the two rows that never call the solver. A dash is a cell no run has filled.</p>"
     )
-
 
 
 def _short(x: Any, n: int = 150) -> str:
@@ -1352,54 +1408,88 @@ def step_lines(trace: Optional[Dict[str, Any]], row: Dict[str, str]) -> List[Tup
     return L
 
 
+def _received_prompt(trace: Optional[Dict[str, Any]]) -> str:
+    """The prompt this run actually received, as the trace recorded it.
+
+    Clipped, because the no-tools rows are handed the whole day and their user
+    message runs past twenty thousand characters on the large days; embedding
+    that for twenty requests under six methods is most of the weight of the
+    page and none of its content. The Prompts section shows the assembled
+    prompt of each method block by block.
+    """
+    msgs = (trace or {}).get("messages") or []
+    parts: List[str] = []
+    for role, label in (("system", "system prompt"), ("user", "user message")):
+        body = next((m.get("content") for m in msgs if m.get("role") == role and m.get("content")), None)
+        if not body:
+            continue
+        parts.append(f"<div class='muted' style='padding:2px 10px'>{label}</div>"
+                     f"<pre style='margin:0 8px 8px'>{clip(str(body))}</pre>")
+    if not parts:
+        return ("<p class='muted' style='padding:0 10px 8px'>No prompt. This row uses no language model: "
+                "regular expressions read the request and the solver does the rest.</p>")
+    return "".join(parts)
+
+
 def same_request_section() -> str:
-    """The same request under each method, one column per method, as the traces recorded it."""
+    """Every request of the run, each unfolding into the six methods side by side.
+
+    Under the table, not in a section of its own: a verdict in that table is a
+    count of these rows, and the run behind any one of them should be one click
+    below the number rather than in another section that has to be searched.
+    """
     dirs = latest_run()
     by_method = {read_header(d)["header"]["method"]: d for d in dirs}
     reqs = run_requests()
     if not dirs or not reqs:
         return ""
-    ids = [q["id"] for q in sorted(reqs, key=lambda x: x["id"])]
-    labels = {q["id"]: f"{q.get('date')} · {q.get('variant')} · " + (q.get("text", "").strip().splitlines()[-1][:90] if q.get("text") else "")
-              for q in reqs}
-    out = [
-        "<div class='card'><h2>The same request under each method, step by step</h2>"
-        "<p class='muted'>One column per method. Each column is the log of what the method did on that request: "
-        "what it wrote, what it called, what the solver returned, what the gate decided, the answer, and where "
-        "the request ended up. Click a line to expand it. The counts at the foot are model calls and tool calls, "
-        "from the trace.</p>"
-        "<p><label>Request <select id='exq'>" + "".join(f"<option value='{E(i)}'>{E(labels[i])}</option>" for i in ids) + "</select></label></p></div>"
-    ]
-    for n, rid in enumerate(ids):
-        out.append(f"<div class='ex{' on' if n == 0 else ''}' data-exq='{E(rid)}'><div class='cols6'>")
+    summaries = {name: {x["request_id"]: x for x in read_summary(d)} for name, d in by_method.items()}
+    methods = [(r["name"], r["label"]) for r in ROWS]
+    requests: List[Dict[str, Any]] = []
+    for q in sorted(reqs, key=lambda x: x["id"]):
+        rid = q["id"]
+        cells: Dict[str, str] = {}
+        columns: List[Dict[str, Any]] = []
         for r in ROWS:
             d = by_method.get(r["name"])
-            if d is None:
-                out.append(f"<div class='col'><h4>{E(r['label'])}</h4><p class='muted' style='padding:8px 10px'>no run</p></div>")
-                continue
-            summ = {x["request_id"]: x for x in read_summary(d)}
-            row = summ.get(rid)
+            row = summaries.get(r["name"], {}).get(rid) if d else None
             if row is None:
-                out.append(f"<div class='col'><h4>{E(r['label'])}</h4><p class='muted' style='padding:8px 10px'>not in this run</p></div>")
+                columns.append({"label": r["label"],
+                                "empty": "no run" if d is None else "not in this run"})
                 continue
-            stem = f"{int(row['nn']):02d}_{rid}"
-            tpath = d / "traces" / f"{stem}.json"
             trace = None
+            tpath = d / "traces" / f"{int(row['nn']):02d}_{rid}.json"
             if tpath.exists():
                 try:
                     payload = json.loads(tpath.read_text(encoding="utf-8"))
                     trace = payload if "messages" in payload else None
                 except ValueError:
                     trace = None
-            lines = step_lines(trace, row)
-            out.append(
-                f"<div class='col'><h4>{E(r['label'])}{verdict(row.get('outcome', ''))}</h4><div class='log'>"
-                + "".join(f"<div class='ln' data-full='{E(full)}'><span class='k {k}'>{k}</span><span class='s'>{E(short)}</span></div>" for k, short, full in lines)
-                + f"</div><div class='vt'>{E(row.get('n_llm_calls', '0') or '0')} model calls, {E(row.get('n_tool_calls', '0') or '0')} tool calls · "
-                f"{E(row.get('prompt_tokens', '0') or '0')} in / {E(row.get('completion_tokens', '0') or '0')} out tokens</div></div>"
-            )
-        out.append("</div></div>")
-    return "".join(out)
+            oc = row.get("outcome", "")
+            cells[r["name"]] = (verdict(oc)
+                                + f"<span class='why'>formulation {E(str(row.get('formulation_exact', '')))}</span>"
+                                + f"<span class='why'>answer {E(str(row.get('answer_ok', '')) or 'not checkable')}</span>")
+            columns.append({
+                "label": r["label"], "verdict": oc, "lines": step_lines(trace, row),
+                "prompt": _received_prompt(trace),
+                "footer": (f"{E(row.get('n_llm_calls', '0') or '0')} model calls, "
+                           f"{E(row.get('n_tool_calls', '0') or '0')} tool calls · "
+                           f"{E(row.get('prompt_tokens', '0') or '0')} in / "
+                           f"{E(row.get('completion_tokens', '0') or '0')} out tokens"),
+            })
+        text = (q.get("text", "").strip().splitlines()[-1] if q.get("text") else "")
+        requests.append({"id": rid, "tag": f"{q.get('date')} · {q.get('variant')}",
+                         "text": text, "cells": cells, "columns": columns})
+    return card(
+        "Every request, under each of the six methods",
+        "<p>Click a request to unfold the six methods side by side. Each column is the log of what that method did "
+        "on that day: what it wrote, what it called, what the solver returned, what the gate decided, and where the "
+        "request ended up. Click any line to expand it to the whole thing. The counts at the foot of a column are "
+        "model calls, tool calls and tokens, read from the trace.</p>"
+        f"<p class='muted'>{len(requests)} requests, every one of them. A request of EVAgent leaves two traces, the "
+        "parse and the agent loop; the log below is the agent loop, and the parse is what the formulation verdict "
+        "in the table is computed from.</p>",
+        request_rows(requests, methods))
 
 
 def tab_results() -> str:

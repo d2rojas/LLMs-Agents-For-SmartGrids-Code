@@ -16,8 +16,10 @@ in different projects with different dependencies, and it must not add one.
 
 from __future__ import annotations
 
+import itertools as _it
+import json
 from html import escape as _escape
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple
 
 __all__ = [
     "CSS",
@@ -130,6 +132,42 @@ display:flex;flex-direction:column}
 table{border-collapse:collapse;width:100%;font-size:13px;background:#fff}
 th,td{border:1px solid var(--line);padding:6px 8px;vertical-align:top;text-align:left}
 th{background:#f6f8fb;font-weight:600}th.g{text-align:center;background:#eef2fb}
+
+/* the results table: numbers right, the count above each of them */
+table.cmp td.num{text-align:right;white-space:nowrap}
+.cnt{display:block;font-size:10.5px;color:var(--muted);line-height:1.2}
+.cnt.na{display:inline-block;font-style:italic}
+.val{display:block}
+
+/* one request, and every method that answered it, side by side */
+table.sc td{font-size:12.5px}
+table.sc tr.req{cursor:pointer}
+table.sc tr.req:hover td:first-child{background:#f6f8fb}
+table.sc .why{display:block;color:var(--muted);font-size:11.5px}
+table.sc .why.open{color:var(--acc)}
+table.sc tr.panel>td{background:#f7f9fc}
+.cols6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;align-items:start;margin:4px 0}
+@media(max-width:1400px){.cols6{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:900px){.cols6{grid-template-columns:1fr}}
+.col{background:#fff;border:1px solid var(--line);border-radius:10px;min-width:0;overflow:hidden}
+.col h4{margin:0;padding:8px 10px;border-bottom:1px solid var(--line);font-size:12.5px;background:#fafbfd}
+.col h4 .muted{font-weight:400}
+.log{font:11.5px/1.4 "JetBrains Mono",ui-monospace,Menlo,monospace;max-height:460px;overflow:auto}
+.ln{display:grid;grid-template-columns:46px 1fr;gap:6px;padding:4px 8px;border-bottom:1px solid #f0f2f5;cursor:pointer}
+.ln:hover{background:#f7f9fc}
+.ln .k{font-weight:600;font-size:10.5px}
+.ln .k.call,.ln .k.model{color:var(--acc)}
+.ln .k.tool,.ln .k.solver{color:#0f8f84}
+.ln .k.plan{color:#6d4fc4}
+.ln .k.gate,.ln .k.retry{color:#c99a06}
+.ln .k.final{color:#1f9d55}
+.ln .k.status{color:var(--muted)}
+.ln .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ln.open .s{white-space:pre-wrap;overflow:visible;word-break:break-word}
+.pr{border-bottom:1px solid var(--line)}
+.pr summary{padding:6px 10px;font-size:12px;cursor:pointer;margin:0}
+.pr pre{max-height:300px;overflow:auto;font-size:11px;margin:0 8px 8px}
+.vt{padding:6px 10px;border-top:1px solid var(--line);font-size:11.5px;background:#fafbfd}
 code{font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:#f1f4f9;
 padding:1px 4px;border-radius:4px}
 pre{background:#fafbfd;border:1px solid var(--line);border-radius:8px;padding:10px;white-space:pre-wrap;
@@ -212,6 +250,204 @@ def table(headers: Sequence[str], rows: Iterable[Sequence[str]], *, escape: bool
     return f"<div class='tw'><table><tr>{head}</tr>{body}</table></div>"
 
 
+# ------------------------------------------------- the comparison, the same everywhere
+
+# The three column groups every case study's results table is built from. Task
+# utility is the only one whose columns differ between cases, because the tasks
+# optimise different things; the other two are defined identically everywhere,
+# which is what lets the four tables be read against each other.
+GROUP_UTILITY = "Task utility"
+GROUP_CORRECTNESS = "Solver-grounded correctness"
+GROUP_COST = "Cost and time"
+
+
+class Count(NamedTuple):
+    """How many instances a figure was computed over, and what they are.
+
+    ``what`` is not decoration. Every case study averages its errors over a
+    different subset -- the scenarios that produced a valid series, the cars of
+    a session, the runs that converged at both ends -- and four columns called
+    "scored" that mean four different things are worse than no column at all.
+    So the case study has to say, in its own words, what it counted.
+    """
+
+    scored: int
+    total: int
+    what: str
+
+
+def counted(value: str, count: Count) -> str:
+    """A measured figure with the count it was computed over, above it.
+
+    Use for every mean, error and rate. A method that answered 7 of 20
+    instances kept the ones it found easy, so its error is not comparable with
+    a method that answered all 20 even when the number is smaller; printing the
+    figure alone hides exactly that.
+    """
+    if not count.what.strip():
+        raise ValueError(
+            "Count.what must say what was counted: this is the whole point of the "
+            "count, and an empty one puts four different denominators under one name"
+        )
+    # The two numbers are also carried as data, so the cross-check can read what
+    # the page rendered and compare it against the rows the page was built from.
+    # A page that computes its own numbers is a second implementation of every
+    # metric, and the way to keep a second implementation honest is to check it.
+    return (f"<span class='cnt' data-k='{count.scored}' data-n='{count.total}' "
+            f"title='{E(count.what)}'>{count.scored}/{count.total}</span>"
+            f"<span class='val'>{value}</span>")
+
+
+NA = "<span class='cnt na' title='not applicable to this method'>n/a</span>"
+
+# Not a missing measurement: there was nothing to measure. A method that
+# returned no valid answer produced no error to average, which is itself the
+# result, and it must not be confused with a measurement that was not taken.
+DASH = "<span class='muted'>&#8212;</span>"
+
+
+def clip(text: str, head: int = 1500, tail: int = 500) -> str:
+    """The beginning and the end of a long block, with the gap declared.
+
+    A prompt that carries a fortnight of ten-minute SCADA readings is seventy
+    thousand characters of CSV. Embedding it once per request and per method is
+    most of the weight of a page and none of its content: what the reader is
+    checking is that the block is there, where it comes from and how it starts.
+    So the middle is dropped and the page says how much it dropped, rather than
+    pretending the block is short or leaving it out without saying so.
+    """
+    if len(text) <= head + tail:
+        return E(text)
+    gone = len(text) - head - tail
+    return (E(text[:head])
+            + f"\n\n<span class='muted'>[{gone:,} of {len(text):,} characters not shown. "
+              "The whole block is in the run's trace file.]</span>\n\n"
+            + E(text[-tail:]))
+
+
+def comparison_table(
+    groups: Sequence[Tuple[str, Sequence[str]]],
+    rows: Sequence[Tuple[str, Sequence[str], Sequence[str]]],
+    *,
+    lead: Sequence[str] = ("Model", "Method"),
+) -> str:
+    """The results table, laid out the same way in every case study.
+
+    A header row of column groups over a header row of columns, the model as
+    the first column, ``no-llm`` first and the methods in the ladder order the
+    case study passes, and the model named once per block so the eye groups the
+    rows by model rather than by method.
+
+    Args:
+        groups: ((group title, (column label, ...)), ...). Use ``GROUP_UTILITY``,
+            ``GROUP_CORRECTNESS`` and ``GROUP_COST`` for the three shared ones.
+        rows: ((model, (lead cell, ...), (data cell, ...)), ...) in the case
+            study's own method order. The lead cells are the columns of ``lead``
+            after Model; the data cells must total the columns of ``groups``.
+        lead: the columns that stand outside the groups, Model first.
+
+    Returns:
+        A scrollable table element.
+    """
+    ncol = sum(len(c) for _g, c in groups)
+    head = ("<tr>" + "".join(f"<th rowspan='2'>{E(x)}</th>" for x in lead)
+            + "".join(f"<th class='g' colspan='{len(c)}'>{E(g)}</th>" for g, c in groups)
+            + "</tr><tr>" + "".join(f"<th>{E(lab)}</th>" for _g, c in groups for lab in c) + "</tr>")
+    # no-llm first: it is the floor the rest are read against, and it is not a
+    # model, so sorting it in with the model names would bury it.
+    order = sorted({r[0] for r in rows}, key=lambda m: (m != "no-llm", m))
+    body: List[str] = []
+    shown: Optional[str] = None
+    for model in order:
+        for row in rows:
+            m, lead_cells, cells = row[0], row[1], row[2]
+            run = row[3] if len(row) > 3 else ""    # which run dir the row was computed from
+            if m != model:
+                continue
+            if len(cells) != ncol:
+                raise ValueError(f"{model}: {len(cells)} cells for {ncol} columns")
+            name = f"<b>{E(model)}</b>" if model != shown else "<span class='muted'>&#8220;</span>"
+            shown = model
+            body.append(f"<tr data-run='{E(run)}'><td>" + name + "</td>"
+                        + "".join(f"<td>{c}</td>" for c in lead_cells)
+                        + "".join(f"<td class='num'>{c}</td>" for c in cells) + "</tr>")
+    cols = json.dumps([lab for _g, c in groups for lab in c])
+    return (f"<div class='tw'><table class='cmp' data-cols='{E(cols)}'>{head}{''.join(body)}</table></div>")
+
+
+# ------------------------------------------------ one request under every method
+
+def steps_log(lines: Sequence[Tuple[str, str, str]]) -> str:
+    """What one run did, one line per step, each expandable to the whole thing.
+
+    ``lines`` is (kind, one-line summary, the full text). The kinds are the same
+    five words in every case study -- ``call`` a tool, ``tool`` what came back,
+    ``plan``, ``gate`` the verdict, ``retry``, ``final`` what was surfaced --
+    so a column of one case study can be read by someone who learned another.
+    """
+    return "<div class='log'>" + "".join(
+        f"<div class='ln' data-full='{E(full)}'><span class='k {E(kind)}'>{E(kind)}</span>"
+        f"<span class='s'>{E(short)}</span></div>"
+        for kind, short, full in lines) + "</div>"
+
+
+def method_columns(columns: Sequence[Dict[str, Any]]) -> str:
+    """The same request under each method, side by side, one column per method.
+
+    Each column is a dict with ``label`` (the method), optionally ``model``,
+    ``verdict``, ``prompt`` (the prompt that method really received, already
+    split into blocks), ``lines`` for ``steps_log`` and ``footer``. A method
+    with no run gets a column saying so rather than being left out, because a
+    missing column reads as an oversight and an empty one is a result.
+    """
+    out: List[str] = []
+    for col in columns:
+        head = f"<h4>{E(col['label'])}"
+        if col.get("model"):
+            head += f"<br><span class='muted'>{E(col['model'])}</span>"
+        if col.get("verdict"):
+            head += verdict(col["verdict"])
+        head += "</h4>"
+        if not col.get("lines") and not col.get("prompt"):
+            out.append(f"<div class='col'>{head}<div class='vt muted'>{E(col.get('empty', 'no run'))}</div></div>")
+            continue
+        prompt = (f"<details class='pr'><summary>the prompt this method received</summary>{col['prompt']}</details>"
+                  if col.get("prompt") else "")
+        foot = f"<div class='vt'>{col['footer']}</div>" if col.get("footer") else ""
+        out.append(f"<div class='col'>{head}{prompt}{steps_log(col.get('lines') or ())}{foot}</div>")
+    return "<div class='cols6'>" + "".join(out) + "</div>"
+
+
+def request_rows(requests: Sequence[Dict[str, Any]], methods: Sequence[Tuple[str, str]]) -> str:
+    """Every request as a row that unfolds into the methods side by side.
+
+    This is what puts the traces on the results page: a cell of the table above
+    is a number, and the request that produced it is one click below it, with
+    what each method did to get there. ``requests`` is a sequence of dicts with
+    ``id``, ``text``, optionally ``tag``, a ``cells`` map of method key to the
+    summary cell, and ``columns`` for ``method_columns``.
+    """
+    head = ("<tr><th>request</th>"
+            + "".join(f"<th>{E(label)}</th>" for _k, label in methods) + "</tr>")
+    body: List[str] = []
+    for r in requests:
+        rid = str(r["id"])
+        cells = r.get("cells") or {}
+        # The panel is the row right after its request, and is found that way
+        # rather than by id: four case studies in one document means ids are
+        # rewritten at assembly time, and a data attribute holding one would be
+        # left pointing at a name that no longer exists.
+        row = (f"<tr class='req'><td><b>{E(str(r.get('tag', '')))}</b><br>{E(str(r.get('text', '')))}"
+               f"<br><span class='why'>{E(rid)}</span>"
+               f"<br><span class='why open'>click: every method side by side &#9662;</span></td>"
+               + "".join(f"<td>{cells.get(k) or '<span class=\"cnt na\">no run</span>'}</td>"
+                         for k, _l in methods) + "</tr>")
+        panel = (f"<tr class='panel' hidden><td colspan='{len(methods) + 1}'>"
+                 f"{method_columns(r.get('columns') or ())}</td></tr>")
+        body.append(row + panel)
+    return f"<div class='tw'><table class='sc'>{head}{''.join(body)}</table></div>"
+
+
 def kv(pairs: Sequence[Tuple[str, str]]) -> str:
     """A two-column key/value list."""
     return "<div class='kv'>" + "".join(f"<b>{E(k)}</b><span>{v}</span>" for k, v in pairs) + "</div>"
@@ -223,6 +459,9 @@ def flow(steps: Sequence[Tuple[str, str]]) -> str:
     return "<div class='flow'>" + "<span class='arr'>→</span>".join(boxes) + "</div>"
 
 
+_ARROW = _it.count()
+
+
 def pipeline(steps: Sequence[Tuple[str, str]], *, loop: Optional[Tuple[int, int, str]] = None) -> str:
     """A block diagram of a pipeline, drawn the way a figure in a paper is drawn.
 
@@ -231,11 +470,12 @@ def pipeline(steps: Sequence[Tuple[str, str]], *, loop: Optional[Tuple[int, int,
     return arc above the row, for a stage that can send the request back.
     """
     n = len(steps)
+    pa = f"pa{next(_ARROW)}"
     bw, bh, gap, top = 150, 58, 34, 38 if loop else 10
     W = n * bw + (n - 1) * gap + 20
     H = top + bh + 44
     d = [f"<svg viewBox='0 0 {W} {H}' width='100%' style='max-width:{W}px;display:block;margin:6px auto' "
-         "xmlns='http://www.w3.org/2000/svg'><defs><marker id='pa' markerWidth='9' markerHeight='9' refX='8' refY='4.5' "
+         f"xmlns='http://www.w3.org/2000/svg'><defs><marker id='{pa}' markerWidth='9' markerHeight='9' refX='8' refY='4.5' "
          "orient='auto'><path d='M0,0 L9,4.5 L0,9 z' fill='#0f172a'/></marker></defs>"]
     xs = []
     for i, (title, caption) in enumerate(steps):
@@ -258,12 +498,12 @@ def pipeline(steps: Sequence[Tuple[str, str]], *, loop: Optional[Tuple[int, int,
                      f"font-family='Inter,Helvetica,Arial' fill='#475569'>{E(ln)}</text>")
         if i:
             d.append(f"<line x1='{x - gap + 2}' y1='{top + bh / 2}' x2='{x - 3}' y2='{top + bh / 2}' "
-                     "stroke='#0f172a' stroke-width='1.2' marker-end='url(#pa)'/>")
+                     "stroke='#0f172a' stroke-width='1.2' marker-end='url(#" + pa + ")'/>")
     if loop:
         a, b, label = loop
         x1, x2 = xs[a] + bw / 2, xs[b] + bw / 2
         d.append(f"<path d='M{x1},{top} C{x1},18 {x2},18 {x2},{top - 3}' fill='none' stroke='#0f172a' stroke-width='1.2' "
-                 "stroke-dasharray='4 3' marker-end='url(#pa)'/>")
+                 "stroke-dasharray='4 3' marker-end='url(#" + pa + ")'/>")
         d.append(f"<text x='{(x1 + x2) / 2}' y='11' text-anchor='middle' font-size='10.5' "
                  f"font-family='Inter,Helvetica,Arial' fill='#475569'>{E(label)}</text>")
     d.append("</svg>")
@@ -344,6 +584,7 @@ def diagram(
     """
     n = len(steps)
     h = height or diagram_height(steps, branch is not None)
+    ar = f"a{next(_ARROW)}"
 
     def box(x: float, y: float, w: float, txt: str, kind: str) -> str:
         fill, stroke = STEP_STYLE.get(kind, STEP_STYLE["out"])
@@ -356,13 +597,13 @@ def diagram(
     def arrow(y1: float, y2: float) -> str:
         return (
             f"<line x1='{_W / 2}' y1='{y1}' x2='{_W / 2}' y2='{y2}' stroke='#64748b' "
-            "stroke-width='1.6' marker-end='url(#a)'/>"
+            "stroke-width='1.6' marker-end='url(#" + ar + ")'/>"
         )
 
     d = [
         f"<svg viewBox='0 0 {_W} {h}' width='100%' height='{h}' "
         "xmlns='http://www.w3.org/2000/svg'>"
-        "<defs><marker id='a' markerWidth='8' markerHeight='8' refX='7' refY='4' orient='auto'>"
+        f"<defs><marker id='{ar}' markerWidth='8' markerHeight='8' refX='7' refY='4' orient='auto'>"
         "<path d='M0,0 L8,4 L0,8 z' fill='#64748b'/></marker></defs>"
     ]
     ys: List[float] = []
@@ -381,7 +622,7 @@ def diagram(
         lo, hi = ys[i] + _BH / 2, ys[i - 1] + _BH / 2
         d.append(
             f"<path d='M{_W - 24},{lo} C{_W - 6},{lo} {_W - 6},{hi} {_W - 24},{hi}' fill='none' "
-            "stroke='#64748b' stroke-width='1.6' marker-end='url(#a)'/>"
+            "stroke='#64748b' stroke-width='1.6' marker-end='url(#" + ar + ")'/>"
         )
 
     if branch is not None:
@@ -533,10 +774,17 @@ document.querySelectorAll('aside a.sub').forEach(a=>a.onclick=e=>{
 function fromHash(){var k=(location.hash||'').slice(1);
   if(k&&document.getElementById('tab-'+k)){show(k);}else{show(FIRST);}}
 window.addEventListener('hashchange',fromHash);
-document.querySelectorAll('.ln').forEach(function(l){l.onclick=function(){
+document.querySelectorAll('.ln').forEach(function(l){l.onclick=function(e){
+  e.stopPropagation();
   var o=l.classList.toggle('open'); var sp=l.querySelector('.s');
   if(!l.dataset.short) l.dataset.short=sp.textContent;
   sp.textContent=o?(l.dataset.full||l.dataset.short):l.dataset.short;};});
+// a request in the results table unfolds into the methods side by side, in the
+// row right under it, so a number and the runs behind it are on one page
+document.querySelectorAll('tr.req').forEach(function(tr){tr.onclick=function(e){
+  if(e.target.closest('a')||e.target.closest('.ln')) return;
+  var p=tr.nextElementSibling;
+  if(p&&p.classList.contains('panel')) p.hidden=!p.hidden;};});
 var b=document.getElementById('burger');
 if(b) b.onclick=()=>document.getElementById('side').classList.toggle('open');
 fromHash();
