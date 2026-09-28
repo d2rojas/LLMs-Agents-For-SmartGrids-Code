@@ -1,81 +1,103 @@
-# Wind Power Forecasting
+# Wind power forecasting: the next 48 hours of one turbine from its history alone
 
-LLM-based wind power forecasting: the LLM acts as the **prediction engine** (no
-external solver) and is compared across three prompting strategies and a GRU
-baseline. Because there is no solver, verification reduces to output-level checks
-(JSON schema validity and clipping to the physical power range).
+A wind turbine's SCADA history for the last fourteen days is given; the next 3, 6 or 48 hours of
+its active power have to be written down, 10-minute step by 10-minute step. Nothing after the last
+history day is known to anyone. This case study measures six ways of doing that, from a parser
+with the conventional forecaster to the solver-grounded agent, on twenty frozen instances of the
+SDWPF farm (KDD Cup 2022), with one scorer for all six.
 
-## Strategies
-- **Naive** — raw history + minimal instruction.
-- **Advanced** — physics-informed prompt (power ∝ wind speed³, saturation, cut-in) + strict JSON schema with retries.
-- **APBF** — Advanced + **Binning** (16 ordinal levels, ~50% fewer tokens) + **Forecast** (48-h ERA5 100 m wind from Open-Meteo appended to the prompt).
+It follows the layout every case study in this repository follows; see [`../LAYOUT.md`](../LAYOUT.md).
+The code of the original study, whose numbers the submitted paper carried, is kept unchanged under
+[`_legacy/`](_legacy/) and is not part of the evaluation.
 
-## LLM models
-The full model × strategy × horizon table (paper §VI-A) is swept by
-[`replication_code/run_full_table_experiments.py`](replication_code/run_full_table_experiments.py)
-over: **Gemini 3 Flash** (`gemini-3-flash-preview`), **Gemini 3 Pro**
-(`gemini-3-pro-preview`), **Claude 3.5 Haiku** (`claude-3-5-haiku-20241022`), and
-**Claude 3.5 Sonnet** (`claude-3-5-sonnet-20241022`). Single-configuration runs
-(`replicate_experiments.py`) default to `gemini-3-flash`, or
-`claude-3-haiku-20240307` with `--provider claude`.
+## Where things are
 
-## Data
-- **SDWPF** turbine dataset (Zhou et al., *Scientific Data* 2024). Download it and place the SCADA file as `wtbdata_245days.csv` in this folder (it is large and is **not** committed).
-- **ERA5** 100 m wind forecasts are fetched at run time from the free Open-Meteo API (no key required).
+| path | what |
+|---|---|
+| `run.py` | the one entry point: `list-methods`, `show-prompt`, `freeze-data`, `train-gru`, `run`, `postprocess`, `rescore`, `index`, `serve` |
+| `config.py` | the task (sampling, 14-day history, horizons, physical range, the KDD Cup abnormal-data rules, the train/test split), budgets (8 model calls, 12 tool calls, 600 s per request), model resolution |
+| `methods/` | one folder per method with its `method.json` and `.txt` prompts; code by role under `methods/agent/`, `methods/prompting/`, `methods/deterministic/`; `methods/README.md` is the table |
+| `solver/` | the trusted tools: `data.py` (the frozen windows, the abnormal rules, the hash check), `forecasters.py` (persistence, power curve, GRU), `gru.py` (the conventional forecaster, trained once), `tools.py` (the catalogue and the dispatcher) |
+| `evaluation/` | `requests.py` (the request text and the question), `scoring.py` (one scorer), `runner.py`, `postprocess.py`, `rescore.py`, `page_fragments.py` (this case study's sections of the shared site) |
+| `data/benchmark/` | the frozen instances: five turbines x four windows, sixteen days each, and `manifest.json` with a content hash per file and the choice rule |
+| `data/gru/` | the GRU's training slices (days 1 to 214 of the five turbines) and its weights `gru_v1.json` with the training log |
+| `results/` | `sdwpf/<date>/<model>/<method>/` with `REPORT.md`, `summary.csv`, `config.json`, `traces/` and `raw/`; see `results/README.md` |
+| `tests/` | API-key-free: every method end to end with a scripted model, the gate, the scorer, the manifest, the prompt hashes |
+
+## The six methods
+
+The same six, with the same names and in the same order, as every other case study.
+
+| method | LLM | tools | gate |
+|---|---|---|---|
+| `rule_based` — a regex parser reads the request, the GRU tool writes the series | no | yes | none |
+| `llm_only_structured` — the model reads the history as CSV and writes the series itself | yes | no | none |
+| `llm_only_cot` — the same plus one reasoning section | yes | no | none |
+| `plan_act_nogate` — one call plans every tool call, executed without feedback | yes | yes | none |
+| `react_nogate` — tool call, observation, repeat, inside the budget | yes | yes | none |
+| `windagent` — the ReAct loop plus the verification gate W1–W5 | yes | yes | final |
+
+`python run.py list-methods` prints this from `methods/`.
+
+## What is different from the submitted paper's experiment
+
+The submitted Section 6.1 fed the model ERA5 reanalysis wind for the very hours it was asked to
+forecast (future information), on one turbine, one window and one call per cell, with a GRU row
+taken from a student report. Here no method sees anything after the last history day, the
+instances are twenty windows in the KDD Cup test period drawn by a fixed rule, the GRU is trained
+in the repository on the training period only and receives the same inputs as every other row,
+the abnormal-data rules of the KDD Cup decide which target points are scored, and every run
+leaves its traces. The dataset's location and calendar dates are not published, so no weather
+forecast of any kind is attached; that is stated in the manifest.
 
 ## Setup
+
 ```bash
-cd wind-forecasting/replication_code
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-
-# API keys for the LLMs you want to run:
-export GEMINI_API_KEY=...        # Gemini 3 Flash
-export ANTHROPIC_API_KEY=...     # Claude
+cp .env.example .env        # OPENROUTER_API_KEY (or OPENAI_API_KEY); the repo's power-flow-agent/.env is read too
 ```
 
-## How to run
+The benchmark is frozen in `data/benchmark/` and needs no download. To rebuild it from the raw
+SDWPF file (`wtbdata_245days.csv`, Zhou et al. 2024):
+
 ```bash
-# Reproduce the full model × strategy × horizon table:
-python run_full_table_experiments.py
-
-# Run/replicate a single configuration:
-python replicate_experiments.py
-
-# Re-run only experiments that failed (e.g., API rate limits):
-python retry_failed_experiments.py
+python run.py freeze-data --source /path/to/wtbdata_245days.csv    # refuses to overwrite without --force
+python run.py train-gru --force                                     # about two minutes on a laptop CPU
 ```
-A step-by-step walkthrough is in [`replication_code/REPLICATION_GUIDE.md`](replication_code/REPLICATION_GUIDE.md); notebooks (`replicate_results.ipynb`, `wind_forecasting_evaluation.ipynb`) reproduce the analysis interactively.
 
-## Results (this replication)
-- **Best:** Gemini 3 Flash + APBF at 3 h → **144.89 kW**, 54% better than the GRU baseline (315.82 kW).
-- APBF excels at short horizons (3 h, 6 h); at 48 h the LLM struggles to emit exactly 288 values (schema-validation failures), which the output-level verification catches.
+A run refuses to start on an instance whose file hashes differently from the manifest.
 
-| Strategy | 3 h | 6 h | 48 h |
-|---|---|---|---|
-| Naive    | 336.68 | 582.23 | 686.56 |
-| Advanced | 298.92 | 280.28 | 686.56 |
-| APBF     | **144.89** | 211.87 | validation failure |
+## Running
 
-(Overall = mean of MAE and RMSE, kW; lower is better.)
-
-## Files
+```bash
+python run.py run --dry-run                                                        # the cost estimate; spends nothing
+python run.py run --method windagent --n 3 --horizon 48 --tag smoke --model openrouter:openai/gpt-4o-mini
+python run.py run                                                                  # every method, every instance, every horizon
+python run.py run --condition stress                                               # the last history day blanked: the correct answer is to escalate
+python run.py index                                                                # results/INDEX.md
 ```
-wind-forecasting/
-├── README.md                 # this file
-├── replication_code/         # scripts + notebooks + REPLICATION_GUIDE.md
-│   ├── replicate_experiments.py
-│   ├── run_full_table_experiments.py
-│   ├── retry_failed_experiments.py
-│   ├── replicate_results.ipynb
-│   └── requirements.txt
-└── results/                  # experiment outputs (CSV) and result tables (.tex)
-```
-The SDWPF CSV is large and is not committed; see **Data** above for how to obtain
-the dataset.
 
-## Notes
-The 48-h horizon is the hardest setting for an LLM predictor: it must return exactly
-288 numbers, and small counting errors trip the schema check. This is the expected
-failure mode for the no-solver case and motivates the output-level verification used
-throughout the paper.
+Every method sees the same requests, the same budget and the same answer contract. A request
+that fails is written as a row with its error rather than omitted, and a request whose trace
+exists already is kept unless `--force`. Nothing spends API credit without an explicit go, and
+every run ends with `REPORT.md`.
+
+## Tests
+
+```bash
+pytest
+```
+
+`tests/test_methods_end_to_end.py` runs all six methods on one request with a scripted model: a
+series copied from a tool is solved, an invented one is wrong-unflagged without the gate and
+escalated with it. `tests/test_methods_prompts.py` pins the hash of every prompt text under `methods/`.
+
+## The shared site
+
+```bash
+cd .. && python -m visuals.build --case wind && open site/wind.html      # or: python run.py serve
+```
+
+`evaluation/page_fragments.py` writes this case study's sections from the method registry, the
+gate's condition table, the frozen manifest, the prompt builders and the result files.

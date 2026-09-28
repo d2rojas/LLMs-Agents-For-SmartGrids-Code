@@ -1,0 +1,18 @@
+{
+  "runner_name": "llm_only:structured",
+  "group": "LLM-only prompting (paper Sec. 3)",
+  "kind": "llm_only",
+  "strategy": "structured",
+  "uses_llm": true,
+  "uses_tools": false,
+  "gate": false,
+  "description": "One call, no tools. The model reads the 14-day history as CSV and the physical rules, and writes the forecast values itself with the answer contract. The LLM as the predictor, which is the setting the paper's Section 6.1 tested.",
+  "prompt_files": ["_shared/common_rules.txt", "_shared/output_contract.txt", "_shared/llm_only_system_prompt.txt"],
+  "dynamic_parts": [
+    "the request (evaluation/requests.py::request_text)",
+    "the history block, 14 days as CSV (solver/data.py::history_csv)",
+    "the tool catalogue rendered as text, so the model knows what the other rows had (solver/tools.py::catalogue_text)"
+  ],
+  "code": "methods/prompting/llm_only.py::run_llm_only(strategy='structured')",
+  "implemented": true
+}
