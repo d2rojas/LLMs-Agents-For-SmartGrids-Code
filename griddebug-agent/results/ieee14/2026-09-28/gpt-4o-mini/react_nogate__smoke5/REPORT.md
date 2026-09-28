@@ -1,6 +1,6 @@
 # react_nogate on IEEE 14-bus with gpt-4o-mini
 
-Generated 2026-09-28 11:07 by evaluation/postprocess.py from `raw/rows.jsonl`. Scenarios: 7. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the harness's own power flow, the same way for every method.
+Generated 2026-09-28 13:38 by evaluation/postprocess.py from `raw/rows.jsonl`. Scenarios: 7. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the harness's own power flow, the same way for every method.
 
 ## Run
 

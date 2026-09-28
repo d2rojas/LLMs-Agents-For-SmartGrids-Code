@@ -1,6 +1,6 @@
 # plan_act_nogate on IEEE 14-bus with gpt-4o-mini
 
-Generated 2026-09-28 00:50 by evaluation/postprocess.py from `raw/rows.jsonl`. Scenarios: 7. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the harness's own power flow, the same way for every method.
+Generated 2026-09-28 13:38 by evaluation/postprocess.py from `raw/rows.jsonl`. Scenarios: 7. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the harness's own power flow, the same way for every method.
 
 ## Run
 
@@ -42,11 +42,12 @@ The three outcomes are exclusive and sum to the scenario count. Escalation takes
 | Task utility | Repaired (secure final network) | 0/7 (0.0%) |
 | Task utility | Improved | 4/7 (57.1%) |
 | Task utility | New violations, before -> after (scenarios converged at both ends, n=6) | 36 -> 31 |
-| Task utility | Load served, mean / worst | 120.63 % / 34.6 % of the base network's demand |
+| Task utility | Load served, mean / worst | 76.47 % / 34.6 % of the base network's demand (a scenario that still carries the injected load increase counts as 100, not more) |
+| Solver-grounded correctness | Solved autonomously | 0/7 (0.0%) |
+| Solver-grounded correctness | Escalated to a person | 7/7 (100.0%) |
+| Solver-grounded correctness | Wrong, unflagged | 0/7 (0.0%) |
 | Solver-grounded correctness | Feasible (final power flow converges) | 7/7 (100.0%) |
 | Solver-grounded correctness | Traceable answers | 7/7 (100.0%) |
-| Solver-grounded correctness | Wrong, unflagged | 0/7 (0.0%) |
-| Cost and operation | Escalated | 7/7 (100.0%) |
 | Cost and operation | LLM calls / tool calls, mean | 2.0 / 8.14 |
 | Cost and operation | Prompt / completion tokens, mean | 5512.29 / 700.0 |
 | Cost and operation | Cost, total | $0.0087 |

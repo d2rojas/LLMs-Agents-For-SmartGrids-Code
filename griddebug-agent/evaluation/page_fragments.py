@@ -75,7 +75,7 @@ COLUMNS: Tuple[Dict[str, str], ...] = (
     {"group": "Solver-grounded correctness", "name": "Wrong, unflagged", "what": "a repair claim the solver contradicts, or an unsupported number, presented as valid", "why": "the third outcome, and the quantity a solver-grounded design exists to drive to zero. The three add up to 100 %"},
     {"group": "Solver-grounded correctness", "name": "Feasible", "what": "the final power flow converges", "why": "the solver status column of the other case studies"},
     {"group": "Solver-grounded correctness", "name": "Traceable", "what": "every number in the answer appears in a tool output or in the evidence", "why": "the reported numbers have an origin that can be checked"},
-    {"group": "Cost and operation", "name": "Calls, Tokens", "what": "model calls, tool calls, prompt and completion tokens per scenario", "why": "what the architecture costs to run"},
+    {"group": "Cost and operation", "name": "Tokens", "what": "prompt and completion tokens per scenario", "why": "what the architecture costs to run"},
     {"group": "Cost and operation", "name": "Cost, Time", "what": "dollars for the whole run set, and wall time per scenario", "why": "the operating cost of each architecture, on the same scenarios"},
 )
 
@@ -230,6 +230,7 @@ def tab_methods() -> str:
                  "not reproducible from the repository, which is the finding of the September audit. That rewrite is the "
                  "editor's work, not this case study's.", "warn"),
         ),
+        side_by_side(),
         card("What the original GridDebugAgent was, and what changed",
              "<p>The code behind the submitted table had one architecture: a ReAct loop with OpenAI function calling, gpt-4o at temperature 0.3, "
              "up to 30 model calls, no verification of the answer, and a baseline that only diagnosed and never acted. It is the <code>react_nogate</code> "
@@ -238,6 +239,241 @@ def tab_methods() -> str:
              "else. The snapshot, OPF, short-circuit and DC tools are out of the catalogue: OPF would solve the repair for the method, and the others "
              "were never used to repair.</p>"),
     ])
+
+
+
+# ---------------------------------------------------- the same fault, every method
+
+
+SBS_METHODS = [r["name"] for r in ROWS]
+SBS_PER_NETWORK = 3          # scenarios shown per system, as in the power-flow case study
+_SBS_TEXT = 1200             # characters kept of a tool output
+_SBS_SAY = 1000              # characters kept of what the model said
+
+
+def _sbs_clip(s: Any, n: int) -> str:
+    t = s if isinstance(s, str) else json.dumps(s, indent=1, ensure_ascii=False)
+    t = t or ""
+    return t if len(t) <= n else t[:n] + "\n… (" + str(len(t) - n) + " more characters, in the trace file)"
+
+
+def _sbs_digest(o: Any) -> str:
+    """One line a control-room reader can scan, from whatever the tool returned."""
+    if not isinstance(o, dict):
+        return _sbs_clip(o, 120)
+    p: List[str] = []
+    if "converged" in o:
+        p.append("converged" if o["converged"] else "DID NOT CONVERGE")
+    if "n_new_violations" in o:
+        p.append(f"{o['n_new_violations']} new violation(s)")
+    if "n_new_overloads" in o:
+        p.append(f"{o['n_new_overloads']} new overload(s)")
+    if "success" in o:
+        p.append("applied" if o["success"] else "REFUSED")
+    stranded = o.get("islanded_load_buses_after")
+    if isinstance(stranded, list) and stranded:
+        p.append("strands load on bus " + ", ".join(str(b) for b in stranded))
+    if o.get("error"):
+        p.append("error: " + _sbs_clip(o["error"], 90))
+    if not p:
+        return " · ".join(f"{k}={_sbs_clip(v, 60)}" for k, v in list(o.items())[:3])
+    return " · ".join(p)
+
+
+def _sbs_runs() -> Tuple[str, List[Path]]:
+    """The newest run set that has the most methods: (tag, its method folders)."""
+    groups: Dict[Tuple[str, str], List[Path]] = {}
+    for d in method_dirs():
+        tag = d.name.split("__")[1] if "__" in d.name else ""
+        groups.setdefault((d.parts[-3], tag), []).append(d)
+    if not groups:
+        return "", []
+    (date, tag), _ = max(groups.items(), key=lambda kv: (len({p.name.split("__")[0] for p in kv[1]}), kv[0][0]))
+    return tag, [d for (dt, tg), ds in groups.items() if dt == date and tg == tag for d in ds]
+
+
+def _sbs_pick(rows: List[Dict[str, str]]) -> List[str]:
+    """Up to three scenarios, from different categories, preferring the ones the methods disagree on."""
+    seen: Dict[str, str] = {}
+    for r in rows:
+        seen.setdefault(r.get("category", ""), r["request_id"])
+    order = ["contingency", "voltage", "thermal", "nonconvergence", "normal"]
+    out = [seen[c] for c in order if c in seen]
+    out += [rid for rid in (r["request_id"] for r in rows) if rid not in out]
+    return out[:SBS_PER_NETWORK]
+
+
+def _sbs_trace(d: Path, row: Dict[str, str]) -> Optional[Dict[str, Any]]:
+    stem = f"{int(row['nn']):02d}_{row['request_id']}"
+    p = d / "traces" / f"{stem}.json"
+    if not p.is_file():
+        return None
+    t = json.loads(p.read_text(encoding="utf-8"))
+    steps = []
+    for i, rd in enumerate(t.get("rounds") or [], 1):
+        llm = rd.get("llm") or {}
+        tools = []
+        for x in rd.get("tools") or []:
+            tools.append({"name": x.get("name"), "kind": x.get("kind"),
+                          "args": ", ".join(f"{k}={_sbs_clip(v, 60)}" for k, v in (x.get("args") or {}).items()),
+                          "says": _sbs_digest(x.get("output")), "raw": _sbs_clip(x.get("output"), _SBS_TEXT),
+                          "bad": x.get("ok") is False or (isinstance(x.get("output"), dict)
+                                                          and (x["output"].get("success") is False or x["output"].get("converged") is False))})
+        steps.append({"n": i, "say": _sbs_clip(llm.get("content") or "", _SBS_SAY),
+                      "acted": any(x.get("kind") == "action" for x in rd.get("tools") or []), "tools": tools})
+    msgs = t.get("messages") or []
+    user = next((m.get("content") for m in msgs if m.get("role") == "user"), None)
+    return {
+        "outcome": row.get("outcome", ""), "steps": steps,
+        "llm_calls": t.get("n_llm_calls"), "tool_calls": t.get("n_tool_calls"),
+        "tokens": (t.get("prompt_tokens") or 0) + (t.get("completion_tokens") or 0),
+        "seconds": round(float(t.get("wall_time_s") or 0), 1),
+        "final": ("did not converge" if row.get("final_converged") != "True"
+                  else "secure" if row.get("final_secure") == "True" else f"{row.get('final_n_new')} new violation(s)"),
+        "islanded": row.get("final_islanded") if row.get("final_islanded") not in ("", "[]", None) else "",
+        "attempts": [{"n": g.get("attempt"), "passed": bool(g.get("passed")), "failed": g.get("failed") or []}
+                     for g in (t.get("gate_history") or [])],
+        "gate": (None if not t.get("gate") else
+                 {"passed": bool(t["gate"].get("passed")), "failed": t["gate"].get("failed") or [],
+                  "attempts": len(t.get("gate_history") or [])}),
+        "budget": bool(t.get("budget_exhausted")), "declared": t.get("harness_declared") or "",
+        "answer": _sbs_clip(t.get("answer") or "not stored", 3000),
+        "user": _sbs_clip(user or (t.get("request") or {}).get("text") or "not stored", 2500),
+        "sys_hash": t.get("system_prompt_hash") or "",
+    }
+
+
+def _sbs_lines(t: Dict[str, Any]) -> str:
+    """One log line per thing that happened, tagged the way the power-flow page tags them."""
+    out: List[str] = []
+
+    def ln(kind: str, summary: str, full: str = "") -> None:
+        out.append(f"<div class='gln' data-full=\"{E(full or summary)}\"><span class='gk {kind}'>{kind}</span>"
+                   f"<span class='gs'>{E(summary)}</span></div>")
+
+    # the deterministic row and Plan-and-Act both commit to everything before seeing a result
+    planning = t.get("method") in ("plan_act_nogate", "rule_based")
+    for i, st in enumerate(t["steps"]):
+        kind = "plan" if (planning and i == 0) else "model"
+        if st["say"]:
+            ln(kind, st["say"].replace("\n", " ")[:400], st["say"])
+        elif st["tools"]:
+            ln(kind, (("the fixed policy, as tool calls" if t.get("method") == "rule_based" else "the whole plan, as tool calls")
+                      if kind == "plan" else f"no words, called {len(st['tools'])} tool(s)"),
+               "The model returned tool calls and no text.")
+        for x in st["tools"]:
+            call = f"{x['name']}({x['args']})"
+            ln("solver", f"{call} → {x['says']}", f"{call}\n\n{x['raw']}")
+    attempts = t.get("attempts") or []
+    for j, a in enumerate(attempts):
+        ln("gate", (f"attempt {a['n']}: " + ("passed all seven conditions" if a["passed"]
+                                             else "failed on " + ", ".join(a["failed"]))),
+           "The harness re-ran the power flow on the final network and checked the answer against it.\n"
+           + ("passed" if a["passed"] else "failed: " + ", ".join(a["failed"])))
+        if not a["passed"] and j + 1 < len(attempts):
+            ln("retry", "sent back to the model with what failed, one retry inside the same budget",
+               "The gate returns its verdict to the model and asks for a corrected answer. "
+               "The retry spends a call from the same budget the ungated rows have.")
+    if not attempts and t["gate"]:
+        g = t["gate"]
+        ln("gate", "passed all seven conditions" if g["passed"] else "failed on " + ", ".join(g["failed"]))
+    if t["budget"]:
+        ln("status", "tool or model budget exhausted")
+    if t["declared"]:
+        ln("status", "the harness wrote the answer: " + t["declared"])
+    ln("final", (t["answer"].replace("\n", " ")[:400] or "no answer"), t["answer"])
+    return "".join(out)
+
+
+def side_by_side() -> str:
+    tag, dirs = _sbs_runs()
+    if not dirs:
+        return card("The same fault under each method, step by step",
+                    "<p class='muted'>No run yet. This section fills itself from the trace files as soon as one exists.</p>")
+    data: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    labels: Dict[str, List[List[str]]] = {}
+    for d in dirs:
+        case, method = d.parts[-4], d.name.split("__")[0]
+        rows = read_summary(d)
+        if not rows:
+            continue
+        wanted = labels.get(case)
+        if wanted is None:
+            picked = _sbs_pick(rows)
+            labels[case] = [[r["request_id"], f"{r['scenario_id']}-v{r['variant']} · {r['category']}"]
+                            for r in rows if r["request_id"] in picked]
+            wanted = labels[case]
+        for rid, _lab in wanted:
+            row = next((r for r in rows if r["request_id"] == rid), None)
+            if not row:
+                continue
+            tr = _sbs_trace(d, row)
+            if tr:
+                tr["method"] = method
+                data.setdefault(case, {}).setdefault(rid, {})[method] = tr
+    if not data:
+        return card("The same fault under each method, step by step",
+                    "<p class='muted'>The runs exist but stored no traces.</p>")
+
+    cases = sorted(data, key=lambda c: int(c.replace("ieee", "")))
+    blocks: List[str] = []
+    for case in cases:
+        for rid, per in data[case].items():
+            cols = []
+            for r in ROWS:
+                t = per.get(r["name"])
+                if not t:
+                    cols.append(f"<div class='gcol'><h4>{E(r['label'])}</h4>"
+                                "<div class='gmeta'>no stored trace for this scenario</div></div>")
+                    continue
+                verdict_cls = {"solved": "ok", "escalated": "esc"}.get(t["outcome"], "bad")
+                cols.append(
+                    f"<div class='gcol'><h4>{E(r['label'])} <span class='tag {verdict_cls}'>{E(t['outcome'].replace('_', ' '))}</span></h4>"
+                    f"<details class='gpr'><summary>prompt sent to this method for this scenario</summary>"
+                    f"<div class='gprb'><pre>{E(t['user'])}</pre>"
+                    + (f"<p class='muted'>system prompt hash {E(t['sys_hash'])}, shown in full in the Prompts tab</p>" if t["sys_hash"]
+                       else "<p class='muted'>no system prompt: this method uses no language model</p>")
+                    + "</div></details>"
+                    f"<div class='gmeta'><b>{len(t['steps'])}</b> steps · <b>{t['llm_calls'] or 0}</b> model calls · "
+                    f"<b>{t['tool_calls'] or 0}</b> tool calls · {t['tokens']} tokens · {t['seconds']} s<br>"
+                    f"final network: {E(t['final'])}"
+                    + (f" · <b>load stranded on {E(t['islanded'])}</b>" if t["islanded"] else "") + "</div>"
+                    f"<div class='glog'>{_sbs_lines(t)}</div></div>")
+            blocks.append(f"<div class='gex' data-case='{E(case)}' data-scn='{E(rid)}'><div class='gcols'>{''.join(cols)}</div></div>")
+
+    sysopts = "".join(f"<option value='{E(c)}'>{E(NETWORK_LABELS.get('case' + c.replace('ieee', ''), c))}</option>" for c in cases)
+    which = "the run set of the paper" if not tag else f"run set <code>{E(tag)}</code>"
+    return card(
+        "The same fault under each method, step by step",
+        f"<p>Real runs, not scored here: {which}, {SBS_PER_NETWORK} of the twenty scenarios per system, every method, on "
+        "the model each run used. Each column is the log of what the method said, what it called and what the solver "
+        "returned; click a line to expand it, and open the prompt it received. The verdicts of these runs are on the "
+        "results pages, where scores belong.</p>"
+        "<style>"
+        ".gctl{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:10px 0 12px;font-size:12.5px;color:#64748b}"
+        ".gctl select{font:inherit;font-size:13px;padding:3px 7px;border:1px solid #e3e7ee;border-radius:8px;background:#fff;color:#0f172a}"
+        ".gex{display:none}.gex.on{display:block}"
+        ".gcols{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;align-items:start;overflow-x:auto}"
+        "@media(max-width:1200px){.gcols{grid-auto-flow:column;grid-auto-columns:minmax(300px,1fr);grid-template-columns:none}}"
+        ".gcol{background:#fff;border:1px solid #e3e7ee;border-radius:10px;min-width:0;overflow:hidden}"
+        ".gcol>h4{margin:0;padding:8px 10px;font-size:12.5px;border-bottom:1px solid #e3e7ee;background:#f8fafc}"
+        ".gmeta{padding:6px 10px;font-size:11px;color:#64748b;border-bottom:1px solid #e3e7ee}.gmeta b{color:#0f172a}"
+        ".gpr{border-bottom:1px solid #e3e7ee}.gpr>summary{padding:6px 10px;font-size:11px;color:#2f5fd0;cursor:pointer}"
+        ".gprb{padding:0 10px 8px}.gprb pre{white-space:pre-wrap;word-break:break-word;background:#f8fafc;border:1px solid #e3e7ee;"
+        "border-radius:7px;padding:8px 10px;font-size:11px;margin:0 0 6px;max-height:240px;overflow:auto}"
+        ".glog{font:11.5px/1.4 'JetBrains Mono',ui-monospace,Menlo,monospace;max-height:60vh;overflow:auto}"
+        ".gln{display:grid;grid-template-columns:44px 1fr;gap:6px;padding:4px 8px;border-bottom:1px solid #f0f2f5;cursor:pointer}"
+        ".gln:hover{background:#f8fafc}.gk{font-weight:600;font-size:10.5px}"
+        ".gk.model{color:#2f5fd0}.gk.solver{color:#0f8f84}.gk.plan{color:#6d4fc4}.gk.gate{color:#c99a06}"
+        ".gk.retry{color:#b45309}.gk.final{color:#2f5fd0}.gk.status{color:#64748b}"
+        ".gs{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
+        ".gln.open .gs{white-space:pre-wrap;overflow:visible;word-break:break-word}"
+        "</style>"
+        "<div class='gctl'><label>System <select id='gsys'>" + sysopts + "</select></label>"
+        "<label>Scenario <select id='gscn'></select></label>"
+        "<span class='muted'>every line is tagged: plan, model, solver, gate, retry, status, final.</span></div>"
+        + "".join(blocks)
+        + "<script>window.GEX=" + json.dumps(labels, ensure_ascii=False) + ";</script>")
 
 
 def tab_scenarios() -> str:
@@ -604,9 +840,25 @@ BUILDERS = {"home": tab_home, "methods": tab_methods, "scenarios": tab_scenarios
 
 SCRIPT = """
 (function(){
-  var mth=document.getElementById('mth'); if(!mth) return;
-  function apply(){ document.querySelectorAll('.pm').forEach(function(p){ p.style.display = p.dataset.mth===mth.value ? '' : 'none'; }); }
-  mth.onchange=apply; apply();
+  var mth=document.getElementById('mth');
+  if(mth){ var apply=function(){ document.querySelectorAll('.pm').forEach(function(p){ p.style.display = p.dataset.mth===mth.value ? '' : 'none'; }); };
+    mth.onchange=apply; apply(); }
+})();
+(function(){
+  var L=window.GEX; if(!L) return;
+  var sys=document.getElementById('gsys'), scn=document.getElementById('gscn');
+  if(!sys||!scn) return;
+  var esc=function(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+  function fill(){ var l=L[sys.value]||[];
+    scn.innerHTML=l.map(function(p){return '<option value="'+esc(p[0])+'">'+esc(p[1])+'</option>';}).join(''); }
+  function show(){ document.querySelectorAll('.gex').forEach(function(b){
+      b.classList.toggle('on', b.dataset.case===sys.value && b.dataset.scn===scn.value); }); }
+  sys.onchange=function(){fill();show();}; scn.onchange=show;
+  document.addEventListener('click', function(e){ var ln=e.target.closest && e.target.closest('.gln'); if(!ln) return;
+    var s2=ln.querySelector('.gs'); if(!ln.classList.contains('open')){ ln.dataset.short=s2.textContent;
+      s2.textContent=ln.dataset.full; ln.classList.add('open'); }
+    else { s2.textContent=ln.dataset.short; ln.classList.remove('open'); } });
+  fill(); show();
 })();
 """
 

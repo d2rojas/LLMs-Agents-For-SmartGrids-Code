@@ -72,6 +72,15 @@ credit without an explicit go, and every run ends with `REPORT.md`.
 pytest
 ```
 
+```bash
+node tests/crosscheck_page.mjs      # optional, needs node
+```
+
+The results page computes every cell in JavaScript from `summary.csv` while `postprocess.py`
+computes the same quantities in Python. Two renderers over one dataset can drift apart, so this
+recomputes the page's table for every run and compares it against the aggregate that run recorded.
+It spends nothing and exits non-zero naming each disagreement.
+
 `tests/test_methods_end_to_end.py` runs all six methods on one scenario with a scripted model:
 a true repair is solved, a false claim is wrong-unflagged without the gate and escalated with it.
 `tests/test_methods_prompts.py` pins the hash of every prompt text under `methods/`.

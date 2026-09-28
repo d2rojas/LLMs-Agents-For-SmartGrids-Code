@@ -1,6 +1,6 @@
 # griddebug on IEEE 14-bus with gpt-4o-mini
 
-Generated 2026-09-28 01:10 by evaluation/postprocess.py from `raw/rows.jsonl`. Scenarios: 7. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the harness's own power flow, the same way for every method.
+Generated 2026-09-28 13:37 by evaluation/postprocess.py from `raw/rows.jsonl`. Scenarios: 7. Scored by the one scorer (evaluation/scoring.py): every verdict below is read from the answer JSON, the tool log and the harness's own power flow, the same way for every method.
 
 ## Run
 
@@ -19,7 +19,7 @@ Generated 2026-09-28 01:10 by evaluation/postprocess.py from `raw/rows.jsonl`. S
 | system_prompt_hash | 4b8459433e97 |
 | git_commit | 46cefeca-dirty |
 | pandapower | 3.5.5 |
-| description | The same loop as ReAct plus the verification gate G1-G6 on the final answer: the harness re-runs the power flow on the final network and checks convergence, islanded load, security or a declared remainder, currency, traceability and consistency. One retry, then a declared failure. The solver-grounded row. |
+| description | The same loop as ReAct plus the verification gate G1-G7 on the final answer: the harness re-runs the power flow on the final network and checks convergence, islanded load, security or a declared remainder, currency, traceability, consistency, and that the actions claimed are the ones the trace shows succeeding. One retry, then a declared failure. The solver-grounded row. |
 | prompt files | _shared/common_rules.txt, _shared/output_contract.txt, _shared/agent_system_prompt.txt, _shared/gate_retry_instruction.txt |
 
 ## Where every scenario ended
@@ -42,11 +42,12 @@ The three outcomes are exclusive and sum to the scenario count. Escalation takes
 | Task utility | Repaired (secure final network) | 1/7 (14.3%) |
 | Task utility | Improved | 6/7 (85.7%) |
 | Task utility | New violations, before -> after (scenarios converged at both ends, n=6) | 36 -> 25 |
-| Task utility | Load served, mean / worst | 88.23 % / 36.9 % of the base network's demand |
+| Task utility | Load served, mean / worst | 77.33 % / 36.9 % of the base network's demand (a scenario that still carries the injected load increase counts as 100, not more) |
+| Solver-grounded correctness | Solved autonomously | 1/7 (14.3%) |
+| Solver-grounded correctness | Escalated to a person | 6/7 (85.7%) |
+| Solver-grounded correctness | Wrong, unflagged | 0/7 (0.0%) |
 | Solver-grounded correctness | Feasible (final power flow converges) | 7/7 (100.0%) |
 | Solver-grounded correctness | Traceable answers | 7/7 (100.0%) |
-| Solver-grounded correctness | Wrong, unflagged | 0/7 (0.0%) |
-| Cost and operation | Escalated | 6/7 (85.7%) |
 | Cost and operation | LLM calls / tool calls, mean | 14.43 / 34.71 |
 | Cost and operation | Prompt / completion tokens, mean | 93280.0 / 1423.43 |
 | Cost and operation | Cost, total | $0.1039 |
