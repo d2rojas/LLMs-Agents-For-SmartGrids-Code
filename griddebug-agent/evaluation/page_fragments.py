@@ -75,7 +75,7 @@ COLUMNS: Tuple[Dict[str, str], ...] = (
     {"group": "Solver-grounded correctness", "name": "Wrong, unflagged", "what": "a repair claim the solver contradicts, or an unsupported number, presented as valid", "why": "the third outcome, and the quantity a solver-grounded design exists to drive to zero. The three add up to 100 %"},
     {"group": "Solver-grounded correctness", "name": "Feasible", "what": "the final power flow converges", "why": "the solver status column of the other case studies"},
     {"group": "Solver-grounded correctness", "name": "Traceable", "what": "every number in the answer appears in a tool output or in the evidence", "why": "the reported numbers have an origin that can be checked"},
-    {"group": "Cost and operation", "name": "Calls, Tokens", "what": "model calls, tool calls, prompt and completion tokens per scenario", "why": "what the architecture costs to run"},
+    {"group": "Cost and operation", "name": "Tokens", "what": "prompt and completion tokens per scenario", "why": "what the architecture costs to run"},
     {"group": "Cost and operation", "name": "Cost, Time", "what": "dollars for the whole run set, and wall time per scenario", "why": "the operating cost of each architecture, on the same scenarios"},
 )
 
