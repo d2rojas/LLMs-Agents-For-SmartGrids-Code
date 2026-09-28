@@ -23,6 +23,28 @@ one section only: chain-of-thought adds ``## Reasoning Instructions`` and allows
 plain-text reasoning before the schedule. Anything else would confound the
 comparison the row is supposed to make.
 
+The same skeleton is sent to the agent rows (2026-09-28)
+--------------------------------------------------------
+``build_agent_user_message`` assembles the user turn of the three agent rows out
+of the same ``## Role`` / ``## System Data`` / ``## Task`` / ``## Output
+Requirements`` sections, from the same functions, with the same answer rule
+(``methods/_shared/answer_rule.txt``). The role text and the output contract are
+the two that differ, and they differ only in what the architecture makes true:
+one says there is no tool and asks for the schedule in the reply, the other says
+there is a solver and asks for the answer alone.
+
+Until this date the agent rows received something else entirely: a ``GOAL``
+section naming the objective and a "serve at least 70 %" target, the constraint
+list in index form, the whole session table, and the solver's own algorithm in
+three steps, none of which the no-tools rows were given (a test in
+``tests/test_prompting.py`` asserts they are not). Three of the six rows were
+therefore being helped by their prompt, which is the confound the fair-baseline
+comparison exists to avoid: a difference between those rows and these would have
+measured the scaffolding as much as the architecture. The scaffolding is gone.
+Plan-and-Act, which had been sent the bare request text with no sections at all,
+gets the same skeleton too, so the three agent rows now differ from each other by
+architecture alone.
+
 What the prompt does *not* say
 ------------------------------
 The arrival and departure times, the energy each car asks for, the connector
@@ -65,10 +87,13 @@ field, which is the only text the extractor is given.
 
 from __future__ import annotations
 
-from typing import Callable, Dict, Iterable, List, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Dict, Iterable, List, Optional, Tuple
 
 import methods
 from evaluation.requests import EVRequest
+
+if TYPE_CHECKING:  # pragma: no cover - import cycle at run time, types only
+    from data.format.schema import DaySessions
 
 # Strategies with a builder registered here; the two body-table rows.
 STRATEGIES: Tuple[str, ...] = ("structured", "chain_of_thought")
@@ -100,8 +125,12 @@ OUTPUT_HEADING = "## Output Requirements"
 # highest-priority pattern on it. Changing the string means changing that reader.
 ANSWER_PREFIX = "Answer:"
 
-# The token in the output contract that the number of cars replaces.
+# Tokens the contracts carry, replaced when a contract is rendered: the number
+# of cars, and the one rule about what the answer must say. The rule lives in a
+# file of its own because every method is held to it and a second copy would be
+# a second rule.
 _N_SESSIONS_TOKEN = "@N_SESSIONS@"
+_ANSWER_RULE_TOKEN = "@ANSWER_RULE@"
 
 # One completion budget for every strategy and for the solver-grounded arm, so a
 # row never differs because it was allowed to write more. Matches the default of
@@ -114,17 +143,19 @@ MAX_COMPLETION_TOKENS = 8192
 _ROLE = methods.read_text("_shared/llm_only_role.txt")
 
 
-def _context_section(request: EVRequest) -> str:
+def _context_section(day: "DaySessions") -> str:
     """The conventions the request text does not state: time, grid, units, labels.
 
     Args:
-        request: The request being rendered. Only its horizon is read.
+        day: The horizon being scheduled. Only its shape is read: the number of
+            steps, the step length, and how many cars the request names.
 
     Returns:
         The ``## System Data`` section. It deliberately contains no session
-        table, no site cap and no prices: those are in the request text.
+        table, no site cap and no prices: those are in the request text. Every
+        method gets this same section, so none of them is told a number the
+        others have to read.
     """
-    day = request.day
     n_steps = day.n_steps
     dt_hours = day.dt_hours
     return "\n".join(
@@ -150,11 +181,24 @@ def _task_section(request: EVRequest) -> str:
     return f"{TASK_HEADING}\n{request.text.strip()}"
 
 
+_ANSWER_RULE = methods.read_text("_shared/answer_rule.txt")
+
 _OUTPUT_CONTRACT = methods.read_text("_shared/llm_only_output_contract.txt")
+
+_AGENT_ROLE = methods.read_text("_shared/agent_role.txt")
+
+_AGENT_OUTPUT_CONTRACT = methods.read_text("_shared/agent_output_contract.txt")
+
+
+def _render(contract: str, *, n_sessions: int) -> str:
+    """A contract text with its tokens filled in."""
+    return contract.replace(_ANSWER_RULE_TOKEN, _ANSWER_RULE).replace(
+        _N_SESSIONS_TOKEN, str(n_sessions)
+    )
 
 
 def _output_section(request: EVRequest) -> str:
-    """The output contract, with the number of cars filled in.
+    """The no-tools output contract, with the number of cars filled in.
 
     Args:
         request: The request being rendered; its car count is the only thing
@@ -164,8 +208,39 @@ def _output_section(request: EVRequest) -> str:
     Returns:
         The ``## Output Requirements`` section.
     """
-    n_sessions = len(request.day.sessions)
-    return f"{OUTPUT_HEADING}\n" + _OUTPUT_CONTRACT.replace(_N_SESSIONS_TOKEN, str(n_sessions))
+    return f"{OUTPUT_HEADING}\n" + _render(_OUTPUT_CONTRACT, n_sessions=len(request.day.sessions))
+
+
+def build_agent_user_message(request_text: str, day: "DaySessions") -> str:
+    """The user turn of the three agent rows: the same sections, the same rule.
+
+    Role, system data, the request verbatim, and what the answer must say. No
+    session table, no restated constraints, no objective and no algorithm: the
+    agent reads the request as the no-tools rows do, and the solver it calls is
+    the thing it has that they do not.
+
+    Args:
+        request_text: The request, verbatim. It is the whole input.
+        day: The horizon, for the ``## System Data`` section. For an agent row
+            this is the day its own parse produced, so nothing here is ground
+            truth the model was handed.
+
+    Returns:
+        The user message.
+
+    Raises:
+        ValueError: If the request text is empty.
+    """
+    if not request_text or not str(request_text).strip():
+        raise ValueError("request_text must be non-empty")
+    return _join(
+        [
+            f"{ROLE_HEADING}\n{_AGENT_ROLE}",
+            _context_section(day),
+            f"{TASK_HEADING}\n{str(request_text).strip()}",
+            f"{OUTPUT_HEADING}\n" + _render(_AGENT_OUTPUT_CONTRACT, n_sessions=len(day.sessions)),
+        ]
+    )
 
 
 _SYSTEM_BASE = methods.read_text("_shared/llm_only_system_prompt.txt")
@@ -197,7 +272,7 @@ def _build_structured(request: EVRequest) -> Tuple[str, str]:
     user = _join(
         [
             f"{ROLE_HEADING}\n{_ROLE}",
-            _context_section(request),
+            _context_section(request.day),
             _task_section(request),
             _output_section(request),
         ]
@@ -215,7 +290,7 @@ def _build_chain_of_thought(request: EVRequest) -> Tuple[str, str]:
     user = _join(
         [
             f"{ROLE_HEADING}\n{_ROLE}",
-            _context_section(request),
+            _context_section(request.day),
             _task_section(request),
             _REASONING_SECTION,
             _output_section(request),

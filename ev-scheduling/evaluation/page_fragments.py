@@ -765,13 +765,16 @@ BLOCKS: Dict[str, Tuple[str, str, str]] = {
     "sys_agent": ("#2f5fd0", "system · agent role, tool-use rules, what-if guidance",
                   "methods/_shared/agent_system_prompt.txt"),
     "sys_parse": ("#0f8f84", "system · session extraction", "methods/_shared/parse_extraction_system.txt"),
+    "sys_plan": ("#6d4fc4", "system · the planner", "methods/plan_act_nogate/plan_system_prompt.txt"),
     "sys_infer": ("#0f8f84", "system · inference of missing fields", "methods/_shared/parse_inference_system.txt"),
-    "u_role": ("#6d4fc4", "user · role", "methods/_shared/llm_only_role.txt"),
+    "u_role": ("#6d4fc4", "user · role", "methods/_shared/llm_only_role.txt or agent_role.txt"),
     "u_data": ("#c99a06", "user · system data: time grid, units, labels",
                "methods/prompting/strategies.py::_context_section"),
     "u_task": ("#0f8f84", "user · task: the request, verbatim", "evaluation/requests.py::render_request"),
     "u_reason": ("#c0392b", "user · reasoning instructions", "methods/llm_only_cot/reasoning_section.txt"),
-    "u_out": ("#c99a06", "user · output requirements", "methods/_shared/llm_only_output_contract.txt"),
+    "u_out": ("#c99a06", "user · output requirements",
+              "methods/_shared/llm_only_output_contract.txt or agent_output_contract.txt, "
+              "both with _shared/answer_rule.txt filled in"),
     "tools": ("#0f8f84", "tool schema (function calling)", "methods/agent/llm_agent.py::_SOLVE_TOOL"),
 }
 
@@ -902,12 +905,15 @@ def tab_prompts() -> str:
         name, arm = c["folder"], A.get(c["runner_name"])
         n_calls = getattr(getattr(arm, "cost", None), "n_calls", 0) if arm else 0
         steps = DIAGRAMS[name]["steps"]
-        blocks = [BLOCKS[k][1] for k in (
-            ["sys_llm", "sys_suffix", "u_role", "u_data", "u_task"] + (["u_reason"] if name == "llm_only_cot" else []) + ["u_out"]
-            if c["kind"] == "llm_only" else
-            (["sys_parse", "sys_infer", "sys_agent", "tools", "u_task"] if name != "plan_act_nogate"
-             else ["sys_parse", "sys_infer", "sys_agent", "tools", "u_task"])
-        )] if c.get("prompt_files") else []
+        # The same four user blocks on every method that sends a prompt; the
+        # system blocks are the ones the architecture adds.
+        user_blocks = ["u_role", "u_data", "u_task"] + (["u_reason"] if name == "llm_only_cot" else []) + ["u_out"]
+        system_blocks = (
+            ["sys_llm", "sys_suffix"] if c["kind"] == "llm_only"
+            else ["sys_parse", "sys_infer", "sys_agent"]
+            + (["sys_plan"] if name == "plan_act_nogate" else []) + ["tools"]
+        )
+        blocks = [BLOCKS[k][1] for k in system_blocks + user_blocks] if c.get("prompt_files") else []
         sys_hash = ""
         if c["kind"] == "llm_only":
             base = methods.read_text("_shared/llm_only_system_prompt.txt") + methods.read_text(f"{name}/system_suffix.txt")
@@ -991,21 +997,29 @@ def tab_prompts() -> str:
                     f"<div class='um' data-scn='{E(variant)}'>" + "".join(blocks) + "</div>"
                 )
         else:
+            from methods.prompting.strategies import build_agent_user_message
+
             for rel in c["prompt_files"]:
                 kind = {
                     "_shared/agent_system_prompt.txt": "sys_agent",
                     "_shared/parse_extraction_system.txt": "sys_parse",
                     "_shared/parse_inference_system.txt": "sys_infer",
-                }.get(rel, "sys_agent")
+                    "plan_act_nogate/plan_system_prompt.txt": "sys_plan",
+                }.get(rel)
+                if kind is None:
+                    continue  # the role and the contract are shown in the user message below
                 inner.append(_block(kind, methods.read_text(rel), source=f"methods/{rel}"))
             import methods.agent.llm_agent as LA
 
             inner.append(_block("tools", json.dumps(LA._SOLVE_TOOL, indent=2), collapse=True))
             for variant, req in examples.items():
+                user = build_agent_user_message(req.text, req.day)
+                blocks = ["<h3>User message</h3>"] + [
+                    _block(kind, text, collapse=(kind == "u_task"))
+                    for kind, text in _split_user_message(user)
+                ]
                 inner.append(
-                    f"<div class='um' data-scn='{E(variant)}'>"
-                    + _block("u_task", req.text, collapse=True)
-                    + "</div>"
+                    f"<div class='um' data-scn='{E(variant)}'>" + "".join(blocks) + "</div>"
                 )
         body.append(f"<div class='card pm' data-mth='{E(name)}'>" + "".join(inner) + "</div>")
 

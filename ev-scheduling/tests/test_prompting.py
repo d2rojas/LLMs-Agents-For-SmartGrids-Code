@@ -17,6 +17,7 @@ import pytest
 
 import json
 
+import methods
 from methods.prompting import strategies as st
 from methods.prompting.parse import read_reply
 from data.format.schema import DaySessions, Session
@@ -440,3 +441,62 @@ def test_state_variant_gets_the_same_contract() -> None:
     assert "`answer` is null" in prompt
     reply = _contract_reply(request, answer=None)
     assert llm_only_answer_text(read_reply(reply, request.day), reply) == ""
+
+
+# --------------------------------------------------------------------------- the same rules for all
+
+
+def test_the_agent_rows_get_the_same_sections_as_the_no_tools_rows() -> None:
+    """Same skeleton, same order: role, system data, task, output requirements."""
+    request = _request()
+    agent = st.build_agent_user_message(request.text, request.day)
+    positions = [agent.index(h) for h in (st.ROLE_HEADING, st.CONTEXT_HEADING, st.TASK_HEADING, st.OUTPUT_HEADING)]
+    assert positions == sorted(positions)
+    # The system-data section is byte-identical: neither side is told a number
+    # the other has to read.
+    assert st._context_section(request.day) in agent
+    assert st._context_section(request.day) in st.build_prompt_text("structured", request)
+
+
+def test_the_agent_prompt_carries_no_scaffolding_the_others_lack() -> None:
+    """The defect this exists for, found on 2026-09-28.
+
+    The agent rows used to be sent a GOAL section with the objective and a
+    "serve at least 70 %" target, the constraints in index form, the whole
+    session table, and the solver's algorithm in three steps. The no-tools rows
+    were sent none of it, and a test above asserts they still are not. A row
+    that is handed the objective and the method is not comparable with one that
+    has to read both out of the request.
+    """
+    request = _request()
+    agent = st.build_agent_user_message(request.text, request.day)
+    for scaffolding in ("GOAL:", "ALGORITHM", "Step A", "arrival_idx", "energy_kwh", "CONSTRAINTS:"):
+        assert scaffolding not in agent, f"the agent prompt still carries {scaffolding!r}"
+    # and no session's ground-truth numbers outside the request text itself
+    head, _, tail = agent.partition(request.text.strip())
+    for outside in (head, tail):
+        for session in request.day.sessions:
+            assert f"{session.energy_kwh}" not in outside
+
+
+def test_every_method_is_held_to_the_same_answer_rule() -> None:
+    """One file states what answering the question means; both contracts use it."""
+    rule = methods.read_text("_shared/answer_rule.txt")
+    request = _request()
+    assert rule in st.build_prompt_text("structured", request)
+    assert rule in st.build_agent_user_message(request.text, request.day)
+    assert st._ANSWER_RULE_TOKEN not in st.build_agent_user_message(request.text, request.day)
+
+
+def test_the_agent_prompt_asks_for_the_answer_and_not_for_a_schedule() -> None:
+    """The one difference the architecture makes true: the solver holds the schedule."""
+    request = _request()
+    agent = st.build_agent_user_message(request.text, request.day)
+    assert "Answer:" in agent
+    assert "schedule rows" not in agent
+    assert '"schedule"' not in agent
+
+
+def test_an_empty_request_is_refused_on_the_agent_path_too() -> None:
+    with pytest.raises(ValueError, match="non-empty"):
+        st.build_agent_user_message("   ", _request().day)
