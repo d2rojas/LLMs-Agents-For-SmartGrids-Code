@@ -33,6 +33,7 @@ Writes ``site/index.html`` and ``site/<case>.html``.
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import json
 import subprocess
 import sys
@@ -303,9 +304,26 @@ def landing(built: Dict[str, Dict[str, Any]]) -> str:
     )
 
 
-def build(only: Optional[str] = None, python: str = PYTHON) -> List[Path]:
-    """Collect every case study and write the site. Returns the files written."""
+def build(only: Optional[str] = None, python: str = PYTHON,
+          require: Optional[Sequence[str]] = None) -> List[Path]:
+    """Collect every case study and write the site. Returns the files written.
+
+    A case study whose generator fails keeps the page it already has, which used to
+    be indistinguishable from a case study nobody changed: the page was still there,
+    still had every section, and the build still exited 0. So the run said nothing
+    while the page showed yesterday's numbers. Now every failure prints the page it
+    is keeping and the date on it.
+
+    Failing the whole build is not the answer, because no worktree can import all
+    four projects: a global strictness would fire on every build for everyone, and a
+    flag to switch it off would be typed reflexively within a day. Instead the exit
+    code is scoped to what the caller asked for. ``require`` names the case studies
+    this build must produce, and ``only`` is an implicit one. A failure outside that
+    set is printed and does not fail the build, because it is somebody else's project
+    that this checkout was never able to build.
+    """
     built: Dict[str, Dict[str, Any]] = {}
+    failed: List[str] = []
     for case in CASES:
         if only and case["id"] != only:
             continue
@@ -315,6 +333,8 @@ def build(only: Optional[str] = None, python: str = PYTHON) -> List[Path]:
         p = collect(case["id"], case["folder"], python)
         if p is not None:
             built[case["id"]] = p
+        else:
+            failed.append(case["id"])
     if not built:
         raise SystemExit("no case study produced a fragment")
 
@@ -351,6 +371,23 @@ def build(only: Optional[str] = None, python: str = PYTHON) -> List[Path]:
     index = SITE / "index.html"
     index.write_text(landing(built), encoding="utf-8")
     written.append(index)
+    if failed:
+        wanted = {c for c in (require or ())} | ({only} if only else set())
+        print()
+        for case_id in failed:
+            page = SITE / f"{case_id}.html"
+            when = (_dt.datetime.fromtimestamp(page.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+                    if page.exists() else "no page at all")
+            mark = "FAILED" if case_id in wanted else "failed"
+            print(f"  {case_id}: generator {mark}, keeping the page from {when}")
+        print("  the usual cause is the interpreter: <project>/.venv/bin/python when it exists,")
+        print("  otherwise the python running this build, which may not have that project's")
+        print("  dependencies. Pass --python, or build that case from its own checkout.")
+        stale = [c for c in failed if c in wanted]
+        if stale:
+            for path in written:
+                print(f"wrote {path.relative_to(ROOT)} ({path.stat().st_size // 1024} KB)")
+            raise SystemExit(f"stale: {', '.join(stale)} did not rebuild and was required")
     return written
 
 
@@ -358,8 +395,10 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--case", help="build only this case study")
     ap.add_argument("--python", default=PYTHON, help="interpreter that can import every case study")
+    ap.add_argument("--require", action="append", metavar="CASE",
+                    help="fail the build if this case study does not rebuild (repeatable; --case implies it)")
     args = ap.parse_args()
-    for path in build(args.case, args.python):
+    for path in build(args.case, args.python, args.require):
         print(f"wrote {path.relative_to(ROOT)} ({path.stat().st_size // 1024} KB)")
 
 
