@@ -363,15 +363,26 @@ def tab_results() -> str:
                 # The date says when, the commit says with what. They are not the
                 # same control and the second is the one that actually varies:
                 # every table here spans four or five harness commits.
+                #
+                # The -dirty suffix is never trimmed. Truncating the id to eight
+                # characters hid it on every row of every table here, which made
+                # the page claim a provenance none of these runs has: a dirty id
+                # names no commit, and the code that produced the row is in
+                # nobody's history.
                 cfg = _config(run)
-                sha = str(cfg.get("git_commit") or "")[:8]
+                full = str(cfg.get("git_commit") or "")
+                dirty = full.endswith("-dirty")
+                sha = (full[:8] + " + uncommitted") if dirty else full[:8]
                 name = (f"<b>{E(label)}</b><div class='muted'><code>{E(key)}</code> · {E(run['date'])}"
-                        + (f" · <code>{E(sha)}</code>" if sha else "") + "</div>")
+                        + (f" · <code{' class=' + chr(39) + 'bad' + chr(39) if dirty else ''}>{E(sha)}</code>"
+                           if full else " · <code>no commit recorded</code>") + "</div>")
                 rows_out.append((model, [name, n_cell], cells, run["path"]))
         if not rows_out:
             continue
         dates = sorted({r["date"] for r in chosen.values()})
-        shas = sorted({str(_config(r).get("git_commit") or "")[:8] for r in chosen.values()} - {""})
+        commits = [str(_config(r).get("git_commit") or "") for r in chosen.values()]
+        shas = sorted({c[:8] for c in commits} - {""})
+        n_dirty = sum(1 for c in commits if c.endswith("-dirty"))
         # Six methods on one system were not run in one sitting, and a table that
         # does not say so reads as one experiment. Each row carries its own date
         # under the method name; this says it out loud as well.
@@ -394,7 +405,14 @@ def tab_results() -> str:
                     "set, was scored by the same evaluator, called the same tool variant and ran at temperature 0. "
                     "What is not shared is the code that drove them, so a difference between two rows is a "
                     "difference between two builds as well as between two methods."),
-                 "info")))
+                 "info"),
+            *([note(f"<b>{n_dirty} of these {len(commits)} rows were run from a working tree with uncommitted "
+                    "changes</b>, marked <code class='bad'>+ uncommitted</code> beside the commit. That id names "
+                    "no commit: the code that produced those numbers is in nobody's history and cannot be "
+                    "recovered, so the rows can be read but not reproduced. This is a property of how the runs "
+                    "were launched, not of the results, and it is shown here rather than trimmed away because "
+                    "the supplement's Reproducibility section promises the opposite.", "bad")]
+              if n_dirty else [])))
 
     body.append(_request_section())
     return "".join(body)

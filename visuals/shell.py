@@ -187,6 +187,9 @@ border-top:1px solid var(--line);border-right:1px solid var(--line);border-botto
 .note.warn{background:#fdf7ec;border:1px solid #f0dcbc}
 .note.info{background:#eef2fb;border:1px solid #d6e0f7}
 .note.bad{background:#fdecec;border:1px solid #f3c9c9}
+/* provenance that does not identify anything: a commit id with uncommitted
+   changes behind it, shown rather than trimmed away */
+code.bad{background:#fdecec;color:#991b1b}
 
 .md h2{font-size:16px;margin:14px 0 6px}.md h3{font-size:14px;margin:12px 0 6px}.md h4{font-size:13px;margin:10px 0 4px}
 .md p{margin:0 0 9px}.md ul,.md ol{margin:6px 0;padding-left:20px}.md table{margin:6px 0 10px}.md pre{max-height:none}
