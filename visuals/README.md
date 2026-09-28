@@ -32,7 +32,8 @@ was launched with.
 |---|---|---|
 | `pfagent` | `power-flow-agent/` | adapter: runs `evaluation/design_page.py` and lifts its tabs, stylesheet and script. To be moved onto `shell.py` directly. |
 | `evagent` | `ev-scheduling/` | native: builds its tabs with `shell.py`. |
-| `griddebug`, `wind` | — | not yet |
+| `griddebug` | `griddebug-agent/` | native: builds its tabs with `shell.py`. |
+| `wind` | — | not yet |
 
 Every page is generated from the code that would run — the method registry, the
 verification conditions, the scenario generator, the prompt builders, the result

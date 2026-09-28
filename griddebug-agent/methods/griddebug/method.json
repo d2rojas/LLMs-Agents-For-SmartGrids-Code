@@ -1,0 +1,19 @@
+{
+  "runner_name": "griddebug",
+  "group": "Multi-step agents (paper Sec. 4)",
+  "kind": "agent",
+  "architecture": "react",
+  "uses_llm": true,
+  "uses_tools": true,
+  "gate": true,
+  "description": "The same loop as ReAct plus the verification gate G1-G6 on the final answer: the harness re-runs the power flow on the final network and checks convergence, islanded load, security or a declared remainder, currency, traceability and consistency. One retry, then a declared failure. The solver-grounded row.",
+  "prompt_files": ["_shared/common_rules.txt", "_shared/output_contract.txt", "_shared/agent_system_prompt.txt", "_shared/gate_retry_instruction.txt"],
+  "dynamic_parts": [
+    "the evidence block (solver/evidence.py::EvidenceReport.to_text)",
+    "the tool schemas (solver/tools.py::openai_schemas)",
+    "the request (evaluation/requests.py::request_text)",
+    "the gate's verdict, handed back to the model on the one retry (methods/agent/gate.py)"
+  ],
+  "code": "methods/agent/loop.py::run_react(gate=True); methods/agent/gate.py",
+  "implemented": true
+}

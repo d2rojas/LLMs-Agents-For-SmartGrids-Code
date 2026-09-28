@@ -53,4 +53,4 @@ others are being brought to it.
 | Wind (6.1) | `wind-forecasting/` | not yet | forecasting, not request answering: the six-method ladder does not map onto it as it stands, and its inputs have a known leakage question open |
 | EVAgent (6.2) | `ev-scheduling/` | in progress | `methods/` done; the rest of the moves in this branch |
 | PFAgent (6.3) | `power-flow-agent/` | reference | `results/` layout, `run.py`, `methods/` as described |
-| GridDebug (6.4) | `griddebug-agent/` | not yet | `backend/{agents,eval,scenarios,tools,rule_engine}` maps onto `methods/`, `evaluation/`, `solver/` |
+| GridDebug (6.4) | `griddebug-agent/` | done (2026-09-27) | `run.py`, `methods/` (six), `solver/`, `evaluation/` with the frozen scenario manifest and `page_fragments.py`; the original FastAPI/Next.js demo kept under `ui/`, not wired to the six methods |
