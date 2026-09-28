@@ -42,7 +42,7 @@ SUMMARY_COLUMNS = [
     "nn", "request_id", "instance_id", "turbine", "horizon_hours", "question", "condition",
     "formulation_exact", "formulation_error_type", "formulation_detail",
     "outcome", "solved", "solved_reason", "escalated", "wrong_silently", "escalation_reason",
-    "status", "schema_ok", "range_ok", "n_values", "mae_kw", "rmse_kw", "overall_kw", "nmae_pct", "mae_persistence_kw", "skill_vs_persistence", "n_scored_points",
+    "status", "schema_ok", "range_ok", "n_values", "mae_kw", "rmse_kw", "overall_kw", "nbias_pct", "nmae_pct", "nrmse_pct", "nmae_reference_pct", "nmae_persistence_pct", "improvement_pct", "improvement_persistence_pct", "n_scored_points",
     "answer_given", "answer_implied", "answer_ok", "answer_truth", "answer_truth_ok",
     "source", "traceable", "gate_pass", "gate_failed",
     "n_llm_calls", "n_tool_calls", "prompt_tokens", "completion_tokens", "cost_usd", "wall_time_s",
@@ -75,7 +75,9 @@ def summary_row(nn: int, r: Dict[str, Any]) -> Dict[str, Any]:
         "wrong_silently": oc == "wrong_unflagged", "escalation_reason": r.get("common_escalation_reason"),
         "status": r.get("common_status"), "schema_ok": r.get("common_schema_ok"), "range_ok": r.get("common_range_ok"), "n_values": r.get("common_n_values"),
         "mae_kw": r.get("common_mae"), "rmse_kw": r.get("common_rmse"), "overall_kw": r.get("common_overall"),
-        "nmae_pct": r.get("common_nmae_pct"), "mae_persistence_kw": r.get("common_mae_persistence"), "skill_vs_persistence": r.get("common_skill_vs_persistence"),
+        "nbias_pct": r.get("common_nbias_pct"), "nmae_pct": r.get("common_nmae_pct"), "nrmse_pct": r.get("common_nrmse_pct"),
+        "nmae_reference_pct": r.get("common_nmae_reference_pct"), "nmae_persistence_pct": r.get("common_nmae_persistence_pct"),
+        "improvement_pct": r.get("common_improvement_pct"), "improvement_persistence_pct": r.get("common_improvement_persistence_pct"),
         "n_scored_points": r.get("common_n_scored_points"),
         "answer_given": a.get("answer"), "answer_implied": r.get("common_answer_implied"), "answer_ok": r.get("common_answer_ok"),
         "answer_truth": r.get("common_answer_truth"), "answer_truth_ok": r.get("common_answer_truth_ok"),
@@ -220,8 +222,9 @@ def render_report(header: Dict[str, Any], rows: List[Dict[str, Any]], agg: Dict[
           f"| Task utility | Formulation exact | {agg.get('common_formulation_count')}/{agg.get('common_formulation_total')} ({agg.get('common_formulation_rate')}%) |",
           f"| Task utility | Formulation error types | {dict(Counter(r.get('common_formulation_error_type') for r in rows if not r.get('common_formulation_exact')))} |",
           f"| Task utility | MAE / RMSE / overall, kW, over valid series (n={agg.get('common_scored_n')}) | {agg.get('common_mae_mean')} / {agg.get('common_rmse_mean')} / {agg.get('common_overall_mean')} |",
-          f"| Task utility | MAE as a share of the 1500 kW rating | {agg.get('common_nmae_pct_mean')} % |",
-          f"| Task utility | Skill against persistence (1 - MAE/MAE_persistence; 0 = no better, negative = worse) | {agg.get('common_skill_mean')} (persistence MAE {agg.get('common_mae_persistence_mean')} kW) |",
+          f"| Task utility | NBIAS / NMAE / NRMSE, % of installed capacity (ANEMOS protocol) | {agg.get('common_nbias_pct_mean')} / {agg.get('common_nmae_pct_mean')} / {agg.get('common_nrmse_pct_mean')} |",
+          f"| Task utility | Improvement over the protocol's reference model, % (its NMAE {agg.get('common_nmae_reference_pct_mean')} %) | {agg.get('common_improvement_mean')} |",
+          f"| Task utility | Improvement over persistence, % (its NMAE {agg.get('common_nmae_persistence_pct_mean')} %) | {agg.get('common_improvement_persistence_mean')} |",
           f"| Task utility | MAE / RMSE, kW, over solved requests | {agg.get('common_mae_solved_mean')} / {agg.get('common_rmse_solved_mean')} |",
           f"| Task utility | Answer coherent with the series | {agg.get('common_answer_count')}/{agg.get('common_answer_total')} |",
           f"| Solver-grounded correctness | Valid series (schema and range) | {agg.get('common_schema_count')}/{n} ({agg.get('common_schema_rate')}%) |",
@@ -234,11 +237,15 @@ def render_report(header: Dict[str, Any], rows: List[Dict[str, Any]], agg: Dict[
           f"| Cost and time | Wall time, mean | {agg.get('wall_time_mean_s')} s |", ""]
     L += ["## By horizon", "",
           "Every error is the mean over the requests of that horizon whose series was valid; a method that returns no valid series at a "
-          "horizon has nothing to average, which is itself the finding. Skill is against persistence on the same points.", "",
-          "| horizon | n | solved | valid series scored | MAE kW | RMSE kW | overall kW | nMAE % | persistence MAE kW | skill |",
-          "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
+          "horizon has nothing to average, which is itself the finding. NMAE and NRMSE are normalised by the 1500 kW installed capacity, and "
+          "Imp. is the improvement score of the ANEMOS protocol (Madsen et al. 2005) over its reference model, `a_k P(t) + (1-a_k) Pbar`, "
+          "fitted on the training period; the improvement over plain persistence is beside it because persistence is the reference most "
+          "readers know, and the protocol warns it flatters a model at long horizons.", "",
+          "| horizon | n | solved | scored | MAE kW | RMSE kW | NMAE % | NRMSE % | reference NMAE % | Imp. % | persistence NMAE % | Imp. vs pers. % |",
+          "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for h, v in (agg.get("by_horizon") or {}).items():
-        L.append(f"| {h} h | {v['n']} | {v['solved']} | {v['n_scored']} | {v['mae']} | {v['rmse']} | {v['overall']} | {v.get('nmae_pct')} | {v.get('mae_persistence')} | {v.get('skill')} |")
+        L.append(f"| {h} h | {v['n']} | {v['solved']} | {v['n_scored']} | {v['mae']} | {v['rmse']} | {v.get('nmae_pct')} | {v.get('nrmse_pct')} | "
+                 f"{v.get('nmae_reference_pct')} | {v.get('improvement_pct')} | {v.get('nmae_persistence_pct')} | {v.get('improvement_persistence_pct')} |")
     L.append("")
     for oc, title in (("wrong_unflagged", "Wrong and unflagged"), ("escalated", "Escalated")):
         sel = [r for r in rows if r.get("common_outcome") == oc]

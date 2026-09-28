@@ -68,9 +68,9 @@ ROWS: Tuple[Dict[str, str], ...] = (
 
 COLUMNS: Tuple[Dict[str, str], ...] = (
     {"group": "Task utility", "name": "Formulation", "what": "the turbine, history window and horizon declared in the answer match the request; with tools, also the call that produced the series", "why": "whether the request was understood, kept apart from whether the series is any good"},
-    {"group": "Task utility", "name": "MAE, RMSE", "what": "forecast error in kW against the target days under the KDD Cup abnormal-data rules, reported per horizon over the requests whose series was valid", "why": "how good the forecast was; the KDD Cup's own score is the mean of the two, kept for continuity with the paper"},
-    {"group": "Task utility", "name": "nMAE", "what": "the same MAE as a share of the turbine's 1500 kW rating", "why": "kW alone cannot be compared across turbines or windy and calm windows; the wind literature reports error as a share of capacity"},
-    {"group": "Task utility", "name": "Skill", "what": "1 - MAE / MAE of persistence (yesterday repeated) on the same points: 0 is no better than the trivial forecast, 1 is perfect, negative is worse", "why": "an MAE of 400 kW means nothing on its own. This says whether a method beat what costs nothing, which is the only question a forecast has to answer first"},
+    {"group": "Task utility", "name": "MAE, RMSE", "what": "forecast error in kW against the target days under the KDD Cup abnormal-data rules, per horizon, over the requests whose series was valid", "why": "the KDD Cup's own score on this dataset is the mean of the two, kept so the numbers stay comparable with the submitted table"},
+    {"group": "Task utility", "name": "NBIAS, NMAE, NRMSE", "what": "the same errors divided by the 1500 kW installed capacity, in per cent", "why": "the minimum set the ANEMOS evaluation protocol asks every wind power forecast to report (Madsen et al. 2005, sec. 5.1); kW alone cannot be compared across turbines or between a windy and a calm window"},
+    {"group": "Task utility", "name": "Imp.", "what": "the protocol's improvement score, 100 (NMAE_ref - NMAE) / NMAE_ref, against its reference model a_k P(t) + (1 - a_k) Pbar fitted on the training period", "why": "an NMAE of 26 % means nothing on its own. This says whether a method beats what costs nothing. The reference is not persistence on purpose: the protocol states that comparing with persistence flatters a model, and the numbers here show it, 53 % improvement against persistence and -6 % against the proper reference for the same forecast"},
     {"group": "Task utility", "name": "Answer", "what": "the answer to the request's question (peak hour, energy) agrees with what the reported series implies", "why": "whether the report is consistent with itself"},
     {"group": "Solver-grounded correctness", "name": "Solved", "what": "a valid series in range, an answer coherent with it, and, with tools, a series traceable to a tool output", "why": "the end-to-end verdict on what can be verified without the future"},
     {"group": "Solver-grounded correctness", "name": "Escalated", "what": "the method declared cannot_forecast, or the budget ran out, or the gate rejected two attempts", "why": "how much work goes back to a person; under the stress condition it is the correct outcome"},
@@ -409,6 +409,24 @@ def tab_gate() -> str:
                  [verdict("escalated"), "the answer declares cannot_forecast, or the budget ran out, or the gate rejected two attempts. Takes precedence. Under the stress condition, the correct outcome"],
                  [verdict("wrong"), "a wrong number of values, a value out of range, an unsupported series (with tools), or an answer that contradicts the series, presented as valid"]])),
         card("The columns", "<p>Three groups, the same three in every case study.</p>", table(["group", "column", "what it measures", "why it is there"], crow)),
+        card("Where the error measures come from",
+             "<p>None of them is ours. Forecast quality is reported with the minimum set of the evaluation protocol the wind power forecasting "
+             "field standardised on: <b>NBIAS, NMAE and NRMSE</b>, each normalised by the installed capacity, plus the <b>improvement score</b> "
+             "against a reference model. That is Madsen, Pinson, Kariniotakis, Nielsen and Nielsen, <i>Standardizing the Performance Evaluation "
+             "of Short-Term Wind Power Prediction Models</i>, Wind Engineering 29(6):475-489, 2005, written for the EU ANEMOS project and used "
+             "there to evaluate more than ten prediction models. MAE and RMSE in kW are kept beside them because the KDD Cup 2022 on this "
+             "dataset scored with their mean, and the submitted paper's table is in kW.</p>"
+             "<p>The reference model is the protocol's, not persistence: "
+             "<code>P(t+k|t) = a<sub>k</sub> P(t) + (1 - a<sub>k</sub>) P&#772;</code> (eq. 4, after Nielsen et al.), with "
+             "<code>a<sub>k</sub></code> the correlation between power now and power k steps later and <code>P&#772;</code> the mean production, "
+             "both fitted on the training period alone and frozen in <code>data/reference/reference_model.json</code>. It is persistence at ten "
+             "minutes (a<sub>k</sub> = 0.97) and the long-run mean at two days (a<sub>k</sub> = 0.02), so neither end of the horizon is "
+             "flattered. The protocol's own words for why: <i>comparison with Persistence does not give a fair measure of the performance of an "
+             "advanced model, since even the use of the global mean as predictor leads to a 50% reduction in the variance of the error compared "
+             "to the error obtained with Persistence.</i></p>",
+             note("This is not a formality. The conventional forecaster of this case study improves on persistence by 53 % at 3 hours and is "
+                  "<b>5.7 % worse than the protocol's reference</b> on the same forecasts. Reporting only the first number would have put a "
+                  "claim in the paper that the field's own protocol calls unfair.", "warn")),
     ])
 
 
@@ -469,19 +487,20 @@ def tab_results() -> str:
                 a = h["aggregate"]
                 bh = a.get("by_horizon") or {}
                 fmt = lambda key: " / ".join("—" if bh[k].get(key) is None else f"{bh[k][key]}" for k in sorted(bh, key=int)) if bh else "—"  # noqa: E731
-                split.append([f"<b>{E(row['label'])}</b>", f"{d.parts[-2]}", str(len(rows)), f"{a.get('form')} %", fmt("mae"), fmt("skill"), pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged"),
+                split.append([f"<b>{E(row['label'])}</b>", f"{d.parts[-2]}", str(len(rows)), f"{a.get('form')} %", fmt("nmae_pct"), fmt("improvement_pct"), pct(rows, "solved"), pct(rows, "escalated"), pct(rows, "wrong_unflagged"),
                               f"{a.get('trace') if a.get('trace') is not None else '—'} %", f"{a.get('tokens')}", f"{a.get('cost')}"])
             else:
                 split.append([f"<b>{E(row['label'])}</b>", "<span class='muted'>not run</span>"] + [""] * 10)
         hs = " / ".join(f"{h} h" for h in HORIZONS_H)
         body.append(card(f"Run set {E(set_name)}",
-                         table(["method", "model", "n", "formulation", f"MAE kW ({hs})", f"skill vs persistence ({hs})", verdict("solved"), verdict("escalated"), verdict("wrong"), "traceable", "tokens", "cost $"], split),
+                         table(["method", "model", "n", "formulation", f"NMAE % ({hs})", f"Imp. % over the reference ({hs})", verdict("solved"), verdict("escalated"), verdict("wrong"), "traceable", "tokens", "cost $"], split),
                          note("A dash in an error column is not a missing measurement: it means the method returned no valid series at that "
-                              "horizon, so there was nothing to score. Skill is 1 - MAE/MAE of persistence on the same points; 0 means no better "
-                              "than repeating yesterday.", "info")))
+                              "horizon, so there was nothing to score. NMAE is the error as a per cent of the 1500 kW installed capacity, and "
+                              "Imp. is the improvement over the protocol's reference model on the same points: 0 means no better than a model "
+                              "that costs nothing, negative means worse.", "info")))
     det = []
     cols = [("nn", "nn"), ("instance_id", "scenario"), ("horizon_hours", "h"), ("question", "question"), ("outcome", "outcome"), ("solved_reason", "why"),
-            ("formulation_exact", "form."), ("n_values", "values"), ("mae_kw", "MAE"), ("nmae_pct", "nMAE %"), ("skill_vs_persistence", "skill"), ("answer_ok", "answer"), ("source", "source"), ("gate_pass", "gate"),
+            ("formulation_exact", "form."), ("n_values", "values"), ("mae_kw", "MAE kW"), ("nmae_pct", "NMAE %"), ("improvement_pct", "Imp. %"), ("answer_ok", "answer"), ("source", "source"), ("gate_pass", "gate"),
             ("n_llm_calls", "llm"), ("n_tool_calls", "tools"), ("cost_usd", "cost $")]
     for d in dirs:
         rows = read_summary(d)

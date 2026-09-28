@@ -9,10 +9,11 @@ and the frozen target days, the same way for every method, and writes the
                   the request; with tools, also against the call that produced the series
                   (scored on every row, never a term of Solved)
     schema/range  the output-level checks: horizon*6 finite values inside [0, 1600] kW
-    mae/rmse      forecast error on the target days under the KDD Cup abnormal-data rules,
-                  only when the schema holds (a short series is not scored on its first values);
-                  also as a share of the turbine's rating (nMAE) and as a skill score against
-                  persistence on the same points, which is what says whether a method is worth running
+    mae/rmse      forecast error on the target days under the KDD Cup abnormal-data rules, only
+                  when the schema holds (a short series is not scored on its first values), in kW
+                  and normalised by the installed capacity as NBIAS, NMAE and NRMSE, the minimum
+                  set of the ANEMOS evaluation protocol (Madsen et al. 2005), with the improvement
+                  score over that protocol's reference model
     answer        the answer to the question against what the reported series implies
     traceable     the series is, value for value, a forecast-tool output or the mean of two
                   (methods with tools); nothing supports it without tools
@@ -43,7 +44,8 @@ FIELDS = [
     "common_schema_ok", "common_range_ok", "common_n_values",
     "common_formulation_exact", "common_formulation_error_type", "common_formulation_detail",
     "common_mae", "common_rmse", "common_overall", "common_n_scored_points",
-    "common_nmae_pct", "common_mae_persistence", "common_skill_vs_persistence",
+    "common_nbias_pct", "common_nmae_pct", "common_nrmse_pct",
+    "common_nmae_reference_pct", "common_nmae_persistence_pct", "common_improvement_pct", "common_improvement_persistence_pct",
     "common_answer_ok", "common_answer_implied", "common_answer_truth", "common_answer_truth_ok",
     "common_source", "common_source_call", "common_traceable",
     "common_escalated", "common_escalation_reason", "common_solved", "common_reason", "common_outcome",
@@ -56,30 +58,49 @@ def forecast_error(series: List[float], window: Window, horizon_hours: int) -> D
     t = window.target(horizon_hours)
     n = int(horizon_hours) * STEPS_PER_HOUR
     if len(series) != n or len(t) != n:
-        return {"mae": None, "rmse": None, "overall": None, "n_scored": 0}
+        return {"mae": None, "rmse": None, "bias": None, "overall": None, "n_scored": 0}
     y = t["Patv"].to_numpy(dtype=float)
     keep = (~t["abnormal"].to_numpy(dtype=bool)) & np.isfinite(y)
     if keep.sum() == 0:
-        return {"mae": None, "rmse": None, "overall": None, "n_scored": 0}
+        return {"mae": None, "rmse": None, "bias": None, "overall": None, "n_scored": 0}
     y = np.clip(y[keep], 0.0, None)
     f = np.asarray(series, dtype=float)[keep]
     mae = float(np.mean(np.abs(f - y)))
     rmse = float(np.sqrt(np.mean((f - y) ** 2)))
-    return {"mae": round(mae, 2), "rmse": round(rmse, 2), "overall": round((mae + rmse) / 2, 2), "n_scored": int(keep.sum())}
+    bias = float(np.mean(y - f))   # the protocol's sign: measured minus predicted, so a positive bias is under-prediction
+    return {"mae": round(mae, 2), "rmse": round(rmse, 2), "bias": round(bias, 2), "overall": round((mae + rmse) / 2, 2), "n_scored": int(keep.sum())}
 
 
-def reference_error(window: Window, horizon_hours: int) -> Dict[str, Any]:
-    """The persistence forecast's error on the same scored points: the reference every skill score is against.
+def reference_errors(window: Window, horizon_hours: int) -> Dict[str, Any]:
+    """The two reference forecasts' error on the same scored points.
 
-    Persistence (yesterday repeated) is what a forecaster has to beat to be worth running, so it is
-    the denominator of the skill score. It is one of the tools, deterministic, and costs nothing to
-    recompute here, so every row carries its own reference rather than a table average."""
+    ``reference`` is the model the ANEMOS protocol adopts (Madsen et al. 2005, eq. 4, after
+    Nielsen et al.): ``a_k P(t) + (1 - a_k) Pbar``, which is persistence at short horizons and the
+    training-period mean at long ones. It is the denominator of the improvement score, because the
+    protocol is explicit that persistence alone flatters a model at long horizons: "comparison with
+    Persistence does not give a fair measure of the performance of an advanced model, since even the
+    use of the global mean as predictor leads to a 50% reduction in the variance of the error".
+    ``persistence`` is kept beside it because it is the reference most readers know.
+
+    Both are deterministic and read only the frozen training parameters and the window's own
+    history, so every row carries its own references rather than a table average."""
     from solver import forecasters as F
+    from solver import reference as R
 
-    try:
-        return forecast_error(F.persistence(window, horizon_hours), window, horizon_hours)
-    except Exception:
-        return {"mae": None, "rmse": None, "overall": None, "n_scored": 0}
+    out: Dict[str, Any] = {}
+    for name, fn in (("reference", R.new_reference_forecast), ("persistence", F.persistence)):
+        try:
+            out[name] = forecast_error(fn(window, horizon_hours), window, horizon_hours)
+        except Exception:
+            out[name] = {"mae": None, "rmse": None, "overall": None, "n_scored": 0}
+    return out
+
+
+def improvement_pct(ec: Optional[float], ec_ref: Optional[float]) -> Optional[float]:
+    """The protocol's improvement score, eq. (14): ``100 (EC_ref - EC) / EC_ref`` per cent."""
+    if ec is None or not ec_ref:
+        return None
+    return round(100.0 * (ec_ref - ec) / ec_ref, 1)
 
 
 def truth_series(window: Window, horizon_hours: int) -> List[float]:
@@ -146,14 +167,17 @@ def score_run(run: MethodRun, *, req: Any, window: Window, has_tools: bool) -> D
     if schema_ok:
         err = forecast_error(series, window, req.horizon_hours)
         out["common_mae"], out["common_rmse"], out["common_overall"], out["common_n_scored_points"] = err["mae"], err["rmse"], err["overall"], err["n_scored"]
-        # the same error read two ways the wind literature reads it: as a share of the turbine's
-        # rating, and as a skill score against persistence on the same points
-        ref = reference_error(window, req.horizon_hours)
-        out["common_mae_persistence"] = ref["mae"]
+        # the same error as the ANEMOS protocol reports it: normalised by the installed capacity,
+        # and as an improvement over the protocol's reference model on the same points
         if err["mae"] is not None:
+            out["common_nbias_pct"] = round(100.0 * err["bias"] / RATED_KW, 2)
             out["common_nmae_pct"] = round(100.0 * err["mae"] / RATED_KW, 2)
-            if ref["mae"]:
-                out["common_skill_vs_persistence"] = round(1.0 - err["mae"] / ref["mae"], 3)
+            out["common_nrmse_pct"] = round(100.0 * err["rmse"] / RATED_KW, 2)
+            ref = reference_errors(window, req.horizon_hours)
+            out["common_nmae_reference_pct"] = None if ref["reference"]["mae"] is None else round(100.0 * ref["reference"]["mae"] / RATED_KW, 2)
+            out["common_nmae_persistence_pct"] = None if ref["persistence"]["mae"] is None else round(100.0 * ref["persistence"]["mae"] / RATED_KW, 2)
+            out["common_improvement_pct"] = improvement_pct(err["mae"], ref["reference"]["mae"])
+            out["common_improvement_persistence_pct"] = improvement_pct(err["mae"], ref["persistence"]["mae"])
 
     implied = derive_answer(req.question, series) if schema_ok else None
     out["common_answer_implied"] = implied
@@ -239,8 +263,9 @@ def aggregate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     for h in sorted({int(r["horizon_hours"]) for r in rs if r.get("horizon_hours") is not None}):
         sel = [r for r in scored if int(r["horizon_hours"]) == h]
         by_h[str(h)] = {"n_scored": len(sel), "mae": mean("common_mae", sel), "rmse": mean("common_rmse", sel), "overall": mean("common_overall", sel),
-                        "nmae_pct": mean("common_nmae_pct", sel), "mae_persistence": mean("common_mae_persistence", sel),
-                        "skill": mean("common_skill_vs_persistence", sel),
+                        "nbias_pct": mean("common_nbias_pct", sel), "nmae_pct": mean("common_nmae_pct", sel), "nrmse_pct": mean("common_nrmse_pct", sel),
+                        "nmae_reference_pct": mean("common_nmae_reference_pct", sel), "nmae_persistence_pct": mean("common_nmae_persistence_pct", sel),
+                        "improvement_pct": mean("common_improvement_pct", sel), "improvement_persistence_pct": mean("common_improvement_persistence_pct", sel),
                         "n": sum(1 for r in rs if int(r["horizon_hours"]) == h),
                         "solved": sum(1 for r in rs if int(r["horizon_hours"]) == h and r["common_outcome"] == "solved")}
     return {
@@ -256,8 +281,10 @@ def aggregate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "common_schema_count": cnt("common_schema_ok", True), "common_schema_rate": rate(cnt("common_schema_ok", True)),
         "common_answer_count": sum(1 for r in ans_rows if r["common_answer_ok"]), "common_answer_total": len(ans_rows),
         "common_mae_mean": mean("common_mae", scored), "common_rmse_mean": mean("common_rmse", scored), "common_overall_mean": mean("common_overall", scored),
-        "common_nmae_pct_mean": mean("common_nmae_pct", scored), "common_mae_persistence_mean": mean("common_mae_persistence", scored),
-        "common_skill_mean": mean("common_skill_vs_persistence", scored),
+        "common_nbias_pct_mean": mean("common_nbias_pct", scored), "common_nmae_pct_mean": mean("common_nmae_pct", scored),
+        "common_nrmse_pct_mean": mean("common_nrmse_pct", scored),
+        "common_nmae_reference_pct_mean": mean("common_nmae_reference_pct", scored), "common_nmae_persistence_pct_mean": mean("common_nmae_persistence_pct", scored),
+        "common_improvement_mean": mean("common_improvement_pct", scored), "common_improvement_persistence_mean": mean("common_improvement_persistence_pct", scored),
         "common_scored_n": len(scored),
         "common_mae_solved_mean": mean("common_mae", solved_rows), "common_rmse_solved_mean": mean("common_rmse", solved_rows),
         "by_horizon": by_h,

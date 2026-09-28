@@ -84,3 +84,42 @@ def test_answer_derivation():
     assert answer_matches("peak_hour", 1, near) and answer_matches("peak_hour", 2, near) and not answer_matches("peak_hour", 3, near)
     assert answer_matches("energy_kwh", 151.0, s) and not answer_matches("energy_kwh", 170.0, s)
     assert answer_matches("none", None, s) is None
+
+
+def test_protocol_reference_model_is_persistence_then_the_mean():
+    """The ANEMOS reference: a_k P(t) + (1-a_k) Pbar, persistence at short lags, the mean at long ones."""
+    from solver import reference as R
+    from solver.data import load_window
+
+    p = R.parameters()["turbines"]["8"]
+    assert p["a_k"][0] > 0.9 and p["a_k"][17] < 0.8 and p["a_k"][-1] < 0.1
+    w = load_window(8, 201)
+    last = float(w.history(days=1)["Patv"].clip(lower=0).ffill().iloc[-1])
+    s3 = R.new_reference_forecast(w, 3)
+    s48 = R.new_reference_forecast(w, 48)
+    assert len(s3) == 18 and len(s48) == 288
+    assert abs(s3[0] - last) < 0.1 * max(last, 1.0)              # ten minutes ahead it is persistence
+    assert abs(s48[-1] - p["mean_kw"]) < 0.05 * p["mean_kw"]     # two days ahead it is the training mean
+
+
+def test_improvement_score_is_the_protocol_formula():
+    from evaluation.scoring import improvement_pct
+
+    assert improvement_pct(50.0, 100.0) == 50.0     # half the reference's error
+    assert improvement_pct(100.0, 100.0) == 0.0     # no better than the reference
+    assert improvement_pct(150.0, 100.0) == -50.0   # worse
+    assert improvement_pct(None, 100.0) is None and improvement_pct(10.0, 0.0) is None
+
+
+def test_errors_are_normalised_by_installed_capacity():
+    from config import RATED_KW
+    from evaluation.scoring import forecast_error
+    from solver.data import load_window
+
+    w = load_window(8, 201)
+    t = w.target(3)
+    import numpy as np
+    truth = np.clip(np.nan_to_num(t["Patv"].to_numpy(dtype=float)), 0, None)
+    e = forecast_error([float(v) + 150.0 for v in truth], w, 3)   # 150 kW too high everywhere
+    assert abs(e["mae"] - 150.0) < 1.0 and abs(e["bias"] + 150.0) < 1.0   # bias is measured minus predicted
+    assert abs(100.0 * e["mae"] / RATED_KW - 10.0) < 0.1                  # 150 of 1500 kW is 10 %
