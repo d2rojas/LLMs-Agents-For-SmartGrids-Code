@@ -431,8 +431,16 @@ def rebuild_output(
         all_outputs = tool_outputs_from_trace(agent_trace)
         tool_outputs = all_outputs[-1:] if all_outputs else []
         prior_tool_outputs = all_outputs[:-1] if len(all_outputs) > 1 else []
-        schedule = _evagent_schedule(request, parsed_problem, calls)
-        sources["schedule"] = "resolved_from_parse_trace"
+        if row.get("gate_declared_failure"):
+            # The gate declared a failure, so the run surfaced no schedule and no
+            # numbers. Re-solving the parse would rebuild a schedule the system
+            # deliberately did not stand behind, and score the day on it. What
+            # was surfaced is what is rescored.
+            schedule = np.zeros((len(request.day.sessions), request.day.n_steps), dtype=float)
+            sources["schedule"] = "declared_failure_no_schedule"
+        else:
+            schedule = _evagent_schedule(request, parsed_problem, calls)
+            sources["schedule"] = "resolved_from_parse_trace"
         sources["tool_outputs"] = "agent_trace" if all_outputs else "missing"
         sources["parsed_problem"] = "parse_trace"
     else:

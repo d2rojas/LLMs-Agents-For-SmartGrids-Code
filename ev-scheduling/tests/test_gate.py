@@ -1,4 +1,4 @@
-"""Unit tests for methods.agent.validate.gate: the five conditions, and the one retry.
+"""Unit tests for methods.agent.validate.gate: the seven conditions, and the one retry.
 
 Offline and adversarial. No API key, no LLM and no CVXPY: the solve results are
 hand-written in the shape ``solver.solver.SolveResult`` returns, and the
@@ -799,5 +799,96 @@ def test_every_condition_is_reported_separately() -> None:
     # carries no residual.
     assert row["gate_E6_shortfall_declared"] == NOT_APPLICABLE
     assert row["gate_E6_residual"] is None
+    # This fixture's verify() passes no request text, so E7 abstains: it is the
+    # one condition that reads something outside the solve.
+    assert row["gate_E7_problem_read_back"] == NOT_APPLICABLE
     assert row["gate_passed"] is True
-    assert [CONDITION_LABELS[name] for name in CONDITION_ORDER] == ["E1", "E2", "E3", "E4", "E5", "E6"]
+    assert [CONDITION_LABELS[name] for name in CONDITION_ORDER] == [
+        "E1", "E2", "E3", "E4", "E5", "E6", "E7",
+    ]
+
+
+# --------------------------------------------------------------------------- E7, the read-back
+
+
+def _read_back_day(text: str):
+    """The day the deterministic grammar reads out of a request, for E7 fixtures."""
+    from methods.agent.parse.parse import parsed_problem_to_day_site_tou
+    from methods.deterministic.rule_based import parse_request
+
+    day, _site, _tou = parsed_problem_to_day_site_tou(parse_request(text).problem)
+    return day
+
+
+_E7_REQUEST = (
+    "2 cars are charging at the lot today, and here is what each one needs. "
+    "EV 1: arrives a quarter to two in the afternoon, leaves 23:15, 14.72 kWh, 7 kW maximum. "
+    "EV 2 sits on a 7 kW station between 17:00 and 24:00 and asks for 6.47 kWh. "
+    "Total draw across all the chargers has to stay at or below 50 kilowatts. "
+    "Energy costs $0.45 per kWh between 4 pm and 9 pm and $0.12 per kWh the rest of the day. "
+    "Plan the charging to minimise what we pay for the energy."
+)
+
+
+def test_e7_passes_when_the_extraction_matches_the_request() -> None:
+    from methods.agent.validate.gate import PASS, _check_problem_read_back
+
+    condition = _check_problem_read_back(_read_back_day(_E7_REQUEST), _E7_REQUEST)
+    assert condition.status == PASS
+    assert condition.label == "E7"
+
+
+def test_e7_catches_the_quarter_to_misread_that_the_gate_used_to_accept() -> None:
+    """The failure the run of 2026-09-28 measured, as a test.
+
+    "a quarter to two in the afternoon" is 13:45. The model read it as 13:15 on
+    58 of the 59 thirty-minute errors of that run, the solver then produced an
+    optimal schedule for a day that does not exist, and E1 to E6 all passed
+    because each of them judges the answer against that same wrong problem.
+    """
+    import dataclasses
+
+    from methods.agent.validate.gate import FAIL, _check_problem_read_back
+
+    day = _read_back_day(_E7_REQUEST)
+    sessions = list(day.sessions)
+    # 13:45 read as 13:15: two steps of a quarter hour, early.
+    sessions[0] = dataclasses.replace(sessions[0], arrival_idx=sessions[0].arrival_idx - 2)
+    misread = dataclasses.replace(day, sessions=sessions)
+
+    condition = _check_problem_read_back(misread, _E7_REQUEST)
+    assert condition.status == FAIL
+    assert condition.residual == 1.0
+    assert "arrival" in condition.detail
+    assert "13.25 h" in condition.detail and "13.75 h" in condition.detail
+
+
+def test_e7_abstains_rather_than_accuses() -> None:
+    """A reader that cannot read the sentence is not evidence that the model is wrong.
+
+    The grammar is deliberately bounded. Three cases abstain, and abstaining
+    never fails the gate: no request text, a phrasing outside the grammar, and
+    an extraction with no sessions.
+    """
+    import dataclasses
+
+    from methods.agent.validate.gate import NOT_APPLICABLE, _check_problem_read_back
+
+    day = _read_back_day(_E7_REQUEST)
+    assert _check_problem_read_back(day, "").status == NOT_APPLICABLE
+    assert _check_problem_read_back(day, None).status == NOT_APPLICABLE
+    assert _check_problem_read_back(
+        day, "EV 1 shows up sometime after lunch and stays until the evening; it wants 10 kWh at 7 kW."
+    ).status == NOT_APPLICABLE
+    assert _check_problem_read_back(dataclasses.replace(day, sessions=[]), _E7_REQUEST).status == NOT_APPLICABLE
+
+
+def test_e7_is_in_the_registry_and_carries_its_own_row_fields() -> None:
+    from evaluation.runner import GATE_ROW_FIELDS
+    from methods.agent.validate.gate import CONDITION_DESCRIPTIONS, CONDITION_LABELS, CONDITION_ORDER
+
+    assert CONDITION_ORDER[-1] == "problem_read_back"
+    assert CONDITION_LABELS["problem_read_back"] == "E7"
+    assert CONDITION_DESCRIPTIONS["problem_read_back"]
+    assert "gate_E7_problem_read_back" in GATE_ROW_FIELDS
+    assert "gate_E7_residual" in GATE_ROW_FIELDS

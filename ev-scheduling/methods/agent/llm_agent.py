@@ -722,7 +722,7 @@ def run_agent_llm(
         )
 
     def _verify(answer: str) -> tuple[GateResult, CheckResult]:
-        """Run the five conditions on one answer, against the problem posed."""
+        """Run the seven conditions on one answer, against the problem posed."""
         schedule = last_solve_result.schedule  # type: ignore[union-attr]
         checked = validate(schedule, posed_day, posed_site)
         prior_outputs, last_outputs = split_tool_outputs(tool_outputs)
@@ -737,6 +737,10 @@ def run_agent_llm(
                 request_text=request,
                 tou=tou,
                 check_result=checked,
+                # E7 reads the request back against the problem as extracted,
+                # before any what-if: a what-if changes what is solved, not what
+                # the request says.
+                read_back_day=day,
             ),
             checked,
         )
