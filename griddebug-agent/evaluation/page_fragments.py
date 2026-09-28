@@ -331,6 +331,8 @@ def _sbs_trace(d: Path, row: Dict[str, str]) -> Optional[Dict[str, Any]]:
         "final": ("did not converge" if row.get("final_converged") != "True"
                   else "secure" if row.get("final_secure") == "True" else f"{row.get('final_n_new')} new violation(s)"),
         "islanded": row.get("final_islanded") if row.get("final_islanded") not in ("", "[]", None) else "",
+        "attempts": [{"n": g.get("attempt"), "passed": bool(g.get("passed")), "failed": g.get("failed") or []}
+                     for g in (t.get("gate_history") or [])],
         "gate": (None if not t.get("gate") else
                  {"passed": bool(t["gate"].get("passed")), "failed": t["gate"].get("failed") or [],
                   "attempts": len(t.get("gate_history") or [])}),
@@ -339,6 +341,48 @@ def _sbs_trace(d: Path, row: Dict[str, str]) -> Optional[Dict[str, Any]]:
         "user": _sbs_clip(user or (t.get("request") or {}).get("text") or "not stored", 2500),
         "sys_hash": t.get("system_prompt_hash") or "",
     }
+
+
+def _sbs_lines(t: Dict[str, Any]) -> str:
+    """One log line per thing that happened, tagged the way the power-flow page tags them."""
+    out: List[str] = []
+
+    def ln(kind: str, summary: str, full: str = "") -> None:
+        out.append(f"<div class='gln' data-full=\"{E(full or summary)}\"><span class='gk {kind}'>{kind}</span>"
+                   f"<span class='gs'>{E(summary)}</span></div>")
+
+    # the deterministic row and Plan-and-Act both commit to everything before seeing a result
+    planning = t.get("method") in ("plan_act_nogate", "rule_based")
+    for i, st in enumerate(t["steps"]):
+        kind = "plan" if (planning and i == 0) else "model"
+        if st["say"]:
+            ln(kind, st["say"].replace("\n", " ")[:400], st["say"])
+        elif st["tools"]:
+            ln(kind, (("the fixed policy, as tool calls" if t.get("method") == "rule_based" else "the whole plan, as tool calls")
+                      if kind == "plan" else f"no words, called {len(st['tools'])} tool(s)"),
+               "The model returned tool calls and no text.")
+        for x in st["tools"]:
+            call = f"{x['name']}({x['args']})"
+            ln("solver", f"{call} → {x['says']}", f"{call}\n\n{x['raw']}")
+    attempts = t.get("attempts") or []
+    for j, a in enumerate(attempts):
+        ln("gate", (f"attempt {a['n']}: " + ("passed all seven conditions" if a["passed"]
+                                             else "failed on " + ", ".join(a["failed"]))),
+           "The harness re-ran the power flow on the final network and checked the answer against it.\n"
+           + ("passed" if a["passed"] else "failed: " + ", ".join(a["failed"])))
+        if not a["passed"] and j + 1 < len(attempts):
+            ln("retry", "sent back to the model with what failed, one retry inside the same budget",
+               "The gate returns its verdict to the model and asks for a corrected answer. "
+               "The retry spends a call from the same budget the ungated rows have.")
+    if not attempts and t["gate"]:
+        g = t["gate"]
+        ln("gate", "passed all seven conditions" if g["passed"] else "failed on " + ", ".join(g["failed"]))
+    if t["budget"]:
+        ln("status", "tool or model budget exhausted")
+    if t["declared"]:
+        ln("status", "the harness wrote the answer: " + t["declared"])
+    ln("final", (t["answer"].replace("\n", " ")[:400] or "no answer"), t["answer"])
+    return "".join(out)
 
 
 def side_by_side() -> str:
@@ -365,46 +409,72 @@ def side_by_side() -> str:
                 continue
             tr = _sbs_trace(d, row)
             if tr:
+                tr["method"] = method
                 data.setdefault(case, {}).setdefault(rid, {})[method] = tr
     if not data:
         return card("The same fault under each method, step by step",
                     "<p class='muted'>The runs exist but stored no traces.</p>")
+
     cases = sorted(data, key=lambda c: int(c.replace("ieee", "")))
+    blocks: List[str] = []
+    for case in cases:
+        for rid, per in data[case].items():
+            cols = []
+            for r in ROWS:
+                t = per.get(r["name"])
+                if not t:
+                    cols.append(f"<div class='gcol'><h4>{E(r['label'])}</h4>"
+                                "<div class='gmeta'>no stored trace for this scenario</div></div>")
+                    continue
+                verdict_cls = {"solved": "ok", "escalated": "esc"}.get(t["outcome"], "bad")
+                cols.append(
+                    f"<div class='gcol'><h4>{E(r['label'])} <span class='tag {verdict_cls}'>{E(t['outcome'].replace('_', ' '))}</span></h4>"
+                    f"<details class='gpr'><summary>prompt sent to this method for this scenario</summary>"
+                    f"<div class='gprb'><pre>{E(t['user'])}</pre>"
+                    + (f"<p class='muted'>system prompt hash {E(t['sys_hash'])}, shown in full in the Prompts tab</p>" if t["sys_hash"]
+                       else "<p class='muted'>no system prompt: this method uses no language model</p>")
+                    + "</div></details>"
+                    f"<div class='gmeta'><b>{len(t['steps'])}</b> steps · <b>{t['llm_calls'] or 0}</b> model calls · "
+                    f"<b>{t['tool_calls'] or 0}</b> tool calls · {t['tokens']} tokens · {t['seconds']} s<br>"
+                    f"final network: {E(t['final'])}"
+                    + (f" · <b>load stranded on {E(t['islanded'])}</b>" if t["islanded"] else "") + "</div>"
+                    f"<div class='glog'>{_sbs_lines(t)}</div></div>")
+            blocks.append(f"<div class='gex' data-case='{E(case)}' data-scn='{E(rid)}'><div class='gcols'>{''.join(cols)}</div></div>")
+
     sysopts = "".join(f"<option value='{E(c)}'>{E(NETWORK_LABELS.get('case' + c.replace('ieee', ''), c))}</option>" for c in cases)
     which = "the run set of the paper" if not tag else f"run set <code>{E(tag)}</code>"
     return card(
         "The same fault under each method, step by step",
         f"<p>Real runs, not scored here: {which}, {SBS_PER_NETWORK} of the twenty scenarios per system, every method, on "
-        "the model each run used. Each column is what that method said, what it called and what the solver answered, in "
-        "order. Yellow marks a step that changed the network, purple a verification-gate attempt. Click a tool line to "
-        "read its full output, and open the prompt the method received. The verdicts of these runs live on the results "
-        "pages, where scores belong.</p>"
+        "the model each run used. Each column is the log of what the method said, what it called and what the solver "
+        "returned; click a line to expand it, and open the prompt it received. The verdicts of these runs are on the "
+        "results pages, where scores belong.</p>"
         "<style>"
-        ".sbs-ctl{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:10px 0 12px;font-size:12.5px;color:#64748b}"
-        ".sbs-ctl select{font:inherit;font-size:13px;padding:3px 7px;border:1px solid #e3e7ee;border-radius:8px;background:#fff;color:#0f172a}"
-        ".sbs{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(320px,1fr);gap:12px;overflow-x:auto;padding-bottom:6px}"
-        ".sbsc{border:1px solid #e3e7ee;border-radius:10px;background:#fff;min-width:320px;display:flex;flex-direction:column}"
-        ".sbsc>h4{margin:0;padding:9px 11px;border-bottom:1px solid #e3e7ee;background:#f8fafc;font-size:13.5px}"
-        ".sbsc .st8{display:flex;gap:10px;flex-wrap:wrap;padding:8px 11px;font-size:11.5px;color:#64748b;border-bottom:1px solid #e3e7ee}"
-        ".sbsc .st8 b{display:block;font-size:14px;color:#0f172a;line-height:1.15}"
-        ".sbsc .fin{padding:7px 11px;font-size:12px;color:#334155;border-bottom:1px solid #e3e7ee}.sbsc .fin span{color:#64748b}"
-        ".sbsl{padding:6px 10px 12px;overflow:auto;max-height:62vh}"
-        ".sbst{border-left:2px solid #e3e7ee;margin:0 0 2px 9px;padding:5px 0 5px 11px;position:relative}"
-        ".sbst>.n{position:absolute;left:-10px;top:5px;width:18px;height:18px;border-radius:50%;background:#eef2fb;color:#2f5fd0;font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center}"
-        ".sbst.act{border-left-color:#d8a23a}.sbst.gate{border-left-color:#7c5cd6}.sbst.ans{border-left-color:#1f9d55}"
-        ".sbst .say{white-space:pre-wrap;font-size:12px;color:#334155;margin:0 0 3px}"
-        ".sbstl{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;margin:3px 0}"
-        ".sbstl .nm{font-weight:700}.sbstl .ar{color:#64748b}.sbstl .rs{color:#166534}.sbstl .rs.bad{color:#d53f3f}"
-        ".sbsc details{margin:2px 0}.sbsc details>summary{font-size:11px;color:#2f5fd0;cursor:pointer}"
-        ".sbsc pre{white-space:pre-wrap;word-break:break-word;background:#0f1b2d;color:#e2e8f0;border-radius:7px;padding:8px 10px;font-size:11px;margin:3px 0;max-height:260px;overflow:auto}"
-        ".sbsp{padding:8px 11px;border-bottom:1px solid #e3e7ee;background:#fffdf5}.sbsp pre{background:#f8fafc;color:#334155;border:1px solid #e3e7ee}"
+        ".gctl{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:10px 0 12px;font-size:12.5px;color:#64748b}"
+        ".gctl select{font:inherit;font-size:13px;padding:3px 7px;border:1px solid #e3e7ee;border-radius:8px;background:#fff;color:#0f172a}"
+        ".gex{display:none}.gex.on{display:block}"
+        ".gcols{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;align-items:start;overflow-x:auto}"
+        "@media(max-width:1200px){.gcols{grid-auto-flow:column;grid-auto-columns:minmax(300px,1fr);grid-template-columns:none}}"
+        ".gcol{background:#fff;border:1px solid #e3e7ee;border-radius:10px;min-width:0;overflow:hidden}"
+        ".gcol>h4{margin:0;padding:8px 10px;font-size:12.5px;border-bottom:1px solid #e3e7ee;background:#f8fafc}"
+        ".gmeta{padding:6px 10px;font-size:11px;color:#64748b;border-bottom:1px solid #e3e7ee}.gmeta b{color:#0f172a}"
+        ".gpr{border-bottom:1px solid #e3e7ee}.gpr>summary{padding:6px 10px;font-size:11px;color:#2f5fd0;cursor:pointer}"
+        ".gprb{padding:0 10px 8px}.gprb pre{white-space:pre-wrap;word-break:break-word;background:#f8fafc;border:1px solid #e3e7ee;"
+        "border-radius:7px;padding:8px 10px;font-size:11px;margin:0 0 6px;max-height:240px;overflow:auto}"
+        ".glog{font:11.5px/1.4 'JetBrains Mono',ui-monospace,Menlo,monospace;max-height:60vh;overflow:auto}"
+        ".gln{display:grid;grid-template-columns:44px 1fr;gap:6px;padding:4px 8px;border-bottom:1px solid #f0f2f5;cursor:pointer}"
+        ".gln:hover{background:#f8fafc}.gk{font-weight:600;font-size:10.5px}"
+        ".gk.model{color:#2f5fd0}.gk.solver{color:#0f8f84}.gk.plan{color:#6d4fc4}.gk.gate{color:#c99a06}"
+        ".gk.retry{color:#b45309}.gk.final{color:#2f5fd0}.gk.status{color:#64748b}"
+        ".gs{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
+        ".gln.open .gs{white-space:pre-wrap;overflow:visible;word-break:break-word}"
         "</style>"
-        "<div class='sbs-ctl'><label>System <select id='sbs-sys'>" + sysopts + "</select></label>"
-        "<label>Scenario <select id='sbs-req'></select></label>"
-        "<label><input type='checkbox' id='sbs-pr'> prompts</label></div>"
-        "<div class='sbs' id='sbs-cols'></div>"
-        "<script>window.SBS=" + json.dumps({"data": data, "labels": labels,
-                                            "methods": [[r["name"], r["label"]] for r in ROWS]}, ensure_ascii=False) + ";</script>")
+        "<div class='gctl'><label>System <select id='gsys'>" + sysopts + "</select></label>"
+        "<label>Scenario <select id='gscn'></select></label>"
+        "<span class='muted'>every line is tagged: plan, model, solver, gate, retry, status, final.</span></div>"
+        + "".join(blocks)
+        + "<script>window.GEX=" + json.dumps(labels, ensure_ascii=False) + ";</script>")
+
 
 def tab_scenarios() -> str:
     from evaluation import scenarios as S
@@ -775,50 +845,20 @@ SCRIPT = """
     mth.onchange=apply; apply(); }
 })();
 (function(){
-  var S=window.SBS; if(!S) return;
-  var sys=document.getElementById('sbs-sys'), req=document.getElementById('sbs-req'),
-      pr=document.getElementById('sbs-pr'), cols=document.getElementById('sbs-cols');
-  if(!sys||!req||!cols) return;
+  var L=window.GEX; if(!L) return;
+  var sys=document.getElementById('gsys'), scn=document.getElementById('gscn');
+  if(!sys||!scn) return;
   var esc=function(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
-  function fillReq(){
-    var l=S.labels[sys.value]||[];
-    req.innerHTML=l.map(function(p){return '<option value="'+esc(p[0])+'">'+esc(p[1])+'</option>';}).join('');
-  }
-  function column(name,label,t){
-    if(!t) return "<div class='sbsc'><h4>"+esc(label)+"</h4><div class='fin'>this method has no stored trace for that scenario</div></div>";
-    var h="<div class='sbsc'><h4>"+esc(label)+" <span class='tag "+(t.outcome==='solved'?'ok':t.outcome==='escalated'?'esc':'bad')+"'>"+esc((t.outcome||'').replace('_',' '))+"</span></h4>"
-      +"<div class='st8'><div><b>"+t.steps.length+"</b>steps</div><div><b>"+(t.llm_calls==null?'0':t.llm_calls)+"</b>model calls</div>"
-      +"<div><b>"+(t.tool_calls==null?'0':t.tool_calls)+"</b>tool calls</div><div><b>"+t.tokens+"</b>tokens</div><div><b>"+t.seconds+"</b>s</div></div>"
-      +"<div class='fin'><span>final network:</span> "+esc(t.final)+(t.islanded?" · <b>load stranded on "+esc(t.islanded)+"</b>":"")
-      +"<br><span>gate:</span> "+(t.gate?(t.gate.passed?'passed':'failed on '+esc(t.gate.failed.join(', '))+(t.gate.attempts>1?' ('+t.gate.attempts+' attempts)':'')):'none, this method has no gate')
-      +(t.budget?"<br><span>budget:</span> exhausted":"")+"</div>";
-    if(pr.checked) h+="<div class='sbsp'><details open><summary>the request it was given</summary><pre>"+esc(t.user)+"</pre></details>"
-      +(t.sys_hash?"<div class='muted' style='font-size:11px'>system prompt hash "+esc(t.sys_hash)+", in the Prompts tab</div>":"")+"</div>";
-    h+="<div class='sbsl'>";
-    t.steps.forEach(function(s2){
-      h+="<div class='sbst"+(s2.acted?' act':'')+"'><span class='n'>"+s2.n+"</span>";
-      if(s2.say) h+="<p class='say'>"+esc(s2.say)+"</p>";
-      else if(s2.tools.length) h+="<p class='say' style='color:#94a3b8'>(no words, went straight to the tools)</p>";
-      s2.tools.forEach(function(x){
-        h+="<div class='sbstl'><span class='nm'>"+esc(x.name)+"</span><span class='ar'>("+esc(x.args)+")</span>"
-          +"<br><span class='rs"+(x.bad?' bad':'')+"'>→ "+esc(x.says)+"</span></div>"
-          +"<details><summary>full output</summary><pre>"+esc(x.raw)+"</pre></details>";
-      });
-      h+="</div>";
-    });
-    if(t.gate&&t.gate.attempts) h+="<div class='sbst gate'><span class='n'>G</span><p class='say'><b>verification gate</b>: "
-      +(t.gate.passed?'passed':'failed on '+esc(t.gate.failed.join(', ')))+", "+t.gate.attempts+" attempt(s)</p></div>";
-    h+="<div class='sbst ans'><span class='n'>&#10003;</span><p class='say'><b>final answer</b>"
-      +(t.declared?" (written by the harness: "+esc(t.declared)+")":"")+"</p><pre>"+esc(t.answer)+"</pre></div>";
-    return h+"</div></div>";
-  }
-  function render(){
-    var per=(S.data[sys.value]||{})[req.value]||{};
-    cols.innerHTML=S.methods.map(function(m){return column(m[0],m[1],per[m[0]]);}).join('');
-  }
-  sys.onchange=function(){fillReq();render();};
-  req.onchange=render; pr.onchange=render;
-  fillReq(); render();
+  function fill(){ var l=L[sys.value]||[];
+    scn.innerHTML=l.map(function(p){return '<option value="'+esc(p[0])+'">'+esc(p[1])+'</option>';}).join(''); }
+  function show(){ document.querySelectorAll('.gex').forEach(function(b){
+      b.classList.toggle('on', b.dataset.case===sys.value && b.dataset.scn===scn.value); }); }
+  sys.onchange=function(){fill();show();}; scn.onchange=show;
+  document.addEventListener('click', function(e){ var ln=e.target.closest && e.target.closest('.gln'); if(!ln) return;
+    var s2=ln.querySelector('.gs'); if(!ln.classList.contains('open')){ ln.dataset.short=s2.textContent;
+      s2.textContent=ln.dataset.full; ln.classList.add('open'); }
+    else { s2.textContent=ln.dataset.short; ln.classList.remove('open'); } });
+  fill(); show();
 })();
 """
 
