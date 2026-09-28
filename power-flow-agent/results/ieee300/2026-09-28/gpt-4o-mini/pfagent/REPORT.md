@@ -1,6 +1,6 @@
 # pfagent on IEEE 300-bus with gpt-4o-mini
 
-Generated 2026-09-28 11:27 by evaluation/postprocess.py from `report.rescored.json`. Runs: 20. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
+Generated 2026-09-28 13:42 by evaluation/postprocess.py from `report.rescored.json`. Runs: 17. Scored by the unified evaluator (v2): every verdict below is read from the answer JSON, the same way for every method.
 
 ## Run
 
@@ -33,9 +33,10 @@ The three outcomes are exclusive and cover every request the method answered. Es
 | outcome | count | share |
 |---|---:|---:|
 | Solved autonomously | 0 | 0.0% |
-| Escalated to a person | 17 | 85.0% |
+| Escalated to a person | 17 | 100.0% |
 | Wrong, unflagged | 0 | 0.0% |
-| **Total** | **20** | 100% |
+| Run error / other | 3 | 17.6% |
+| **Total** | **17** | 100% |
 
 ## Metrics
 
@@ -47,15 +48,15 @@ The three outcomes are exclusive and cover every request the method answered. Es
 | Task utility | Flow MAE, all runs | n/a MW |
 | Task utility | Flow MAE, formulation-exact runs | n/a MW |
 | Task utility | KCL mismatch, mean | n/a MW |
-| Solver-grounded correctness | Solved (computation right, any path) | 0/20 (0.0%) |
-| Solver-grounded correctness | V-pass (all conditions, offline) | 20/20 (100.0%) |
+| Solver-grounded correctness | Solved (computation right, any path) | 0/17 (0.0%) |
+| Solver-grounded correctness | V-pass (all conditions, offline) | 17/17 (100.0%) |
 | Reporting | Traceable answers | 17/17 (100.0%) |
 | Reporting | Traceable numbers, mean share | 1 |
-| Reporting | Stale state quoted | 0/20 |
-| Cost and time | LLM calls / tool calls, mean | 6.15 / 4 |
-| Cost and time | Prompt / completion tokens, mean | 2.05e+05 / 26409 |
-| Cost and time | Cost, total | $0.9311 |
-| Cost and time | Wall time, mean | 318.3 s |
+| Reporting | Stale state quoted | 0/17 |
+| Cost and time | LLM calls / tool calls, mean | 5.94 / 3.94 |
+| Cost and time | Prompt / completion tokens, mean | 1.88e+05 / 22631 |
+| Cost and time | Cost, total | $0.7097 |
+| Cost and time | Wall time, mean | 288 s |
 
 ### Cross-check against the runner's own scoreboard
 
@@ -68,15 +69,15 @@ Values the runner aggregated for the same rows (report.json scoreboard). They sh
 | common_wrong_count | 0 | 0 |
 | common_formulation_count | 5 | 5 |
 | common_traceable_count | 17 | 17 |
-| common_n | 17 | 20  <-- differs |
+| common_n | 17 | 17 |
 
 ## By request difficulty
 
 | difficulty | n | solved | escalated | wrong unflagged | formulation exact |
 |---|---:|---:|---:|---:|---:|
-| ambiguous | 5 | 0 | 3 | 0 | 0 |
+| ambiguous | 3 | 0 | 3 | 0 | 0 |
 | multistep | 5 | 0 | 5 | 0 | 0 |
-| parameterized | 5 | 0 | 4 | 0 | 3 |
+| parameterized | 4 | 0 | 4 | 0 | 3 |
 | plain | 5 | 0 | 5 | 0 | 2 |
 
 ## Escalated (17)

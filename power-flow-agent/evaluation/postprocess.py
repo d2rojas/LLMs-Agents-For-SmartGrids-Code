@@ -598,6 +598,13 @@ def _mean(values: Iterable[Any]) -> Optional[float]:
 
 
 def aggregate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    # Rates and means are over the requests the method answered, the same denominator
+    # aggregate_common() and results.html use. A request whose API call failed never produced an
+    # answer, so counting its tokens and wall time would mix a failed transport with a reply
+    # (2026-09-28, found by tests/crosscheck_page.mjs: the page said n=17 where this said n=20).
+    oc_all = Counter(_outcome(r) for r in rows)
+    errors = [r for r in rows if _outcome(r) == "run_error"]
+    rows = [r for r in rows if _outcome(r) != "run_error"]
     n = len(rows)
     oc = Counter(_outcome(r) for r in rows)
     fe_rows = [r for r in rows if r.get("formulation_exact") is not None]
@@ -612,7 +619,7 @@ def aggregate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "solved_autonomously": oc.get("solved", 0),
         "escalated": oc.get("escalated", 0),
         "wrong_unflagged": oc.get("wrong_unflagged", 0),
-        "run_errors": oc.get("error", 0),
+        "run_errors": len(errors),
         "other": oc.get("other", 0),
         "solved_any": sum(1 for r in rows if r.get("solved")),
         "formulation_total": len(fe_rows), "formulation_exact": len(exact), "formulation_errors": dict(err_types),
