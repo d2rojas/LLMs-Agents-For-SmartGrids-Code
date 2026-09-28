@@ -79,12 +79,12 @@ def freeze(force: bool = False, log=print) -> Path:
     """Write ``data/reference/reference_model.json`` from the frozen training slices."""
     if REFERENCE_PATH.exists() and not force:
         raise FileExistsError(f"{REFERENCE_PATH} exists; pass --force to refit")
-    files = sorted(GRU_DIR.glob("train_t*.csv"))
+    files = sorted(GRU_DIR.glob("train_t*.csv.gz"))
     if not files:
-        raise FileNotFoundError("no data/gru/train_t*.csv; run `python run.py freeze-data` first")
+        raise FileNotFoundError("no data/gru/train_t*.csv.gz; run `python run.py freeze-data` first")
     turbines = {}
     for p in files:
-        t = int(p.stem.split("_t")[1])
+        t = int(p.name.split("_t")[1].split(".")[0])
         turbines[str(t)] = fit(t, p)
         e = turbines[str(t)]
         log(f"  turbine {t}: mean {e['mean_kw']:.1f} kW, a_1 {e['a_k'][0]:.3f}, a_18 {e['a_k'][17]:.3f}, a_288 {e['a_k'][-1]:.3f}")
@@ -122,6 +122,7 @@ def new_reference_forecast(window: Any, horizon_h: int) -> List[float]:
         raise KeyError(f"turbine {window.turbine} is not in {REFERENCE_PATH.name}")
     last = pd.to_numeric(window.history(days=1)["Patv"], errors="coerce").clip(lower=0).ffill().bfill().fillna(0.0).to_numpy(dtype=float)
     p_t = float(last[-1])
-    pbar, a = float(p["mean_kw"]), p["a_k"]
+    # the correlation is scale-free; the mean production is not, so it follows the window's own size
+    pbar, a = float(p["mean_kw"]) * float(getattr(window, "scale", 1.0)), p["a_k"]
     n = int(horizon_h) * STEPS_PER_HOUR
     return [round(float(a[k] * p_t + (1.0 - a[k]) * pbar), 1) for k in range(n)]

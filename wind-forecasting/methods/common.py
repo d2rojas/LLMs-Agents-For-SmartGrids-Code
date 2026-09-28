@@ -83,8 +83,8 @@ def history_block(ctx: Context) -> str:
     last = per.get(w.history_end_day, 0)
     check = (f"Data check: {len(per)} days, each with 144 rows; rows with a wind speed and a power reading on the last day (day {w.history_end_day}): "
              f"{last} of 144. " + ("The history is complete." if last >= 72 else "The last day is missing: the feed stopped."))
-    return (f"Turbine {w.turbine}, days {w.base_day} to {w.history_end_day}, 10-minute sampling, {len(w.history())} rows. {check}\n"
-            + history_csv(w))
+    return (f"Turbine {w.turbine}, rated {w.rating_kw:.0f} kW, days {w.base_day} to {w.history_end_day}, 10-minute sampling, "
+            f"{len(w.history())} rows. {check}\n" + history_csv(w))
 
 
 def user_message(ctx: Context, *, history: bool = False, catalogue: bool = False, reasoning: bool = False) -> str:

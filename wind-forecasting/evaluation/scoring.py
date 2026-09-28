@@ -33,7 +33,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from config import HISTORY_DAYS, POWER_MAX_KW, RATED_KW, STEPS_PER_HOUR
+from config import HISTORY_DAYS, STEPS_PER_HOUR
 from methods.agent.gate import answer_matches, derive_answer, trace_forecast
 from methods.answer import Answer
 from methods.common import MethodRun
@@ -145,8 +145,9 @@ def score_run(run: MethodRun, *, req: Any, window: Window, has_tools: bool) -> D
     out["common_claims_forecast"] = bool(a.claims_forecast)
     out["common_declares_failure"] = bool(a.declares_failure)
     out["common_n_values"] = len(series)
+    rating, power_max = window.rating_kw, window.power_max_kw
     schema_ok = bool(a.json_ok and a.claims_forecast and a.n_non_numeric == 0 and len(series) == n_needed)
-    range_ok = bool(series) and all(0.0 <= float(v) <= POWER_MAX_KW for v in series)
+    range_ok = bool(series) and all(0.0 <= float(v) <= power_max for v in series)
     out["common_schema_ok"] = schema_ok
     out["common_range_ok"] = bool(range_ok) if series else None
 
@@ -170,12 +171,12 @@ def score_run(run: MethodRun, *, req: Any, window: Window, has_tools: bool) -> D
         # the same error as the ANEMOS protocol reports it: normalised by the installed capacity,
         # and as an improvement over the protocol's reference model on the same points
         if err["mae"] is not None:
-            out["common_nbias_pct"] = round(100.0 * err["bias"] / RATED_KW, 2)
-            out["common_nmae_pct"] = round(100.0 * err["mae"] / RATED_KW, 2)
-            out["common_nrmse_pct"] = round(100.0 * err["rmse"] / RATED_KW, 2)
+            out["common_nbias_pct"] = round(100.0 * err["bias"] / rating, 2)
+            out["common_nmae_pct"] = round(100.0 * err["mae"] / rating, 2)
+            out["common_nrmse_pct"] = round(100.0 * err["rmse"] / rating, 2)
             ref = reference_errors(window, req.horizon_hours)
-            out["common_nmae_reference_pct"] = None if ref["reference"]["mae"] is None else round(100.0 * ref["reference"]["mae"] / RATED_KW, 2)
-            out["common_nmae_persistence_pct"] = None if ref["persistence"]["mae"] is None else round(100.0 * ref["persistence"]["mae"] / RATED_KW, 2)
+            out["common_nmae_reference_pct"] = None if ref["reference"]["mae"] is None else round(100.0 * ref["reference"]["mae"] / rating, 2)
+            out["common_nmae_persistence_pct"] = None if ref["persistence"]["mae"] is None else round(100.0 * ref["persistence"]["mae"] / rating, 2)
             out["common_improvement_pct"] = improvement_pct(err["mae"], ref["reference"]["mae"])
             out["common_improvement_persistence_pct"] = improvement_pct(err["mae"], ref["persistence"]["mae"])
 
@@ -224,7 +225,7 @@ def score_run(run: MethodRun, *, req: Any, window: Window, has_tools: bool) -> D
     elif not schema_ok:
         solved, reason = False, (f"{a.n_non_numeric} non-numeric value(s)" if a.n_non_numeric else f"{len(series)} values, the horizon needs {n_needed}")
     elif not range_ok:
-        solved, reason = False, f"values outside [0, {POWER_MAX_KW:.0f}] kW: {min(series):.1f} to {max(series):.1f}"
+        solved, reason = False, f"values outside [0, {power_max:.0f}] kW: {min(series):.1f} to {max(series):.1f}"
     elif has_tools and not out["common_traceable"]:
         solved, reason = False, ("the series matches no forecast-tool output" if src_entry is None else f"the series is a {how} of {src_entry['name']} but source says {a.source!r}")
     elif out["common_answer_ok"] is False:

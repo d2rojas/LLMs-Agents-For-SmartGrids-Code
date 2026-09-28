@@ -26,14 +26,14 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 
-from config import ANSWER_REL_TOL, HISTORY_DAYS, POWER_MAX_KW, STEPS_PER_HOUR, TRACE_TOL_KW
+from config import ANSWER_REL_TOL, HISTORY_DAYS, POWER_MAX_KW, RATED_KW, STEPS_PER_HOUR, TRACE_TOL_KW
 from methods.answer import Answer
 
 CONDITION_ORDER = ("schema", "range", "traceable", "consistent", "coherent")
 CONDITION_LABELS = {"schema": "W1", "range": "W2", "traceable": "W3", "consistent": "W4", "coherent": "W5"}
 CONDITION_DESCRIPTIONS = {
     "schema": "status is forecast and the series has exactly horizon_hours*6 finite values",
-    "range": f"every value lies in [0, {POWER_MAX_KW:.0f}] kW, the physical range of the turbine",
+    "range": "every value lies between zero and the turbine's rated power plus a small margin, the physical range of the machine",
     "traceable": f"the series equals, within {TRACE_TOL_KW} kW per value, one forecast-tool output or the element-wise mean of two, and the answer names that source",
     "consistent": "the formulation declared in the answer (turbine, history days, horizon) matches the arguments of the tool call the series came from",
     "coherent": f"the answer to the request's question follows from the reported series (the named hour within {ANSWER_REL_TOL:.0%} of the highest hourly mean; the energy within {ANSWER_REL_TOL:.0%})",
@@ -112,7 +112,8 @@ def trace_forecast(series: List[float], tool_log: Iterable[Dict[str, Any]]) -> T
 # ---------------------------------------------------------------- the check
 
 
-def check(answer: Answer, tool_log: List[Dict[str, Any]], *, horizon_hours: int, question_kind: Optional[str]) -> Dict[str, Any]:
+def check(answer: Answer, tool_log: List[Dict[str, Any]], *, horizon_hours: int, question_kind: Optional[str],
+          power_max_kw: float = POWER_MAX_KW) -> Dict[str, Any]:
     results: Dict[str, Dict[str, Any]] = {}
     n_needed = int(horizon_hours) * STEPS_PER_HOUR
     series = list(answer.forecast)
@@ -128,11 +129,11 @@ def check(answer: Answer, tool_log: List[Dict[str, Any]], *, horizon_hours: int,
     else:
         results["schema"] = {"passed": True, "detail": f"{n_needed} finite values"}
 
-    if series and all(0.0 <= float(v) <= POWER_MAX_KW for v in series):
-        results["range"] = {"passed": True, "detail": f"all values in [0, {POWER_MAX_KW:.0f}] kW"}
+    if series and all(0.0 <= float(v) <= power_max_kw for v in series):
+        results["range"] = {"passed": True, "detail": f"all values in [0, {power_max_kw:.0f}] kW"}
     elif series:
         lo, hi = min(series), max(series)
-        results["range"] = {"passed": False, "detail": f"values from {lo:.1f} to {hi:.1f} kW; the range is [0, {POWER_MAX_KW:.0f}]"}
+        results["range"] = {"passed": False, "detail": f"values from {lo:.1f} to {hi:.1f} kW; the range is [0, {power_max_kw:.0f}]"}
     else:
         results["range"] = {"passed": False, "detail": "no series"}
 

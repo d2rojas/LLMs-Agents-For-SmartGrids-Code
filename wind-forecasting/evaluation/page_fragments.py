@@ -90,12 +90,9 @@ def manifest() -> Optional[Dict[str, Any]]:
 
 
 def gru_meta() -> Optional[Dict[str, Any]]:
-    from solver.gru import WEIGHTS_PATH
+    from solver import gru
 
-    if not WEIGHTS_PATH.exists():
-        return None
-    d = json.loads(WEIGHTS_PATH.read_text(encoding="utf-8"))
-    return {k: v for k, v in d.items() if k != "state"}
+    return gru.metadata() if gru.WEIGHTS_PATH.exists() else None
 
 
 def method_dirs() -> List[Path]:
@@ -253,11 +250,20 @@ def tab_scenarios() -> str:
                          + f"<div class='muted'>history: {e['abnormal_points_history']} abnormal rows of {HISTORY_DAYS * 144}</div>")
         rows.append(cells)
     g = gru_meta()
-    gru_txt = ("<p class='muted'>No GRU trained yet.</p>" if not g else
-               f"<p>{E(g['model'])}. Trained on days {g['training']['train_days'][0]} to {g['training']['train_days'][1]} of the five turbines "
-               f"({', '.join(g['training']['turbines'])}), validated on days {g['training']['val_days'][0]} to {g['training']['val_days'][1]}, "
-               f"seed {g['training']['seed']}, {g['training']['epochs']} epochs; best validation MAE {g['training']['best_val_mae_kw']} kW. "
-               f"Weights and training log in <code>data/gru/gru_v1.json</code>; its hash is stamped on every run's config.</p>")
+    if not g:
+        gru_txt = "<p class='muted'>No forecaster trained yet.</p>"
+    else:
+        t = g["training"]
+        rows_g = [[f"{h} h", f"{v['best_val_mae_kw']} kW", f"{v['reference_val_mae_kw']} kW", f"{v['best_val_improvement_pct']:+.1f} %"]
+                  for h, v in sorted(g["horizons"].items(), key=lambda kv: int(kv[0]))]
+        gru_txt = (f"<p>{E(g['model'])}, one per horizon. Trained on days {t['train_days'][0]} to {t['train_days'][1]} of "
+                   f"{t['n_turbines']} complete turbines of the farm, with days {t['val_days'][0]} to {t['val_days'][1]} held out to choose "
+                   f"the stopping epoch. No target day is read anywhere in training. Weights, the training log and the hashes of every "
+                   f"training file are in <code>data/gru/gru_v1.json</code>, and that file's hash is stamped on every run's config.</p>"
+                   "<p>It does not predict the power level. It predicts the <b>correction to the protocol's reference model</b>, so a model "
+                   "that learns nothing reproduces the reference and anything it learns is measurable added value. The held-out numbers:</p>"
+                   + table(["horizon", "validation MAE", "the reference on the same windows", "improvement"], rows_g)
+                   + "<p class='muted'>Measured on days 201 to 214, which no method is ever asked about. The test windows begin at day 215.</p>")
     return "".join([
         card("What a scenario is, and how many there are",
              "<p><b>One scenario is one turbine and one 14-day window of its history.</b> Five turbines times four windows makes twenty "

@@ -16,12 +16,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import methods  # noqa: E402
 
-# Recorded 2026-09-27 after the first smoke (completeness clause and deterministic-tools sentence added); the paper runs use these.
+# Recorded 2026-09-28, after the rated power moved out of the fixed rules and into the request and the
+# tool outputs, where it belongs: it is a property of the machine, not a constant of the case study.
 PINNED_TEXTS = {
     "_shared/agent_system_prompt.txt": "21795226f311",
-    "_shared/common_rules.txt": "14c1bfc571bd",
+    "_shared/common_rules.txt": "b19bc7e03cf7",
     "_shared/gate_retry_instruction.txt": "b4370d0298ed",
-    "_shared/llm_only_system_prompt.txt": "98d441c1a688",
+    "_shared/llm_only_system_prompt.txt": "873eff4d8734",
     "_shared/output_contract.txt": "ec148bd1af2d",
     "llm_only_cot/reasoning_section.txt": "15ceb870f33f",
     "plan_act_nogate/plan_system_prompt.txt": "a79112af0b70",
