@@ -113,8 +113,33 @@ def _f(v: Any) -> Optional[float]:
 # ------------------------------------------------------------------- rendering
 
 
+def _outcome_label(r: Dict[str, str]) -> str:
+    """The row's outcome in the vocabulary every case study shares.
+
+    A row the arm never completed carries no outcome, because it was never
+    scored: the three rates are taken over the rows that finished, and
+    ``aggregate`` reports the rest separately as ``run_error``. Writing that as
+    an empty cell in ``summary.csv`` left the run's own rates right and the file
+    silent about why one row was missing from them, and anything recounting the
+    file had to guess. ``visuals/crosscheck.mjs`` guessed wrong, reading the
+    blank as the last branch of its three-way rule and counting a failed row as
+    wrong and unflagged, which is the worst of the four things it could have
+    been mistaken for.
+
+    So the label is written, and it is the one ``power-flow-agent`` writes for
+    the same case (``postprocess._outcome``), which is what keeps a recount of
+    any case study's rows comparable with any other's.
+    """
+    outcome = str(r.get("outcome") or "")
+    if outcome:
+        return outcome
+    if r.get("error") or (r.get("status") and r.get("status") != "ok"):
+        return "run_error"
+    return ""
+
+
 def summary_row(nn: int, r: Dict[str, str]) -> Dict[str, Any]:
-    outcome = r.get("outcome", "")
+    outcome = _outcome_label(r)
     return {
         "nn": nn,
         "request_id": r.get("request_id"),
@@ -169,7 +194,14 @@ def aggregate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     tokens = sum(int(_f(r["prompt_tokens"]) or 0) + int(_f(r["completion_tokens"]) or 0) for r in rows)
     cost = sum(_f(r["est_cost_usd"]) or 0.0 for r in rows)
     return {
+        # ``n`` is what was attempted and ``n_scored`` is what the three rates
+        # are actually over; they differ by the rows the arm never completed.
+        # Both are published because a rate read next to the wrong one of them
+        # is a wrong rate, and because the shared cross-check compares its own
+        # recount of the scored rows against ``n_scored`` by name
+        # (``tests/crosscheck_spec.json``).
         "n": n,
+        "n_scored": len(ok),
         "solved": solved,
         "escalated": esc,
         "wrong": wrong,

@@ -127,6 +127,62 @@ from solver.solver import solve  # noqa: E402
 
 REPO_ROOT = PROJECT_ROOT.parent
 
+# Marks a commit id whose working tree carried uncommitted code, as the other
+# three case studies mark theirs.
+DIRTY_SUFFIX = "-dirty"
+
+# Paths whose modification does not change the code a run executes. ``results/``
+# holds what earlier runs wrote, and the page, the index and the rescores all
+# rewrite it, so a tree is almost never clean by the time the next run starts.
+# Counting that as dirty is what made the field useless in the two case studies
+# that report "<sha>-dirty" on every run they have: it stops distinguishing
+# anything. Excluded here so that ``-dirty`` on an EV run means what it says,
+# that the harness itself was uncommitted.
+_UNVERSIONED_FOR_REPRODUCIBILITY: Tuple[str, ...] = ("results/",)
+
+
+def dirty_paths() -> List[str]:
+    """Project files with uncommitted changes that would change what a run does."""
+    import subprocess
+
+    try:
+        out = subprocess.run(
+            ["git", "status", "--porcelain", "--", "."],
+            cwd=PROJECT_ROOT, capture_output=True, text=True, check=True,
+        ).stdout
+    except Exception:
+        return []
+    paths = [line[3:].strip() for line in out.splitlines() if line[3:].strip()]
+    return [
+        p for p in paths
+        if not any(f"ev-scheduling/{skip}" in p or p.startswith(skip) for skip in _UNVERSIONED_FOR_REPRODUCIBILITY)
+    ]
+
+
+def git_commit() -> str:
+    """The commit this harness ran from, ``-dirty`` when its code is uncommitted.
+
+    Recorded in the run manifest and carried into every method's ``config.json``
+    by ``evaluation/postprocess.py``, which is where the paper's traceability
+    link starts: a table cell names a run, the run names a commit, the commit
+    can be checked out. Until 2026-09-28 EV recorded no commit at all, which is
+    worse than recording a dirty one: a missing field cannot tell a clean run
+    from a dirty one afterwards.
+
+    Dirtiness is judged on the code only; see ``_UNVERSIONED_FOR_REPRODUCIBILITY``.
+    """
+    import subprocess
+
+    try:
+        sha = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=PROJECT_ROOT, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    except Exception:
+        return "unknown"
+    return sha + (DIRTY_SUFFIX if dirty_paths() else "")
+
+
 # Shared price book of the repository; the power-flow project holds it next to
 # its own runner. Prices are USD per million tokens.
 DEFAULT_PRICING_FILE = REPO_ROOT / "power-flow-agent" / "pricing.json"
@@ -2683,6 +2739,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
             return 0
 
+        # A real-data run is the one whose numbers reach the paper, and the paper
+        # names the commit that produced them. A run started from uncommitted
+        # code records "<sha>-dirty", which identifies nothing: that code is in
+        # no commit and cannot be checked out later. A synthetic run is a smoke
+        # and may be dirty, because nobody will publish it.
+        commit_now = git_commit()
+        if not synthetic and commit_now.endswith(DIRTY_SUFFIX):
+            print(
+                f"refusing to run on real data from a tree with uncommitted code changes.\n"
+                f"  the run would record {commit_now}, which no one can check out later.\n"
+                f"  commit the code first, or use --data-source fixture for a smoke run.\n"
+                f"  uncommitted (results/ is ignored here, it is output not input):\n    "
+                + "\n    ".join(dirty_paths()[:10]),
+                file=sys.stderr,
+            )
+            return 2
+
         preflight(arms, spec)
         inner_client = build_client(spec) if any(a.uses_llm for a in arms) else None
         ledger = Ledger(price_in=price_in, price_out=price_out, limit_usd=float(args.budget_usd))
@@ -2694,6 +2767,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "case_study": "ev_scheduling",
             "harness": "evaluation/runner.py",
+            # The traceability link the paper needs: a table cell names a run,
+            # the run names a commit, the commit can be checked out.
+            "git_commit": commit_now,
+            "command": " ".join([Path(sys.argv[0]).name] + list(sys.argv[1:])),
             "synthetic": synthetic,
             "smoke_test": synthetic,
             "banner": SMOKE_BANNER if synthetic else REAL_BANNER,

@@ -315,20 +315,25 @@ def tab_overview() -> str:
             "and its charger delivers at most <em>p̄<sub>i</sub></em> kW. The site cannot draw more than "
             "<em>P<sub>max</sub></em>(<em>t</em>) at any step, and energy at step <em>t</em> costs "
             "<em>c</em>(<em>t</em>) per kWh.</p>",
-            r"""\[
-\begin{aligned}
-\min_{p,\,u}\quad & \sum_{t=0}^{T-1} c(t)\,\Big(\sum_{i=1}^{N} p_i(t)\Big)\,\Delta \;+\; M \sum_{i=1}^{N} u_i \\[4pt]
-\text{s.t.}\quad
-& p_i(t) = 0, && t \notin [a_i, d_i) && \text{(1)} \\
-& 0 \le p_i(t) \le \bar p_i, && t \in [a_i, d_i) && \text{(2)} \\
-& \sum_{i=1}^{N} p_i(t) \le P_{\max}(t), && \forall t && \text{(3)} \\
-& \Delta \sum_{t=0}^{T-1} p_i(t) + u_i = E_i, && \forall i && \text{(4)} \\
-& p_i(t) \ge 0,\; u_i \ge 0.
-\end{aligned}
-\]"""
-            "<p class='muted'>Decision variables: <span>\\(p_i(t)\\)</span>, the power delivered to session "
-            "<span>\\(i\\)</span> at step <span>\\(t\\)</span> in kW, and <span>\\(u_i\\)</span>, the energy not "
-            "delivered to session <span>\\(i\\)</span> in kWh. (1) the car is not plugged in; (2) the charger's limit; "
+            # Written as text rather than as TeX. The site renders offline, with
+            # no maths typesetter, so a \[...\] block would reach the reader as
+            # its own source: alignment ampersands, \Big( and \\[4pt] included.
+            # Monospace and Unicode carry this formulation without any of that.
+            "<pre class='math'>"
+            "minimize    &Sigma;_t  c(t) &middot; ( &Sigma;_i p_i(t) ) &middot; &Delta;   +   M &middot; &Sigma;_i u_i\n"
+            "  over p, u\n"
+            "\n"
+            "subject to\n"
+            "  (1)   p_i(t) = 0                      for t &notin; [a_i, d_i)\n"
+            "  (2)   0 &le; p_i(t) &le; p&#772;_i                for t &isin; [a_i, d_i)\n"
+            "  (3)   &Sigma;_i p_i(t) &le; P_max(t)           for every step t\n"
+            "  (4)   &Delta; &middot; &Sigma;_t p_i(t) + u_i = E_i      for every session i\n"
+            "        p_i(t) &ge; 0,   u_i &ge; 0\n"
+            "</pre>"
+            "<p class='muted'>Subscripts are written <code>_i</code> and <code>_t</code>; sums run over all "
+            "<em>N</em> sessions and all <em>T</em> steps. Decision variables: <code>p_i(t)</code>, the power "
+            "delivered to session <em>i</em> at step <em>t</em> in kW, and <code>u_i</code>, the energy not "
+            "delivered to session <em>i</em> in kWh. (1) the car is not plugged in; (2) the charger's limit; "
             "(3) the site's cap; (4) deliver the energy, or account for what is missing.</p>"
             "<p>Constraints (1) to (3) are <b>hard</b>: a schedule that breaks one of them cannot be run, and the "
             "site would trip or the car would draw power it cannot take. Constraint (4) is <b>soft</b>, through the "
@@ -338,15 +343,13 @@ def tab_overview() -> str:
             "does not produce an infeasible solve; it produces an optimal one with a large "
             "Σ<em>u<sub>i</sub></em>, which somebody has to notice and say out loud.</p>",
             "<h3>What is reported from a solution</h3>"
-            r"""\[
-\begin{aligned}
-\text{cost} &= \sum_{t} c(t)\Big(\sum_i p_i(t)\Big)\Delta, &
-\text{peak} &= \max_t \sum_i p_i(t), \\
-\text{unmet} &= \sum_i u_i, &
-\text{gap} &= \frac{\text{cost} - \text{cost}^\star}{\text{cost}^\star},
-\end{aligned}
-\]"""
-            "<p class='muted'>with <span>\\(\\text{cost}^\\star\\)</span> the optimum of the same day.</p>"
+            "<pre class='math'>"
+            "cost    = &Sigma;_t c(t) &middot; ( &Sigma;_i p_i(t) ) &middot; &Delta;\n"
+            "peak    = max over t of  &Sigma;_i p_i(t)\n"
+            "unmet   = &Sigma;_i u_i\n"
+            "gap     = (cost &minus; cost*) / cost*\n"
+            "</pre>"
+            "<p class='muted'>with <code>cost*</code> the optimum of the same day.</p>"
             "<p class='muted'>The solver is CVXPY with its default backend. Its feasibility tolerance is around "
             "10<sup>−8</sup>; the constraint checker that scores a schedule uses 10<sup>−5</sup>, so numerical "
             "slop is never reported as a violation.</p>",
@@ -1293,10 +1296,15 @@ def expected_table() -> str:
     """The table, laid out the way every case study of this site lays out its own."""
     by_model: Dict[str, Dict[str, List[Dict[str, str]]]] = {}
     dir_of: Dict[Tuple[str, str], str] = {}
-    for d in method_dirs():
+    # The newest run of each (model, method) wins, rather than whichever the
+    # directory listing reached first. results/ holds several sets at once while
+    # a day's work is in flux, and first-seen is not a choice: the GridDebug
+    # session found its own table showing four different run sets as one
+    # experiment because of exactly this.
+    for d in sorted(method_dirs(), key=lambda p: p.parts[-3]):
         hdr = read_header(d)["header"]
-        by_model.setdefault(hdr["model"], {}).setdefault(hdr["method"], read_summary(d))
-        dir_of.setdefault((hdr["model"], hdr["method"]), str(d.relative_to(PROJECT_ROOT / "results")))
+        by_model.setdefault(hdr["model"], {})[hdr["method"]] = read_summary(d)
+        dir_of[(hdr["model"], hdr["method"])] = str(d.relative_to(PROJECT_ROOT / "results"))
 
     FMT = {"tokens": "{:,.0f}", "time": "{:.1f}", "gap_solved": "{:.3f}", "gap_all": "{:.3f}",
            "unmet_solved": "{:.1f}", "unmet_all": "{:.1f}"}

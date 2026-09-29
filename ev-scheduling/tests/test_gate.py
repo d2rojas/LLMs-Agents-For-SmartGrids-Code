@@ -802,9 +802,12 @@ def test_every_condition_is_reported_separately() -> None:
     # This fixture's verify() passes no request text, so E7 abstains: it is the
     # one condition that reads something outside the solve.
     assert row["gate_E7_problem_read_back"] == NOT_APPLICABLE
+    # And E8 with it: with no request text there is no question to hold the
+    # answer's quantity to.
+    assert row["gate_E8_answers_the_question"] == NOT_APPLICABLE
     assert row["gate_passed"] is True
     assert [CONDITION_LABELS[name] for name in CONDITION_ORDER] == [
-        "E1", "E2", "E3", "E4", "E5", "E6", "E7",
+        "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8",
     ]
 
 
@@ -887,8 +890,163 @@ def test_e7_is_in_the_registry_and_carries_its_own_row_fields() -> None:
     from evaluation.runner import GATE_ROW_FIELDS
     from methods.agent.validate.gate import CONDITION_DESCRIPTIONS, CONDITION_LABELS, CONDITION_ORDER
 
-    assert CONDITION_ORDER[-1] == "problem_read_back"
+    assert CONDITION_ORDER[-2] == "problem_read_back"
     assert CONDITION_LABELS["problem_read_back"] == "E7"
     assert CONDITION_DESCRIPTIONS["problem_read_back"]
     assert "gate_E7_problem_read_back" in GATE_ROW_FIELDS
     assert "gate_E7_residual" in GATE_ROW_FIELDS
+
+
+# --------------------------------------------------------------------------- E8, the question
+
+
+_E8_COST_REQUEST = (
+    "1 car is charging at the lot today. "
+    "EV 1: arrives at midnight, leaves at 02:00, 2 kWh, 8 kW maximum. "
+    "What does that cheapest plan cost for the day? Give the total in dollars, to the cent."
+)
+_E8_SHARE_REQUEST = _E8_COST_REQUEST.replace(
+    "What does that cheapest plan cost for the day? Give the total in dollars, to the cent.",
+    "Tell me what percentage of the requested energy is delivered, to two decimals.",
+)
+
+
+def _verify_with_question(answer: str, request: str, *, schedule=None, solve=None):
+    """``verify_answer`` on the one-car day with a question attached."""
+    return verify_answer(
+        answer,
+        solve_result=solve if solve is not None else FakeSolve(schedule=schedule if schedule is not None else optimal_schedule()),
+        day=one_car_day(),
+        site=one_car_site(),
+        tool_outputs=[OPTIMAL_TOOL_OUTPUT],
+        prior_tool_outputs=[],
+        request_text=request,
+        tou=cheap_then_expensive_tou(),
+    )
+
+
+def test_e8_passes_when_the_answer_reports_the_quantity_that_was_asked_for() -> None:
+    """The cheap schedule costs $0.20 and the answer says so."""
+    result = _verify_with_question("The cheapest plan costs $0.20 for the day.", _E8_COST_REQUEST)
+
+    assert status_of(result, "answers_the_question") == PASS
+    assert result.conditions["answers_the_question"].label == "E8"
+    assert result.passed is True
+
+
+def test_e8_catches_the_right_number_to_the_wrong_question() -> None:
+    """The failure of 2026-09-28 that every other condition accepted.
+
+    Asked for the share of the requested *energy* delivered, the agent reported
+    ``pct_fully_served`` from the solver's own output: the share of *cars* that
+    left full. Here the day delivers 100 % of its energy, and an answer that
+    reports the day's cost instead states a number that is equally real, equally
+    current, and not the one asked for.
+    """
+    result = _verify_with_question("The plan costs $0.20 and peaks at 8.0 kW.", _E8_SHARE_REQUEST)
+
+    condition = result.conditions["answers_the_question"]
+    assert condition.status == FAIL
+    assert "100.00 %" in condition.detail
+    assert result.passed is False
+    # The point of the test: nothing else objects. The numbers are the last
+    # solve's, they trace, and they describe the surfaced schedule.
+    for name in ("solver_optimal", "no_hard_violation", "traceable", "currency", "schedule_consistency"):
+        assert status_of(result, name) == PASS
+
+
+def test_e8_does_not_escalate_an_answer_that_rounds() -> None:
+    """The gate's tolerance is the scorer's, so rounding is not a failure.
+
+    A reply written for a person rounds. If E8 were tighter than
+    ``evaluation.outcome``, it would escalate days the scorer then counts as
+    correctly answered, which is one system disagreeing with itself.
+    """
+    result = _verify_with_question("The cheapest plan costs about $0.2 for the day.", _E8_COST_REQUEST)
+
+    assert status_of(result, "answers_the_question") == PASS
+
+
+def test_e8_abstains_on_a_question_it_does_not_read() -> None:
+    """Bounded grammar, same discipline as E7: it recognises what it knows.
+
+    A request that prescribes an operation only, asks a yes/no, or asks about
+    the day rather than the plan leaves E8 out of force, and abstaining never
+    fails the gate.
+    """
+    for request in (
+        "",
+        "Plan the charging to minimise what we pay for the energy.",
+        "Can every car leave with all the energy it asked for? Answer yes or no.",
+        "Also tell me the total energy requested across all the cars, in kWh to two decimals.",
+    ):
+        result = _verify_with_question(GOOD_ANSWER, request)
+        assert status_of(result, "answers_the_question") == NOT_APPLICABLE, request
+
+
+def test_e8_abstains_when_two_quantities_are_asked_for_at_once() -> None:
+    """An ambiguous read accuses nobody: one number cannot answer two questions."""
+    from methods.agent.validate.gate import _asked_quantity
+
+    both = (
+        "What does that cheapest plan cost for the day? "
+        "Tell me what percentage of the requested energy is delivered, to two decimals."
+    )
+    assert _asked_quantity(both) is None
+
+
+def test_e8_reads_every_question_the_generator_can_ask_and_no_other() -> None:
+    """E8's grammar is coupled to ``evaluation/requests.py``, and this is the coupling.
+
+    The condition can only recompute three quantities from a schedule. It must
+    recognise every phrasing the generator emits for those three, so a real run
+    never leaves E8 silently out of force, and none of the others, so it never
+    holds an answer to a quantity the request did not ask for. A new phrasing
+    breaks this test instead of quietly disabling the condition.
+    """
+    import ast
+    import inspect
+
+    from evaluation import requests as reqs
+    from methods.agent.validate.gate import _asked_quantity
+
+    expected = {"cost_question": "cost", "unmet_question": "unmet_kwh", "served_share": "pct_energy_served"}
+    for variant, builder in reqs._QUESTION_BUILDERS.items():
+        # The phrasings are the literal list the builder hands to ``rng.choice``.
+        tree = ast.parse(inspect.getsource(builder).lstrip())
+        def literal(element: ast.expr) -> Optional[str]:
+            """The phrasing, with any interpolated clock phrase left as a blank."""
+            if isinstance(element, ast.Constant) and isinstance(element.value, str):
+                return element.value
+            if isinstance(element, ast.JoinedStr):
+                return " ".join(
+                    part.value for part in element.values
+                    if isinstance(part, ast.Constant) and isinstance(part.value, str)
+                )
+            return None
+
+        phrasings = [
+            text
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "choice"
+            for argument in node.args
+            if isinstance(argument, ast.List)
+            for element in argument.elts
+            if (text := literal(element))
+        ]
+        assert phrasings or variant in reqs.STATE_VARIANTS, variant
+        for text in phrasings:
+            assert _asked_quantity(text) == expected.get(variant), (variant, text)
+
+
+def test_e8_is_in_the_registry_and_carries_its_own_row_fields() -> None:
+    from evaluation.runner import GATE_ROW_FIELDS
+    from methods.agent.validate.gate import CONDITION_DESCRIPTIONS, CONDITION_LABELS, CONDITION_ORDER
+
+    assert CONDITION_ORDER[-1] == "answers_the_question"
+    assert CONDITION_LABELS["answers_the_question"] == "E8"
+    assert CONDITION_DESCRIPTIONS["answers_the_question"]
+    assert "gate_E8_answers_the_question" in GATE_ROW_FIELDS
+    assert "gate_E8_residual" in GATE_ROW_FIELDS
