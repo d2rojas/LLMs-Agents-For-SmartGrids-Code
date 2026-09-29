@@ -63,16 +63,22 @@ def model_slug(model: str) -> str:
 
 
 # What a run's provenance depends on: the code, the prompts and the pricing that produced the
-# numbers. Deliberately NOT results/, which a run dirties by writing into it, nor the untracked
-# copies iCloud leaves beside result files. Until 2026-09-28 this was `git status -- .` over the
-# whole project, so every one of the 36 committed runs recorded a `-dirty` commit and the suffix
-# said nothing: it fired on the run's own output. A suffix that is always on cannot warn anybody.
+# numbers. Deliberately NOT results/, which a run dirties by writing into it. Until 2026-09-28 this
+# was `git status -- .` over the whole project, so every one of the 36 committed runs recorded a
+# `-dirty` commit and the suffix said nothing: it fired on the run's own output. A suffix that is
+# always on cannot warn anybody.
+#
+# Untracked files DO count. iCloud's `<name> 2.py` copies cannot cause a false positive here because
+# .gitignore lines 24-25 already ignore them, verified by putting `solver/case_loader 2.py` and
+# `config 3.py` in place and watching the flag stay off. What untracked files do catch is a new
+# source module used by a run before anyone ran `git add`, which is irreproducibility of the real
+# kind: the run would otherwise record a clean commit while running code in no commit at all.
 _CODE_PATHS = ("evaluation", "methods", "solver", "viz", "ui", "tests", "run.py", "config.py", "pricing.json", "requirements.txt")
 
 
 def dirty_code() -> str:
     """The code changes that would make this run unreproducible, or "" when there are none."""
-    out = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no", "--", *_CODE_PATHS],
+    out = subprocess.run(["git", "status", "--porcelain", "--", *_CODE_PATHS],
                          cwd=PROJECT_ROOT, capture_output=True, text=True, check=True).stdout.strip()
     return out
 
