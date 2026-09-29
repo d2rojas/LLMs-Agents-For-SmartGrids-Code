@@ -604,6 +604,7 @@ def aggregate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     # (2026-09-28, found by tests/crosscheck_page.mjs: the page said n=17 where this said n=20).
     oc_all = Counter(_outcome(r) for r in rows)
     errors = [r for r in rows if _outcome(r) == "run_error"]
+    attempted = list(rows)          # money was spent on these; rates were not earned on them
     rows = [r for r in rows if _outcome(r) != "run_error"]
     n = len(rows)
     oc = Counter(_outcome(r) for r in rows)
@@ -636,7 +637,12 @@ def aggregate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "kcl_mismatch_mean": _mean((r.get("metrics") or {}).get("kcl_mean_mismatch_mw") for r in rows),
         "prompt_tokens_mean": _mean(r.get("prompt_tokens") for r in rows),
         "completion_tokens_mean": _mean(r.get("completion_tokens") for r in rows),
-        "cost_usd_total": sum(float(r["cost_usd"]) for r in rows if r.get("cost_usd") is not None) if any(r.get("cost_usd") is not None for r in rows) else None,
+        # Over every request ATTEMPTED, not only the answered ones: a request whose API call failed
+        # still billed the calls the run made before it died. Excluding them made the 300-bus PFAgent
+        # run read $0.7097 where $0.9311 was spent, 24 % low. Rates and means stay over the answered
+        # requests, which is a different question from what it cost (2026-09-28, raised by EV's
+        # column-sum check). Every other run has no failures, so only that one figure moves.
+        "cost_usd_total": sum(float(r["cost_usd"]) for r in attempted if r.get("cost_usd") is not None) if any(r.get("cost_usd") is not None for r in attempted) else None,
         "wall_time_s_mean": _mean(r.get("wall_time_s") for r in rows),
         "n_llm_calls_mean": _mean(r.get("n_llm_calls") for r in rows),
         "n_tool_calls_mean": _mean(r.get("n_tool_calls") for r in rows),

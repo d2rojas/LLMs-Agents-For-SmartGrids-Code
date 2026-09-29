@@ -1200,11 +1200,21 @@ def _word_numbers_from_text(text: str) -> set[float]:
     misses -- reuses methods.deterministic.rule_based's own word list (its bus-number parser
     covers the same generated-request phrasings) rather than a second one to keep
     in sync."""
-    from methods.deterministic.rule_based import _NUMBER_WORDS
+    from methods.deterministic.rule_based import _NUMBER_WORDS, _WORD_NUMBER_RE, words_phrase_to_int
 
     found: set[float] = set()
     for word in re.findall(r"[a-zA-Z]+", text):
         v = _NUMBER_WORDS.get(word.lower())
+        if v is not None:
+            found.add(float(v))
+    # The composed reading too: "bus thirty-one" grounds 31, not only 30 and 1, and "bus one
+    # hundred ninety-six" grounds 196. Without it V6 read the agent's correct conversion of a
+    # spelled-out bus id as an invented argument, which penalised the `ambiguous` request class
+    # for the one thing it exists to test (2026-09-28). Both readings are kept: a request that
+    # says "thirty-one" does state a thirty and a one as far as grounding is concerned, and
+    # dropping them would turn one false positive into another.
+    for m in _WORD_NUMBER_RE.finditer(text):
+        v = words_phrase_to_int(m.group(0))
         if v is not None:
             found.add(float(v))
     return found

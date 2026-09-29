@@ -62,14 +62,33 @@ def test_words_to_digits():
     assert words_to_int("7") == 7
     assert words_to_int("seven") == 7
     assert words_to_int("Twenty") == 20
-    with pytest.raises(ValueError):
-        words_to_int("thirty")
+    # Until 2026-09-28 the table stopped at twenty and this line pinned that limit with
+    # `pytest.raises(ValueError)` on "thirty". Every system here has buses above twenty and the
+    # `ambiguous` request class is the one that spells them out, so the limit fell entirely on the
+    # requests written to test exactly this. Changed on purpose, in the commit that lifted it.
+    assert words_to_int("thirty") == 30
+    assert words_to_int("ninety") == 90
+    assert words_to_int("thirty-one") == 31
+    assert words_to_int("thirty one") == 31
+    assert words_to_int("one hundred ninety-six") == 196
+    assert words_to_int("two hundred ten") == 210
+    # Still not a number: a run of words that is not one cardinal must not parse to something.
+    for bad in ("one two three", "twenty thirty", "hundred", "bus"):
+        with pytest.raises(ValueError):
+            words_to_int(bad)
     assert parse("set load at bus seven to 45 MW") == [{"tool": "modify_load", "args": {"bus_id": 7, "p_mw": 45.0}}]
     assert parse("open the branch from bus four to bus five") == [
         {"tool": "disconnect_line", "args": {"from_bus": 4, "to_bus": 5}}
     ]
     assert parse("restore the line between bus twelve and bus thirteen") == [
         {"tool": "reconnect_line", "args": {"from_bus": 12, "to_bus": 13}}
+    ]
+    # The two requests this gap actually cost us, both `ambiguous`, one per affected system.
+    assert parse("disconnect the line between bus thirty and bus thirty-one") == [
+        {"tool": "disconnect_line", "args": {"from_bus": 30, "to_bus": 31}}
+    ]
+    assert parse("disconnect the line between bus one hundred ninety-six and bus two hundred ten") == [
+        {"tool": "disconnect_line", "args": {"from_bus": 196, "to_bus": 210}}
     ]
 
 

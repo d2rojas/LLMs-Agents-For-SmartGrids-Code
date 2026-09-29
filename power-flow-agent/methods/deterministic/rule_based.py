@@ -39,14 +39,56 @@ TOOL_NAMES = {t["name"] for t in TOOLS}
 
 SUPPORTED_CASES = ("14", "30", "57", "118", "300")
 
+# The table stopped at twenty until 2026-09-28, and nothing composed: "bus thirty-one" parsed as
+# neither 30 nor 31, and "bus one hundred ninety-six" as neither. Every system here has buses above
+# twenty, and the `ambiguous` request class is the one that spells them out, so the gap fell entirely
+# on the requests written to test exactly this. It cost the deterministic parser two escalations
+# (case57-ambiguous-015-s0, case300-ambiguous-003-s0) and, through evaluation/metrics.py which reads
+# this same table, made V6 read the agent's correct conversion as an invented argument.
 _NUMBER_WORDS: Dict[str, int] = {
     "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
     "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
     "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18,
-    "nineteen": 19, "twenty": 20,
+    "nineteen": 19, "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60,
+    "seventy": 70, "eighty": 80, "ninety": 90,
 }
+_HUNDRED_WORD = "hundred"
+# "thirty-one", "thirty one", "one hundred ninety-six", "two hundred ten". Bounded at three
+# hundreds-groups because the largest system here is 300 buses; nothing needs thousands.
 _WORD_ALT = "|".join(sorted(_NUMBER_WORDS, key=len, reverse=True))
-_BUS_TOKEN = rf"(\d+|{_WORD_ALT})"
+_WORD_NUMBER_RE = re.compile(
+    rf"\b(?:(?:{_WORD_ALT})(?:[\s-]+{_HUNDRED_WORD})?)(?:[\s-]+(?:{_WORD_ALT}))*\b", re.IGNORECASE
+)
+
+
+def words_phrase_to_int(phrase: str) -> Optional[int]:
+    """"thirty-one" -> 31, "one hundred ninety-six" -> 196, "two hundred ten" -> 210.
+
+    Returns None when the phrase is not a single well-formed cardinal, so a run of unrelated
+    number words ("one two three") is not silently read as a number.
+    """
+    parts = [w.lower() for w in re.split(r"[\s-]+", phrase.strip()) if w]
+    total = current = 0
+    seen = False
+    for w in parts:
+        if w == _HUNDRED_WORD:
+            if current == 0:
+                return None  # "hundred" with nothing in front of it
+            current *= 100
+            seen = True
+            continue
+        v = _NUMBER_WORDS.get(w)
+        if v is None:
+            return None
+        if v >= 100 or (current % 100 and v >= 10) or (current % 10 and v < 100 and current % 100):
+            return None  # "twenty thirty", "one two": not one cardinal
+        current += v
+        seen = True
+    total += current
+    return total if seen else None
+
+
+_BUS_TOKEN = rf"(\d+|{_WORD_NUMBER_RE.pattern})"
 _NUM = r"(\d+(?:\.\d+)?)"
 
 MVA_WARNING = "MVA interpreted as active power (MW); apparent power is not a load setpoint."
@@ -68,6 +110,9 @@ def words_to_int(token: str) -> int:
         return int(s)
     if s in _NUMBER_WORDS:
         return _NUMBER_WORDS[s]
+    composed = words_phrase_to_int(s)
+    if composed is not None:
+        return composed
     raise ValueError(f"not a bus number: {token!r}")
 
 
