@@ -422,3 +422,45 @@ def test_the_comparability_tolerance_scales_with_the_day(
 
     # An explicit tolerance still wins, for a caller that knows better.
     assert cost_gap(10.0, 10.0, unmet_kwh=1.0, unmet_tol_kwh=2.0, n_sessions=1).comparable is True
+
+
+def test_the_answer_tolerance_scales_with_the_size_of_the_quantity() -> None:
+    """A reply written for a person rounds, and rounding is not a wrong answer.
+
+    ``rule_based`` runs no model: it solves the LP and states the result. On the
+    run of 2026-09-28 it lost four of its twenty days to the absolute tolerance
+    alone, on 158.46 against 158.45 and three more of the same kind. A row with
+    no language model in it cannot be wrong about the answer to its own solve,
+    so the tolerance was at fault, not the row.
+
+    The relative floor has to be loose enough for that and tight enough to keep
+    catching the failure the term exists for, which on the same run was a whole
+    quantity apart: the share of cars reported where the share of energy was
+    asked for.
+    """
+    from evaluation.outcome import ANSWER_REL_TOL, FAIL, PASS
+
+    # The four days rule_based lost to rounding alone.
+    for truth, given in ((158.45, 158.46), (60.28, 60.259), (17.22, 17.231)):
+        assert check_answer(RequestAnswer(kind="unmet_kwh", truth=truth, given=given)).status == PASS
+    assert check_answer(RequestAnswer(kind="pct_served", truth=97.97, given=97.96)).status == PASS
+
+    # The wrong quantity, which stays wrong: pct_fully_served where pct of
+    # energy was asked for, on the same days.
+    for truth, given in ((97.97, 97.78), (97.04, 23.53), (99.44, 93.02)):
+        assert check_answer(RequestAnswer(kind="pct_served", truth=truth, given=given)).status == FAIL
+
+    # It is a floor and never a ceiling: small quantities keep the absolute
+    # tolerance the unit implies.
+    small = check_answer(RequestAnswer(kind="cost", truth=0.20, given=0.22))
+    assert small.status == FAIL
+    assert small.tolerance == pytest.approx(0.01)
+
+    # And the request's own tolerance still wins outright when it sets one,
+    # in either direction: here it is tighter than the relative floor, which
+    # would otherwise have accepted this answer.
+    override = check_answer(RequestAnswer(kind="cost", truth=450.0, given=450.2, tolerance=0.01))
+    assert override.status == FAIL
+    assert override.tolerance == pytest.approx(0.01)
+    assert ANSWER_REL_TOL * 450.0 > 0.2
+    assert check_answer(RequestAnswer(kind="cost", truth=450.0, given=450.2)).status == PASS

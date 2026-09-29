@@ -139,7 +139,12 @@ def test_time_phrasings_are_genuinely_varied() -> None:
     assert "8:15 am" in quarter_past_eight
     assert "quarter past eight in the morning" in quarter_past_eight
     assert "half past seven in the evening" in half_past_seven_pm
-    assert "half seven in the evening" in half_past_seven_pm   # British usage
+    # The bare "half seven" is never emitted: it is 7:30 in British usage and
+    # 6:30 in Dutch and German usage, so it has two correct readings and is
+    # not an unambiguous phrase. The deterministic reader still accepts it,
+    # with the British value, for text this generator did not write.
+    assert "half seven in the evening" not in half_past_seven_pm
+    assert not any(ph.startswith("half ") and not ph.startswith("half past") for ph in half_past_seven_pm)
     assert "a quarter to five in the evening" in quarter_to_five_pm
     assert rq.time_phrases(48, N_STEPS, DT).count("noon") == 1
     assert "midnight at the end of the day" in rq.time_phrases(N_STEPS, N_STEPS, DT)

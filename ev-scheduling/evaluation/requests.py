@@ -16,7 +16,7 @@ anywhere on the evaluated path and ``evaluation/formulation.py`` had nothing to
 score. The rigid ``_build_nl_request`` helper in that script emits one HH:MM
 template for every car, which tests a regex, not an extraction. The text here
 varies the time expressions ("6 pm", "18:00", "quarter past eight in the
-morning", "half seven in the evening", "midnight at the end of the day"), the
+morning", "half past seven in the evening", "midnight at the end of the day"), the
 units (kWh and Wh, kW and W, dollars and cents), the sentence shapes and the
 order of the cars, so the formulation column measures reading rather than
 pattern matching.
@@ -347,8 +347,11 @@ def time_phrases(idx: int, n_steps: int, dt_hours: float) -> List[str]:
         out.append(f"quarter past {anchor}" + ("" if hour == 0 else f" {part}"))
     elif minute == 30:
         out.append(f"half past {anchor}" + ("" if hour == 0 else f" {part}"))
-        if hour != 0:
-            out.append(f"half {anchor} {part}")  # British usage: "half seven" is 7:30
+        # Not the bare "half seven": it is 7:30 in British usage and 6:30 in
+        # Dutch and German usage, so it has two correct readings, and a reader
+        # cannot be scored wrong for choosing one. Found on 2026-09-28, when a
+        # frontier model's only two extraction errors in 382 cars were "half
+        # eleven at night" and "half ten at night", read an hour early.
     elif minute == 45:
         nxt = hour + 1
         if nxt == 12:
