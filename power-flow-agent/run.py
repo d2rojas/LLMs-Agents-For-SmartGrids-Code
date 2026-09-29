@@ -62,11 +62,25 @@ def model_slug(model: str) -> str:
     return model.split("/")[-1].split(":")[-1]
 
 
+# What a run's provenance depends on: the code, the prompts and the pricing that produced the
+# numbers. Deliberately NOT results/, which a run dirties by writing into it, nor the untracked
+# copies iCloud leaves beside result files. Until 2026-09-28 this was `git status -- .` over the
+# whole project, so every one of the 36 committed runs recorded a `-dirty` commit and the suffix
+# said nothing: it fired on the run's own output. A suffix that is always on cannot warn anybody.
+_CODE_PATHS = ("evaluation", "methods", "solver", "viz", "ui", "tests", "run.py", "config.py", "pricing.json", "requirements.txt")
+
+
+def dirty_code() -> str:
+    """The code changes that would make this run unreproducible, or "" when there are none."""
+    out = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no", "--", *_CODE_PATHS],
+                         cwd=PROJECT_ROOT, capture_output=True, text=True, check=True).stdout.strip()
+    return out
+
+
 def git_commit() -> str:
     try:
         sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=PROJECT_ROOT, capture_output=True, text=True, check=True).stdout.strip()
-        dirty = subprocess.run(["git", "status", "--porcelain", "--", "."], cwd=PROJECT_ROOT, capture_output=True, text=True, check=True).stdout.strip()
-        return sha + ("-dirty" if dirty else "")
+        return sha + ("-dirty" if dirty_code() else "")
     except Exception:
         return "unknown"
 
