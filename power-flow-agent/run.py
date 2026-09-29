@@ -136,6 +136,35 @@ def cmd_show_prompt(args: argparse.Namespace) -> int:
     return 0
 
 
+def _refuse_dirty(args: argparse.Namespace) -> Optional[int]:
+    """Refuse to start an untagged run while the code is uncommitted, and say what to do.
+
+    An untagged run is by convention the paper's own set, and its numbers are quoted with the commit
+    it records. A run started on a dirty tree records `<sha>-dirty`, which names no commit, so those
+    numbers can be read but not reproduced -- the supplement's Reproducibility section promises the
+    opposite. All 36 committed runs carry that suffix, and on 2026-09-28 this session repeated the
+    mistake live, launching eight runs (one of them 3.98 USD of frontier model) minutes after
+    writing that the guard was needed. Knowing about the failure is not enough; hence the check.
+
+    Three ways past it, on purpose: `--tag` marks a smoke or pilot, which may be dirty because
+    nothing quotes it; `--dry-run` never blocks, so a cost estimate is always available mid-edit;
+    and `--allow-dirty` is the explicit override, which prints the same warning and continues, so
+    this can never stand between someone and a run they have decided to make.
+    """
+    if args.dry_run or args.tag or getattr(args, "allow_dirty", False):
+        return None
+    dirty = dirty_code()
+    if not dirty:
+        return None
+    sha = git_commit().replace("-dirty", "")
+    print("refusing to start: the code is uncommitted, so this run could not be reproduced from what it records.", file=sys.stderr)
+    print(f"it would have recorded {sha}-dirty, which names no commit. uncommitted:", file=sys.stderr)
+    for line in dirty.splitlines()[:20]:
+        print(f"  {line}", file=sys.stderr)
+    print("commit first, or pass --tag <name> for a smoke, or --allow-dirty to run anyway.", file=sys.stderr)
+    return 3
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     cases = [normalize_case(c) for c in args.cases]
     if not cases:  # no silent default: the design runs on four systems and every run names its own
@@ -143,6 +172,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 2
     ms = [methods.get_method(name) for name in args.methods]
     models = list(args.models) or ["openai:gpt-4o-mini"]
+    if (blocked := _refuse_dirty(args)) is not None:
+        return blocked
     date = args.date or _dt.date.today().isoformat()
     condition = args.condition or ("stress" if args.difficulties == ["stress"] else "normal")
     pricing = load_pricing()
@@ -383,6 +414,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--tag", default=None, help="suffix for the run folder (e.g. pilot)")
     r.add_argument("--dry-run", action="store_true", help="print the plan and cost estimate, run nothing")
     r.add_argument("--force", action="store_true", help="rerun even if raw/report.json exists")
+    r.add_argument("--allow-dirty", action="store_true", help="start even with uncommitted code; the run records <sha>-dirty and cannot be reproduced from it")
     r.add_argument("--no-rescore", action="store_true", help="skip evaluation/rescore.py after the run")
     r.add_argument("--quiet", action="store_true", help="do not echo the runner's output (it still goes to raw/run.log)")
     r.set_defaults(func=cmd_run)
