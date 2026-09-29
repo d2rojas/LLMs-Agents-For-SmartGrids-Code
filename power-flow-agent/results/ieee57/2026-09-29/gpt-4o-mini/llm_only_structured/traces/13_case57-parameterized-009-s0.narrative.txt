@@ -1,0 +1,23 @@
+RUN 13  |  case57-parameterized-009-s0  |  llm_only:structured  |  gpt-4o-mini  |  IEEE 57-bus  |  seed 0  |  difficulty parameterized
+Request: Load the IEEE 57-bus system and run the power flow, then list every line whose loading is above 90%.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): { "formulation": [ {"tool": "load_case", "args": {"case_name": "case57"}}, {"tool": "run_powerflow", "args": {}} ], "converged": true, "summary": "The IEEE 57-bus system was loaded and the power flow ...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 6678 in / 4503 out tokens, $0.0037, 39.9 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case57") -> run_powerflow()
+  declared: load_case(case_name="case57") -> run_powerflow()   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 256, untraceable: 256 -> traceable answer: no
+  untraceable values: ['156.9 MW', '98.5%', '18.5 MW', '98.5%', '19.5 MW', '98.5%', '110.5 MW', '99.5%', '1.04', '0.0', '1.02', '-2.0', '1.01', '-4.0', '1.00', '-6.0', '0.99', '-8.0', '0.98', '-10.0']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: voltage_error
+  against the reference: voltage MAE 0.1051 p.u., flow MAE 27.0067 MW, KCL mismatch 17.2449 MW, power-balance error n/a
+  raw trace: case57-parameterized-009-s0_run0.json

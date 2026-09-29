@@ -1,0 +1,29 @@
+RUN 18  |  case300-plain-008-s0  |  react_nogate  |  gpt-5.6-sol  |  IEEE 300-bus  |  seed 0  |  difficulty plain
+Request: Load case300 and set the active load at bus 1 to 90 MW.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case300")   (1068 in / 50 out tokens, 4.8 s)
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=23670.14
+  2. LLM called set_active_load(bus_id=1, p_mw=90)   (1163 in / 26 out tokens, 1.3 s)
+       tool set_active_load -> converged=true, total_load_mw=23673.386, total_generation_mw=24112.516, total_loss_mw=439.131  [gate pass]
+  3. LLM called run_powerflow()   (1357 in / 15 out tokens, 2.9 s)
+       tool run_powerflow -> case_name="case300", converged=true, total_load_mw=23673.386, total_generation_mw=24112.516, total_loss_mw=439.131, bus_voltages[300], line_flows[345], voltage_violations[73], thermal_violations[12]  [gate pass]
+  4. LLM replied without tool calls: { "summary": "Loaded IEEE case300 and set the active load at bus 1 to 90 MW. The reactive load at bus 1 was left unchanged.", "converged": true, "case_name": "c   (38440 in / 433 out tokens, 7.0 s)
+  5. LLM wrote the final answer   (38714 in / 19094 out tokens, 114.1 s)
+  Totals: 5 LLM calls, 3 tool calls, 3 tool rounds, 80742 in / 19618 out tokens, $0.3577, 130.4 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> modify_load(bus_id=1, p_mw=90.0)
+  executed: load_case(case_name="case300") -> set_active_load(bus_id=1, p_mw=90) -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 1383, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 1.89e-07 p.u., flow MAE 2.44e-04 MW, KCL mismatch 1.81e-04 MW, power-balance error n/a
+  raw trace: case300-plain-008-s0_run0.json

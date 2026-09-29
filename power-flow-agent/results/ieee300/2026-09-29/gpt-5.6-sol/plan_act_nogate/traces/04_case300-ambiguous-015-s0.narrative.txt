@@ -1,0 +1,30 @@
+RUN 04  |  case300-ambiguous-015-s0  |  plan_act_nogate  |  gpt-5.6-sol  |  IEEE 300-bus  |  seed 0  |  difficulty ambiguous
+Request: Load the 300-bus test case (case300) and set the active load at bus 109 to 17.6 MVA.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 3-step plan: load_case(case_name="case300") -> set_active_load(bus_id=109, p_mw=17.6) -> run_powerflow()
+  2. LLM replied without tool calls: {"plan":[{"tool":"load_case","args":{"case_name":"case300"}},{"tool":"set_active_load","args":{"bus_id":109,"p_mw":17.6}},{"tool":"run_powerflow","args":{}}]}   (695 in / 100 out tokens, 2.5 s)
+  3. parser called load_case(case_name="case300")
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=24103.166
+  4. parser called set_active_load(bus_id=109, p_mw=17.6)
+       tool set_active_load -> converged=true, total_load_mw=24088.08, total_generation_mw=24641.207, total_loss_mw=553.127  [gate pass]
+  5. parser called run_powerflow()
+       tool run_powerflow -> case_name="case300", converged=true, total_load_mw=24088.08, total_generation_mw=24641.207, total_loss_mw=553.127, bus_voltages[300], line_flows[345], voltage_violations[90], thermal_violations[26]  [gate pass]
+  6. LLM wrote the final answer   (40210 in / 19789 out tokens, 116.1 s)
+  Totals: 2 LLM calls, 3 tool calls, 1 tool rounds, 40905 in / 19889 out tokens, $0.2807, 118.8 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> modify_load(bus_id=109, p_mw=17.6)
+  executed: load_case(case_name="case300") -> set_active_load(bus_id=109, p_mw=17.6) -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 1416, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 2.06e-07 p.u., flow MAE 2.62e-04 MW, KCL mismatch 1.71e-04 MW, power-balance error n/a
+  raw trace: case300-ambiguous-015-s0_run0.json

@@ -1,0 +1,28 @@
+RUN 12  |  case300-parameterized-005-s0  |  react_nogate  |  gpt-4o-mini  |  IEEE 300-bus  |  seed 0  |  difficulty parameterized
+Request: Load the IEEE 300-bus system and disconnect the line between bus 100 and bus 102.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case300"); disconnect_line(from_bus=100, to_bus=102)   (1069 in / 52 out tokens, 1.1 s)
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=23988.024
+       tool disconnect_line -> converged=true, total_load_mw=23988.024, total_generation_mw=24465.927, total_loss_mw=477.903  [gate pass]
+  2. LLM called run_powerflow()   (1322 in / 11 out tokens, 0.8 s)
+       tool run_powerflow -> case_name="case300", converged=true, total_load_mw=23988.024, total_generation_mw=24465.927, total_loss_mw=477.903, bus_voltages[300], line_flows[345], voltage_violations[80], thermal_violations[27]  [gate pass]
+  3. LLM replied without tool calls: ```json { "converged": true, "bus_voltages": [ {"bus_id": 1, "vm_pu": 1.028972, "va_deg": -7.174, "is_violation": false, "violation_type": null}, {"bus_id": 2,    (39620 in / 16384 out tokens, 135.0 s)
+  4. LLM wrote the final answer   (56070 in / 12879 out tokens, 117.5 s)
+  Totals: 4 LLM calls, 3 tool calls, 2 tool rounds, 98081 in / 29326 out tokens, $0.0323, 254.6 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> disconnect_line(from_bus=100, to_bus=102)
+  executed: load_case(case_name="case300") -> disconnect_line(from_bus=100, to_bus=102) -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 805, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1, 2] after disconnect_line at call 1)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: incomplete_coverage
+  against the reference: voltage MAE 2.00e-07 p.u., flow MAE 2.56e-04 MW, KCL mismatch 8.48e-05 MW, power-balance error n/a
+  raw trace: case300-parameterized-005-s0_run0.json

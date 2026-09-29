@@ -1,0 +1,43 @@
+RUN 14  |  case300-parameterized-013-s0  |  pfagent  |  gpt-5.6-sol  |  IEEE 300-bus  |  seed 0  |  difficulty parameterized
+Request: Load the 300-bus test case (case300) and disconnect the line between bus 246 and bus 247.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case300")   (1076 in / 41 out tokens, 2.1 s)
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=23592.428
+  2. LLM called disconnect_line(from_bus=246, to_bus=247)   (1171 in / 24 out tokens, 1.5 s)
+       tool disconnect_line -> converged=true, total_load_mw=23592.428, total_generation_mw=24055.667, total_loss_mw=463.239  [gate pass]
+  3. LLM called run_powerflow()   (1332 in / 15 out tokens, 2.3 s)
+       tool run_powerflow -> case_name="case300", converged=true, total_load_mw=23592.428, total_generation_mw=24055.667, total_loss_mw=463.239, bus_voltages[300], line_flows[345], voltage_violations[73], thermal_violations[22]  [gate pass]
+  4. LLM replied without tool calls: { "summary": "Loaded case300, disconnected the branch between buses 246 and 247, and solved the resulting AC power flow.", "case_name": "case300", "converged":    (39005 in / 479 out tokens, 7.3 s)
+  5. LLM wrote the final answer   (39358 in / 19499 out tokens, 116.0 s)
+  Totals: 5 LLM calls, 3 tool calls, 3 tool rounds, 81942 in / 20058 out tokens, $0.3645, 129.9 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> disconnect_line(from_bus=246, to_bus=247)
+  executed: load_case(case_name="case300") -> disconnect_line(from_bus=246, to_bus=247) -> run_powerflow()
+  verdict:  EXACT
+
+VERIFICATION GATE  (task-level, on the final answer)
+  V1  converged              pass  residual 0
+  V2  balance                pass  residual 0
+  V3  no_isolated_buses      pass  residual 0
+  V4  traceability           pass  residual 0
+  V5  currency               pass  residual 0
+  V6  argument_grounding     pass  every mutating-tool argument traces to the request or a prior tool output
+  V7  claims_from_tools      pass  answer matches the agent's own last solved state
+  V8  request_applied        pass  every change applied and reflected in the final state
+  V10 complete_state         pass  all 300 buses reported
+  V11 formulation_matches_trace pass  the declared operations are the ones the trace shows
+  V9  plausible_state        pass  voltages within 0.8 to 1.2 p.u., losses below 10 % of the load
+  outcome: pass_first after 1 attempt(s)
+
+REPORTING
+  numbers in the answer: 1393, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1, 2] after disconnect_line at call 1)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 1.85e-07 p.u., flow MAE 2.58e-04 MW, KCL mismatch 1.66e-04 MW, power-balance error n/a
+  raw trace: case300-parameterized-013-s0_run0.json

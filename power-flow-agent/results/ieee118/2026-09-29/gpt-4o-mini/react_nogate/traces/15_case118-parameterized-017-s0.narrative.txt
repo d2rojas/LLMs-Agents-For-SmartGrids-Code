@@ -1,0 +1,27 @@
+RUN 15  |  case118-parameterized-017-s0  |  react_nogate  |  gpt-4o-mini  |  IEEE 118-bus  |  seed 0  |  difficulty parameterized
+Request: Load case118 and run an N-1 contingency analysis ranked by max violations and report the 8 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case118")   (1071 in / 16 out tokens, 1.1 s)
+       tool load_case -> case_name="case118", n_buses=118, n_lines=184, total_load_mw=4249.525
+  2. LLM called run_n1_contingency(top_k=8, criteria="max_violations")   (1159 in / 26 out tokens, 1.4 s)
+       tool run_n1_contingency -> N-1 completed over 184 branches. Worst outage: 8-9 (line), V violations=6 (delta=3), thermal violations=45 (delta=44).
+  3. LLM replied without tool calls: ```json { "converged": true, "result": [ { "outage": "8-9 (line)", "converged": true, "voltage_violations": 6, "thermal_violations": 45, "worst_vm": 0.937392, "   (9509 in / 677 out tokens, 8.6 s)
+  4. LLM wrote the final answer   (10252 in / 223 out tokens, 3.2 s)
+  Totals: 4 LLM calls, 2 tool calls, 2 tool rounds, 21991 in / 942 out tokens, $0.0039, 18.6 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case118") -> run_n1_contingency(top_k=8, criteria="max_violations")
+  executed: load_case(case_name="case118") -> run_n1_contingency(top_k=8, criteria="max_violations")
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 3, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: no_state_reported
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case118-parameterized-017-s0_run0.json

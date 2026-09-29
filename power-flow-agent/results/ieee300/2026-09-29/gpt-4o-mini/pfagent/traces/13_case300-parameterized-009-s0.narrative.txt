@@ -1,0 +1,31 @@
+RUN 13  |  case300-parameterized-009-s0  |  pfagent  |  gpt-4o-mini  |  IEEE 300-bus  |  seed 0  |  difficulty parameterized
+Request: Load the 300-bus test case (case300) and run an N-1 contingency analysis ranked by max violations and report the 3 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case300")   (1080 in / 16 out tokens, 5.6 s)
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=23795.153
+  2. LLM called run_n1_contingency(top_k=3, criteria="max_violations")   (1168 in / 26 out tokens, 10.6 s)
+       tool run_n1_contingency -> N-1 completed over 345 branches. Worst outage: 23-25 (line), V violations=0 (delta=-75), thermal violations=0 (delta=-21).
+  3. LLM replied without tool calls:    (249.0 s)
+  Totals: 3 LLM calls, 2 tool calls, 2 tool rounds, 2248 in / 42 out tokens, $0.0004, 278.7 s
+  Status: llm_error
+  Error: RuntimeError: LLM request failed: APIConnectionError: Connection error.
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> run_n1_contingency(top_k=3, criteria="max_violations")
+  executed: load_case(case_name="case300") -> run_n1_contingency(top_k=3, criteria="max_violations")
+  verdict:  n/a (no tool calls in this method)
+
+VERIFICATION GATE  (task-level, on the final answer)
+  no verification record in the trace
+
+REPORTING
+  numbers in the answer: 0, untraceable: 0 -> traceable answer: n/a
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: RUN ERROR
+  computation correct (solved): no   reason: run_error
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case300-parameterized-009-s0_run0.json

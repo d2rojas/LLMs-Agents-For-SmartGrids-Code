@@ -1,0 +1,44 @@
+RUN 20  |  case300-plain-016-s0  |  pfagent  |  gpt-5.6-sol  |  IEEE 300-bus  |  seed 0  |  difficulty plain
+Request: Load case300 and run an N-1 contingency analysis and report the worst single outage.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case300")   (1069 in / 88 out tokens, 9.0 s)
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=23543.991
+  2. LLM called run_powerflow()   (1164 in / 15 out tokens, 1.7 s)
+       tool run_powerflow -> case_name="case300", converged=true, total_load_mw=23543.991, total_generation_mw=24006.529, total_loss_mw=462.538, bus_voltages[300], line_flows[345], voltage_violations[75], thermal_violations[25]  [gate pass]
+  3. LLM called run_n1_contingency(top_k=1, criteria="max_violations", max_candidates=0)   (39114 in / 35 out tokens, 6.1 s)
+       tool run_n1_contingency -> N-1 completed over 345 branches. Worst outage: 23-25 (line), V violations=0 (delta=-75), thermal violations=0 (delta=-25).
+  4. LLM replied without tool calls: { "converged": true, "case_name": "case300", "summary": "A full N-1 scan of all 345 branches was completed using maximum violations as the ranking criterion. Th   (42634 in / 638 out tokens, 11.4 s)
+  5. LLM wrote the final answer   (42978 in / 525 out tokens, 7.0 s)
+  Totals: 5 LLM calls, 3 tool calls, 3 tool rounds, 126959 in / 1301 out tokens, $0.2669, 53.4 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> run_n1_contingency()
+  executed: load_case(case_name="case300") -> run_powerflow() -> run_n1_contingency(top_k=1, criteria="max_violations", max_candidates=0)
+  verdict:  EXACT
+
+VERIFICATION GATE  (task-level, on the final answer)
+  V1  converged              pass  residual 0
+  V2  balance                pass  residual 3.64e-12
+  V3  no_isolated_buses      pass  residual 0
+  V4  traceability           pass  residual 0
+  V5  currency               pass  residual 0
+  V6  argument_grounding     pass  every mutating-tool argument traces to the request or a prior tool output
+  V7  claims_from_tools      pass  answer matches the agent's own last solved state
+  V8  request_applied        pass  no network change was made
+  V10 complete_state         pass  the answer declares it cannot complete the request
+  V11 formulation_matches_trace pass  the answer declares it cannot complete the request
+  V9  plausible_state        pass  voltages within 0.8 to 1.2 p.u., losses below 10 % of the load
+  outcome: pass_first after 1 attempt(s)
+
+REPORTING
+  numbers in the answer: 3, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: ESCALATED TO A PERSON
+  computation correct (solved): no   reason: no_state_reported
+  escalation detected via: cannot_answer, abstention_json, declared_inability
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case300-plain-016-s0_run0.json

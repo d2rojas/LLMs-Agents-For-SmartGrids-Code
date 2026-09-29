@@ -1,0 +1,28 @@
+RUN 09  |  case57-multistep-014-s0  |  rule_based  |  no-llm  |  IEEE 57-bus  |  seed 0  |  difficulty multistep
+Request: Load the IEEE 57-bus system, set the active load at bus 43 to 2.1 MW, then rerun the power flow, then report the bus with the lowest voltage magnitude.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 3-step plan: load_case(case_name="case57") -> modify_load(bus_id=43, p_mw=2.1) -> run_powerflow()
+  2. parser called load_case(case_name="case57")
+       tool load_case -> case_name="case57", n_buses=57, n_lines=80, total_load_mw=1275.008
+  3. parser called modify_load(bus_id=43, p_mw=2.1)
+       tool modify_load -> converged=true, total_load_mw=1275.302, total_generation_mw=1306.355, total_loss_mw=31.054  [gate pass]
+  4. parser called run_powerflow()
+       tool run_powerflow -> case_name="case57", converged=true, total_load_mw=1275.302, total_generation_mw=1306.355, total_loss_mw=31.054, bus_voltages[57], line_flows[80], voltage_violations[40], thermal_violations[1]  [gate pass]
+  Totals: 0 LLM calls, 3 tool calls, 1 tool rounds, 0 in / 0 out tokens, $0.0000, 0.9 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case57") -> modify_load(bus_id=43, p_mw=2.1) -> run_powerflow()
+  executed: load_case(case_name="case57") -> modify_load(bus_id=43, p_mw=2.1) -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 327, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1, 2] after modify_load at call 1)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 2.27e-07 p.u., flow MAE 0.0509 MW, KCL mismatch 1.93e-04 MW, power-balance error n/a
+  raw trace: case57-multistep-014-s0_run0.json

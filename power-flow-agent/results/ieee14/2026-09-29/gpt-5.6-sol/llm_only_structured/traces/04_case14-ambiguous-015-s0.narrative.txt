@@ -1,0 +1,23 @@
+RUN 04  |  case14-ambiguous-015-s0  |  llm_only:structured  |  gpt-5.6-sol  |  IEEE 14-bus  |  seed 0  |  difficulty ambiguous
+Request: Load the 14-bus test case (case14) and set the active load at bus 5 to 4.4 MVA.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): {"formulation":[{"tool":"load_case","args":{"case_name":"case14"}},{"tool":"set_active_load","args":{"bus_id":5,"p_mw":4.4}}],"converged":true,"summary":"Loaded case14 and interpreted the requested ac...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 3098 in / 12448 out tokens, $0.1307, 161.6 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> modify_load(bus_id=5, p_mw=4.4)
+  declared: load_case(case_name="case14") -> set_active_load(bus_id=5, p_mw=4.4)   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 108, untraceable: 108 -> traceable answer: no
+  untraceable values: ['1.463722 Mvar', '1.0195 p.u.', '-8.737 degrees', '261.238718 MW', '13.78 MW', '1.06', '0.0', '1.045', '-5.063', '1.01', '-13.11', '1.0174', '-10.301', '1.0195', '-8.737', '1.07', '-14.285', '1.0613', '-13.383', '1.09']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 3.96e-04 p.u., flow MAE 0.0807 MW, KCL mismatch 0.0164 MW, power-balance error n/a
+  raw trace: case14-ambiguous-015-s0_run0.json

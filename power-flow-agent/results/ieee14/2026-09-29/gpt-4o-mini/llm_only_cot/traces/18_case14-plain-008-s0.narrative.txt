@@ -1,0 +1,23 @@
+RUN 18  |  case14-plain-008-s0  |  llm_only:cot  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty plain
+Request: Load case14 and set the active load at bus 2 to 21.7 MW.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): 1. The request refers to bus 2, which is a load bus where the active load is to be set to 21.7 MW. The slack bus is bus 1, which is the external grid. The generator buses are buses 2, 3, 6, and 8. 2. ...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 3265 in / 1564 out tokens, $0.0014, 14.2 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> modify_load(bus_id=2, p_mw=21.7)
+  declared: load_case(case_name="case14") -> set_active_load(bus_id=2, p_mw=21.7) -> run_powerflow()   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 70, untraceable: 70 -> traceable answer: no
+  untraceable values: ['20.917473 MW', '57.74 MW', '57.74 MW', '0.00 MW', '1.06', '0.0', '1.045', '-0.5', '1.01', '-1.0', '1.02', '-2.0', '1.03', '-3.0', '1.07', '-4.0', '1.04', '-5.0', '1.09', '-6.0']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: voltage_error
+  against the reference: voltage MAE 0.0218 p.u., flow MAE 30.192 MW, KCL mismatch 11.8555 MW, power-balance error n/a
+  raw trace: case14-plain-008-s0_run0.json

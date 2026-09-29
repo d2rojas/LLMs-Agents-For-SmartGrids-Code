@@ -1,0 +1,48 @@
+RUN 14  |  case300-parameterized-013-s0  |  pfagent  |  gpt-4o-mini  |  IEEE 300-bus  |  seed 0  |  difficulty parameterized
+Request: Load the 300-bus test case (case300) and disconnect the line between bus 246 and bus 247.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case300"); disconnect_line(from_bus=246, to_bus=247)   (1073 in / 52 out tokens, 1.1 s)
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=23592.428
+       tool disconnect_line -> converged=true, total_load_mw=23592.428, total_generation_mw=24055.667, total_loss_mw=463.239  [gate pass]
+  2. LLM called run_powerflow()   (1326 in / 11 out tokens, 0.8 s)
+       tool run_powerflow -> case_name="case300", converged=true, total_load_mw=23592.428, total_generation_mw=24055.667, total_loss_mw=463.239, bus_voltages[300], line_flows[345], voltage_violations[72], thermal_violations[22]  [gate pass]
+  3. LLM replied without tool calls: ```json { "converged": true, "bus_voltages": [ {"bus_id": 1, "vm_pu": 1.026161, "va_deg": 34.253, "is_violation": false, "violation_type": null}, {"bus_id": 2,    (38946 in / 16384 out tokens, 142.9 s)
+  4. LLM wrote the final answer   (55396 in / 16384 out tokens, 147.1 s)
+  5. LLM called run_powerflow()   (72560 in / 11 out tokens, 2.0 s)
+       tool run_powerflow -> case_name="case300", converged=true, total_load_mw=23592.428, total_generation_mw=24055.667, total_loss_mw=463.239, bus_voltages[300], line_flows[345], voltage_violations[72], thermal_violations[22]  [gate pass]
+  6. LLM replied without tool calls: { "formulation": [ {"tool": "load_case", "args": {"case_name": "case300"}}, {"tool": "disconnect_line", "args": {"from_bus": 246, "to_bus": 247}}, {"tool": "run   (110180 in / 16384 out tokens, 164.5 s)
+  7. LLM wrote the final answer   (1.1 s)
+  Totals: 7 LLM calls, 4 tool calls, 3 tool rounds, 279481 in / 49226 out tokens, $0.0715, 460.2 s
+  Status: llm_error
+  Error: RuntimeError: LLM request failed: BadRequestError: Error code: 400 - {'error': {'message': 'Provider returned error', 'code': 400, 'metadata': {'raw': '{\n  "error": {\n    "message": "This model\'s maximum context length is 128000 tokens. However, you requested 143014 tokens (126630 in the messages, 16384 in the completion). Please reduce the length of the messages or completion.",\n    "type": "invalid_request_error",\n    "param": "messages",\n    "code": "context_length_exceeded"\n  }\n}', 'provider_name': 'OpenAI', 'is_byok': False, 'provider_error_code': 'context_length_exceeded'}}, 'user_id': 'user_3HOeIF7nXlscajtnQLqmvnuJW2c'}
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> disconnect_line(from_bus=246, to_bus=247)
+  executed: load_case(case_name="case300") -> disconnect_line(from_bus=246, to_bus=247) -> run_powerflow() -> run_powerflow()
+  verdict:  n/a (no tool calls in this method)
+
+VERIFICATION GATE  (task-level, on the final answer)
+  V1  converged              pass  residual 0
+  V2  balance                pass  residual 0
+  V3  no_isolated_buses      pass  residual 0
+  V4  traceability           pass  residual 0
+  V5  currency               pass  residual 0
+  V6  argument_grounding     pass  every mutating-tool argument traces to the request or a prior tool output
+  V7  claims_from_tools      pass  answer matches the agent's own last solved state
+  V8  request_applied        pass  every change applied and reflected in the final state
+  V10 complete_state         FAIL  the answer is not the JSON answer object, so it carries no state
+  V11 formulation_matches_trace FAIL  the answer is not the JSON answer object, so it declares no formulation
+  V9  plausible_state        pass  voltages within 0.8 to 1.2 p.u., losses below 10 % of the load
+  outcome: no accepted answer; the run ended with status llm_error (the gate rejected the last candidate answer)
+
+REPORTING
+  numbers in the answer: 0, untraceable: 0 -> traceable answer: n/a
+  stale state quoted: no (re-solved at [1, 2, 3] after disconnect_line at call 1)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: RUN ERROR
+  computation correct (solved): no   reason: run_error
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case300-parameterized-013-s0_run0.json

@@ -1,0 +1,23 @@
+RUN 18  |  case300-plain-008-s0  |  llm_only:structured  |  gpt-4o-mini  |  IEEE 300-bus  |  seed 0  |  difficulty plain
+Request: Load case300 and set the active load at bus 1 to 90 MW.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): { "formulation": [ { "tool": "load_case", "args": { "case_name": "case300" } }, { "tool": "set_active_load", "args": { "bus_id": 1, "p_mw": 90.0 } }, { "tool": "run_powerflow", "args": {} } ], "conver...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 25514 in / 8340 out tokens, $0.0088, 82.9 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> modify_load(bus_id=1, p_mw=90.0)
+  declared: load_case(case_name="case300") -> set_active_load(bus_id=1, p_mw=90.0) -> run_powerflow()   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 608, untraceable: 608 -> traceable answer: no
+  untraceable values: ['0.0 MW', '0.0 MW', '1.02', '0.0', '1.01', '-1.5', '-3.0', '-4.0', '-5.0', '-6.0', '-7.0', '-8.0', '-9.0', '-10.0', '-11.0', '-12.0', '-13.0', '-14.0', '-15.0', '-16.0']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: incomplete_coverage
+  against the reference: voltage MAE 0.029 p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case300-plain-008-s0_run0.json

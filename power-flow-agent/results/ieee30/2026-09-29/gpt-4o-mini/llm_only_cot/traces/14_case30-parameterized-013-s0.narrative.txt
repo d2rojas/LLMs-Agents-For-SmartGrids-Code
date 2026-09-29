@@ -1,0 +1,23 @@
+RUN 14  |  case30-parameterized-013-s0  |  llm_only:cot  |  gpt-4o-mini  |  IEEE 30-bus  |  seed 0  |  difficulty parameterized
+Request: Load case30 and disconnect the line between bus 6 and bus 9.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): To address the request, I will follow these steps: 1. Identify the buses involved in the case30 system. The slack bus is bus 1, and the load buses are buses 2, 3, 4, 7, 8, 10, 12, 14, 15, 16, 17, 18, ...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 4269 in / 2950 out tokens, $0.0024, 26.2 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case30") -> disconnect_line(from_bus=6, to_bus=9)
+  declared: load_case(case_name="case30") -> disconnect_line(from_bus=6, to_bus=9) -> run_powerflow()   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 143, untraceable: 143 -> traceable answer: no
+  untraceable values: ['1.0', '0.0', '1.01', '-2.0', '1.02', '-3.0', '1.03', '-4.0', '1.01', '-1.0', '1.00', '-5.0', '1.02', '-2.5', '1.01', '-1.5', '0.99', '-6.0', '1.00', '-5.5']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: voltage_error
+  against the reference: voltage MAE 0.021 p.u., flow MAE 7.2864 MW, KCL mismatch 10.6198 MW, power-balance error n/a
+  raw trace: case30-parameterized-013-s0_run0.json

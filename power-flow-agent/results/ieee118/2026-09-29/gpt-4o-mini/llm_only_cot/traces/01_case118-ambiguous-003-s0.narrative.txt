@@ -1,0 +1,23 @@
+RUN 01  |  case118-ambiguous-003-s0  |  llm_only:cot  |  gpt-4o-mini  |  IEEE 118-bus  |  seed 0  |  difficulty ambiguous
+Request: Load the IEEE 118-bus system and disconnect the line between bus eleven and bus thirteen.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): 1. The request refers to buses 11 and 13. Bus 11 has a load of 68.49 MW and 22.50 MVar, while bus 13 has a load of 37.17 MW and 17.49 MVar. The slack bus is bus 69, which has an external grid connecte...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 14226 in / 11006 out tokens, $0.0087, 143 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case118") -> disconnect_line(from_bus=11, to_bus=13)
+  declared: load_case(case_name="case118") -> disconnect_line(from_bus=11, to_bus=13) -> run_powerflow()   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 597, untraceable: 597 -> traceable answer: no
+  untraceable values: ['68.49 MW', '22.50 MVar', '37.17 MW', '17.49 MVar', '428.62 MW', '1,200.00 MW', '1,200.00 MW', '0.00 MW', '1.02', '0.0', '1.01', '5.0', '1.00', '10.0', '1.03', '15.0', '1.02', '20.0', '1.01', '25.0']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: voltage_error
+  against the reference: voltage MAE 0.0378 p.u., flow MAE 50.8611 MW, KCL mismatch 56.5975 MW, power-balance error n/a
+  raw trace: case118-ambiguous-003-s0_run0.json

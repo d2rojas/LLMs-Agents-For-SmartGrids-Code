@@ -1,0 +1,29 @@
+RUN 13  |  case14-parameterized-009-s0  |  react_nogate  |  gpt-5.6-sol  |  IEEE 14-bus  |  seed 0  |  difficulty parameterized
+Request: Load the 14-bus test case (case14) and run an N-1 contingency analysis ranked by max violations and report the 3 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case14")   (1083 in / 97 out tokens, 3.3 s)
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=251.353
+  2. LLM called run_powerflow()   (1176 in / 15 out tokens, 1.5 s)
+       tool run_powerflow -> case_name="case14", converged=true, total_load_mw=251.353, total_generation_mw=263.591, total_loss_mw=12.239, bus_voltages[14], line_flows[20], voltage_violations[9], thermal_violations[0]  [gate pass]
+  3. LLM called run_n1_contingency(top_k=3, criteria="max_violations", max_candidates=0)   (3479 in / 35 out tokens, 2.1 s)
+       tool run_n1_contingency -> N-1 completed over 20 branches. Worst outage: 5-6 (trafo), V violations=9 (delta=0), thermal violations=9 (delta=9).
+  4. LLM replied without tool calls: { "case_name": "case14", "converged": true, "summary": "N-1 analysis completed over all 20 branches and ranked by maximum violations. The worst contingency is t   (8404 in / 805 out tokens, 8.8 s)
+  5. LLM wrote the final answer   (9032 in / 2178 out tokens, 14.9 s)
+  Totals: 5 LLM calls, 3 tool calls, 3 tool rounds, 23174 in / 3130 out tokens, $0.0776, 32.5 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> run_n1_contingency(top_k=3, criteria="max_violations")
+  executed: load_case(case_name="case14") -> run_powerflow() -> run_n1_contingency(top_k=3, criteria="max_violations", max_candidates=0)
+  verdict:  NOT EXACT (missed_step): the formulation declared in the answer omits run_n1_contingency, which the request needs and which the trace shows the method did run
+
+REPORTING
+  numbers in the answer: 87, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: formulation
+  against the reference: voltage MAE 1.38e-07 p.u., flow MAE 2.85e-04 MW, KCL mismatch 1.86e-04 MW, power-balance error n/a
+  raw trace: case14-parameterized-009-s0_run0.json

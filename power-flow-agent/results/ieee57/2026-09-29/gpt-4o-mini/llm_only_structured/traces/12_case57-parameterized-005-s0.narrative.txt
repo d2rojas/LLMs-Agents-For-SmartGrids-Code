@@ -1,0 +1,23 @@
+RUN 12  |  case57-parameterized-005-s0  |  llm_only:structured  |  gpt-4o-mini  |  IEEE 57-bus  |  seed 0  |  difficulty parameterized
+Request: Load the 57-bus test case (case57) and set the active load at bus 12 to 336.9 MW.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): { "formulation": [ {"tool": "load_case", "args": {"case_name": "case57"}}, {"tool": "set_active_load", "args": {"bus_id": 12, "p_mw": 336.9}}, {"tool": "run_powerflow", "args": {}} ], "converged": tru...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 6681 in / 1765 out tokens, $0.0021, 14.8 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case57") -> modify_load(bus_id=12, p_mw=336.9)
+  declared: load_case(case_name="case57") -> set_active_load(bus_id=12, p_mw=336.9) -> run_powerflow()   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 122, untraceable: 122 -> traceable answer: no
+  untraceable values: ['0.0 MW', '1,052.0 MW', '0.0 MW', '1.04', '0.0', '1.01', '-1.5', '0.99', '-3.0', '0.98', '-5.0', '0.97', '-7.0', '0.96', '-9.0', '0.95', '-11.0', '0.94', '-13.0', '0.93']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: voltage_error
+  against the reference: voltage MAE 0.1615 p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case57-parameterized-005-s0_run0.json

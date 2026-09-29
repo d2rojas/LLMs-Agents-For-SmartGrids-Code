@@ -1,0 +1,30 @@
+RUN 11  |  case300-parameterized-001-s0  |  react_nogate  |  gpt-5.6-sol  |  IEEE 300-bus  |  seed 0  |  difficulty parameterized
+Request: Load the IEEE 300-bus system and run an N-1 contingency analysis ranked by min voltage and report the 3 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case300")   (1079 in / 55 out tokens, 2.5 s)
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=23557.276
+  2. LLM called run_powerflow()   (1174 in / 15 out tokens, 1.6 s)
+       tool run_powerflow -> case_name="case300", converged=true, total_load_mw=23557.276, total_generation_mw=23969.735, total_loss_mw=412.459, bus_voltages[300], line_flows[345], voltage_violations[74], thermal_violations[10]  [gate pass]
+  3. LLM called run_n1_contingency(top_k=3, criteria="min_voltage", max_candidates=0)   (38187 in / 33 out tokens, 9.8 s)
+       tool run_n1_contingency -> N-1 completed over 345 branches. Worst outage: 23-25 (line), V violations=0 (delta=-74), thermal violations=0 (delta=-10).
+  4. LLM replied without tool calls: { "case_name": "case300", "converged": true, "summary": "The base-case AC power flow converged. All 345 branches were scanned. Ranking was interpreted as priori   (43003 in / 691 out tokens, 9.9 s)
+  5. LLM wrote the final answer   (43482 in / 510 out tokens, 7.4 s)
+  Totals: 5 LLM calls, 3 tool calls, 3 tool rounds, 126925 in / 1304 out tokens, $0.2669, 69.5 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> run_n1_contingency(top_k=3, criteria="min_voltage")
+  executed: load_case(case_name="case300") -> run_powerflow() -> run_n1_contingency(top_k=3, criteria="min_voltage", max_candidates=0)
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 3, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: ESCALATED TO A PERSON
+  computation correct (solved): no   reason: no_state_reported
+  escalation detected via: cannot_answer, abstention_json, declared_inability
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case300-parameterized-001-s0_run0.json

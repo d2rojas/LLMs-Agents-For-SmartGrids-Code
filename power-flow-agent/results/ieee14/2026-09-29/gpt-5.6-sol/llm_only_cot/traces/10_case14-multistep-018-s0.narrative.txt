@@ -1,0 +1,23 @@
+RUN 10  |  case14-multistep-018-s0  |  llm_only:cot  |  gpt-5.6-sol  |  IEEE 14-bus  |  seed 0  |  difficulty multistep
+Request: Load the IEEE 14-bus system, disconnect the line between bus 4 and bus 5, then rerun the power flow, then list every line whose loading is above 90%.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): {"formulation":[{"tool":"load_case","args":{"case_name":"case14"}},{"tool":"run_powerflow","args":{}},{"tool":"disconnect_line","args":{"from_bus":4,"to_bus":5}}],"converged":true,"summary":"The IEEE ...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 3284 in / 12881 out tokens, $0.1354, 183.9 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> disconnect_line(from_bus=4, to_bus=5) -> run_powerflow()
+  declared: load_case(case_name="case14") -> run_powerflow() -> disconnect_line(from_bus=4, to_bus=5)   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 93, untraceable: 93 -> traceable answer: no
+  untraceable values: ['97.3%', '129.4%', '182.0%', '100.4%', '110.4%', '139.6%', '129.2%', '102.2%', '148.5%', '1.06', '0.0', '1.045', '-5.63', '1.01', '-15.23', '1.0143', '-14.45', '1.0423', '-6.82', '1.07']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: voltage_error
+  against the reference: voltage MAE 0.0111 p.u., flow MAE 1.0484 MW, KCL mismatch 0.3117 MW, power-balance error n/a
+  raw trace: case14-multistep-018-s0_run0.json

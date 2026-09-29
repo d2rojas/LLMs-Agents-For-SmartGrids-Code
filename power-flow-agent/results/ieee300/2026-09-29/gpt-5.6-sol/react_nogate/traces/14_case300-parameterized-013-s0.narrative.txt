@@ -1,0 +1,29 @@
+RUN 14  |  case300-parameterized-013-s0  |  react_nogate  |  gpt-5.6-sol  |  IEEE 300-bus  |  seed 0  |  difficulty parameterized
+Request: Load the 300-bus test case (case300) and disconnect the line between bus 246 and bus 247.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case300")   (1076 in / 75 out tokens, 3.0 s)
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=23592.428
+  2. LLM called disconnect_line(from_bus=246, to_bus=247)   (1171 in / 24 out tokens, 1.7 s)
+       tool disconnect_line -> converged=true, total_load_mw=23592.428, total_generation_mw=24055.667, total_loss_mw=463.239  [gate pass]
+  3. LLM called run_powerflow()   (1332 in / 15 out tokens, 1.6 s)
+       tool run_powerflow -> case_name="case300", converged=true, total_load_mw=23592.428, total_generation_mw=24055.667, total_loss_mw=463.239, bus_voltages[300], line_flows[345], voltage_violations[73], thermal_violations[22]  [gate pass]
+  4. LLM replied without tool calls: { "summary": "Loaded IEEE case300, disconnected the branch between buses 246 and 247, and solved the resulting network state.", "converged": true, "cannot_answe   (39005 in / 537 out tokens, 7.2 s)
+  5. LLM wrote the final answer   (39371 in / 2640 out tokens, 24.0 s)
+  Totals: 5 LLM calls, 3 tool calls, 3 tool rounds, 81955 in / 3291 out tokens, $0.1968, 38.5 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> disconnect_line(from_bus=246, to_bus=247)
+  executed: load_case(case_name="case300") -> disconnect_line(from_bus=246, to_bus=247) -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 107, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1, 2] after disconnect_line at call 1)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: incomplete_coverage
+  against the reference: voltage MAE 1.71e-07 p.u., flow MAE 0 MW, KCL mismatch 0 MW, power-balance error n/a
+  raw trace: case300-parameterized-013-s0_run0.json

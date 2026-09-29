@@ -1,0 +1,32 @@
+RUN 07  |  case30-multistep-006-s0  |  rule_based  |  no-llm  |  IEEE 30-bus  |  seed 0  |  difficulty multistep
+Request: Load the 30-bus test case (case30), set the active load at bus 8 to 26.8 MW, disconnect the line between bus 10 and bus 17, reconnect the line between bus 10 and bus 17, and finally rerun the power flow, then list every line whose loading is above 80%.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 5-step plan: load_case(case_name="case30") -> modify_load(bus_id=8, p_mw=26.8) -> disconnect_line(from_bus=10, to_bus=17) -> reconnect_line(from_bus=10, to_bus=17) -> run_powerflow()
+  2. parser called load_case(case_name="case30")
+       tool load_case -> case_name="case30", n_buses=30, n_lines=41, total_load_mw=194.602
+  3. parser called modify_load(bus_id=8, p_mw=26.8)
+       tool modify_load -> converged=true, total_load_mw=188.905, total_generation_mw=191.35, total_loss_mw=2.445  [gate pass]
+  4. parser called disconnect_line(from_bus=10, to_bus=17)
+       tool disconnect_line -> converged=true, total_load_mw=188.905, total_generation_mw=191.453, total_loss_mw=2.549  [gate pass]
+  5. parser called reconnect_line(from_bus=10, to_bus=17)
+       tool reconnect_line -> converged=true, total_load_mw=188.905, total_generation_mw=191.35, total_loss_mw=2.445  [gate pass]
+  6. parser called run_powerflow()
+       tool run_powerflow -> case_name="case30", converged=true, total_load_mw=188.905, total_generation_mw=191.35, total_loss_mw=2.445, bus_voltages[30], line_flows[41], voltage_violations[0], thermal_violations[1]  [gate pass]
+  Totals: 0 LLM calls, 5 tool calls, 1 tool rounds, 0 in / 0 out tokens, $0.0000, 0.7 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case30") -> modify_load(bus_id=8, p_mw=26.8) -> disconnect_line(from_bus=10, to_bus=17) -> reconnect_line(from_bus=10, to_bus=17) -> run_powerflow()
+  executed: load_case(case_name="case30") -> modify_load(bus_id=8, p_mw=26.8) -> disconnect_line(from_bus=10, to_bus=17) -> reconnect_line(from_bus=10, to_bus=17) -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 182, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [3, 4] after reconnect_line at call 3)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 1.49e-07 p.u., flow MAE 2.60e-04 MW, KCL mismatch 1.92e-04 MW, power-balance error n/a
+  raw trace: case30-multistep-006-s0_run0.json

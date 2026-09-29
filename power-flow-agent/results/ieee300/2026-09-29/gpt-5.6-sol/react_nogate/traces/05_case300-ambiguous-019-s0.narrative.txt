@@ -1,0 +1,29 @@
+RUN 05  |  case300-ambiguous-019-s0  |  react_nogate  |  gpt-5.6-sol  |  IEEE 300-bus  |  seed 0  |  difficulty ambiguous
+Request: Load the 300-bus test case (case300) and disconnect the line between bus 172 and bus 173 (1-based).
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case300")   (1079 in / 58 out tokens, 3.0 s)
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=23867.898
+  2. LLM called disconnect_line(from_bus=172, to_bus=173)   (1174 in / 24 out tokens, 1.1 s)
+       tool disconnect_line -> converged=true, total_load_mw=23867.898, total_generation_mw=24335.136, total_loss_mw=467.238  [gate pass]
+  3. LLM called run_powerflow()   (1335 in / 15 out tokens, 603.9 s)
+       tool run_powerflow -> case_name="case300", converged=true, total_load_mw=23867.898, total_generation_mw=24335.136, total_loss_mw=467.238, bus_voltages[300], line_flows[345], voltage_violations[78], thermal_violations[17]  [gate pass]
+  4. LLM replied without tool calls: { "summary": "Loaded case300 and disconnected the branch between MATPOWER buses 172 and 173 using the requested 1-based bus identifiers. The post-change AC powe   (38957 in / 551 out tokens, 7.0 s)
+  5. LLM wrote the final answer   (39388 in / 19494 out tokens, 112.9 s)
+  Totals: 5 LLM calls, 3 tool calls, 3 tool rounds, 81933 in / 20142 out tokens, $0.3653, 728.8 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> disconnect_line(from_bus=172, to_bus=173)
+  executed: load_case(case_name="case300") -> disconnect_line(from_bus=172, to_bus=173) -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 1391, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1, 2] after disconnect_line at call 1)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 1.85e-07 p.u., flow MAE 2.46e-04 MW, KCL mismatch 1.71e-04 MW, power-balance error n/a
+  raw trace: case300-ambiguous-019-s0_run0.json

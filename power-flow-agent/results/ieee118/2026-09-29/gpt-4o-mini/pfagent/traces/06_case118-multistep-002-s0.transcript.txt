@@ -1,0 +1,599 @@
+==============================================================================
+TRANSCRIPT  pfagent  |  openrouter:openai/gpt-4o-mini  |  case118  |  case118-multistep-002-s0  run 0
+==============================================================================
+date: 2026-09-29   seed: 0   difficulty: multistep   tool variant: load_split
+
+[system]   (hash 43ef7eaadb12, from methods/pfagent/method.json prompt_files)
+You are a power system power-flow analysis assistant. You help the user complete power system analysis tasks from natural-language requests.
+
+## What you can do
+You complete tasks by calling tool functions:
+1. Load an IEEE standard test system (14, 30, 57, 118, 300 buses)
+2. Run AC power flow
+3. Modify the load at a bus and re-solve
+4. Disconnect or reconnect a line and re-solve
+5. Query the network status
+6. Run an N-1 contingency analysis (disconnect branches one at a time and rank the worst cases)
+7. Generate remedial-action suggestions (what-if load shedding or voltage adjustment) to reduce violation risk
+
+## Rules
+- Never fabricate a numerical result. Every voltage, power, loss, or loading value you report must come from a solver output (tool-using methods) or from your own explicit computation on the data given (methods without tools).
+- If the request is ambiguous, state the interpretation you are using in `summary`.
+- Bus and line identifiers in the request are MATPOWER 1-based ids; use them as given, unless the request itself states a different indexing convention for that identifier (e.g. "(0-based)"), in which case convert it to the MATPOWER 1-based id.
+- If you cannot complete the request, say so: set `converged` to false, leave the result arrays empty, and explain why in `cannot_answer`. Do not guess.
+- Always reply in English, and only with the JSON object described under Output.
+- Tools that change the network (loads, lines, remedial actions) return only a confirmation of the change, never the state. Every answer reports a state, taken from a run_powerflow output: call run_powerflow after the last change (or on the base case, for a contingency scan) and copy that state into the answer; do not report values from before a change.
+- If a tool reports an error or a non-converged power flow, say so explicitly and do not report numbers for that state.
+
+## Output
+When the task is complete, reply with the JSON object described in the final-answer instruction, filled from the tool outputs of the last solve.
+
+[user]   (complete message, stored at run time)
+Load case118, disconnect the line between bus 104 and bus 105, disconnect the line between bus 47 and bus 69, and finally run an N-1 contingency analysis ranked by min voltage and report the 8 worst outages.
+
+[tools available to the model]   (function-calling schema, --tool-variant load_split; enum values and defaults as sent)
+  load_case(case_name: string* in {case14, case30, case57, case118, case300})  Load IEEE test case.
+  run_powerflow()  Run power flow on current case.
+  disconnect_line(from_bus: integer*, to_bus: integer*)  Disconnect line/branch between two buses and recompute.
+  reconnect_line(from_bus: integer*, to_bus: integer*)  Reconnect line/branch between two buses and recompute.
+  get_most_loaded_branch()  Get most loaded branch.
+  run_n1_contingency(top_k: integer (default 5), criteria: string in {max_violations, max_overload, min_voltage} (default max_violations), max_candidates: integer (default 0))  Run N-1 contingency analysis.
+  recommend_remedial_actions(max_actions: integer (default 5), allow_load_shed: boolean (default True), allow_voltage_control: boolean (default True), include_best_comparison: boolean (default True))  Recommend remedial actions.
+  apply_remedial_action(action_index: integer*, confirmed: boolean (default False))  Apply one remedial action by index.
+  get_status()  Get current network status.
+  generate_plot(plot_type: string* in {voltage_heatmap, flow_diagram, violation_overview, comparison})  Generate one plot.
+  set_active_load(bus_id: integer*, p_mw: number*)  Set a bus's active load (MW) and recompute. Use this when the request states only an active-power value. This tool has no reactive-power argument: the bus's present reactive load is always left unchanged. If the request also states a reactive-power value, use set_load instead.
+  set_load(bus_id: integer*, p_mw: number*, q_mvar: number*)  Set a bus's active and reactive load (MW, Mvar) and recompute. Use this only when the request states both values. If the request states only an active-power value, use set_active_load instead -- do not invent a reactive-power value here to fill this in.
+
+--- round 1 ---
+[assistant]   (1097 in / 72 out tokens, 1.2 s)
+(no text)
+tool_call  load_case(case_name="case118")
+tool_call  disconnect_line(from_bus=104, to_bus=105)
+tool_call  disconnect_line(from_bus=47, to_bus=69)
+[tool load_case]   (gate: not applied)
+{"case_name": "case118", "n_buses": 118, "n_generators": 54, "n_lines": 184, "n_loads": 99, "total_load_mw": 4290.775, "total_gen_capacity_mw": 9966.2}
+[tool disconnect_line]   (gate: pass)
+{"applied": {"tool": "disconnect_line", "from_bus": 104, "to_bus": 105, "in_service": false}, "converged": true, "total_generation_mw": 4429.251, "total_load_mw": 4290.775, "total_loss_mw": 138.476, "n_voltage_violations": 3, "n_thermal_violations": 3, "note": "Change applied and the network re-solved. Call run_powerflow to get the bus voltages and branch flows of the new state."}
+[tool disconnect_line]   (gate: pass)
+{"applied": {"tool": "disconnect_line", "from_bus": 47, "to_bus": 69, "in_service": false}, "converged": true, "total_generation_mw": 4430.119, "total_load_mw": 4290.775, "total_loss_mw": 139.344, "n_voltage_violations": 5, "n_thermal_violations": 5, "note": "Change applied and the network re-solved. Call run_powerflow to get the bus voltages and branch flows of the new state."}
+
+--- round 2 ---
+[assistant]   (1496 in / 24 out tokens, 1.0 s)
+(no text)
+tool_call  run_n1_contingency(top_k=8, criteria="min_voltage")
+[tool run_n1_contingency]   (gate: not applied)
+{"plot_type": "n1_ranking", "figure_json": "<plotly figure, 16 KB, omitted; see the .json trace>", "n1_report": {"case_name": "case118", "base_converged": true, "top_k": 8, "criteria": "min_voltage", "results": [{"branch_id": 7, "branch_type": "line", "from_bus": 9, "to_bus": 10, "converged": true, "n_voltage_violations": 5, "n_thermal_violations": 51, "delta_voltage_violations": 0, "delta_thermal_violations": 46, "worst_vm_pu": 0.937447, "worst_loading_percent": 1084.8387, "score": 1635464.2155, "notes": ""}, {"branch_id": 6, "branch_type": "line", "from_bus": 8, "to_bus": 9, "converged": true, "n_voltage_violations": 5, "n_thermal_violations": 51, "delta_voltage_violations": 0, "delta_thermal_violations": 46, "worst_vm_pu": 0.937456, "worst_loading_percent": 1084.6267, "score": 1635252.1469, "notes": ""}, {"branch_id": 100000, "branch_type": "trafo", "from_bus": 8, "to_bus": 5, "converged": true, "n_voltage_violations": 3, "n_thermal_violations": 32, "delta_voltage_violations": -2, "delta_thermal_violations": 27, "worst_vm_pu": 0.943, "worst_loading_percent": 567.1488, "score": 907718.7863, "notes": ""}, {"branch_id": 100003, "branch_type": "trafo", "from_bus": 38, "to_bus": 37, "converged": true, "n_voltage_violations": 3, "n_thermal_violations": 37, "delta_voltage_violations": -2, "delta_thermal_violations": 32, "worst_vm_pu": 0.943, "worst_loading_percent": 333.5016, "score": 724071.5946, "notes": ""}, {"branch_id": 89, "branch_type": "line", "from_bus": 38, "to_bus": 65, "converged": true, "n_voltage_violations": 6, "n_thermal_violations": 37, "delta_voltage_violations": 1, "delta_thermal_violations": 32, "worst_vm_pu": 0.943, "worst_loading_percent": 246.9793, "score": 667549.3255, "notes": ""}, {"branch_id": 88, "branch_type": "line", "from_bus": 63, "to_bus": 64, "converged": true, "n_voltage_violations": 5, "n_thermal_violations": 20, "delta_voltage_violations": 0, "delta_thermal_violations": 15, "worst_vm_pu": 0.943, "worst_loading_percent": 376.1922, "score": 616762.1742, "notes": ""}, {"branch_id": 100004, "branch_type": "trafo", "from_bus": 63, "to_bus": 59, "converged": true, "n_voltage_violations": 4, "n_thermal_violations": 20, "delta_voltage_violations": -1, "delta_thermal_violations": 15, "worst_vm_pu": 0.943, "worst_loading_percent": 385.2635, "score": 615833.4782, "notes": ""}, {"branch_id": 34, "branch_type": "line", "from_bus": 26, "to_bus": 30, "converged": true, "n_voltage_violations": 6, "n_thermal_violations": 25, "delta_voltage_violations": 1, "delta_thermal_violations": 20, "worst_vm_pu": 0.939977, "worst_loading_percent": 273.1075, "score": 573707.7734, "notes": ""}], "summary_text": "N-1 completed over 182 branches. Worst outage: 9-10 (line), V violations=5 (delta=0), thermal violations=51 (delta=46)."}}
+
+--- round 3 ---
+[assistant]   (9853 in / 1178 out tokens, 8.8 s)
+```json
+{
+  "converged": true,
+  "n1_results": [
+    {
+      "branch_id": 7,
+      "branch_type": "line",
+      "from_bus": 9,
+      "to_bus": 10,
+      "converged": true,
+      "n_voltage_violations": 5,
+      "n_thermal_violations": 51,
+      "delta_voltage_violations": 0,
+      "delta_thermal_violations": 46,
+      "worst_vm_pu": 0.937447,
+      "worst_loading_percent": 1084.8387,
+      "score": 1635464.2155,
+      "notes": ""
+    },
+    {
+      "branch_id": 6,
+      "branch_type": "line",
+      "from_bus": 8,
+      "to_bus": 9,
+      "converged": true,
+      "n_voltage_violations": 5,
+      "n_thermal_violations": 51,
+      "delta_voltage_violations": 0,
+      "delta_thermal_violations": 46,
+      "worst_vm_pu": 0.937456,
+      "worst_loading_percent": 1084.6267,
+      "score": 1635252.1469,
+      "notes": ""
+    },
+    {
+      "branch_id": 100000,
+      "branch_type": "trafo",
+      "from_bus": 8,
+      "to_bus": 5,
+      "converged": true,
+      "n_voltage_violations": 3,
+      "n_thermal_violations": 32,
+      "delta_voltage_violations": -2,
+      "delta_thermal_violations": 27,
+      "worst_vm_pu": 0.943,
+      "worst_loading_percent": 567.1488,
+      "score": 907718.7863,
+      "notes": ""
+    },
+    {
+      "branch_id": 100003,
+      "branch_type": "trafo",
+      "from_bus": 38,
+      "to_bus": 37,
+      "converged": true,
+      "n_voltage_violations": 3,
+      "n_thermal_violations": 37,
+      "delta_voltage_violations": -2,
+      "delta_thermal_violations": 32,
+      "worst_vm_pu": 0.943,
+      "worst_loading_percent": 333.5016,
+      "score": 724071.5946,
+      "notes": ""
+    },
+    {
+      "branch_id": 89,
+      "branch_type": "line",
+      "from_bus": 38,
+      "to_bus": 65,
+      "converged": true,
+      "n_voltage_violations": 6,
+      "n_thermal_violations": 37,
+      "delta_voltage_violations": 1,
+      "delta_thermal_violations": 32,
+      "worst_vm_pu": 0.943,
+      "worst_loading_percent": 246.9793,
+      "score": 667549.3255,
+      "notes": ""
+    },
+    {
+      "branch_id": 88,
+      "branch_type": "line",
+      "from_bus": 63,
+      "to_bus": 64,
+      "converged": true,
+      "n_voltage_violations": 5,
+      "n_thermal_violations": 20,
+      "delta_voltage_violations": 0,
+      "delta_thermal_violations": 15,
+      "worst_vm_pu": 0.943,
+      "worst_loading_percent": 376.1922,
+      "score": 616762.1742,
+      "notes": ""
+    },
+    {
+      "branch_id": 100004,
+      "branch_type": "trafo",
+      "from_bus": 63,
+      "to_bus": 59,
+      "converged": true,
+      "n_voltage_violations": 4,
+      "n_thermal_violations": 20,
+      "delta_voltage_violations": -1,
+      "delta_thermal_violations": 15,
+      "worst_vm_pu": 0.943,
+      "worst_loading_percent": 385.2635,
+      "score": 615833.4782,
+      "notes": ""
+    },
+    {
+      "branch_id": 34,
+      "branch_type": "line",
+      "from_bus": 26,
+      "to_bus": 30,
+      "converged": true,
+      "n_voltage_violations": 6,
+      "n_thermal_violations": 25,
+      "delta_voltage_violations": 1,
+      "delta_thermal_violations": 20,
+      "worst_vm_pu": 0.939977,
+      "worst_loading_percent": 273.1075,
+      "score": 573707.7734,
+      "notes": ""
+    }
+  ],
+  "summary": {
+    "case_name": "case118",
+    "base_converged": true,
+    "top_k": 8,
+    "criteria": "min_voltage",
+    "summary_text": "N-1 completed over 182 branches. Worst outage: 9-10 (line), V violations=5 (delta=0), thermal violations=51 (delta=46)."
+  }
+}
+```
+
+--- round 3 ---
+[assistant final]   (11097 in / 249 out tokens, 2.8 s)
+{
+  "formulation": [
+    {"tool": "load_case", "args": {"case_name": "case118"}},
+    {"tool": "disconnect_line", "args": {"from_bus": 104, "to_bus": 105}},
+    {"tool": "disconnect_line", "args": {"from_bus": 47, "to_bus": 69}},
+    {"tool": "run_n1_contingency", "args": {"top_k": 8, "criteria": "min_voltage"}}
+  ],
+  "converged": true,
+  "summary": "N-1 contingency analysis completed for the modified case118 network.",
+  "answer": "Worst outage: line 9-10, 5 voltage violations",
+  "bus_voltages": [],
+  "line_flows": [],
+  "total_generation_mw": 4430.119,
+  "total_load_mw": 4290.775,
+  "total_loss_mw": 139.344,
+  "violations": {
+    "voltage": [],
+    "thermal": []
+  },
+  "next_step": "Consider load shedding or voltage adjustments to mitigate violations.",
+  "cannot_answer": null
+}
+
+--- round 3 ---
+[assistant]   (12118 in / 11 out tokens, 0.8 s)
+(no text)
+tool_call  run_powerflow()
+[tool run_powerflow]   (gate: pass)
+{"case_name": "case118", "converged": true, "bus_voltages": [{"bus_id": 1, "vm_pu": 0.955, "va_deg": 11.035, "is_violation": false, "violation_type": null}, {"bus_id": 2, "vm_pu": 0.971562, "va_deg": 11.689, "is_violation": false, "violation_type": null}, {"bus_id": 3, "vm_pu": 0.96788, "va_deg": 12.0, "is_violation": false, "violation_type": null}, {"bus_id": 4, "vm_pu": 0.998, "va_deg": 15.787, "is_violation": false, "violation_type": null}, {"bus_id": 5, "vm_pu": 1.001999, "va_deg": 16.227, "is_violation": false, "violation_type": null}, {"bus_id": 6, "vm_pu": 0.99, "va_deg": 13.447, "is_violation": false, "violation_type": null}, {"bus_id": 7, "vm_pu": 0.989275, "va_deg": 13.021, "is_violation": false, "violation_type": null}, {"bus_id": 8, "vm_pu": 1.015, "va_deg": 21.265, "is_violation": false, "violation_type": null}, {"bus_id": 9, "vm_pu": 1.042307, "va_deg": 28.77, "is_violation": false, "violation_type": null}, {"bus_id": 10, "vm_pu": 1.05, "va_deg": 36.607, "is_violation": false, "violation_type": null}, {"bus_id": 11, "vm_pu": 0.985167, "va_deg": 13.223, "is_violation": false, "violation_type": null}, {"bus_id": 12, "vm_pu": 0.99, "va_deg": 12.714, "is_violation": false, "violation_type": null}, {"bus_id": 13, "vm_pu": 0.969446, "va_deg": 11.888, "is_violation": false, "violation_type": null}, {"bus_id": 14, "vm_pu": 0.983505, "va_deg": 11.951, "is_violation": false, "violation_type": null}, {"bus_id": 15, "vm_pu": 0.97, "va_deg": 11.57, "is_violation": false, "violation_type": null}, {"bus_id": 16, "vm_pu": 0.983559, "va_deg": 12.313, "is_violation": false, "violation_type": null}, {"bus_id": 17, "vm_pu": 0.995033, "va_deg": 13.99, "is_violation": false, "violation_type": null}, {"bus_id": 18, "vm_pu": 0.973, "va_deg": 11.906, "is_violation": false, "violation_type": null}, {"bus_id": 19, "vm_pu": 0.962, "va_deg": 11.383, "is_violation": false, "violation_type": null}, {"bus_id": 20, "vm_pu": 0.955883, "va_deg": 12.062, "is_violation": false, "violation_type": null}, {"bus_id": 21, "vm_pu": 0.956458, "va_deg": 13.598, "is_violation": false, "violation_type": null}, {"bus_id": 22, "vm_pu": 0.968214, "va_deg": 16.143, "is_violation": false, "violation_type": null}, {"bus_id": 23, "vm_pu": 0.999493, "va_deg": 21.049, "is_violation": false, "violation_type": null}, {"bus_id": 24, "vm_pu": 0.992, "va_deg": 20.904, "is_violation": false, "violation_type": null}, {"bus_id": 25, "vm_pu": 1.05, "va_deg": 27.912, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 26, "vm_pu": 1.015, "va_deg": 29.306, "is_violation": false, "violation_type": null}, {"bus_id": 27, "vm_pu": 0.968, "va_deg": 15.338, "is_violation": false, "violation_type": null}, {"bus_id": 28, "vm_pu": 0.961232, "va_deg": 13.641, "is_violation": false, "violation_type": null}, {"bus_id": 29, "vm_pu": 0.963256, "va_deg": 12.742, "is_violation": false, "violation_type": null}, {"bus_id": 30, "vm_pu": 0.985582, "va_deg": 18.901, "is_violation": false, "violation_type": null}, {"bus_id": 31, "vm_pu": 0.967, "va_deg": 12.868, "is_violation": false, "violation_type": null}, {"bus_id": 32, "vm_pu": 0.963, "va_deg": 14.944, "is_violation": false, "violation_type": null}, {"bus_id": 33, "vm_pu": 0.969967, "va_deg": 10.58, "is_violation": false, "violation_type": null}, {"bus_id": 34, "vm_pu": 0.984, "va_deg": 10.953, "is_violation": false, "violation_type": null}, {"bus_id": 35, "vm_pu": 0.980462, "va_deg": 10.535, "is_violation": false, "violation_type": null}, {"bus_id": 36, "vm_pu": 0.98, "va_deg": 10.538, "is_violation": false, "violation_type": null}, {"bus_id": 37, "vm_pu": 0.990676, "va_deg": 11.43, "is_violation": false, "violation_type": null}, {"bus_id": 38, "vm_pu": 0.961145, "va_deg": 16.715, "is_violation": false, "violation_type": null}, {"bus_id": 39, "vm_pu": 0.970192, "va_deg": 7.831, "is_violation": false, "violation_type": null}, {"bus_id": 40, "vm_pu": 0.97, "va_deg": 6.589, "is_violation": false, "violation_type": null}, {"bus_id": 41, "vm_pu": 0.966254, "va_deg": 5.963, "is_violation": false, "violation_type": null}, {"bus_id": 42, "vm_pu": 0.985, "va_deg": 7.277, "is_violation": false, "violation_type": null}, {"bus_id": 43, "vm_pu": 0.977456, "va_deg": 10.363, "is_violation": false, "violation_type": null}, {"bus_id": 44, "vm_pu": 0.982641, "va_deg": 11.89, "is_violation": false, "violation_type": null}, {"bus_id": 45, "vm_pu": 0.984284, "va_deg": 13.43, "is_violation": false, "violation_type": null}, {"bus_id": 46, "vm_pu": 1.005, "va_deg": 15.741, "is_violation": false, "violation_type": null}, {"bus_id": 47, "vm_pu": 1.014358, "va_deg": 17.191, "is_violation": false, "violation_type": null}, {"bus_id": 48, "vm_pu": 1.020108, "va_deg": 17.926, "is_violation": false, "violation_type": null}, {"bus_id": 49, "vm_pu": 1.025, "va_deg": 19.144, "is_violation": false, "violation_type": null}, {"bus_id": 50, "vm_pu": 1.000626, "va_deg": 17.08, "is_violation": false, "violation_type": null}, {"bus_id": 51, "vm_pu": 0.965919, "va_deg": 14.471, "is_violation": false, "violation_type": null}, {"bus_id": 52, "vm_pu": 0.955741, "va_deg": 13.515, "is_violation": false, "violation_type": null}, {"bus_id": 53, "vm_pu": 0.944311, "va_deg": 12.502, "is_violation": true, "violation_type": "undervoltage"}, {"bus_id": 54, "vm_pu": 0.955, "va_deg": 13.543, "is_violation": false, "violation_type": null}, {"bus_id": 55, "vm_pu": 0.952, "va_deg": 13.286, "is_violation": false, "violation_type": null}, {"bus_id": 56, "vm_pu": 0.954, "va_deg": 13.445, "is_violation": false, "violation_type": null}, {"bus_id": 57, "vm_pu": 0.970579, "va_deg": 14.619, "is_violation": false, "violation_type": null}, {"bus_id": 58, "vm_pu": 0.958479, "va_deg": 13.737, "is_violation": false, "violation_type": null}, {"bus_id": 59, "vm_pu": 0.985, "va_deg": 18.104, "is_violation": false, "violation_type": null}, {"bus_id": 60, "vm_pu": 0.993185, "va_deg": 22.361, "is_violation": false, "violation_type": null}, {"bus_id": 61, "vm_pu": 0.995, "va_deg": 23.27, "is_violation": false, "violation_type": null}, {"bus_id": 62, "vm_pu": 0.998, "va_deg": 22.659, "is_violation": false, "violation_type": null}, {"bus_id": 63, "vm_pu": 0.968076, "va_deg": 21.835, "is_violation": false, "violation_type": null}, {"bus_id": 64, "vm_pu": 0.983298, "va_deg": 23.793, "is_violation": false, "violation_type": null}, {"bus_id": 65, "vm_pu": 1.005, "va_deg": 27.258, "is_violation": false, "violation_type": null}, {"bus_id": 66, "vm_pu": 1.05, "va_deg": 26.717, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 67, "vm_pu": 1.020381, "va_deg": 24.152, "is_violation": false, "violation_type": null}, {"bus_id": 68, "vm_pu": 1.003271, "va_deg": 27.535, "is_violation": false, "violation_type": null}, {"bus_id": 69, "vm_pu": 1.035, "va_deg": 30.0, "is_violation": false, "violation_type": null}, {"bus_id": 70, "vm_pu": 0.984, "va_deg": 22.509, "is_violation": false, "violation_type": null}, {"bus_id": 71, "vm_pu": 0.986844, "va_deg": 22.084, "is_violation": false, "violation_type": null}, {"bus_id": 72, "vm_pu": 0.98, "va_deg": 20.873, "is_violation": false, "violation_type": null}, {"bus_id": 73, "vm_pu": 0.991, "va_deg": 21.883, "is_violation": false, "violation_type": null}, {"bus_id": 74, "vm_pu": 0.958, "va_deg": 21.567, "is_violation": false, "violation_type": null}, {"bus_id": 75, "vm_pu": 0.967155, "va_deg": 22.949, "is_violation": false, "violation_type": null}, {"bus_id": 76, "vm_pu": 0.943, "va_deg": 22.114, "is_violation": true, "violation_type": "undervoltage"}, {"bus_id": 77, "vm_pu": 1.006, "va_deg": 27.148, "is_violation": false, "violation_type": null}, {"bus_id": 78, "vm_pu": 1.002796, "va_deg": 26.83, "is_violation": false, "violation_type": null}, {"bus_id": 79, "vm_pu": 1.008262, "va_deg": 27.171, "is_violation": false, "violation_type": null}, {"bus_id": 80, "vm_pu": 1.04, "va_deg": 29.608, "is_violation": false, "violation_type": null}, {"bus_id": 81, "vm_pu": 0.996976, "va_deg": 28.339, "is_violation": false, "violation_type": null}, {"bus_id": 82, "vm_pu": 0.988615, "va_deg": 28.074, "is_violation": false, "violation_type": null}, {"bus_id": 83, "vm_pu": 0.984233, "va_deg": 29.402, "is_violation": false, "violation_type": null}, {"bus_id": 84, "vm_pu": 0.97944, "va_deg": 32.144, "is_violation": false, "violation_type": null}, {"bus_id": 85, "vm_pu": 0.985, "va_deg": 33.807, "is_violation": false, "violation_type": null}, {"bus_id": 86, "vm_pu": 0.985562, "va_deg": 32.333, "is_violation": false, "violation_type": null}, {"bus_id": 87, "vm_pu": 1.015, "va_deg": 32.626, "is_violation": false, "violation_type": null}, {"bus_id": 88, "vm_pu": 0.987767, "va_deg": 37.202, "is_violation": false, "violation_type": null}, {"bus_id": 89, "vm_pu": 1.005, "va_deg": 41.33, "is_violation": false, "violation_type": null}, {"bus_id": 90, "vm_pu": 0.985, "va_deg": 34.549, "is_violation": false, "violation_type": null}, {"bus_id": 91, "vm_pu": 0.98, "va_deg": 34.58, "is_violation": false, "violation_type": null}, {"bus_id": 92, "vm_pu": 0.99, "va_deg": 35.196, "is_violation": false, "violation_type": null}, {"bus_id": 93, "vm_pu": 0.985638, "va_deg": 31.999, "is_violation": false, "violation_type": null}, {"bus_id": 94, "vm_pu": 0.989908, "va_deg": 29.66, "is_violation": false, "violation_type": null}, {"bus_id": 95, "vm_pu": 0.980544, "va_deg": 28.634, "is_violation": false, "violation_type": null}, {"bus_id": 96, "vm_pu": 0.992409, "va_deg": 28.388, "is_violation": false, "violation_type": null}, {"bus_id": 97, "vm_pu": 1.011004, "va_deg": 28.632, "is_violation": false, "violation_type": null}, {"bus_id": 98, "vm_pu": 1.02303, "va_deg": 28.091, "is_violation": false, "violation_type": null}, {"bus_id": 99, "vm_pu": 1.01, "va_deg": 27.896, "is_violation": false, "violation_type": null}, {"bus_id": 100, "vm_pu": 1.017, "va_deg": 28.93, "is_violation": false, "violation_type": null}, {"bus_id": 101, "vm_pu": 0.990165, "va_deg": 30.65, "is_violation": false, "violation_type": null}, {"bus_id": 102, "vm_pu": 0.988665, "va_deg": 33.58, "is_violation": false, "violation_type": null}, {"bus_id": 103, "vm_pu": 1.01, "va_deg": 24.928, "is_violation": false, "violation_type": null}, {"bus_id": 104, "vm_pu": 0.971, "va_deg": 25.094, "is_violation": false, "violation_type": null}, {"bus_id": 105, "vm_pu": 0.965, "va_deg": 18.769, "is_violation": false, "violation_type": null}, {"bus_id": 106, "vm_pu": 0.960688, "va_deg": 19.027, "is_violation": false, "violation_type": null}, {"bus_id": 107, "vm_pu": 0.952, "va_deg": 15.859, "is_violation": false, "violation_type": null}, {"bus_id": 108, "vm_pu": 0.966385, "va_deg": 18.172, "is_violation": false, "violation_type": null}, {"bus_id": 109, "vm_pu": 0.967193, "va_deg": 17.967, "is_violation": false, "violation_type": null}, {"bus_id": 110, "vm_pu": 0.973, "va_deg": 17.773, "is_violation": false, "violation_type": null}, {"bus_id": 111, "vm_pu": 0.98, "va_deg": 19.382, "is_violation": false, "violation_type": null}, {"bus_id": 112, "vm_pu": 0.975, "va_deg": 14.716, "is_violation": false, "violation_type": null}, {"bus_id": 113, "vm_pu": 0.993, "va_deg": 13.968, "is_violation": false, "violation_type": null}, {"bus_id": 114, "vm_pu": 0.960347, "va_deg": 14.572, "is_violation": false, "violation_type": null}, {"bus_id": 115, "vm_pu": 0.960308, "va_deg": 14.556, "is_violation": false, "violation_type": null}, {"bus_id": 116, "vm_pu": 1.005, "va_deg": 27.142, "is_violation": false, "violation_type": null}, {"bus_id": 117, "vm_pu": 0.973802, "va_deg": 11.171, "is_violation": false, "violation_type": null}, {"bus_id": 118, "vm_pu": 0.949327, "va_deg": 22.095, "is_violation": true, "violation_type": "undervoltage"}], "line_flows": [{"line_id": 0, "from_bus": 1, "to_bus": 2, "p_from_mw": -14.097, "q_from_mvar": -12.654, "loading_percent": 67.4, "is_violation": false}, {"line_id": 1, "from_bus": 1, "to_bus": 3, "p_from_mw": -41.612, "q_from_mvar": -16.534, "loading_percent": 84.79, "is_violation": false}, {"line_id": 2, "from_bus": 4, "to_bus": 5, "p_from_mw": -102.117, "q_from_mvar": -27.227, "loading_percent": 79.28, "is_violation": false}, {"line_id": 3, "from_bus": 3, "to_bus": 5, "p_from_mw": -69.019, "q_from_mvar": -14.064, "loading_percent": 80.92, "is_violation": false}, {"line_id": 4, "from_bus": 5, "to_bus": 6, "p_from_mw": 90.082, "q_from_mvar": 3.858, "loading_percent": 81.44, "is_violation": false}, {"line_id": 5, "from_bus": 6, "to_bus": 7, "p_from_mw": 34.144, "q_from_mvar": -4.223, "loading_percent": 76.75, "is_violation": false}, {"line_id": 6, "from_bus": 8, "to_bus": 9, "p_from_mw": -455.02, "q_from_mvar": -84.617, "loading_percent": 82.34, "is_violation": false}, {"line_id": 7, "from_bus": 9, "to_bus": 10, "p_from_mw": -459.938, "q_from_mvar": -23.118, "loading_percent": 82.62, "is_violation": false}, {"line_id": 8, "from_bus": 4, "to_bus": 11, "p_from_mw": 64.105, "q_from_mvar": -0.298, "loading_percent": 79.84, "is_violation": false}, {"line_id": 9, "from_bus": 5, "to_bus": 11, "p_from_mw": 76.976, "q_from_mvar": 2.934, "loading_percent": 79.74, "is_violation": false}, {"line_id": 10, "from_bus": 11, "to_bus": 12, "p_from_mw": 33.765, "q_from_mvar": -34.591, "loading_percent": 78.76, "is_violation": false}, {"line_id": 11, "from_bus": 2, "to_bus": 12, "p_from_mw": -33.582, "q_from_mvar": -19.379, "loading_percent": 81.36, "is_violation": false}, {"line_id": 12, "from_bus": 3, "to_bus": 12, "p_from_mw": -10.531, "q_from_mvar": -12.05, "loading_percent": 56.94, "is_violation": false}, {"line_id": 13, "from_bus": 7, "to_bus": 12, "p_from_mw": 14.011, "q_from_mvar": -6.048, "loading_percent": 54.3, "is_violation": false}, {"line_id": 14, "from_bus": 11, "to_bus": 13, "p_from_mw": 33.851, "q_from_mvar": 10.328, "loading_percent": 76.74, "is_violation": false}, {"line_id": 15, "from_bus": 12, "to_bus": 14, "p_from_mw": 19.355, "q_from_mvar": 2.442, "loading_percent": 69.41, "is_violation": false}, {"line_id": 16, "from_bus": 13, "to_bus": 15, "p_from_mw": 1.9, "q_from_mvar": -3.738, "loading_percent": 14.92, "is_violation": false}, {"line_id": 17, "from_bus": 14, "to_bus": 15, "p_from_mw": 4.884, "q_from_mvar": 2.904, "loading_percent": 20.22, "is_violation": false}, {"line_id": 18, "from_bus": 12, "to_bus": 16, "p_from_mw": 9.51, "q_from_mvar": 4.208, "loading_percent": 37.0, "is_violation": false}, {"line_id": 19, "from_bus": 15, "to_bus": 17, "p_from_mw": -100.323, "q_from_mvar": -25.38, "loading_percent": 77.62, "is_violation": false}, {"line_id": 20, "from_bus": 16, "to_bus": 17, "p_from_mw": -16.385, "q_from_mvar": -4.157, "loading_percent": 60.15, "is_violation": false}, {"line_id": 21, "from_bus": 17, "to_bus": 18, "p_from_mw": 76.089, "q_from_mvar": 25.507, "loading_percent": 76.43, "is_violation": false}, {"line_id": 22, "from_bus": 18, "to_bus": 19, "p_from_mw": 21.194, "q_from_mvar": 16.438, "loading_percent": 83.57, "is_violation": false}, {"line_id": 23, "from_bus": 19, "to_bus": 20, "p_from_mw": -7.857, "q_from_mvar": 5.399, "loading_percent": 33.92, "is_violation": false}, {"line_id": 24, "from_bus": 15, "to_bus": 19, "p_from_mw": 12.554, "q_from_mvar": 15.409, "loading_percent": 70.72, "is_violation": false}, {"line_id": 25, "from_bus": 20, "to_bus": 21, "p_from_mw": -27.64, "q_from_mvar": 4.711, "loading_percent": 77.21, "is_violation": false}, {"line_id": 26, "from_bus": 21, "to_bus": 22, "p_from_mw": -42.708, "q_from_mvar": -2.574, "loading_percent": 79.81, "is_violation": false}, {"line_id": 27, "from_bus": 22, "to_bus": 23, "p_from_mw": -53.199, "q_from_mvar": -7.269, "loading_percent": 80.01, "is_violation": false}, {"line_id": 28, "from_bus": 23, "to_bus": 24, "p_from_mw": 8.613, "q_from_mvar": 10.377, "loading_percent": 47.98, "is_violation": false}, {"line_id": 29, "from_bus": 23, "to_bus": 25, "p_from_mw": -161.113, "q_from_mvar": -26.6, "loading_percent": 79.34, "is_violation": false}, {"line_id": 30, "from_bus": 25, "to_bus": 27, "p_from_mw": 143.507, "q_from_mvar": 30.056, "loading_percent": 79.99, "is_violation": false}, {"line_id": 31, "from_bus": 27, "to_bus": 28, "p_from_mw": 32.434, "q_from_mvar": -0.129, "loading_percent": 78.91, "is_violation": false}, {"line_id": 32, "from_bus": 28, "to_bus": 29, "p_from_mw": 14.032, "q_from_mvar": -6.568, "loading_percent": 55.13, "is_violation": false}, {"line_id": 33, "from_bus": 8, "to_bus": 30, "p_from_mw": 86.483, "q_from_mvar": 27.063, "loading_percent": 91.39, "is_violation": false}, {"line_id": 34, "from_bus": 26, "to_bus": 30, "p_from_mw": 213.248, "q_from_mvar": -12.735, "loading_percent": 76.29, "is_violation": false}, {"line_id": 35, "from_bus": 17, "to_bus": 31, "p_from_mw": 16.029, "q_from_mvar": 11.128, "loading_percent": 69.43, "is_violation": false}, {"line_id": 36, "from_bus": 29, "to_bus": 31, "p_from_mw": -8.822, "q_from_mvar": -8.395, "loading_percent": 43.33, "is_violation": false}, {"line_id": 37, "from_bus": 23, "to_bus": 32, "p_from_mw": 91.831, "q_from_mvar": 5.261, "loading_percent": 79.02, "is_violation": false}, {"line_id": 38, "from_bus": 31, "to_bus": 32, "p_from_mw": -30.114, "q_from_mvar": 12.485, "loading_percent": 80.67, "is_violation": false}, {"line_id": 39, "from_bus": 27, "to_bus": 32, "p_from_mw": 9.567, "q_from_mvar": 2.636, "loading_percent": 35.31, "is_violation": false}, {"line_id": 40, "from_bus": 15, "to_bus": 33, "p_from_mw": 11.98, "q_from_mvar": -5.024, "loading_percent": 46.22, "is_violation": false}, {"line_id": 41, "from_bus": 19, "to_bus": 34, "p_from_mw": 0.248, "q_from_mvar": -11.557, "loading_percent": 41.13, "is_violation": false}, {"line_id": 42, "from_bus": 35, "to_bus": 36, "p_from_mw": 0.433, "q_from_mvar": 4.221, "loading_percent": 15.1, "is_violation": false}, {"line_id": 43, "from_bus": 35, "to_bus": 37, "p_from_mw": -33.28, "q_from_mvar": -13.179, "loading_percent": 78.97, "is_violation": false}, {"line_id": 44, "from_bus": 33, "to_bus": 37, "p_from_mw": -13.028, "q_from_mvar": -11.986, "loading_percent": 62.99, "is_violation": false}, {"line_id": 45, "from_bus": 34, "to_bus": 36, "p_from_mw": 27.884, "q_from_mvar": 5.443, "loading_percent": 74.26, "is_violation": false}, {"line_id": 46, "from_bus": 34, "to_bus": 37, "p_from_mw": -97.948, "q_from_mvar": -43.33, "loading_percent": 82.27, "is_violation": false}, {"line_id": 47, "from_bus": 37, "to_bus": 39, "p_from_mw": 57.945, "q_from_mvar": 2.06, "loading_percent": 84.35, "is_violation": false}, {"line_id": 48, "from_bus": 37, "to_bus": 40, "p_from_mw": 47.387, "q_from_mvar": -4.555, "loading_percent": 86.21, "is_violation": false}, {"line_id": 49, "from_bus": 30, "to_bus": 38, "p_from_mw": 70.323, "q_from_mvar": 19.338, "loading_percent": 89.5, "is_violation": false}, {"line_id": 50, "from_bus": 39, "to_bus": 40, "p_from_mw": 31.037, "q_from_mvar": -9.497, "loading_percent": 91.79, "is_violation": false}, {"line_id": 51, "from_bus": 40, "to_bus": 41, "p_from_mw": 21.4, "q_from_mvar": 0.63, "loading_percent": 76.17, "is_violation": false}, {"line_id": 52, "from_bus": 40, "to_bus": 42, "p_from_mw": -7.939, "q_from_mvar": -7.698, "loading_percent": 39.35, "is_violation": false}, {"line_id": 53, "from_bus": 41, "to_bus": 42, "p_from_mw": -18.486, "q_from_mvar": -9.223, "loading_percent": 72.01, "is_violation": false}, {"line_id": 54, "from_bus": 43, "to_bus": 44, "p_from_mw": -10.274, "q_from_mvar": -2.28, "loading_percent": 37.44, "is_violation": false}, {"line_id": 55, "from_bus": 34, "to_bus": 43, "p_from_mw": 6.446, "q_from_mvar": 0.231, "loading_percent": 22.95, "is_violation": false}, {"line_id": 56, "from_bus": 44, "to_bus": 45, "p_from_mw": -27.501, "q_from_mvar": 4.352, "loading_percent": 67.04, "is_violation": false}, {"line_id": 57, "from_bus": 45, "to_bus": 46, "p_from_mw": -30.984, "q_from_mvar": -6.913, "loading_percent": 69.57, "is_violation": false}, {"line_id": 58, "from_bus": 46, "to_bus": 47, "p_from_mw": -20.601, "q_from_mvar": -2.58, "loading_percent": 53.35, "is_violation": false}, {"line_id": 59, "from_bus": 46, "to_bus": 48, "p_from_mw": -20.988, "q_from_mvar": -3.349, "loading_percent": 75.62, "is_violation": false}, {"line_id": 60, "from_bus": 47, "to_bus": 49, "p_from_mw": -56.405, "q_from_mvar": 0.106, "loading_percent": 200.69, "is_violation": true}, {"line_id": 61, "from_bus": 42, "to_bus": 49, "p_from_mw": -62.439, "q_from_mvar": 4.132, "loading_percent": 76.92, "is_violation": false}, {"line_id": 62, "from_bus": 42, "to_bus": 49, "p_from_mw": -62.439, "q_from_mvar": 4.132, "loading_percent": 76.92, "is_violation": false}, {"line_id": 63, "from_bus": 45, "to_bus": 49, "p_from_mw": -53.675, "q_from_mvar": -1.264, "loading_percent": 86.35, "is_violation": false}, {"line_id": 64, "from_bus": 48, "to_bus": 49, "p_from_mw": -42.048, "q_from_mvar": 4.835, "loading_percent": 96.62, "is_violation": false}, {"line_id": 65, "from_bus": 49, "to_bus": 50, "p_from_mw": 54.366, "q_from_mvar": 13.82, "loading_percent": 81.13, "is_violation": false}, {"line_id": 66, "from_bus": 49, "to_bus": 51, "p_from_mw": 66.978, "q_from_mvar": 21.049, "loading_percent": 80.59, "is_violation": false}, {"line_id": 67, "from_bus": 51, "to_bus": 52, "p_from_mw": 28.622, "q_from_mvar": 6.406, "loading_percent": 80.26, "is_violation": false}, {"line_id": 68, "from_bus": 52, "to_bus": 53, "p_from_mw": 10.781, "q_from_mvar": 2.244, "loading_percent": 39.18, "is_violation": false}, {"line_id": 69, "from_bus": 53, "to_bus": 54, "p_from_mw": -14.52, "q_from_mvar": -6.404, "loading_percent": 56.46, "is_violation": false}, {"line_id": 70, "from_bus": 49, "to_bus": 54, "p_from_mw": 37.353, "q_from_mvar": 13.132, "loading_percent": 79.26, "is_violation": false}, {"line_id": 71, "from_bus": 49, "to_bus": 54, "p_from_mw": 37.342, "q_from_mvar": 11.276, "loading_percent": 79.26, "is_violation": false}, {"line_id": 72, "from_bus": 54, "to_bus": 55, "p_from_mw": 6.376, "q_from_mvar": 1.62, "loading_percent": 23.41, "is_violation": false}, {"line_id": 73, "from_bus": 54, "to_bus": 56, "p_from_mw": 17.81, "q_from_mvar": 4.552, "loading_percent": 65.41, "is_violation": false}, {"line_id": 74, "from_bus": 55, "to_bus": 56, "p_from_mw": -18.748, "q_from_mvar": -6.697, "loading_percent": 70.83, "is_violation": false}, {"line_id": 75, "from_bus": 56, "to_bus": 57, "p_from_mw": -22.539, "q_from_mvar": -9.27, "loading_percent": 78.85, "is_violation": false}, {"line_id": 76, "from_bus": 50, "to_bus": 57, "p_from_mw": 34.932, "q_from_mvar": 9.087, "loading_percent": 78.0, "is_violation": false}, {"line_id": 77, "from_bus": 56, "to_bus": 58, "p_from_mw": -5.676, "q_from_mvar": -3.497, "loading_percent": 23.72, "is_violation": false}, {"line_id": 78, "from_bus": 51, "to_bus": 58, "p_from_mw": 17.84, "q_from_mvar": 2.94, "loading_percent": 64.33, "is_violation": false}, {"line_id": 79, "from_bus": 54, "to_bus": 59, "p_from_mw": -33.463, "q_from_mvar": -6.582, "loading_percent": 87.18, "is_violation": false}, {"line_id": 80, "from_bus": 56, "to_bus": 59, "p_from_mw": -30.572, "q_from_mvar": -3.086, "loading_percent": 86.94, "is_violation": false}, {"line_id": 81, "from_bus": 56, "to_bus": 59, "p_from_mw": -32.039, "q_from_mvar": -2.749, "loading_percent": 86.99, "is_violation": false}, {"line_id": 82, "from_bus": 55, "to_bus": 59, "p_from_mw": -37.541, "q_from_mvar": -7.337, "loading_percent": 86.22, "is_violation": false}, {"line_id": 83, "from_bus": 59, "to_bus": 60, "p_from_mw": -48.57, "q_from_mvar": 5.096, "loading_percent": 89.89, "is_violation": false}, {"line_id": 84, "from_bus": 59, "to_bus": 61, "p_from_mw": -56.967, "q_from_mvar": 6.662, "loading_percent": 88.3, "is_violation": false}, {"line_id": 85, "from_bus": 60, "to_bus": 61, "p_from_mw": -114.218, "q_from_mvar": 9.185, "loading_percent": 81.56, "is_violation": false}, {"line_id": 86, "from_bus": 60, "to_bus": 62, "p_from_mw": -10.564, "q_from_mvar": -6.909, "loading_percent": 44.91, "is_violation": false}, {"line_id": 87, "from_bus": 61, "to_bus": 62, "p_from_mw": 25.225, "q_from_mvar": -13.802, "loading_percent": 79.28, "is_violation": false}, {"line_id": 88, "from_bus": 63, "to_bus": 64, "p_from_mw": -167.48, "q_from_mvar": -66.62, "loading_percent": 86.81, "is_violation": false}, {"line_id": 89, "from_bus": 38, "to_bus": 65, "p_from_mw": -180.145, "q_from_mvar": -58.063, "loading_percent": 79.6, "is_violation": false}, {"line_id": 90, "from_bus": 64, "to_bus": 65, "p_from_mw": -201.913, "q_from_mvar": -65.066, "loading_percent": 87.25, "is_violation": false}, {"line_id": 91, "from_bus": 49, "to_bus": 66, "p_from_mw": -151.974, "q_from_mvar": 10.795, "loading_percent": 92.13, "is_violation": false}, {"line_id": 92, "from_bus": 49, "to_bus": 66, "p_from_mw": -151.974, "q_from_mvar": 10.795, "loading_percent": 92.13, "is_violation": false}, {"line_id": 93, "from_bus": 62, "to_bus": 66, "p_from_mw": -37.193, "q_from_mvar": -17.255, "loading_percent": 80.05, "is_violation": false}, {"line_id": 94, "from_bus": 62, "to_bus": 67, "p_from_mw": -25.574, "q_from_mvar": -14.7, "loading_percent": 83.52, "is_violation": false}, {"line_id": 95, "from_bus": 66, "to_bus": 67, "p_from_mw": 51.717, "q_from_mvar": 18.806, "loading_percent": 77.86, "is_violation": false}, {"line_id": 96, "from_bus": 65, "to_bus": 68, "p_from_mw": -29.288, "q_from_mvar": -18.758, "loading_percent": 104.84, "is_violation": true}, {"line_id": 97, "from_bus": 47, "to_bus": 69, "p_from_mw": 0.0, "q_from_mvar": 0.0, "loading_percent": 0.0, "is_violation": false}, {"line_id": 98, "from_bus": 49, "to_bus": 69, "p_from_mw": -55.702, "q_from_mvar": 15.281, "loading_percent": 96.79, "is_violation": false}, {"line_id": 99, "from_bus": 69, "to_bus": 70, "p_from_mw": 109.851, "q_from_mvar": 15.924, "loading_percent": 81.05, "is_violation": false}, {"line_id": 100, "from_bus": 24, "to_bus": 70, "p_from_mw": -6.633, "q_from_mvar": -2.961, "loading_percent": 25.84, "is_violation": false}, {"line_id": 101, "from_bus": 70, "to_bus": 71, "p_from_mw": 17.283, "q_from_mvar": -12.526, "loading_percent": 75.95, "is_violation": false}, {"line_id": 102, "from_bus": 24, "to_bus": 72, "p_from_mw": 1.677, "q_from_mvar": 3.255, "loading_percent": 13.03, "is_violation": false}, {"line_id": 103, "from_bus": 71, "to_bus": 72, "p_from_mw": 11.602, "q_from_mvar": -1.167, "loading_percent": 41.49, "is_violation": false}, {"line_id": 104, "from_bus": 71, "to_bus": 73, "p_from_mw": 5.641, "q_from_mvar": -10.67, "loading_percent": 42.94, "is_violation": false}, {"line_id": 105, "from_bus": 70, "to_bus": 74, "p_from_mw": 16.126, "q_from_mvar": 12.916, "loading_percent": 73.51, "is_violation": false}, {"line_id": 106, "from_bus": 70, "to_bus": 75, "p_from_mw": -1.468, "q_from_mvar": 10.478, "loading_percent": 37.65, "is_violation": false}, {"line_id": 107, "from_bus": 69, "to_bus": 75, "p_from_mw": 109.792, "q_from_mvar": 20.674, "loading_percent": 79.87, "is_violation": false}, {"line_id": 108, "from_bus": 74, "to_bus": 75, "p_from_mw": -56.215, "q_from_mvar": -4.382, "loading_percent": 86.16, "is_violation": false}, {"line_id": 109, "from_bus": 76, "to_bus": 77, "p_from_mw": -61.971, "q_from_mvar": -20.713, "loading_percent": 80.83, "is_violation": false}, {"line_id": 110, "from_bus": 69, "to_bus": 77, "p_from_mw": 55.567, "q_from_mvar": 8.434, "loading_percent": 71.85, "is_violation": false}, {"line_id": 111, "from_bus": 75, "to_bus": 77, "p_from_mw": -37.512, "q_from_mvar": -8.537, "loading_percent": 85.72, "is_violation": false}, {"line_id": 112, "from_bus": 77, "to_bus": 78, "p_from_mw": 48.603, "q_from_mvar": 10.74, "loading_percent": 86.8, "is_violation": false}, {"line_id": 113, "from_bus": 78, "to_bus": 79, "p_from_mw": -28.24, "q_from_mvar": -16.396, "loading_percent": 82.73, "is_violation": false}, {"line_id": 114, "from_bus": 77, "to_bus": 80, "p_from_mw": -103.837, "q_from_mvar": -34.529, "loading_percent": 84.53, "is_violation": false}, {"line_id": 115, "from_bus": 77, "to_bus": 80, "p_from_mw": -47.87, "q_from_mvar": -19.407, "loading_percent": 84.52, "is_violation": false}, {"line_id": 116, "from_bus": 79, "to_bus": 80, "p_from_mw": -69.679, "q_from_mvar": -29.619, "loading_percent": 85.1, "is_violation": false}, {"line_id": 117, "from_bus": 68, "to_bus": 81, "p_from_mw": -66.262, "q_from_mvar": -3.174, "loading_percent": 119.57, "is_violation": true}, {"line_id": 118, "from_bus": 77, "to_bus": 82, "p_from_mw": -10.357, "q_from_mvar": 20.138, "loading_percent": 80.57, "is_violation": false}, {"line_id": 119, "from_bus": 82, "to_bus": 83, "p_from_mw": -52.746, "q_from_mvar": 26.796, "loading_percent": 89.05, "is_violation": false}, {"line_id": 120, "from_bus": 83, "to_bus": 84, "p_from_mw": -26.841, "q_from_mvar": 15.869, "loading_percent": 86.58, "is_violation": false}, {"line_id": 121, "from_bus": 83, "to_bus": 85, "p_from_mw": -46.014, "q_from_mvar": 13.108, "loading_percent": 86.16, "is_violation": false}, {"line_id": 122, "from_bus": 84, "to_bus": 85, "p_from_mw": -38.759, "q_from_mvar": 9.807, "loading_percent": 85.42, "is_violation": false}, {"line_id": 123, "from_bus": 85, "to_bus": 86, "p_from_mw": 18.725, "q_from_mvar": -6.856, "loading_percent": 70.95, "is_violation": false}, {"line_id": 124, "from_bus": 85, "to_bus": 88, "p_from_mw": -54.591, "q_from_mvar": 8.368, "loading_percent": 86.7, "is_violation": false}, {"line_id": 125, "from_bus": 85, "to_bus": 89, "p_from_mw": -74.397, "q_from_mvar": 1.537, "loading_percent": 83.56, "is_violation": false}, {"line_id": 126, "from_bus": 88, "to_bus": 89, "p_from_mw": -100.506, "q_from_mvar": -1.612, "loading_percent": 81.26, "is_violation": false}, {"line_id": 127, "from_bus": 89, "to_bus": 90, "p_from_mw": 61.474, "q_from_mvar": -5.229, "loading_percent": 84.5, "is_violation": false}, {"line_id": 128, "from_bus": 89, "to_bus": 90, "p_from_mw": 117.051, "q_from_mvar": -6.187, "loading_percent": 84.51, "is_violation": false}, {"line_id": 129, "from_bus": 90, "to_bus": 91, "p_from_mw": 1.052, "q_from_mvar": 4.534, "loading_percent": 16.56, "is_violation": false}, {"line_id": 130, "from_bus": 89, "to_bus": 92, "p_from_mw": 210.512, "q_from_mvar": -2.903, "loading_percent": 83.56, "is_violation": false}, {"line_id": 131, "from_bus": 89, "to_bus": 92, "p_from_mw": 66.412, "q_from_mvar": -5.461, "loading_percent": 83.56, "is_violation": false}, {"line_id": 132, "from_bus": 91, "to_bus": 92, "p_from_mw": -9.633, "q_from_mvar": -6.299, "loading_percent": 40.95, "is_violation": false}, {"line_id": 133, "from_bus": 92, "to_bus": 93, "p_from_mw": 60.656, "q_from_mvar": -12.639, "loading_percent": 84.31, "is_violation": false}, {"line_id": 134, "from_bus": 92, "to_bus": 94, "p_from_mw": 55.588, "q_from_mvar": -15.961, "loading_percent": 85.14, "is_violation": false}, {"line_id": 135, "from_bus": 93, "to_bus": 94, "p_from_mw": 48.491, "q_from_mvar": -20.323, "loading_percent": 86.21, "is_violation": false}, {"line_id": 136, "from_bus": 94, "to_bus": 95, "p_from_mw": 42.704, "q_from_mvar": 8.185, "loading_percent": 83.13, "is_violation": false}, {"line_id": 137, "from_bus": 80, "to_bus": 96, "p_from_mw": 16.779, "q_from_mvar": 21.37, "loading_percent": 76.68, "is_violation": false}, {"line_id": 138, "from_bus": 82, "to_bus": 96, "p_from_mw": -11.234, "q_from_mvar": -6.275, "loading_percent": 45.78, "is_violation": false}, {"line_id": 139, "from_bus": 94, "to_bus": 96, "p_from_mw": 22.173, "q_from_mvar": -10.561, "loading_percent": 87.39, "is_violation": false}, {"line_id": 140, "from_bus": 80, "to_bus": 97, "p_from_mw": 24.586, "q_from_mvar": 26.259, "loading_percent": 77.99, "is_violation": false}, {"line_id": 141, "from_bus": 80, "to_bus": 98, "p_from_mw": 28.378, "q_from_mvar": 8.886, "loading_percent": 78.98, "is_violation": false}, {"line_id": 142, "from_bus": 80, "to_bus": 99, "p_from_mw": 17.754, "q_from_mvar": 8.507, "loading_percent": 70.05, "is_violation": false}, {"line_id": 143, "from_bus": 92, "to_bus": 100, "p_from_mw": 34.065, "q_from_mvar": -16.818, "loading_percent": 85.44, "is_violation": false}, {"line_id": 144, "from_bus": 94, "to_bus": 100, "p_from_mw": 7.268, "q_from_mvar": -51.288, "loading_percent": 81.71, "is_violation": false}, {"line_id": 145, "from_bus": 95, "to_bus": 96, "p_from_mw": 0.901, "q_from_mvar": -22.244, "loading_percent": 79.21, "is_violation": false}, {"line_id": 146, "from_bus": 96, "to_bus": 97, "p_from_mw": -8.583, "q_from_mvar": -20.345, "loading_percent": 76.76, "is_violation": false}, {"line_id": 147, "from_bus": 98, "to_bus": 100, "p_from_mw": -7.371, "q_from_mvar": 2.653, "loading_percent": 27.87, "is_violation": false}, {"line_id": 148, "from_bus": 99, "to_bus": 100, "p_from_mw": -23.517, "q_from_mvar": -4.386, "loading_percent": 82.81, "is_violation": false}, {"line_id": 149, "from_bus": 100, "to_bus": 101, "p_from_mw": -18.242, "q_from_mvar": 24.292, "loading_percent": 85.67, "is_violation": false}, {"line_id": 150, "from_bus": 92, "to_bus": 102, "p_from_mw": 47.737, "q_from_mvar": -8.161, "loading_percent": 85.28, "is_violation": false}, {"line_id": 151, "from_bus": 101, "to_bus": 102, "p_from_mw": -42.11, "q_from_mvar": 10.277, "loading_percent": 86.1, "is_violation": false}, {"line_id": 152, "from_bus": 100, "to_bus": 103, "p_from_mw": 130.042, "q_from_mvar": -24.074, "loading_percent": 85.5, "is_violation": false}, {"line_id": 153, "from_bus": 100, "to_bus": 104, "p_from_mw": 35.939, "q_from_mvar": 13.274, "loading_percent": 53.6, "is_violation": false}, {"line_id": 154, "from_bus": 103, "to_bus": 104, "p_from_mw": 5.088, "q_from_mvar": 21.297, "loading_percent": 49.64, "is_violation": false}, {"line_id": 155, "from_bus": 103, "to_bus": 105, "p_from_mw": 67.399, "q_from_mvar": 7.161, "loading_percent": 119.92, "is_violation": true}, {"line_id": 156, "from_bus": 100, "to_bus": 106, "p_from_mw": 76.337, "q_from_mvar": 7.992, "loading_percent": 100.5, "is_violation": true}, {"line_id": 157, "from_bus": 104, "to_bus": 105, "p_from_mw": 0.0, "q_from_mvar": 0.0, "loading_percent": 0.0, "is_violation": false}, {"line_id": 158, "from_bus": 105, "to_bus": 106, "p_from_mw": -5.325, "q_from_mvar": 8.32, "loading_percent": 35.15, "is_violation": false}, {"line_id": 159, "from_bus": 105, "to_bus": 107, "p_from_mw": 25.52, "q_from_mvar": -2.086, "loading_percent": 76.26, "is_violation": false}, {"line_id": 160, "from_bus": 105, "to_bus": 108, "p_from_mw": 11.553, "q_from_mvar": -6.976, "loading_percent": 40.86, "is_violation": false}, {"line_id": 161, "from_bus": 106, "to_bus": 107, "p_from_mw": 26.904, "q_from_mvar": -4.645, "loading_percent": 89.99, "is_violation": false}, {"line_id": 162, "from_bus": 108, "to_bus": 109, "p_from_mw": 9.359, "q_from_mvar": -6.459, "loading_percent": 37.34, "is_violation": false}, {"line_id": 163, "from_bus": 103, "to_bus": 110, "p_from_mw": 69.639, "q_from_mvar": 7.48, "loading_percent": 91.6, "is_violation": false}, {"line_id": 164, "from_bus": 109, "to_bus": 110, "p_from_mw": 1.328, "q_from_mvar": -8.793, "loading_percent": 31.64, "is_violation": false}, {"line_id": 165, "from_bus": 110, "to_bus": 111, "p_from_mw": -34.99, "q_from_mvar": 0.726, "loading_percent": 78.39, "is_violation": false}, {"line_id": 166, "from_bus": 110, "to_bus": 112, "p_from_mw": 68.475, "q_from_mvar": -30.294, "loading_percent": 78.92, "is_violation": false}, {"line_id": 167, "from_bus": 17, "to_bus": 113, "p_from_mw": 3.046, "q_from_mvar": 5.418, "loading_percent": 22.12, "is_violation": false}, {"line_id": 168, "from_bus": 32, "to_bus": 113, "p_from_mw": 3.422, "q_from_mvar": -17.602, "loading_percent": 63.8, "is_violation": false}, {"line_id": 169, "from_bus": 32, "to_bus": 114, "p_from_mw": 10.256, "q_from_mvar": 1.189, "loading_percent": 36.73, "is_violation": false}, {"line_id": 170, "from_bus": 27, "to_bus": 115, "p_from_mw": 18.483, "q_from_mvar": 5.151, "loading_percent": 68.27, "is_violation": false}, {"line_id": 171, "from_bus": 114, "to_bus": 115, "p_from_mw": 2.444, "q_from_mvar": -0.301, "loading_percent": 8.76, "is_violation": false}, {"line_id": 172, "from_bus": 12, "to_bus": 117, "p_from_mw": 20.176, "q_from_mvar": 5.208, "loading_percent": 74.14, "is_violation": false}, {"line_id": 173, "from_bus": 75, "to_bus": 118, "p_from_mw": 36.029, "q_from_mvar": 24.636, "loading_percent": 74.89, "is_violation": false}, {"line_id": 174, "from_bus": 76, "to_bus": 118, "p_from_mw": -2.532, "q_from_mvar": -10.808, "loading_percent": 39.5, "is_violation": false}, {"line_id": 100000, "from_bus": 8, "to_bus": 5, "p_from_mw": 339.658, "q_from_mvar": 124.775, "loading_percent": 80.25, "is_violation": false}, {"line_id": 100001, "from_bus": 26, "to_bus": 25, "p_from_mw": 70.681, "q_from_mvar": 21.041, "loading_percent": 63.55, "is_violation": false}, {"line_id": 100002, "from_bus": 30, "to_bus": 17, "p_from_mw": 225.359, "q_from_mvar": 93.314, "loading_percent": 78.31, "is_violation": false}, {"line_id": 100003, "from_bus": 38, "to_bus": 37, "p_from_mw": 250.156, "q_from_mvar": 113.758, "loading_percent": 81.85, "is_violation": false}, {"line_id": 100004, "from_bus": 63, "to_bus": 59, "p_from_mw": 167.48, "q_from_mvar": 66.62, "loading_percent": 86.81, "is_violation": false}, {"line_id": 100005, "from_bus": 64, "to_bus": 61, "p_from_mw": 33.859, "q_from_mvar": 12.342, "loading_percent": 85.84, "is_violation": false}, {"line_id": 100006, "from_bus": 65, "to_bus": 66, "p_from_mw": 28.799, "q_from_mvar": 72.374, "loading_percent": 85.65, "is_violation": false}, {"line_id": 100007, "from_bus": 68, "to_bus": 69, "p_from_mw": -129.103, "q_from_mvar": 113.028, "loading_percent": 81.23, "is_violation": false}, {"line_id": 100008, "from_bus": 81, "to_bus": 80, "p_from_mw": -66.363, "q_from_mvar": 76.484, "loading_percent": 92.56, "is_violation": false}], "total_generation_mw": 4430.119, "total_load_mw": 4290.775, "total_loss_mw": 139.344, "voltage_violations": [{"bus_id": 25, "vm_pu": 1.05, "va_deg": 27.912, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 53, "vm_pu": 0.944311, "va_deg": 12.502, "is_violation": true, "violation_type": "undervoltage"}, {"bus_id": 66, "vm_pu": 1.05, "va_deg": 26.717, "is_violation": true, "violation_type": "overvoltage"}, {"bus_id": 76, "vm_pu": 0.943, "va_deg": 22.114, "is_violation": true, "violation_type": "undervoltage"}, {"bus_id": 118, "vm_pu": 0.949327, "va_deg": 22.095, "is_violation": true, "violation_type": "undervoltage"}], "thermal_violations": [{"line_id": 60, "from_bus": 47, "to_bus": 49, "p_from_mw": -56.405, "q_from_mvar": 0.106, "loading_percent": 200.69, "is_violation": true}, {"line_id": 96, "from_bus": 65, "to_bus": 68, "p_from_mw": -29.288, "q_from_mvar": -18.758, "loading_percent": 104.84, "is_violation": true}, {"line_id": 117, "from_bus": 68, "to_bus": 81, "p_from_mw": -66.262, "q_from_mvar": -3.174, "loading_percent": 119.57, "is_violation": true}, {"line_id": 155, "from_bus": 103, "to_bus": 105, "p_from_mw": 67.399, "q_from_mvar": 7.161, "loading_percent": 119.92, "is_violation": true}, {"line_id": 156, "from_bus": 100, "to_bus": 106, "p_from_mw": 76.337, "q_from_mvar": 7.992, "loading_percent": 100.5, "is_violation": true}], "summary_text": "", "solver_backend": "pandapower", "llm_prompt": null, "llm_response": null}
+
+--- round 4 ---
+[assistant]   (28418 in / 11094 out tokens, 87.4 s)
+{
+  "formulation": [
+    {"tool": "load_case", "args": {"case_name": "case118"}},
+    {"tool": "disconnect_line", "args": {"from_bus": 104, "to_bus": 105}},
+    {"tool": "disconnect_line", "args": {"from_bus": 47, "to_bus": 69}},
+    {"tool": "run_powerflow", "args": {}},
+    {"tool": "run_n1_contingency", "args": {"top_k": 8, "criteria": "min_voltage"}}
+  ],
+  "converged": true,
+  "summary": "N-1 contingency analysis completed for the modified case118 network.",
+  "answer": "Worst outage: line 9-10, 5 voltage violations",
+  "bus_voltages": [
+    {"bus_id": 1, "vm_pu": 0.955, "va_deg": 11.035},
+    {"bus_id": 2, "vm_pu": 0.971562, "va_deg": 11.689},
+    {"bus_id": 3, "vm_pu": 0.96788, "va_deg": 12.0},
+    {"bus_id": 4, "vm_pu": 0.998, "va_deg": 15.787},
+    {"bus_id": 5, "vm_pu": 1.001999, "va_deg": 16.227},
+    {"bus_id": 6, "vm_pu": 0.99, "va_deg": 13.447},
+    {"bus_id": 7, "vm_pu": 0.989275, "va_deg": 13.021},
+    {"bus_id": 8, "vm_pu": 1.015, "va_deg": 21.265},
+    {"bus_id": 9, "vm_pu": 1.042307, "va_deg": 28.77},
+    {"bus_id": 10, "vm_pu": 1.05, "va_deg": 36.607},
+    {"bus_id": 11, "vm_pu": 0.985167, "va_deg": 13.223},
+    {"bus_id": 12, "vm_pu": 0.99, "va_deg": 12.714},
+    {"bus_id": 13, "vm_pu": 0.969446, "va_deg": 11.888},
+    {"bus_id": 14, "vm_pu": 0.983505, "va_deg": 11.951},
+    {"bus_id": 15, "vm_pu": 0.97, "va_deg": 11.57},
+    {"bus_id": 16, "vm_pu": 0.983559, "va_deg": 12.313},
+    {"bus_id": 17, "vm_pu": 0.995033, "va_deg": 13.99},
+    {"bus_id": 18, "vm_pu": 0.973, "va_deg": 11.906},
+    {"bus_id": 19, "vm_pu": 0.962, "va_deg": 11.383},
+    {"bus_id": 20, "vm_pu": 0.955883, "va_deg": 12.062},
+    {"bus_id": 21, "vm_pu": 0.956458, "va_deg": 13.598},
+    {"bus_id": 22, "vm_pu": 0.968214, "va_deg": 16.143},
+    {"bus_id": 23, "vm_pu": 0.999493, "va_deg": 21.049},
+    {"bus_id": 24, "vm_pu": 0.992, "va_deg": 20.904},
+    {"bus_id": 25, "vm_pu": 1.05, "va_deg": 27.912},
+    {"bus_id": 26, "vm_pu": 1.015, "va_deg": 29.306},
+    {"bus_id": 27, "vm_pu": 0.968, "va_deg": 15.338},
+    {"bus_id": 28, "vm_pu": 0.961232, "va_deg": 13.641},
+    {"bus_id": 29, "vm_pu": 0.963256, "va_deg": 12.742},
+    {"bus_id": 30, "vm_pu": 0.985582, "va_deg": 18.901},
+    {"bus_id": 31, "vm_pu": 0.967, "va_deg": 12.868},
+    {"bus_id": 32, "vm_pu": 0.963, "va_deg": 14.944},
+    {"bus_id": 33, "vm_pu": 0.969967, "va_deg": 10.58},
+    {"bus_id": 34, "vm_pu": 0.984, "va_deg": 10.953},
+    {"bus_id": 35, "vm_pu": 0.980462, "va_deg": 10.535},
+    {"bus_id": 36, "vm_pu": 0.98, "va_deg": 10.538},
+    {"bus_id": 37, "vm_pu": 0.990676, "va_deg": 11.43},
+    {"bus_id": 38, "vm_pu": 0.961145, "va_deg": 16.715},
+    {"bus_id": 39, "vm_pu": 0.970192, "va_deg": 7.831},
+    {"bus_id": 40, "vm_pu": 0.97, "va_deg": 6.589},
+    {"bus_id": 41, "vm_pu": 0.966254, "va_deg": 5.963},
+    {"bus_id": 42, "vm_pu": 0.985, "va_deg": 7.277},
+    {"bus_id": 43, "vm_pu": 0.977456, "va_deg": 10.363},
+    {"bus_id": 44, "vm_pu": 0.982641, "va_deg": 11.89},
+    {"bus_id": 45, "vm_pu": 0.984284, "va_deg": 13.43},
+    {"bus_id": 46, "vm_pu": 1.005, "va_deg": 15.741},
+    {"bus_id": 47, "vm_pu": 1.014358, "va_deg": 17.191},
+    {"bus_id": 48, "vm_pu": 1.020108, "va_deg": 17.926},
+    {"bus_id": 49, "vm_pu": 1.025, "va_deg": 19.144},
+    {"bus_id": 50, "vm_pu": 1.000626, "va_deg": 17.08},
+    {"bus_id": 51, "vm_pu": 0.965919, "va_deg": 14.471},
+    {"bus_id": 52, "vm_pu": 0.955741, "va_deg": 13.515},
+    {"bus_id": 53, "vm_pu": 0.944311, "va_deg": 12.502},
+    {"bus_id": 54, "vm_pu": 0.955, "va_deg": 13.543},
+    {"bus_id": 55, "vm_pu": 0.952, "va_deg": 13.286},
+    {"bus_id": 56, "vm_pu": 0.954, "va_deg": 13.445},
+    {"bus_id": 57, "vm_pu": 0.970579, "va_deg": 14.619},
+    {"bus_id": 58, "vm_pu": 0.958479, "va_deg": 13.737},
+    {"bus_id": 59, "vm_pu": 0.985, "va_deg": 18.104},
+    {"bus_id": 60, "vm_pu": 0.993185, "va_deg": 22.361},
+    {"bus_id": 61, "vm_pu": 0.995, "va_deg": 23.27},
+    {"bus_id": 62, "vm_pu": 0.998, "va_deg": 22.659},
+    {"bus_id": 63, "vm_pu": 0.968076, "va_deg": 21.835},
+    {"bus_id": 64, "vm_pu": 0.983298, "va_deg": 23.793},
+    {"bus_id": 65, "vm_pu": 1.005, "va_deg": 27.258},
+    {"bus_id": 66, "vm_pu": 1.05, "va_deg": 26.717},
+    {"bus_id": 67, "vm_pu": 1.020381, "va_deg": 24.152},
+    {"bus_id": 68, "vm_pu": 1.003271, "va_deg": 27.535},
+    {"bus_id": 69, "vm_pu": 1.035, "va_deg": 30.0},
+    {"bus_id": 70, "vm_pu": 0.984, "va_deg": 22.509},
+    {"bus_id": 71, "vm_pu": 0.986844, "va_deg": 22.084},
+    {"bus_id": 72, "vm_pu": 0.98, "va_deg": 20.873},
+    {"bus_id": 73, "vm_pu": 0.991, "va_deg": 21.883},
+    {"bus_id": 74, "vm_pu": 0.958, "va_deg": 21.567},
+    {"bus_id": 75, "vm_pu": 0.967155, "va_deg": 22.949},
+    {"bus_id": 76, "vm_pu": 0.943, "va_deg": 22.114},
+    {"bus_id": 77, "vm_pu": 1.006, "va_deg": 27.148},
+    {"bus_id": 78, "vm_pu": 1.002796, "va_deg": 26.83},
+    {"bus_id": 79, "vm_pu": 1.008262, "va_deg": 27.171},
+    {"bus_id": 80, "vm_pu": 1.04, "va_deg": 29.608},
+    {"bus_id": 81, "vm_pu": 0.996976, "va_deg": 28.339},
+    {"bus_id": 82, "vm_pu": 0.988615, "va_deg": 28.074},
+    {"bus_id": 83, "vm_pu": 0.984233, "va_deg": 29.402},
+    {"bus_id": 84, "vm_pu": 0.97944, "va_deg": 32.144},
+    {"bus_id": 85, "vm_pu": 0.985, "va_deg": 33.807},
+    {"bus_id": 86, "vm_pu": 0.985562, "va_deg": 32.333},
+    {"bus_id": 87, "vm_pu": 1.015, "va_deg": 32.626},
+    {"bus_id": 88, "vm_pu": 0.987767, "va_deg": 37.202},
+    {"bus_id": 89, "vm_pu": 1.005, "va_deg": 41.33},
+    {"bus_id": 90, "vm_pu": 0.985, "va_deg": 34.549},
+    {"bus_id": 91, "vm_pu": 0.98, "va_deg": 34.58},
+    {"bus_id": 92, "vm_pu": 0.99, "va_deg": 35.196},
+    {"bus_id": 93, "vm_pu": 0.985638, "va_deg": 31.999},
+    {"bus_id": 94, "vm_pu": 0.989908, "va_deg": 29.66},
+    {"bus_id": 95, "vm_pu": 0.980544, "va_deg": 28.634},
+    {"bus_id": 96, "vm_pu": 0.992409, "va_deg": 28.388},
+    {"bus_id": 97, "vm_pu": 1.011004, "va_deg": 28.632},
+    {"bus_id": 98, "vm_pu": 1.02303, "va_deg": 28.091},
+    {"bus_id": 99, "vm_pu": 1.01, "va_deg": 27.896},
+    {"bus_id": 100, "vm_pu": 1.017, "va_deg": 28.93},
+    {"bus_id": 101, "vm_pu": 0.990165, "va_deg": 30.65},
+    {"bus_id": 102, "vm_pu": 0.988665, "va_deg": 33.58},
+    {"bus_id": 103, "vm_pu": 1.01, "va_deg": 24.928},
+    {"bus_id": 104, "vm_pu": 0.971, "va_deg": 25.094},
+    {"bus_id": 105, "vm_pu": 0.965, "va_deg": 18.769},
+    {"bus_id": 106, "vm_pu": 0.960688, "va_deg": 19.027},
+    {"bus_id": 107, "vm_pu": 0.952, "va_deg": 15.859},
+    {"bus_id": 108, "vm_pu": 0.966385, "va_deg": 18.172},
+    {"bus_id": 109, "vm_pu": 0.967193, "va_deg": 17.967},
+    {"bus_id": 110, "vm_pu": 0.973, "va_deg": 17.773},
+    {"bus_id": 111, "vm_pu": 0.98, "va_deg": 19.382},
+    {"bus_id": 112, "vm_pu": 0.975, "va_deg": 14.716},
+    {"bus_id": 113, "vm_pu": 0.993, "va_deg": 13.968},
+    {"bus_id": 114, "vm_pu": 0.960347, "va_deg": 14.572},
+    {"bus_id": 115, "vm_pu": 0.960308, "va_deg": 14.556},
+    {"bus_id": 116, "vm_pu": 1.005, "va_deg": 27.142},
+    {"bus_id": 117, "vm_pu": 0.973802, "va_deg": 11.171},
+    {"bus_id": 118, "vm_pu": 0.949327, "va_deg": 22.095}
+  ],
+  "line_flows": [
+    {"line_id": 0, "from_bus": 1, "to_bus": 2, "p_from_mw": -14.097, "loading_percent": 67.4},
+    {"line_id": 1, "from_bus": 1, "to_bus": 3, "p_from_mw": -41.612, "loading_percent": 84.79},
+    {"line_id": 2, "from_bus": 4, "to_bus": 5, "p_from_mw": -102.117, "loading_percent": 79.28},
+    {"line_id": 3, "from_bus": 3, "to_bus": 5, "p_from_mw": -69.019, "loading_percent": 80.92},
+    {"line_id": 4, "from_bus": 5, "to_bus": 6, "p_from_mw": 90.082, "loading_percent": 81.44},
+    {"line_id": 5, "from_bus": 6, "to_bus": 7, "p_from_mw": 34.144, "loading_percent": 76.75},
+    {"line_id": 6, "from_bus": 8, "to_bus": 9, "p_from_mw": -455.02, "loading_percent": 82.34},
+    {"line_id": 7, "from_bus": 9, "to_bus": 10, "p_from_mw": -459.938, "loading_percent": 82.62},
+    {"line_id": 8, "from_bus": 4, "to_bus": 11, "p_from_mw": 64.105, "loading_percent": 79.84},
+    {"line_id": 9, "from_bus": 5, "to_bus": 11, "p_from_mw": 76.976, "loading_percent": 79.74},
+    {"line_id": 10, "from_bus": 11, "to_bus": 12, "p_from_mw": 33.765, "loading_percent": 78.76},
+    {"line_id": 11, "from_bus": 2, "to_bus": 12, "p_from_mw": -33.582, "loading_percent": 81.36},
+    {"line_id": 12, "from_bus": 3, "to_bus": 12, "p_from_mw": -10.531, "loading_percent": 56.94},
+    {"line_id": 13, "from_bus": 7, "to_bus": 12, "p_from_mw": 14.011, "loading_percent": 54.3},
+    {"line_id": 14, "from_bus": 11, "to_bus": 13, "p_from_mw": 33.851, "loading_percent": 76.74},
+    {"line_id": 15, "from_bus": 12, "to_bus": 14, "p_from_mw": 19.355, "loading_percent": 69.41},
+    {"line_id": 16, "from_bus": 13, "to_bus": 15, "p_from_mw": 1.9, "loading_percent": 14.92},
+    {"line_id": 17, "from_bus": 14, "to_bus": 15, "p_from_mw": 4.884, "loading_percent": 20.22},
+    {"line_id": 18, "from_bus": 12, "to_bus": 16, "p_from_mw": 9.51, "loading_percent": 37.0},
+    {"line_id": 19, "from_bus": 15, "to_bus": 17, "p_from_mw": -100.323, "loading_percent": 77.62},
+    {"line_id": 20, "from_bus": 16, "to_bus": 17, "p_from_mw": -16.385, "loading_percent": 60.15},
+    {"line_id": 21, "from_bus": 17, "to_bus": 18, "p_from_mw": 76.089, "loading_percent": 76.43},
+    {"line_id": 22, "from_bus": 18, "to_bus": 19, "p_from_mw": 21.194, "loading_percent": 83.57},
+    {"line_id": 23, "from_bus": 19, "to_bus": 20, "p_from_mw": -7.857, "loading_percent": 33.92},
+    {"line_id": 24, "from_bus": 15, "to_bus": 19, "p_from_mw": 12.554, "loading_percent": 70.72},
+    {"line_id": 25, "from_bus": 20, "to_bus": 21, "p_from_mw": -27.64, "loading_percent": 77.21},
+    {"line_id": 26, "from_bus": 21, "to_bus": 22, "p_from_mw": -42.708, "loading_percent": 79.81},
+    {"line_id": 27, "from_bus": 22, "to_bus": 23, "p_from_mw": -53.199, "loading_percent": 80.01},
+    {"line_id": 28, "from_bus": 23, "to_bus": 24, "p_from_mw": 8.613, "loading_percent": 47.98},
+    {"line_id": 29, "from_bus": 23, "to_bus": 25, "p_from_mw": -161.113, "loading_percent": 79.34},
+    {"line_id": 30, "from_bus": 25, "to_bus": 27, "p_from_mw": 143.507, "loading_percent": 79.99},
+    {"line_id": 31, "from_bus": 27, "to_bus": 28, "p_from_mw": 32.434, "loading_percent": 78.91},
+    {"line_id": 32, "from_bus": 28, "to_bus": 29, "p_from_mw": 14.032, "loading_percent": 55.13},
+    {"line_id": 33, "from_bus": 8, "to_bus": 30, "p_from_mw": 86.483, "loading_percent": 91.39},
+    {"line_id": 34, "from_bus": 26, "to_bus": 30, "p_from_mw": 213.248, "loading_percent": 76.29},
+    {"line_id": 35, "from_bus": 17, "to_bus": 31, "p_from_mw": 16.029, "loading_percent": 69.43},
+    {"line_id": 36, "from_bus": 29, "to_bus": 31, "p_from_mw": -8.822, "loading_percent": 43.33},
+    {"line_id": 37, "from_bus": 23, "to_bus": 32, "p_from_mw": 91.831, "loading_percent": 79.02},
+    {"line_id": 38, "from_bus": 31, "to_bus": 32, "p_from_mw": -30.114, "loading_percent": 80.67},
+    {"line_id": 39, "from_bus": 27, "to_bus": 32, "p_from_mw": 9.567, "loading_percent": 35.31},
+    {"line_id": 40, "from_bus": 15, "to_bus": 33, "p_from_mw": 11.98, "loading_percent": 46.22},
+    {"line_id": 41, "from_bus": 19, "to_bus": 34, "p_from_mw": 0.248, "loading_percent": 41.13},
+    {"line_id": 42, "from_bus": 35, "to_bus": 36, "p_from_mw": 0.433, "loading_percent": 15.1},
+    {"line_id": 43, "from_bus": 35, "to_bus": 37, "p_from_mw": -33.28, "loading_percent": 78.97},
+    {"line_id": 44, "from_bus": 33, "to_bus": 37, "p_from_mw": -13.028, "loading_percent": 62.99},
+    {"line_id": 45, "from_bus": 34, "to_bus": 36, "p_from_mw": 27.884, "loading_percent": 74.26},
+    {"line_id": 46, "from_bus": 34, "to_bus": 37, "p_from_mw": -97.948, "loading_percent": 82.27},
+    {"line_id": 47, "from_bus": 37, "to_bus": 39, "p_from_mw": 57.945, "loading_percent": 84.35},
+    {"line_id": 48, "from_bus": 37, "to_bus": 40, "p_from_mw": 47.387, "loading_percent": 86.21},
+    {"line_id": 49, "from_bus": 30, "to_bus": 38, "p_from_mw": 70.323, "loading_percent": 89.5},
+    {"line_id": 50, "from_bus": 39, "to_bus": 40, "p_from_mw": 31.037, "loading_percent": 91.79},
+    {"line_id": 51, "from_bus": 40, "to_bus": 41, "p_from_mw": 21.4, "loading_percent": 76.17},
+    {"line_id": 52, "from_bus": 40, "to_bus": 42, "p_from_mw": -7.939, "loading_percent": 39.35},
+    {"line_id": 53, "from_bus": 41, "to_bus": 42, "p_from_mw": -18.486, "loading_percent": 72.01},
+    {"line_id": 54, "from_bus": 43, "to_bus": 44, "p_from_mw": -10.274, "loading_percent": 37.44},
+    {"line_id": 55, "from_bus": 34, "to_bus": 43, "p_from_mw": 6.446, "loading_percent": 22.95},
+    {"line_id": 56, "from_bus": 44, "to_bus": 45, "p_from_mw": -27.501, "loading_percent": 67.04},
+    {"line_id": 57, "from_bus": 45, "to_bus": 46, "p_from_mw": -30.984, "loading_percent": 69.57},
+    {"line_id": 58, "from_bus": 46, "to_bus": 47, "p_from_mw": -20.601, "loading_percent": 53.35},
+    {"line_id": 59, "from_bus": 46, "to_bus": 48, "p_from_mw": -20.988, "loading_percent": 75.62},
+    {"line_id": 60, "from_bus": 47, "to_bus": 49, "p_from_mw": -56.405, "loading_percent": 200.69},
+    {"line_id": 61, "from_bus": 42, "to_bus": 49, "p_from_mw": -62.439, "loading_percent": 76.92},
+    {"line_id": 62, "from_bus": 42, "to_bus": 49, "p_from_mw": -62.439, "loading_percent": 76.92},
+    {"line_id": 63, "from_bus": 45, "to_bus": 49, "p_from_mw": -53.675, "loading_percent": 86.35},
+    {"line_id": 64, "from_bus": 48, "to_bus": 49, "p_from_mw": -42.048, "loading_percent": 96.62},
+    {"line_id": 65, "from_bus": 49, "to_bus": 50, "p_from_mw": 54.366, "loading_percent": 81.13},
+    {"line_id": 66, "from_bus": 49, "to_bus": 51, "p_from_mw": 66.978, "loading_percent": 80.59},
+    {"line_id": 67, "from_bus": 51, "to_bus": 52, "p_from_mw": 28.622, "loading_percent": 80.26},
+    {"line_id": 68, "from_bus": 52, "to_bus": 53, "p_from_mw": 10.781, "loading_percent": 39.18},
+    {"line_id": 69, "from_bus": 53, "to_bus": 54, "p_from_mw": -14.52, "loading_percent": 56.46},
+    {"line_id": 70, "from_bus": 49, "to_bus": 54, "p_from_mw": 37.353, "loading_percent": 79.26},
+    {"line_id": 71, "from_bus": 49, "to_bus": 54, "p_from_mw": 37.342, "loading_percent": 79.26},
+    {"line_id": 72, "from_bus": 54, "to_bus": 55, "p_from_mw": 6.376, "loading_percent": 23.41},
+    {"line_id": 73, "from_bus": 54, "to_bus": 56, "p_from_mw": 17.81, "loading_percent": 65.41},
+    {"line_id": 74, "from_bus": 55, "to_bus": 56, "p_from_mw": -18.748, "loading_percent": 70.83},
+    {"line_id": 75, "from_bus": 56, "to_bus": 57, "p_from_mw": -22.539, "loading_percent": 78.85},
+    {"line_id": 76, "from_bus": 50, "to_bus": 57, "p_from_mw": 34.932, "loading_percent": 78.0},
+    {"line_id": 77, "from_bus": 56, "to_bus": 58, "p_from_mw": -5.676, "loading_percent": 23.72},
+    {"line_id": 78, "from_bus": 51, "to_bus": 58, "p_from_mw": 17.84, "loading_percent": 64.33},
+    {"line_id": 79, "from_bus": 54, "to_bus": 59, "p_from_mw": -33.463, "loading_percent": 87.18},
+    {"line_id": 80, "from_bus": 56, "to_bus": 59, "p_from_mw": -30.572, "loading_percent": 86.94},
+    {"line_id": 81, "from_bus": 56, "to_bus": 59, "p_from_mw": -32.039, "loading_percent": 86.99},
+    {"line_id": 82, "from_bus": 55, "to_bus": 59, "p_from_mw": -37.541, "loading_percent": 86.22},
+    {"line_id": 83, "from_bus": 59, "to_bus": 60, "p_from_mw": -48.57, "loading_percent": 89.89},
+    {"line_id": 84, "from_bus": 59, "to_bus": 61, "p_from_mw": -56.967, "loading_percent": 88.3},
+    {"line_id": 85, "from_bus": 60, "to_bus": 61, "p_from_mw": -114.218, "loading_percent": 81.56},
+    {"line_id": 86, "from_bus": 60, "to_bus": 62, "p_from_mw": -10.564, "loading_percent": 44.91},
+    {"line_id": 87, "from_bus": 61, "to_bus": 62, "p_from_mw": 25.225, "loading_percent": 79.28},
+    {"line_id": 88, "from_bus": 63, "to_bus": 64, "p_from_mw": -167.48, "loading_percent": 86.81},
+    {"line_id": 89, "from_bus": 38, "to_bus": 65, "p_from_mw": -180.145, "loading_percent": 79.6},
+    {"line_id": 90, "from_bus": 64, "to_bus": 65, "p_from_mw": -201.913, "loading_percent": 87.25},
+    {"line_id": 91, "from_bus": 49, "to_bus": 66, "p_from_mw": -151.974, "loading_percent": 92.13},
+    {"line_id": 92, "from_bus": 49, "to_bus": 66, "p_from_mw": -151.974, "loading_percent": 92.13},
+    {"line_id": 93, "from_bus": 62, "to_bus": 66, "p_from_mw": -37.193, "loading_percent": 80.05},
+    {"line_id": 94, "from_bus": 62, "to_bus": 67, "p_from_mw": -25.574, "loading_percent": 83.52},
+    {"line_id": 95, "from_bus": 66, "to_bus": 67, "p_from_mw": 51.717, "loading_percent": 77.86},
+    {"line_id": 96, "from_bus": 65, "to_bus": 68, "p_from_mw": -29.288, "loading_percent": 104.84},
+    {"line_id": 97, "from_bus": 47, "to_bus": 69, "p_from_mw": 0.0, "loading_percent": 0.0},
+    {"line_id": 98, "from_bus": 49, "to_bus": 69, "p_from_mw": -55.702, "loading_percent": 96.79},
+    {"line_id": 99, "from_bus": 69, "to_bus": 70, "p_from_mw": 109.851, "loading_percent": 81.05},
+    {"line_id": 100, "from_bus": 24, "to_bus": 70, "p_from_mw": -6.633, "loading_percent": 25.84},
+    {"line_id": 101, "from_bus": 70, "to_bus": 71, "p_from_mw": 17.283, "loading_percent": 75.95},
+    {"line_id": 102, "from_bus": 24, "to_bus": 72, "p_from_mw": 1.677, "loading_percent": 13.03},
+    {"line_id": 103, "from_bus": 71, "to_bus": 72, "p_from_mw": 11.602, "loading_percent": 41.49},
+    {"line_id": 104, "from_bus": 71, "to_bus": 73, "p_from_mw": 5.641, "loading_percent": 42.94},
+    {"line_id": 105, "from_bus": 70, "to_bus": 74, "p_from_mw": 16.126, "loading_percent": 73.51},
+    {"line_id": 106, "from_bus": 70, "to_bus": 75, "p_from_mw": -1.468, "loading_percent": 37.65},
+    {"line_id": 107, "from_bus": 69, "to_bus": 75, "p_from_mw": 109.792, "loading_percent": 79.87},
+    {"line_id": 108, "from_bus": 74, "to_bus": 75, "p_from_mw": -56.215, "loading_percent": 86.16},
+    {"line_id": 109, "from_bus": 76, "to_bus": 77, "p_from_mw": -61.971, "loading_percent": 80.83},
+    {"line_id": 110, "from_bus": 69, "to_bus": 77, "p_from_mw": 55.567, "loading_percent": 71.85},
+    {"line_id": 111, "from_bus": 75, "to_bus": 77, "p_from_mw": -37.512, "loading_percent": 85.72},
+    {"line_id": 112, "from_bus": 77, "to_bus": 78, "p_from_mw": 48.603, "loading_percent": 86.8},
+    {"line_id": 113, "from_bus": 78, "to_bus": 79, "p_from_mw": -28.24, "loading_percent": 82.73},
+    {"line_id": 114, "from_bus": 77, "to_bus": 80, "p_from_mw": -103.837, "loading_percent": 84.53},
+    {"line_id": 115, "from_bus": 77, "to_bus": 80, "p_from_mw": -47.87, "loading_percent": 84.52},
+    {"line_id": 116, "from_bus": 79, "to_bus": 80, "p_from_mw": -69.679, "loading_percent": 85.1},
+    {"line_id": 117, "from_bus": 68, "to_bus": 81, "p_from_mw": -66.262, "loading_percent": 119.57},
+    {"line_id": 118, "from_bus": 77, "to_bus": 82, "p_from_mw": -10.357, "loading_percent": 80.57},
+    {"line_id": 119, "from_bus": 82, "to_bus": 83, "p_from_mw": -52.746, "loading_percent": 89.05},
+    {"line_id": 120, "from_bus": 83, "to_bus": 84, "p_from_mw": -26.841, "loading_percent": 86.58},
+    {"line_id": 121, "from_bus": 83, "to_bus": 85, "p_from_mw": -46.014, "loading_percent": 86.16},
+    {"line_id": 122, "from_bus": 84, "to_bus": 85, "p_from_mw": -38.759, "loading_percent": 85.42},
+    {"line_id": 123, "from_bus": 85, "to_bus": 86, "p_from_mw": 18.725, "loading_percent": 70.95},
+    {"line_id": 124, "from_bus": 85, "to_bus": 88, "p_from_mw": -54.591, "loading_percent": 86.7},
+    {"line_id": 125, "from_bus": 85, "to_bus": 89, "p_from_mw": -74.397, "loading_percent": 83.56},
+    {"line_id": 126, "from_bus": 88, "to_bus": 89, "p_from_mw": -100.506, "loading_percent": 81.26},
+    {"line_id": 127, "from_bus": 89, "to_bus": 90, "p_from_mw": 61.474, "loading_percent": 84.5},
+    {"line_id": 128, "from_bus": 89, "to_bus": 90, "p_from_mw": 117.051, "loading_percent": 84.51},
+    {"line_id": 129, "from_bus": 90, "to_bus": 91, "p_from_mw": 1.052, "loading_percent": 16.56},
+    {"line_id": 130, "from_bus": 89, "to_bus": 92, "p_from_mw": 210.512, "loading_percent": 83.56},
+    {"line_id": 131, "from_bus": 89, "to_bus": 92, "p_from_mw": 66.412, "loading_percent": 83.56},
+    {"line_id": 132, "from_bus": 91, "to_bus": 92, "p_from_mw": -9.633, "loading_percent": 40.95},
+    {"line_id": 133, "from_bus": 92, "to_bus": 93, "p_from_mw": 60.656, "loading_percent": 84.31},
+    {"line_id": 134, "from_bus": 92, "to_bus": 94, "p_from_mw": 55.588, "loading_percent": 85.14},
+    {"line_id": 135, "from_bus": 93, "to_bus": 94, "p_from_mw": 48.491, "loading_percent": 86.21},
+    {"line_id": 136, "from_bus": 94, "to_bus": 95, "p_from_mw": 42.704, "loading_percent": 83.13},
+    {"line_id": 137, "from_bus": 80, "to_bus": 96, "p_from_mw": 16.779, "loading_percent": 76.68},
+    {"line_id": 138, "from_bus": 82, "to_bus": 96, "p_from_mw": -11.234, "loading_percent": 45.78},
+    {"line_id": 139, "from_bus": 94, "to_bus": 96, "p_from_mw": 22.173, "loading_percent": 87.39},
+    {"line_id": 140, "from_bus": 80, "to_bus": 97, "p_from_mw": 24.586, "loading_percent": 77.99},
+    {"line_id": 141, "from_bus": 80, "to_bus": 98, "p_from_mw": 28.378, "loading_percent": 78.98},
+    {"line_id": 142, "from_bus": 80, "to_bus": 99, "p_from_mw": 17.754, "loading_percent": 70.05},
+    {"line_id": 143, "from_bus": 92, "to_bus": 100, "p_from_mw": 34.065, "loading_percent": 85.44},
+    {"line_id": 144, "from_bus": 94, "to_bus": 100, "p_from_mw": 7.268, "loading_percent": 81.71},
+    {"line_id": 145, "from_bus": 95, "to_bus": 96, "p_from_mw": 0.901, "loading_percent": 79.21},
+    {"line_id": 146, "from_bus": 96, "to_bus": 97, "p_from_mw": -8.583, "loading_percent": 76.76},
+    {"line_id": 147, "from_bus": 98, "to_bus": 100, "p_from_mw": -7.371, "loading_percent": 27.87},
+    {"line_id": 148, "from_bus": 99, "to_bus": 100, "p_from_mw": -23.517, "loading_percent": 82.81},
+    {"line_id": 149, "from_bus": 100, "to_bus": 101, "p_from_mw": -18.242, "loading_percent": 85.67},
+    {"line_id": 150, "from_bus": 92, "to_bus": 102, "p_from_mw": 47.737, "loading_percent": 85.28},
+    {"line_id": 151, "from_bus": 101, "to_bus": 102, "p_from_mw": -42.11, "loading_percent": 86.1},
+    {"line_id": 152, "from_bus": 100, "to_bus": 103, "p_from_mw": 130.042, "loading_percent": 85.5},
+    {"line_id": 153, "from_bus": 100, "to_bus": 104, "p_from_mw": 35.939, "loading_percent": 53.6},
+    {"line_id": 154, "from_bus": 103, "to_bus": 104, "p_from_mw": 5.088, "loading_percent": 49.64},
+    {"line_id": 155, "from_bus": 103, "to_bus": 105, "p_from_mw": 67.399, "loading_percent": 119.92},
+    {"line_id": 156, "from_bus": 100, "to_bus": 106, "p_from_mw": 76.337, "loading_percent": 100.5},
+    {"line_id": 157, "from_bus": 104, "to_bus": 105, "p_from_mw": 0.0, "loading_percent": 0.0},
+    {"line_id": 158, "from_bus": 105, "to_bus": 106, "p_from_mw": -5.325, "loading_percent": 35.15},
+    {"line_id": 159, "from_bus": 105, "to_bus": 107, "p_from_mw": 25.52, "loading_percent": 76.26},
+    {"line_id": 160, "from_bus": 105, "to_bus": 108, "p_from_mw": 11.553, "loading_percent": 40.86},
+    {"line_id": 161, "from_bus": 106, "to_bus": 107, "p_from_mw": 26.904, "loading_percent": 89.99},
+    {"line_id": 162, "from_bus": 108, "to_bus": 109, "p_from_mw": 9.359, "loading_percent": 37.34},
+    {"line_id": 163, "from_bus": 103, "to_bus": 110, "p_from_mw": 69.639, "loading_percent": 91.6},
+    {"line_id": 164, "from_bus": 109, "to_bus": 110, "p_from_mw": 1.328, "loading_percent": 31.64},
+    {"line_id": 165, "from_bus": 110, "to_bus": 111, "p_from_mw": -34.99, "loading_percent": 78.39},
+    {"line_id": 166, "from_bus": 110, "to_bus": 112, "p_from_mw": 68.475, "loading_percent": 78.92},
+    {"line_id": 167, "from_bus": 17, "to_bus": 113, "p_from_mw": 3.046, "loading_percent": 22.12},
+    {"line_id": 168, "from_bus": 32, "to_bus": 113, "p_from_mw": 3.422, "loading_percent": 63.8},
+    {"line_id": 169, "from_bus": 32, "to_bus": 114, "p_from_mw": 10.256, "loading_percent": 36.73},
+    {"line_id": 170, "from_bus": 27, "to_bus": 115, "p_from_mw": 18.483, "loading_percent": 68.27},
+    {"line_id": 171, "from_bus": 114, "to_bus": 115, "p_from_mw": 2.444, "loading_percent": 8.76},
+    {"line_id": 172, "from_bus": 12, "to_bus": 117, "p_from_mw": 20.176, "loading_percent": 74.14},
+    {"line_id": 173, "from_bus": 75, "to_bus": 118, "p_from_mw": 36.029, "loading_percent": 74.89},
+    {"line_id": 174, "from_bus": 76, "to_bus": 118, "p_from_mw": -2.532, "loading_percent": 39.5}
+  ],
+  "total_generation_mw": 4430.119,
+  "total_load_mw": 4290.775,
+  "total_loss_mw": 139.344,
+  "violations": {
+    "voltage": [
+      {"bus_id": 25, "vm_pu": 1.05, "va_deg": 27.912},
+      {"bus_id": 53, "vm_pu": 0.944311, "va_deg": 12.502},
+      {"bus_id": 66, "vm_pu": 1.05, "va_deg": 26.717},
+      {"bus_id": 76, "vm_pu": 0.943, "va_deg": 22.114},
+      {"bus_id": 118, "vm_pu": 0.949327, "va_deg": 22.095}
+    ],
+    "thermal": [
+      {"line_id": 60, "loading_percent": 200.69},
+      {"line_id": 96, "loading_percent": 104.84},
+      {"line_id": 117, "loading_percent": 119.57},
+      {"line_id": 155, "loading_percent": 119.92},
+      {"line_id": 156, "loading_percent": 100.5}
+    ]
+  },
+  "next_step": "Consider load shedding or voltage adjustments to mitigate violations.",
+  "cannot_answer": null
+}
+
+[verification gate]   outcome: pass_retry after 2 attempt(s)
+attempt 1: FAIL
+  V1  converged              pass  residual 0
+  V2  balance                pass  
+  V3  no_isolated_buses      pass  residual 0
+  V4  traceability           pass  residual 0
+  V5  currency               pass  residual 0
+  V6  argument_grounding     pass  every mutating-tool argument traces to the request or a prior tool output
+  V7  claims_from_tools      pass  no solved state in the trace to re-derive a claim from
+  V8  request_applied        FAIL  no solved state after the network changes
+  V10 complete_state         FAIL  no run_powerflow output in the trace to report the state from (call run_powerflow: after the last change, or on the base case for a contingency scan)
+  V11 formulation_matches_trace pass  the declared operations are the ones the trace shows
+  V9  plausible_state        pass  no solved state
+attempt 2: pass
+  V1  converged              pass  residual 0
+  V2  balance                pass  residual 0
+  V3  no_isolated_buses      pass  residual 0
+  V4  traceability           pass  residual 0
+  V5  currency               pass  residual 0
+  V6  argument_grounding     pass  every mutating-tool argument traces to the request or a prior tool output
+  V7  claims_from_tools      pass  answer matches the agent's own last solved state
+  V8  request_applied        pass  every change applied and reflected in the final state
+  V10 complete_state         pass  all 118 buses reported; 9 of 177 branches missing from line_flows (recorded, not enforced)
+  V11 formulation_matches_trace pass  the declared operations are the ones the trace shows
+  V9  plausible_state        pass  voltages within 0.8 to 1.2 p.u., losses below 10 % of the load
+[retry message to the model]
+Verification failed before this answer could be accepted. Failed condition(s):
+- no solved state after the network changes
+- no run_powerflow output in the trace to report the state from (call run_powerflow: after the last change, or on the base case for a contingency scan) (report every bus in bus_voltages and every branch in line_flows, copied from the last run_powerflow output)
+Produce a corrected final answer. You may call tools again if needed, but only to inspect the current state (e.g. re-running the power flow) -- do not undo or reverse a network change the request asked for (do not reconnect a line it asked you to disconnect, do not revert a load value it asked you to set) just to reach a state that passes verification. If the requested state genuinely fails, report that failure. Do not change a number without a tool call to support it.

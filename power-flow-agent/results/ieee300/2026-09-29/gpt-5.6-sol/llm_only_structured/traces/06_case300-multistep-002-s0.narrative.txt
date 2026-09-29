@@ -1,0 +1,24 @@
+RUN 06  |  case300-multistep-002-s0  |  llm_only:structured  |  gpt-5.6-sol  |  IEEE 300-bus  |  seed 0  |  difficulty multistep
+Request: Load the 300-bus test case (case300), disconnect the line between bus 137 and bus 188, disconnect the line between bus 195 and bus 219, and finally rerun the power flow, then list every line whose loading is above 100%.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM answered directly from the prompt (no tools): {"formulation":[{"tool":"load_case","args":{"case_name":"case300"}},{"tool":"disconnect_line","args":{"from_bus":137,"to_bus":188}},{"tool":"disconnect_line","args":{"from_bus":195,"to_bus":219}},{"to...
+  Totals: 1 LLM calls, 0 tool calls, 0 tool rounds, 25552 in / 776 out tokens, $0.0589, 14.2 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> disconnect_line(from_bus=137, to_bus=188) -> disconnect_line(from_bus=195, to_bus=219) -> run_powerflow()
+  declared: load_case(case_name="case300") -> disconnect_line(from_bus=137, to_bus=188) -> disconnect_line(from_bus=195, to_bus=219) -> run_powerflow()   [no tools: the model states the operations, nothing is executed]
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 4, untraceable: 4 -> traceable answer: no
+  untraceable values: ['0.0', '0.0', '0.0']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: ESCALATED TO A PERSON
+  computation correct (solved): no   reason: no_state_reported
+  escalation detected via: cannot_answer, abstention_json, declared_inability
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case300-multistep-002-s0_run0.json

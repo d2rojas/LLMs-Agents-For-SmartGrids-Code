@@ -1,0 +1,27 @@
+RUN 20  |  case14-plain-016-s0  |  react_nogate  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty plain
+Request: Load case14 and run an N-1 contingency analysis and report the worst single outage.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case14")   (1066 in / 16 out tokens, 0.7 s)
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=251.474
+  2. LLM called run_n1_contingency(top_k=1)   (1152 in / 19 out tokens, 0.7 s)
+       tool run_n1_contingency -> N-1 completed over 20 branches. Worst outage: 5-6 (trafo), V violations=9 (delta=0), thermal violations=9 (delta=9).
+  3. LLM replied without tool calls: { "converged": true, "result": { "worst_outage": { "from_bus": 5, "to_bus": 6, "branch_type": "trafo", "n_voltage_violations": 9, "n_thermal_violations": 9, "de   (4683 in / 180 out tokens, 2.0 s)
+  4. LLM wrote the final answer   (4929 in / 204 out tokens, 2.5 s)
+  Totals: 4 LLM calls, 2 tool calls, 2 tool rounds, 11830 in / 419 out tokens, $0.0020, 6.7 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> run_n1_contingency()
+  executed: load_case(case_name="case14") -> run_n1_contingency(top_k=1)
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 3, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: no_state_reported
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case14-plain-016-s0_run0.json

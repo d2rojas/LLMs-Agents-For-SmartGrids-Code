@@ -1,0 +1,30 @@
+RUN 03  |  case300-ambiguous-011-s0  |  plan_act_nogate  |  gpt-4o-mini  |  IEEE 300-bus  |  seed 0  |  difficulty ambiguous
+Request: Load case300 and set the active load at bus 123 to 102,200 kw.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 3-step plan: load_case(case_name="case300") -> set_active_load(bus_id=123, p_mw=102.2) -> run_powerflow()
+  2. LLM replied without tool calls: {"plan":[{"tool":"load_case","args":{"case_name":"case300"}},{"tool":"set_active_load","args":{"bus_id":123,"p_mw":102.2}},{"tool":"run_powerflow","args":{}}]}   (686 in / 51 out tokens, 2.1 s)
+  3. parser called load_case(case_name="case300")
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=23949.498
+  4. parser called set_active_load(bus_id=123, p_mw=102.2)
+       tool set_active_load -> converged=true, total_load_mw=23967.936, total_generation_mw=24542.65, total_loss_mw=574.714  [gate pass]
+  5. parser called run_powerflow()
+       tool run_powerflow -> case_name="case300", converged=true, total_load_mw=23967.936, total_generation_mw=24542.65, total_loss_mw=574.714, bus_voltages[300], line_flows[345], voltage_violations[93], thermal_violations[34]  [gate pass]
+  6. LLM wrote the final answer   (40791 in / 7066 out tokens, 64.4 s)
+  Totals: 2 LLM calls, 3 tool calls, 1 tool rounds, 41477 in / 7117 out tokens, $0.0105, 66.7 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> modify_load(bus_id=123, p_mw=102.2)
+  executed: load_case(case_name="case300") -> set_active_load(bus_id=123, p_mw=102.2) -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 366, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: incomplete_coverage
+  against the reference: voltage MAE 1.96e-07 p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case300-ambiguous-011-s0_run0.json

@@ -1,0 +1,28 @@
+RUN 01  |  case30-ambiguous-003-s0  |  react_nogate  |  gpt-4o-mini  |  IEEE 30-bus  |  seed 0  |  difficulty ambiguous
+Request: Load the IEEE 30-bus system and disconnect the line between bus three and bus four.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case30"); disconnect_line(from_bus=3, to_bus=4)   (1067 in / 52 out tokens, 0.9 s)
+       tool load_case -> case_name="case30", n_buses=30, n_lines=41, total_load_mw=189.48
+       tool disconnect_line -> converged=true, total_load_mw=189.48, total_generation_mw=192.434, total_loss_mw=2.954  [gate pass]
+  2. LLM called run_powerflow()   (1316 in / 11 out tokens, 0.6 s)
+       tool run_powerflow -> case_name="case30", converged=true, total_load_mw=189.48, total_generation_mw=192.434, total_loss_mw=2.954, bus_voltages[30], line_flows[41], voltage_violations[0], thermal_violations[8]  [gate pass]
+  3. LLM replied without tool calls: { "converged": true, "bus_voltages": [ {"bus_id": 1, "vm_pu": 1.0, "va_deg": 0.0, "is_violation": false, "violation_type": null}, {"bus_id": 2, "vm_pu": 1.0, "v   (5552 in / 4279 out tokens, 38.1 s)
+  4. LLM wrote the final answer   (9897 in / 2942 out tokens, 27.1 s)
+  Totals: 4 LLM calls, 3 tool calls, 2 tool rounds, 17832 in / 7284 out tokens, $0.0070, 66.9 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case30") -> disconnect_line(from_bus=3, to_bus=4)
+  executed: load_case(case_name="case30") -> disconnect_line(from_bus=3, to_bus=4) -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 156, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1, 2] after disconnect_line at call 1)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 2.06e-07 p.u., flow MAE 2.79e-04 MW, KCL mismatch 2.79e-04 MW, power-balance error n/a
+  raw trace: case30-ambiguous-003-s0_run0.json

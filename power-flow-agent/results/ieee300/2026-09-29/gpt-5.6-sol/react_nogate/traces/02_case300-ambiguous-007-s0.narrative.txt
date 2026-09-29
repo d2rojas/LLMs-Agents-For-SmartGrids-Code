@@ -1,0 +1,29 @@
+RUN 02  |  case300-ambiguous-007-s0  |  react_nogate  |  gpt-5.6-sol  |  IEEE 300-bus  |  seed 0  |  difficulty ambiguous
+Request: Load the 300-bus test case (case300) and disconnect the line between bus 135 and bus 136 (1-based).
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case300")   (1079 in / 42 out tokens, 5.0 s)
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=24126.795
+  2. LLM called disconnect_line(from_bus=135, to_bus=136)   (1174 in / 24 out tokens, 2.4 s)
+       tool disconnect_line -> converged=true, total_load_mw=24126.795, total_generation_mw=24827.789, total_loss_mw=700.994  [gate pass]
+  3. LLM called run_powerflow()   (1335 in / 15 out tokens, 1.1 s)
+       tool run_powerflow -> case_name="case300", converged=true, total_load_mw=24126.795, total_generation_mw=24827.789, total_loss_mw=700.994, bus_voltages[300], line_flows[345], voltage_violations[102], thermal_violations[52]  [gate pass]
+  4. LLM replied without tool calls: { "summary": "Loaded case300 and disconnected the branch between buses 135 and 136 using MATPOWER 1-based bus identifiers.", "case_name": "case300", "converged"   (42154 in / 592 out tokens, 13.2 s)
+  5. LLM wrote the final answer   (42560 in / 3193 out tokens, 26.8 s)
+  Totals: 5 LLM calls, 3 tool calls, 3 tool rounds, 88302 in / 3866 out tokens, $0.2153, 48.9 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> disconnect_line(from_bus=135, to_bus=136)
+  executed: load_case(case_name="case300") -> disconnect_line(from_bus=135, to_bus=136) -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 167, untraceable: 0 -> traceable answer: yes
+  stale state quoted: no (re-solved at [1, 2] after disconnect_line at call 1)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: incomplete_coverage
+  against the reference: voltage MAE 3.58e-07 p.u., flow MAE 0 MW, KCL mismatch 0 MW, power-balance error n/a
+  raw trace: case300-ambiguous-007-s0_run0.json

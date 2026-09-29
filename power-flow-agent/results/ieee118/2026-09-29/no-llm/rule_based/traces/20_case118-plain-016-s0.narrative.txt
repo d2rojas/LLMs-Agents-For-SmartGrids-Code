@@ -1,0 +1,28 @@
+RUN 20  |  case118-plain-016-s0  |  rule_based  |  no-llm  |  IEEE 118-bus  |  seed 0  |  difficulty plain
+Request: Load case118 and run an N-1 contingency analysis and report the worst single outage.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 2-step plan: load_case(case_name="case118") -> run_n1_contingency(top_k=1)
+  2. parser called load_case(case_name="case118")
+       tool load_case -> case_name="case118", n_buses=118, n_lines=184, total_load_mw=4238.87
+  3. parser called run_n1_contingency(top_k=1)
+       tool run_n1_contingency -> N-1 completed over 184 branches. Worst outage: 9-10 (line), V violations=4 (delta=0), thermal violations=46 (delta=43).
+  4. parser called run_powerflow()
+       tool run_powerflow -> case_name="case118", converged=true, total_load_mw=4238.87, total_generation_mw=4370.468, total_loss_mw=131.598, bus_voltages[118], line_flows[184], voltage_violations[4], thermal_violations[3]  [gate pass]
+  Totals: 0 LLM calls, 3 tool calls, 1 tool rounds, 0 in / 0 out tokens, $0.0000, 14.7 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case118") -> run_n1_contingency()
+  executed: load_case(case_name="case118") -> run_n1_contingency(top_k=1) -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 620, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 1.31e-07 p.u., flow MAE 1.3623 MW, KCL mismatch 0.0111 MW, power-balance error n/a
+  raw trace: case118-plain-016-s0_run0.json

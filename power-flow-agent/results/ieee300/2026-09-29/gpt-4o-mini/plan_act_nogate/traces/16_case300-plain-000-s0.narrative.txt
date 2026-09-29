@@ -1,0 +1,28 @@
+RUN 16  |  case300-plain-000-s0  |  plan_act_nogate  |  gpt-4o-mini  |  IEEE 300-bus  |  seed 0  |  difficulty plain
+Request: Load case300 and run the power flow, then report the bus with the lowest voltage magnitude.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 2-step plan: load_case(case_name="case300") -> run_powerflow()
+  2. LLM replied without tool calls: {"plan":[{"tool":"load_case","args":{"case_name":"case300"}},{"tool":"run_powerflow","args":{}}]}   (686 in / 29 out tokens, 2.2 s)
+  3. parser called load_case(case_name="case300")
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=23794.41
+  4. parser called run_powerflow()
+       tool run_powerflow -> case_name="case300", converged=true, total_load_mw=23794.41, total_generation_mw=24239.187, total_loss_mw=444.777, bus_voltages[300], line_flows[345], voltage_violations[74], thermal_violations[14]  [gate pass]
+  5. LLM wrote the final answer   (38508 in / 7994 out tokens, 80.0 s)
+  Totals: 2 LLM calls, 2 tool calls, 1 tool rounds, 39194 in / 8023 out tokens, $0.0107, 82.6 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> run_powerflow()
+  executed: load_case(case_name="case300") -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 572, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: incomplete_coverage
+  against the reference: voltage MAE 2.04e-07 p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case300-plain-000-s0_run0.json

@@ -1,0 +1,29 @@
+RUN 17  |  case300-plain-004-s0  |  plan_act_nogate  |  gpt-4o-mini  |  IEEE 300-bus  |  seed 0  |  difficulty plain
+Request: Load case300 and run an N-1 contingency analysis and report the worst single outage.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 2-step plan: load_case(case_name="case300") -> run_n1_contingency(top_k=1, criteria="max_overload", max_candidates=0)
+  2. LLM replied without tool calls: {"plan":[{"tool":"load_case","args":{"case_name":"case300"}},{"tool":"run_n1_contingency","args":{"top_k":1,"criteria":"max_overload","max_candidates":0}}]}   (685 in / 46 out tokens, 1.9 s)
+  3. parser called load_case(case_name="case300")
+       tool load_case -> case_name="case300", n_buses=300, n_lines=345, total_load_mw=23507.164
+  4. parser called run_n1_contingency(top_k=1, criteria="max_overload", max_candidates=0)
+       tool run_n1_contingency -> N-1 completed over 345 branches. Worst outage: 23-25 (line), V violations=0 (delta=-76), thermal violations=0 (delta=-36).
+  5. LLM wrote the final answer   (4786 in / 208 out tokens, 4.8 s)
+  Totals: 2 LLM calls, 2 tool calls, 1 tool rounds, 5471 in / 254 out tokens, $0.0010, 17.6 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case300") -> run_n1_contingency()
+  executed: load_case(case_name="case300") -> run_n1_contingency(top_k=1, criteria="max_overload", max_candidates=0)
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 3, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: ESCALATED TO A PERSON
+  computation correct (solved): no   reason: no_state_reported
+  escalation detected via: cannot_answer, abstention_json
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case300-plain-004-s0_run0.json

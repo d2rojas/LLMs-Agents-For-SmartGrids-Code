@@ -1,0 +1,26 @@
+RUN 19  |  case118-plain-012-s0  |  rule_based  |  no-llm  |  IEEE 118-bus  |  seed 0  |  difficulty plain
+Request: Load the 118-bus test case (case118).
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 1-step plan: load_case(case_name="case118")
+  2. parser called load_case(case_name="case118")
+       tool load_case -> case_name="case118", n_buses=118, n_lines=184, total_load_mw=4241.886
+  3. parser called run_powerflow()
+       tool run_powerflow -> case_name="case118", converged=true, total_load_mw=4241.886, total_generation_mw=4383.722, total_loss_mw=141.836, bus_voltages[118], line_flows[184], voltage_violations[4], thermal_violations[7]  [gate pass]
+  Totals: 0 LLM calls, 2 tool calls, 1 tool rounds, 0 in / 0 out tokens, $0.0000, 0.4 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case118")
+  executed: load_case(case_name="case118") -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 624, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_ok
+  against the reference: voltage MAE 1.28e-07 p.u., flow MAE 1.4076 MW, KCL mismatch 0.0127 MW, power-balance error n/a
+  raw trace: case118-plain-012-s0_run0.json

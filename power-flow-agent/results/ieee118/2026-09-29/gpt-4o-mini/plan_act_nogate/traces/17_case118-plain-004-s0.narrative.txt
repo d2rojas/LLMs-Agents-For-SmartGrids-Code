@@ -1,0 +1,29 @@
+RUN 17  |  case118-plain-004-s0  |  plan_act_nogate  |  gpt-4o-mini  |  IEEE 118-bus  |  seed 0  |  difficulty plain
+Request: Load case118 and run an N-1 contingency analysis and report the worst single outage.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 2-step plan: load_case(case_name="case118") -> run_n1_contingency(top_k=1, criteria="max_overload", max_candidates=0)
+  2. LLM replied without tool calls: {"plan":[{"tool":"load_case","args":{"case_name":"case118"}},{"tool":"run_n1_contingency","args":{"top_k":1,"criteria":"max_overload","max_candidates":0}}]}   (685 in / 46 out tokens, 0.8 s)
+  3. parser called load_case(case_name="case118")
+       tool load_case -> case_name="case118", n_buses=118, n_lines=184, total_load_mw=4232.967
+  4. parser called run_n1_contingency(top_k=1, criteria="max_overload", max_candidates=0)
+       tool run_n1_contingency -> N-1 completed over 184 branches. Worst outage: 9-10 (line), V violations=5 (delta=2), thermal violations=47 (delta=46).
+  5. LLM wrote the final answer   (4825 in / 227 out tokens, 2.2 s)
+  Totals: 2 LLM calls, 2 tool calls, 1 tool rounds, 5510 in / 273 out tokens, $0.0010, 10.3 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case118") -> run_n1_contingency()
+  executed: load_case(case_name="case118") -> run_n1_contingency(top_k=1, criteria="max_overload", max_candidates=0)
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 4, untraceable: 3 -> traceable answer: no
+  untraceable values: ['0.0', '0.0', '0.0']
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): no
+
+OUTCOME: WRONG, UNFLAGGED
+  computation correct (solved): no   reason: no_state_reported
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case118-plain-004-s0_run0.json

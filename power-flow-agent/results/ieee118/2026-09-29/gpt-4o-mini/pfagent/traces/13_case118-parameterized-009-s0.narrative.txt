@@ -1,0 +1,44 @@
+RUN 13  |  case118-parameterized-009-s0  |  pfagent  |  gpt-4o-mini  |  IEEE 118-bus  |  seed 0  |  difficulty parameterized
+Request: Load the 118-bus test case (case118) and run an N-1 contingency analysis ranked by max violations and report the 3 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case118")   (1080 in / 16 out tokens, 0.7 s)
+       tool load_case -> case_name="case118", n_buses=118, n_lines=184, total_load_mw=4298.731
+  2. LLM called run_n1_contingency(top_k=3, criteria="max_violations")   (1168 in / 26 out tokens, 0.7 s)
+       tool run_n1_contingency -> N-1 completed over 184 branches. Worst outage: 9-10 (line), V violations=5 (delta=0), thermal violations=46 (delta=43).
+  3. LLM replied without tool calls: { "converged": true, "result": [ { "outage": "9-10 (line)", "voltage_violations": 5, "thermal_violations": 46, "worst_vm": 0.942648, "worst_loading_percent": 70   (6096 in / 248 out tokens, 3.1 s)
+  4. LLM wrote the final answer   (6410 in / 214 out tokens, 2.5 s)
+  5. LLM called run_powerflow()   (7387 in / 11 out tokens, 0.8 s)
+       tool run_powerflow -> case_name="case118", converged=true, total_load_mw=4298.731, total_generation_mw=4435.816, total_loss_mw=137.084, bus_voltages[118], line_flows[184], voltage_violations[5], thermal_violations[3]  [gate pass]
+  6. LLM replied without tool calls: { "formulation": [ {"tool": "load_case", "args": {"case_name": "case118"}}, {"tool": "run_n1_contingency", "args": {"top_k": 3, "criteria": "max_violations"}},    (23569 in / 11413 out tokens, 755.6 s)
+  Totals: 6 LLM calls, 3 tool calls, 3 tool rounds, 45710 in / 11928 out tokens, $0.0140, 767.6 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case118") -> run_n1_contingency(top_k=3, criteria="max_violations")
+  executed: load_case(case_name="case118") -> run_n1_contingency(top_k=3, criteria="max_violations") -> run_powerflow()
+  verdict:  EXACT
+
+VERIFICATION GATE  (task-level, on the final answer)
+  V1  converged              pass  residual 0
+  V2  balance                pass  residual 0.001
+  V3  no_isolated_buses      pass  residual 0
+  V4  traceability           pass  residual 0
+  V5  currency               pass  residual 0
+  V6  argument_grounding     pass  every mutating-tool argument traces to the request or a prior tool output
+  V7  claims_from_tools      pass  answer matches the agent's own last solved state
+  V8  request_applied        pass  no network change was made
+  V10 complete_state         pass  all 118 buses reported; 1 of 177 branches missing from line_flows (recorded, not enforced)
+  V11 formulation_matches_trace pass  the declared operations are the ones the trace shows
+  V9  plausible_state        pass  voltages within 0.8 to 1.2 p.u., losses below 10 % of the load
+  outcome: pass_retry after 2 attempt(s)
+
+REPORTING
+  numbers in the answer: 620, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 1.36e-07 p.u., flow MAE 0.2494 MW, KCL mismatch 0.0426 MW, power-balance error n/a
+  raw trace: case118-parameterized-009-s0_run0.json

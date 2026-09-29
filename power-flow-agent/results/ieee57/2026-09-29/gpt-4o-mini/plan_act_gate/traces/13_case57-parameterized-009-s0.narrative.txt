@@ -1,0 +1,47 @@
+RUN 13  |  case57-parameterized-009-s0  |  plan_act_gate  |  gpt-4o-mini  |  IEEE 57-bus  |  seed 0  |  difficulty parameterized
+Request: Load the IEEE 57-bus system and run the power flow, then list every line whose loading is above 90%.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 2-step plan: load_case(case_name="case57") -> run_powerflow()
+  2. LLM replied without tool calls: {"plan":[{"tool":"load_case","args":{"case_name":"case57"}},{"tool":"run_powerflow","args":{}}]}   (692 in / 29 out tokens, 1.1 s)
+  3. parser called load_case(case_name="case57")
+       tool load_case -> case_name="case57", n_buses=57, n_lines=80, total_load_mw=1242.374
+  4. parser called run_powerflow()
+       tool run_powerflow -> case_name="case57", converged=true, total_load_mw=1242.374, total_generation_mw=1277.076, total_loss_mw=34.702, bus_voltages[57], line_flows[80], voltage_violations[40], thermal_violations[5]  [gate pass]
+  5. LLM wrote the final answer   (10635 in / 2756 out tokens, 22.2 s)
+  6. LLM called get_status()   (11359 in / 10 out tokens, 0.9 s)
+       tool get_status -> {"active_case": "case57", "network_info": {"case_name": "case57", "n_buses": 57, "n_generators": 7, "n_lines": 80, "n_loads": 42, "total_load_mw": 1242.374, "total_gen_capacity_mw": 1975.88}, "has_last_result": true, "la...
+  7. LLM wrote the final answer   (11600 in / 4809 out tokens, 37.5 s)
+  Totals: 4 LLM calls, 3 tool calls, 1 tool rounds, 34286 in / 7604 out tokens, $0.0097, 62.8 s
+  Status: verification_failed
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case57") -> run_powerflow()
+  executed: load_case(case_name="case57") -> run_powerflow() -> get_status()
+  verdict:  n/a (no tool calls in this method)
+
+VERIFICATION GATE  (task-level, on the final answer)
+  V1  converged              pass  residual 0
+  V2  balance                pass  residual 0
+  V3  no_isolated_buses      pass  residual 0
+  V4  traceability           pass  residual 0
+  V5  currency               pass  residual 0
+  V6  argument_grounding     pass  every mutating-tool argument traces to the request or a prior tool output
+  V7  claims_from_tools      FAIL  answer does not match the agent's own last solved state
+  V8  request_applied        pass  no network change was made
+  V10 complete_state         pass  all 57 buses reported; 15 of 78 branches missing from line_flows (recorded, not enforced)
+  V11 formulation_matches_trace pass  the declared operations are the ones the trace shows
+  V9  plausible_state        pass  voltages span 0.716 to 1.040 p.u.
+  outcome: abstained after 2 attempt(s)
+
+REPORTING
+  numbers in the answer: 0, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: ESCALATED TO A PERSON
+  computation correct (solved): no   reason: formulation
+  escalation detected via: gate_abstained
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case57-parameterized-009-s0_run0.json
