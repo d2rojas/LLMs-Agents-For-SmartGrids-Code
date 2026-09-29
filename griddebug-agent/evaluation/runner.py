@@ -165,6 +165,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.dry_run:
         return 0
 
+    # The paper set has to be reproducible from the repository. A run started from a
+    # dirty tree records "<sha>-dirty", which identifies nothing: the code that
+    # produced it is not in any commit. Smoke runs carry a tag and may be dirty,
+    # because nobody will publish them.
+    commit_now = git_commit()
+    if not args.tag and commit_now.endswith("-dirty"):
+        print("refusing to run the paper set from a tree with uncommitted changes.\n"
+              f"  the run would record {commit_now}, which no one can check out later.\n"
+              "  commit first, or pass --tag <name> if this is a smoke run.")
+        return 2
+
     client = build_client(spec) if spec.uses_llm and any(m != "rule_based" for m in method_names) else None
     manifest = None if args.no_manifest_check else M.load_manifest()
     commit = git_commit()
