@@ -1415,3 +1415,66 @@ def test_a_parallel_run_writes_a_sorted_file_and_a_manifest_that_does_not_say_so
     manifest = json.loads((out_dir / "run_manifest.json").read_text())
     assert "workers" not in manifest
     assert manifest["items_per_arm"] == 2
+
+
+# ------------------------------------------------- the commit a run ran from
+
+
+def test_the_run_records_the_commit_it_ran_from() -> None:
+    """The paper's traceability link starts here.
+
+    A table cell names a run, the run's ``config.json`` names a commit, and the
+    commit can be checked out. Until 2026-09-28 EV recorded no commit at all,
+    the only one of the four case studies that did not, and a missing field is
+    worse than a dirty one: afterwards it cannot tell a clean run from a dirty
+    one. ``evaluation/postprocess.py`` already copied ``git_commit`` out of the
+    manifest; nothing ever put it in.
+    """
+    from evaluation.runner import DIRTY_SUFFIX, git_commit
+
+    commit = git_commit()
+    assert commit
+    assert commit == "unknown" or len(commit.replace(DIRTY_SUFFIX, "")) >= 7
+
+
+def test_a_modified_result_does_not_make_the_code_dirty() -> None:
+    """``results/`` is output, not input.
+
+    Every run, every rescore and every page build rewrites it, so a tree is
+    almost never clean by the time the next run starts. Counting that as dirty
+    is what left the other two case studies reporting "<sha>-dirty" on every
+    run they have, where the suffix stops distinguishing anything. Here it means
+    what it says: the harness itself was uncommitted.
+    """
+    from evaluation.runner import dirty_paths
+
+    assert not [p for p in dirty_paths() if "results/" in p]
+
+
+def test_the_guard_only_stops_a_real_data_run(monkeypatch, tmp_path, capsys) -> None:
+    """A real-data run is the paper set and refuses a dirty tree; a smoke may be dirty.
+
+    The escape is deliberately not a flag: committing the code is the thing that
+    has to happen, and ``--data-source fixture`` already says "this one is a
+    smoke" in the vocabulary this case study uses everywhere else.
+    """
+    from evaluation import runner
+
+    monkeypatch.setattr(runner, "git_commit", lambda: "deadbee" + runner.DIRTY_SUFFIX)
+    monkeypatch.setattr(runner, "dirty_paths", lambda: ["ev-scheduling/evaluation/runner.py"])
+
+    code = runner.main([
+        "--data-source", "cache", "--days", "1", "--budget-usd", "0.01",
+        "--out-dir", str(tmp_path / "blocked"),
+    ])
+    assert code == 2
+    message = capsys.readouterr().err
+    assert "uncommitted code changes" in message
+    assert "deadbee" + runner.DIRTY_SUFFIX in message
+    assert not (tmp_path / "blocked" / "rows.jsonl").exists()
+
+    # A dry run prices the work and never starts it, so it is never blocked.
+    assert runner.main([
+        "--data-source", "cache", "--days", "1", "--dry-run",
+        "--out-dir", str(tmp_path / "priced"),
+    ]) == 0
