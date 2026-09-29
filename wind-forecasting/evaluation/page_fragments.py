@@ -473,6 +473,17 @@ def tab_plan() -> str:
     ])
 
 
+def _seconds(v: Optional[float]) -> str:
+    """Seconds, with enough precision to keep the row that costs almost none.
+
+    The parser answers in 0.03 s and the agents in twenty-odd, so a whole-second
+    format writes the baseline as 0 and throws away the largest ratio in the
+    table. Sub-second values keep two decimals; the rest stay whole."""
+    if v is None:
+        return DASH
+    return f"{v:.2f}" if v < 1 else f"{v:.0f}"
+
+
 def tab_results() -> str:
     dirs = method_dirs()
     if not dirs:
@@ -509,7 +520,20 @@ def tab_results() -> str:
         (GROUP_COST, ["Tokens", "Cost $", "Time s"]),
     )
 
-    for set_name, per in by_set.items():
+    # One run set at a time, chosen from a picker, instead of four cards stacked. The main set of the
+    # latest date comes first: the older runs and the smoke tests are here so a number can be traced
+    # back, not so they compete with the table a reader came for.
+    order = sorted(by_set, key=lambda k: (k.rsplit(" \u00b7 ", 1)[0], k.endswith("main")), reverse=True)
+    body.append("<div class='card'><label>Run set <select id='rset'>"
+                + "".join(f"<option value='{E(k)}'{' selected' if k == order[0] else ''}>{E(k)}"
+                          + ("" if k.endswith("main") else " (side run)") + "</option>" for k in order)
+                + "</select></label>"
+                + f"<p class='muted'>{len(order)} run sets. The one shown first is the most recent main set, which is the "
+                  "table of this case study. A side run is a smoke test or a condition such as <code>scaled</code>, kept "
+                  "so its numbers can be checked, not to be read as the result.</p></div>")
+
+    for set_name in order:
+        per = by_set[set_name]
         rows_out: List[Tuple[str, List[str], List[str]]] = []
         for row in ROWS:
             if row["name"] not in per:
@@ -532,10 +556,11 @@ def tab_results() -> str:
                       f"{a.get('trace')}" if a.get("trace") is not None else NA]
             cells += [f"{a.get('tokens'):,}" if a.get("tokens") is not None else NA,
                       f"{a.get('cost'):.3f}" if a.get("cost") is not None else NA,
-                      f"{a.get('wall_time_mean_s'):.0f}" if a.get("wall_time_mean_s") is not None else DASH]
+                      _seconds(a.get("wall_time_mean_s"))]
             label = (f"<b>{E(row['label'])}</b><div class='muted'><code>{E(row['name'])}</code></div>")
             rows_out.append((d.parts[-2], [label, str(len(rows))], cells, str(d.relative_to(PROJECT_ROOT / "results"))))
         missing = [r for r in ROWS if r["name"] not in per]
+        body.append(f"<div class='rs' data-set='{E(set_name)}'{'' if set_name == order[0] else ' hidden'}>")
         body.append(card(
             f"Run set {E(set_name)}",
             comparison_table(GROUPS, rows_out, lead=("Model", "Method", "n")),
@@ -548,6 +573,7 @@ def tab_results() -> str:
                  "the method returned no valid series there, which is itself the result. NMAE is the error as a per cent of the "
                  "1500 kW installed capacity, and Imp. is the improvement over the protocol's reference model on the same "
                  "points: 0 means no better than a model that costs nothing, negative means worse.", "info")))
+        body.append("</div>")
 
     body.append(request_section())
 
@@ -769,74 +795,6 @@ def _example_prompt(t: Dict[str, Any]) -> str:
     return "".join(parts)
 
 
-def examples_section() -> str:
-    """The same request under each of the six methods, prompt and steps, side by side."""
-    dirs = method_dirs()
-    if not dirs:
-        return ""
-    latest = max(d.parts[-3] for d in dirs)
-    by_method: Dict[str, Path] = {}
-    for d in dirs:
-        if d.parts[-3] == latest and "__" not in d.name:
-            by_method[d.name] = d
-    if not by_method:
-        return ""
-
-    def trace_of(d: Path, rid: str) -> Optional[Dict[str, Any]]:
-        for f in sorted((d / "traces").glob("*.json")):
-            if " " in f.stem.split("_", 1)[-1]:
-                continue  # an iCloud copy, never the file we wrote
-            if f.stem.split("_", 1)[-1] == rid:
-                return json.loads(f.read_text(encoding="utf-8"))
-        return None
-
-    # one request per horizon, all from the same scenario, so the columns differ by method and nothing else
-    rids: List[Tuple[str, str]] = []
-    any_dir = next(iter(by_method.values()))
-    for f in sorted((any_dir / "traces").glob("*.json")):
-        rid = f.stem.split("_", 1)[-1]
-        if " " in rid:
-            continue
-        t = json.loads(f.read_text(encoding="utf-8"))
-        r = t.get("request") or {}
-        if r.get("instance_id") and rids and r["instance_id"] != rids[0][1].split("|")[0]:
-            continue
-        rids.append((rid, f"{r.get('instance_id')}|{r.get('horizon_hours')} h · question: {r.get('question')}"))
-        if len(rids) == len(HORIZONS_H):
-            break
-
-    opts = "".join(f"<option value='{E(rid)}'>{E(lab.split('|')[1])}</option>" for rid, lab in rids)
-    out = [card("The same request under each of the six methods",
-                "<p>Real runs of " + E(latest) + " on " + E(next(iter(by_method.values())).parts[-2]) +
-                ", not re-scored here. One scenario, the three horizons, every method side by side. Each column opens with the "
-                "prompt that method received and then lists what it did: <span class='k call'>call</span> a tool, "
-                "<span class='k tool'>tool</span> what came back, <span class='k gate'>gate</span> the verdict, "
-                "<span class='k final'>final</span> what was surfaced. Click any line to expand it.</p>"
-                "<p class='muted'>The prompt of each column is split into the blocks it is built from, the same colours and the same "
-                "source files as the Prompts section, so the columns can be compared block by block and not as walls of text. "
-                "Grey is the part built at run time: the request, the history, the tool catalogue.</p>"
-                "<p><label>Request <select id='exs'>" + opts + "</select></label></p>")]
-    for n, (rid, _lab) in enumerate(rids):
-        cols = []
-        for row in ROWS:
-            d = by_method.get(row["name"])
-            t = trace_of(d, rid) if d else None
-            if not t:
-                cols.append(f"<div class='col'><h4>{E(row['label'])}</h4><p class='muted' style='padding:8px 10px'>no run</p></div>")
-                continue
-            lines = "".join(f"<div class='ln' data-full='{E(full)}'><span class='k {k}'>{k}</span><span class='s'>{E(short)}</span></div>"
-                            for k, short, full in _example_lines(t))
-            sc = t.get("scored") or {}
-            cols.append(f"<div class='col'><h4>{E(row['label'])}<br><span class='muted'>{E(t.get('model') or '')}</span></h4>"
-                        f"<details class='pr'><summary>the prompt this method received</summary>{_example_prompt(t)}</details>"
-                        f"<div class='log'>{lines}</div>"
-                        f"<div class='vt'>{t.get('n_llm_calls')} model calls · {t.get('n_tool_calls')} tool calls · "
-                        f"{t.get('wall_time_s', 0):.0f} s<br><span class='muted'>formulation "
-                        f"{'exact' if sc.get('common_formulation_exact') else E(str(sc.get('common_formulation_error_type') or 'not declared'))}</span></div></div>")
-        out.append(f"<div class='ex{' on' if n == 0 else ''}' data-scn='{E(rid)}'><div class='cols6'>" + "".join(cols) + "</div></div>")
-    return "".join(out)
-
-
 def tab_traces() -> str:
     dirs = method_dirs()
     if not dirs:
@@ -883,6 +841,11 @@ BUILDERS = {"home": tab_home, "methods": tab_methods, "scenarios": tab_scenarios
             "plan": tab_plan, "results": tab_results, "traces": tab_traces, "analysis": tab_analysis, "status": tab_status}
 
 SCRIPT = """
+(function(){
+  var rs=document.getElementById('rset');
+  if(rs){ rs.onchange=function(){ document.querySelectorAll('.rs').forEach(function(d){
+      d.hidden = d.dataset.set!==rs.value; }); }; }
+})();
 (function(){
   var mth=document.getElementById('mth'); if(!mth) return;
   function apply(){ document.querySelectorAll('.pm').forEach(function(p){ p.style.display = p.dataset.mth===mth.value ? '' : 'none'; }); }

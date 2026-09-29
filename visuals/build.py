@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import os
 import re
 import subprocess
 import sys
@@ -288,8 +289,15 @@ def scope_css(css: str, case_id: str) -> str:
     return "\n".join(out)
 
 
-def render(payload: Dict[str, Any], built: Dict[str, Dict[str, Any]]) -> str:
-    """One case study's page. Every section of SECTIONS, filled in or not."""
+def render(payload: Dict[str, Any], built: Dict[str, Dict[str, Any]],
+           stale_note: str = "") -> str:
+    """One case study's page. Every section of SECTIONS, filled in or not.
+
+    ``stale_note`` is prefixed to every section when the page is being written
+    from a cached fragment that is older than the runs it describes, the same
+    banner the joined page carries, so a page cannot pass off old numbers as
+    current merely because the file was rewritten today.
+    """
     tabs = payload.get("tabs", {})
     labels = {k: t for _g, entries in payload.get("groups", []) for k, t in entries}
     body: List[str] = []
@@ -298,7 +306,7 @@ def render(payload: Dict[str, Any], built: Dict[str, Dict[str, Any]]) -> str:
         if key in links:
             continue  # served by a page of its own; the sidebar links to it
         content = tabs.get(key) or placeholder(payload["title"], key, labels.get(key, label), purpose)
-        body.append(shell.tab(key, content, on=(n == 0)))
+        body.append(shell.tab(key, stale_note + content, on=(n == 0)))
     extra = payload.get("script", "")
     return shell.page(
         title=f"{payload['title']} · Evaluation",
@@ -310,7 +318,21 @@ def render(payload: Dict[str, Any], built: Dict[str, Dict[str, Any]]) -> str:
     ).replace("</body></html>", f"<script>{extra}</script></body></html>" if extra else "</body></html>")
 
 
-FRAGMENTS = SITE / "_fragments"
+# The fragment cache is shared by every worktree of this repository, and lives
+# outside all of them.
+#
+# No interpreter on this machine can import all four projects, so no checkout can
+# build the whole site on its own; each one could only build its own case study
+# and keep three stale or empty pages beside it. With five worktrees that meant
+# five different sites, and what a reader saw depended on which folder they
+# happened to open. Keeping the cache per worktree made that structural.
+#
+# It is a cache, not a source, so it does not belong in git either: these four
+# files are 29 MB and change on every run, which is the whole site's weight in
+# churn per run in a public repository. Putting it one level above the worktrees
+# costs nothing, is shared by construction, and means whoever rebuilds a case
+# study updates it for everybody.
+FRAGMENTS = Path(os.environ.get("VISUALS_FRAGMENTS") or (ROOT.parent / ".visuals-fragments"))
 
 
 def cache_put(case_id: str, payload: Dict[str, Any]) -> None:
@@ -318,7 +340,11 @@ def cache_put(case_id: str, payload: Dict[str, Any]) -> None:
     FRAGMENTS.mkdir(parents=True, exist_ok=True)
     stamped = dict(payload)
     stamped["_at"] = _dt.datetime.now().strftime("%Y-%m-%d %H:%M")
-    (FRAGMENTS / f"{case_id}.json").write_text(json.dumps(stamped), encoding="utf-8")
+    # written whole and moved into place, because another worktree may be reading
+    # this file while this build writes it
+    tmp = FRAGMENTS / f".{case_id}.{os.getpid()}.tmp"
+    tmp.write_text(json.dumps(stamped), encoding="utf-8")
+    tmp.replace(FRAGMENTS / f"{case_id}.json")
 
 
 def cache_get(case_id: str) -> Optional[Dict[str, Any]]:
@@ -330,6 +356,44 @@ def cache_get(case_id: str) -> Optional[Dict[str, Any]]:
         return json.loads(f.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return None
+
+
+def behind_results(case_id: str, folder: str) -> bool:
+    """Whether the cached fragment is older than the runs it would describe.
+
+    Not rebuilt and out of date are different things, and only the second is
+    worth a warning. No interpreter here can import all four projects, so most
+    builds legitimately take three case studies from the cache; saying so on
+    every one of their sections turned a normal build into four alarms about
+    nothing. What matters is whether the fragment predates the newest scored
+    run, which is the same question the cross-check asks of a page.
+    """
+    f = FRAGMENTS / f"{case_id}.json"
+    if not f.exists():
+        return True
+    results = ROOT / folder / "results"
+    if not results.is_dir():
+        return False
+    newest = max((p.stat().st_mtime for p in results.rglob("summary.csv")), default=0.0)
+    return bool(newest and f.stat().st_mtime < newest)
+
+
+def stale_banner(case_id: str, folder: str, payload: Dict[str, Any],
+                 fresh: Sequence[str] = ()) -> str:
+    """The warning a section carries when it is older than the runs it describes.
+
+    Only that: a fragment merely taken from the cache is the normal case, since
+    no interpreter here can import all four projects and most builds legitimately
+    render three case studies from it. Saying so on every section of every build
+    turned a normal build into four alarms about nothing.
+    """
+    if case_id in fresh or not behind_results(case_id, folder):
+        return ""
+    return shell.note(
+        f"This section is older than the runs it describes. What follows is the fragment of "
+        f"{E(str(payload.get('_at', 'an earlier build')))}, and a run has been scored since. Rebuild it from a "
+        f"checkout whose interpreter can import this project: "
+        f"<code>python -m visuals.build --require {E(case_id)}</code>.", "warn")
 
 
 def unified(pages: Dict[str, Dict[str, Any]], fresh: Sequence[str] = ()) -> str:
@@ -362,11 +426,7 @@ def unified(pages: Dict[str, Dict[str, Any]], fresh: Sequence[str] = ()) -> str:
         if p is None:
             continue
         cid = case["id"]
-        stale_note = "" if cid in fresh else shell.note(
-            f"This case study was not rebuilt by the build that wrote this page. What follows is the "
-            f"fragment of {E(str(p.get('_at', 'an earlier build')))}, kept because no interpreter in this "
-            f"checkout can import all four projects. Rebuild it from a checkout that can, with "
-            f"<code>python -m visuals.build --require {E(cid)}</code>.", "warn")
+        stale_note = stale_banner(cid, case["folder"], p, fresh)
         labels = {k: t for _g, entries in p.get("groups", []) for k, t in entries}
         links = p.get("links", {})
         tabs = p.get("tabs", {})
@@ -515,9 +575,6 @@ def build(only: Optional[str] = None, python: str = PYTHON,
             cache_put(case["id"], p)
         else:
             failed.append(case["id"])
-    if not built:
-        raise SystemExit("no case study produced a fragment")
-
     # One document holds all four case studies, so a build of one of them still
     # has to render the other three. Their fragments come from the cache the
     # last build that could run them left behind. A case study that has never
@@ -530,6 +587,11 @@ def build(only: Optional[str] = None, python: str = PYTHON,
         cached = cache_get(case["id"])
         if cached is not None:
             built[case["id"]] = cached
+    if not built:
+        # Checked after the cache, not before it. A checkout whose only
+        # generator fails still has a site to write if another checkout left
+        # fragments behind, and refusing here threw that away.
+        raise SystemExit("no case study produced a fragment, and none is cached")
 
     # A case study with no generator still gets a page: the same sections, all
     # of them empty and saying so. The skeleton is the standard; filling it in
@@ -549,16 +611,24 @@ def build(only: Optional[str] = None, python: str = PYTHON,
         }
 
     SITE.mkdir(parents=True, exist_ok=True)
+    folders = {c["id"]: c["folder"] for c in CASES}
+    from_cache: List[str] = []
     written: List[Path] = []
     for case_id, p in pages.items():
-        # The per-case page is only rewritten when this build actually produced
-        # the case study, so its date keeps meaning what it meant: when these
-        # numbers were read. A case rendered from the cache is rewritten only
-        # inside index.html, where it carries a banner saying so.
-        if case_id not in fresh and (SITE / f"{case_id}.html").exists():
+        # A page is written whenever there is something real to write it from:
+        # this build's own fragment, or the shared one another checkout left.
+        # Only a case study with neither keeps the page it already has. The
+        # cache used to feed index.html alone, so a checkout that could not
+        # import a project kept an empty page for it beside a joined page that
+        # had it -- which is the one thing the shared cache existed to prevent.
+        cached = case_id not in fresh and bool(p.get("tabs"))
+        if case_id not in fresh and not cached and (SITE / f"{case_id}.html").exists():
             continue
+        if cached:
+            from_cache.append(case_id)
         out = SITE / f"{case_id}.html"
-        out.write_text(render(p, pages), encoding="utf-8")
+        out.write_text(render(p, pages, stale_banner(case_id, folders.get(case_id, ""), p, fresh)),
+                       encoding="utf-8")
         written.append(out)
         # pages a case study serves as its own (a trace viewer too large to
         # embed) are copied next to it, under site/<id>/, and linked from the sidebar
@@ -577,11 +647,15 @@ def build(only: Optional[str] = None, python: str = PYTHON,
         wanted = {c for c in (require or ())} | ({only} if only else set())
         print()
         for case_id in failed:
+            mark = "FAILED" if case_id in wanted else "failed"
+            if case_id in from_cache:
+                at = str((pages.get(case_id) or {}).get("_at", "an earlier build"))
+                print(f"  {case_id}: generator {mark}, page built from the shared fragment of {at}")
+                continue
             page = SITE / f"{case_id}.html"
             when = (_dt.datetime.fromtimestamp(page.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
                     if page.exists() else "no page at all")
-            mark = "FAILED" if case_id in wanted else "failed"
-            print(f"  {case_id}: generator {mark}, keeping the page from {when}")
+            print(f"  {case_id}: generator {mark}, no fragment either, keeping the page from {when}")
         print("  the usual cause is the interpreter: <project>/.venv/bin/python when it exists,")
         print("  otherwise the python running this build, which may not have that project's")
         print("  dependencies. Pass --python, or build that case from its own checkout.")
@@ -589,7 +663,17 @@ def build(only: Optional[str] = None, python: str = PYTHON,
         if stale:
             for path in written:
                 print(f"wrote {path.relative_to(ROOT)} ({path.stat().st_size // 1024} KB)")
-            raise SystemExit(f"stale: {', '.join(stale)} did not rebuild and was required")
+            # Still an error: the caller said this case study had to rebuild here
+            # and it did not. But whether the page is wrong or merely not rebuilt
+            # in this checkout are different problems with different fixes, so
+            # the exit says which.
+            behind = [c for c in stale if behind_results(c, folders.get(c, ""))]
+            if behind:
+                raise SystemExit(f"stale: {', '.join(behind)} did not rebuild and the cached fragment "
+                                 "is older than its runs, so the page is out of date")
+            raise SystemExit(f"stale: {', '.join(stale)} did not rebuild here and was required; the page "
+                             "was written from a shared fragment that is current, so it is not wrong, "
+                             "but this checkout could not produce it")
     return written
 
 
