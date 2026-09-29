@@ -366,9 +366,11 @@ def tab_results() -> str:
                 #
                 # The -dirty suffix is never trimmed. Truncating the id to eight
                 # characters hid it on every row of every table here, which made
-                # the page claim a provenance none of these runs has: a dirty id
-                # names no commit, and the code that produced the row is in
-                # nobody's history.
+                # the page claim a provenance the id does not carry on its own.
+                # What the suffix means here is weaker than it looks: the check
+                # that set it covered the whole project, results/ included, so a
+                # run marked itself dirty with its own output. It reads as
+                # "unknown", not as "uncommitted harness".
                 cfg = _config(run)
                 full = str(cfg.get("git_commit") or "")
                 dirty = full.endswith("-dirty")
@@ -406,12 +408,16 @@ def tab_results() -> str:
                     "What is not shared is the code that drove them, so a difference between two rows is a "
                     "difference between two builds as well as between two methods."),
                  "info"),
-            *([note(f"<b>{n_dirty} of these {len(commits)} rows were run from a working tree with uncommitted "
-                    "changes</b>, marked <code class='bad'>+ uncommitted</code> beside the commit. That id names "
-                    "no commit: the code that produced those numbers is in nobody's history and cannot be "
-                    "recovered, so the rows can be read but not reproduced. This is a property of how the runs "
-                    "were launched, not of the results, and it is shown here rather than trimmed away because "
-                    "the supplement's Reproducibility section promises the opposite.", "bad")]
+            *([note(f"<b>{n_dirty} of these {len(commits)} rows recorded their commit with a "
+                    "<code>-dirty</code> suffix</b>, shown as <code class='bad'>+ uncommitted</code> beside the "
+                    "date. Read it as unknown rather than as bad: the check that set it ran "
+                    "<code>git status --porcelain -- .</code> over the whole project, which includes the "
+                    "<code>results/</code> tree the runs themselves write into, so it could not tell an "
+                    "uncommitted harness from the uncommitted output of an earlier run. Every run here carries "
+                    "the suffix, which is what a flag that cannot come out clean looks like. It is shown rather "
+                    "than trimmed away because the id does not identify the code on its own, and it is not "
+                    "evidence that the code was uncommitted either. The wind case study has since narrowed the "
+                    "same check to exclude results; runs made after that will mean what they say.", "warn")]
               if n_dirty else [])))
 
     body.append(_request_section())
