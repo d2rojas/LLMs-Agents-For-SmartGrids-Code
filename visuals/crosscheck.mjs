@@ -65,9 +65,16 @@ export function parseCSV(text) {
 }
 
 // The same three-way rule every case study scores by, so the check does not
-// invent a fourth definition of the thing it is checking.
-const outcome = (r) =>
-  r.outcome || (T(r.solved) ? "solved" : T(r.escalated) ? "escalated" : "wrong_unflagged");
+// invent a fourth definition of the thing it is checking. A blank outcome beside
+// a non-empty error column is a run that never happened, not a wrong answer:
+// falling straight through to wrong_unflagged would take the worst of the four
+// readings available, and silently. Asked for by the EV session, which had a row
+// counted as wrong because its summary.csv did not yet write the label.
+const outcome = (r) => {
+  if (r.outcome) return r.outcome;
+  if (String(r.error ?? "").trim()) return "run_error";
+  return T(r.solved) ? "solved" : T(r.escalated) ? "escalated" : "wrong_unflagged";
+};
 
 /** Every `<tr data-run=...>` of the page, with the counts each of its cells rendered. */
 export function pageRows(html) {
@@ -131,10 +138,16 @@ if (runsAt && pageAt < runsAt) {
 const html = readFileSync(pagePath, "utf8");
 const rowsOnPage = pageRows(html);
 if (!rowsOnPage.length) {
-  console.log(`${pagePath}: no table carries data-run, nothing to check.`);
-  console.log("A results table built with shell.comparison_table tags each row with its run directory;");
-  console.log("a case study whose table does not is not covered by this check.");
-  process.exit(1);
+  // Almost always a page built before comparison_table started tagging its rows,
+  // which is the other way a page can be out of date: newer than the runs, older
+  // than the code. Not a disagreement, so not a failure -- reporting it as one
+  // sends whoever sees the red looking for a bug in a table that is fine, which
+  // is what happened to the GridDebug session on its first run after merging.
+  console.log(`${pagePath} has no table tagged with data-run, so there is nothing to check against.`);
+  console.log("Either the page predates the tagging and needs rebuilding, or this case study's table");
+  console.log("is not built with shell.comparison_table and is not covered by this check.");
+  console.log("Rebuild first: python -m visuals.build --require <case>");
+  process.exit(STALE);
 }
 
 const spec = specPath && existsSync(specPath) ? JSON.parse(readFileSync(specPath, "utf8")) : null;
@@ -188,7 +201,18 @@ for (const { run, cols, cells } of rowsOnPage) {
   const j = JSON.parse(readFileSync(sj, "utf8"));
   const agg = j.aggregate || j;
   const K = spec.aggregate || {};
-  cmp(run, "aggregate n", done.length, agg[K.n ?? "n"]);
+  // `n` means the scored requests in three of the four case studies and meant the
+  // attempted ones in the fourth, and the two only differ once a run fails, so the
+  // difference sat untested. A case study that publishes both is checked on both
+  // and on the identity between them; one that publishes only `n` says here which
+  // it means, and the default is the scored count the three others use.
+  const scoredKey = K.n_scored ?? (K.n_is_attempted ? null : (K.n ?? "n"));
+  if (scoredKey) cmp(run, `aggregate ${scoredKey} (scored)`, done.length, agg[scoredKey]);
+  if (K.n_scored && K.n) {
+    cmp(run, `aggregate ${K.n} (attempted)`, all.length, agg[K.n]);
+    cmp(run, `aggregate ${K.n} == ${K.n_scored} + run errors`,
+        agg[K.n], (agg[K.n_scored] ?? 0) + (agg[K.run_errors] ?? 0));
+  }
   if (K.solved) cmp(run, "aggregate solved", count("solved"), agg[K.solved]);
   if (K.escalated) cmp(run, "aggregate escalated", count("escalated"), agg[K.escalated]);
   if (K.wrong) cmp(run, "aggregate wrong_unflagged", count("wrong_unflagged"), agg[K.wrong]);

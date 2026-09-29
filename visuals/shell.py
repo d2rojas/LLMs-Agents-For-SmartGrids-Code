@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import itertools as _it
 import json
+import re as _re
 from html import escape as _escape
 from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple
 
@@ -187,6 +188,15 @@ border-top:1px solid var(--line);border-right:1px solid var(--line);border-botto
 .note.warn{background:#fdf7ec;border:1px solid #f0dcbc}
 .note.info{background:#eef2fb;border:1px solid #d6e0f7}
 .note.bad{background:#fdecec;border:1px solid #f3c9c9}
+/* provenance that does not identify anything: a commit id with uncommitted
+   changes behind it, shown rather than trimmed away */
+code.bad{background:#fdecec;color:#991b1b}
+
+/* a formulation, laid out rather than typeset, so the page needs nothing from
+   the network to be read correctly */
+pre.math{background:#fbfcfe;border:1px solid var(--line);border-left:3px solid var(--acc);
+padding:12px 14px;white-space:pre;overflow-x:auto;font-size:12.5px;line-height:1.55;max-height:none}
+code.math{background:#f1f4f9}
 
 .md h2{font-size:16px;margin:14px 0 6px}.md h3{font-size:14px;margin:12px 0 6px}.md h4{font-size:13px;margin:10px 0 4px}
 .md p{margin:0 0 9px}.md ul,.md ol{margin:6px 0;padding-left:20px}.md table{margin:6px 0 10px}.md pre{max-height:none}
@@ -755,9 +765,28 @@ def markdown(text: str) -> str:
     return "<div class='md'>" + "".join(out) + "</div>"
 
 
+_MATH_BLOCK = _re.compile(r"\\\[(.+?)\\\]", _re.S)
+_MATH_INLINE = _re.compile(r"\\\((.+?)\\\)", _re.S)
+
+
+def _math(body: str) -> str:
+    """Lay out the LaTeX a case study writes so it survives without a typesetter.
+
+    The site used to pull KaTeX and a webfont from two CDNs to render two
+    formulas in a thirty-megabyte page. That is a page that does not work on a
+    plane, and the point of this site is that it opens by double-clicking it.
+    So the source is laid out instead of typeset: a display block keeps its line
+    breaks and alignment in a monospace box, which is how the formulation was
+    written and is read correctly by anyone who can read the paper. Inline
+    fragments become code spans.
+    """
+    body = _MATH_BLOCK.sub(lambda m: f"<pre class='math'>{E(m.group(1).strip())}</pre>", body)
+    return _MATH_INLINE.sub(lambda m: f"<code class='math'>{E(m.group(1).strip())}</code>", body)
+
+
 def tab(key: str, body: str, *, on: bool = False) -> str:
     """Wrap one tab's content."""
-    return f"<div class='tab{' on' if on else ''}' id='tab-{E(key)}'>{body}</div>"
+    return f"<div class='tab{' on' if on else ''}' id='tab-{E(key)}'>{_math(body)}</div>"
 
 
 # --------------------------------------------------------------------- page
@@ -854,18 +883,15 @@ def page(
                 side.append(f"<a class='sub' data-t='{E(key)}' href='#{E(key)}'>{E(text)}</a>")
 
     return (
+        # Nothing is fetched. The page is one file that opens by double-clicking
+        # it, with no network and no server: the webfont and the maths typesetter
+        # this used to pull from two CDNs made a thirty-megabyte page depend on
+        # being online to look right, for two formulas and a typeface that every
+        # stack here already names fallbacks for. `_math` lays the formulas out
+        # instead.
         "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
         f"<title>{E(title)}</title>"
-        "<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700"
-        "&family=JetBrains+Mono:wght@400;500&display=swap' rel='stylesheet'>"
-        # KaTeX renders the \[ ... \] blocks a case study writes in LaTeX. Offline, the
-        # LaTeX source shows as typed, which is still readable and still correct.
-        "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css'>"
-        "<script defer src='https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js'></script>"
-        "<script defer src='https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js' "
-        "onload=\"renderMathInElement(document.body,{delimiters:[{left:'\\\\[',right:'\\\\]',display:true},"
-        "{left:'\\\\(',right:'\\\\)',display:false}],throwOnError:false})\"></script>"
         f"<style>{CSS}{extra_css}</style></head><body>"
         f"<div class='top'><button class='burger' id='burger'>☰</button>"
         f"<span class='brand'>{E(brand)}</span>"

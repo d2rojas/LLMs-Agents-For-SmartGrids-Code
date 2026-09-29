@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import os
 import re
 import subprocess
 import sys
@@ -310,7 +311,21 @@ def render(payload: Dict[str, Any], built: Dict[str, Dict[str, Any]]) -> str:
     ).replace("</body></html>", f"<script>{extra}</script></body></html>" if extra else "</body></html>")
 
 
-FRAGMENTS = SITE / "_fragments"
+# The fragment cache is shared by every worktree of this repository, and lives
+# outside all of them.
+#
+# No interpreter on this machine can import all four projects, so no checkout can
+# build the whole site on its own; each one could only build its own case study
+# and keep three stale or empty pages beside it. With five worktrees that meant
+# five different sites, and what a reader saw depended on which folder they
+# happened to open. Keeping the cache per worktree made that structural.
+#
+# It is a cache, not a source, so it does not belong in git either: these four
+# files are 29 MB and change on every run, which is the whole site's weight in
+# churn per run in a public repository. Putting it one level above the worktrees
+# costs nothing, is shared by construction, and means whoever rebuilds a case
+# study updates it for everybody.
+FRAGMENTS = Path(os.environ.get("VISUALS_FRAGMENTS") or (ROOT.parent / ".visuals-fragments"))
 
 
 def cache_put(case_id: str, payload: Dict[str, Any]) -> None:
@@ -318,7 +333,11 @@ def cache_put(case_id: str, payload: Dict[str, Any]) -> None:
     FRAGMENTS.mkdir(parents=True, exist_ok=True)
     stamped = dict(payload)
     stamped["_at"] = _dt.datetime.now().strftime("%Y-%m-%d %H:%M")
-    (FRAGMENTS / f"{case_id}.json").write_text(json.dumps(stamped), encoding="utf-8")
+    # written whole and moved into place, because another worktree may be reading
+    # this file while this build writes it
+    tmp = FRAGMENTS / f".{case_id}.{os.getpid()}.tmp"
+    tmp.write_text(json.dumps(stamped), encoding="utf-8")
+    tmp.replace(FRAGMENTS / f"{case_id}.json")
 
 
 def cache_get(case_id: str) -> Optional[Dict[str, Any]]:
@@ -330,6 +349,26 @@ def cache_get(case_id: str) -> Optional[Dict[str, Any]]:
         return json.loads(f.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return None
+
+
+def behind_results(case_id: str, folder: str) -> bool:
+    """Whether the cached fragment is older than the runs it would describe.
+
+    Not rebuilt and out of date are different things, and only the second is
+    worth a warning. No interpreter here can import all four projects, so most
+    builds legitimately take three case studies from the cache; saying so on
+    every one of their sections turned a normal build into four alarms about
+    nothing. What matters is whether the fragment predates the newest scored
+    run, which is the same question the cross-check asks of a page.
+    """
+    f = FRAGMENTS / f"{case_id}.json"
+    if not f.exists():
+        return True
+    results = ROOT / folder / "results"
+    if not results.is_dir():
+        return False
+    newest = max((p.stat().st_mtime for p in results.rglob("summary.csv")), default=0.0)
+    return bool(newest and f.stat().st_mtime < newest)
 
 
 def unified(pages: Dict[str, Dict[str, Any]], fresh: Sequence[str] = ()) -> str:
@@ -362,10 +401,12 @@ def unified(pages: Dict[str, Dict[str, Any]], fresh: Sequence[str] = ()) -> str:
         if p is None:
             continue
         cid = case["id"]
-        stale_note = "" if cid in fresh else shell.note(
-            f"This case study was not rebuilt by the build that wrote this page. What follows is the "
-            f"fragment of {E(str(p.get('_at', 'an earlier build')))}, kept because no interpreter in this "
-            f"checkout can import all four projects. Rebuild it from a checkout that can, with "
+        # Only a fragment that is actually behind its own results is worth saying
+        # anything about. One merely taken from the cache is the normal case.
+        stale_note = "" if (cid in fresh or not behind_results(cid, case["folder"])) else shell.note(
+            f"This section is older than the runs it describes. What follows is the fragment of "
+            f"{E(str(p.get('_at', 'an earlier build')))}, and a run has been scored since. Rebuild it from a "
+            f"checkout whose interpreter can import this project: "
             f"<code>python -m visuals.build --require {E(cid)}</code>.", "warn")
         labels = {k: t for _g, entries in p.get("groups", []) for k, t in entries}
         links = p.get("links", {})
