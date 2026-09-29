@@ -52,9 +52,17 @@ NETWORK_FACTOR = {"case14": 0.8, "case30": 1.0, "case57": 1.3, "case118": 2.0, "
 
 
 def git_commit() -> str:
+    """The commit this run's code comes from, plus ``-dirty`` when that code is uncommitted.
+
+    ``results/`` is excluded on purpose. It holds what runs write, including the
+    folders of earlier runs, so a status over the whole project reports "dirty"
+    about output rather than about code, on every run, forever. A flag that is
+    always on says nothing, and this one gates the paper set.
+    """
     try:
         sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=PROJECT_ROOT, capture_output=True, text=True, check=True).stdout.strip()
-        dirty = subprocess.run(["git", "status", "--porcelain", "--", "."], cwd=PROJECT_ROOT, capture_output=True, text=True, check=True).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain", "--", ".", ":(exclude)results"],
+                               cwd=PROJECT_ROOT, capture_output=True, text=True, check=True).stdout.strip()
         return sha + ("-dirty" if dirty else "")
     except Exception:
         return "unknown"
@@ -171,7 +179,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # because nobody will publish them.
     commit_now = git_commit()
     if not args.tag and commit_now.endswith("-dirty"):
-        print("refusing to run the paper set from a tree with uncommitted changes.\n"
+        print("refusing to run the paper set from uncommitted code.\n"
               f"  the run would record {commit_now}, which no one can check out later.\n"
               "  commit first, or pass --tag <name> if this is a smoke run.")
         return 2
