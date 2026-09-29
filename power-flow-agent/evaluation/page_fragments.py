@@ -410,14 +410,21 @@ def tab_results() -> str:
                  "info"),
             *([note(f"<b>{n_dirty} of these {len(commits)} rows recorded their commit with a "
                     "<code>-dirty</code> suffix</b>, shown as <code class='bad'>+ uncommitted</code> beside the "
-                    "date. Read it as unknown rather than as bad: the check that set it ran "
+                    "date. Read it as unknown rather than as bad. The check that set it ran "
                     "<code>git status --porcelain -- .</code> over the whole project, which includes the "
-                    "<code>results/</code> tree the runs themselves write into, so it could not tell an "
-                    "uncommitted harness from the uncommitted output of an earlier run. Every run here carries "
-                    "the suffix, which is what a flag that cannot come out clean looks like. It is shown rather "
-                    "than trimmed away because the id does not identify the code on its own, and it is not "
-                    "evidence that the code was uncommitted either. The wind case study has since narrowed the "
-                    "same check to exclude results; runs made after that will mean what they say.", "warn")]
+                    "<code>results/</code> tree the runs themselves write into, so it could not come out clean "
+                    "and could not tell an uncommitted harness from the output of an earlier run. It has since "
+                    "been narrowed to the code that decides whether a run can be repeated, so runs made from now "
+                    "on mean what they say; these ones are from before that.<br><br>"
+                    "What was measured rather than assumed, once the suffix stopped being informative: all 36 "
+                    "runs share one evaluator, <code>cbfcc87389d7</code>, and every row that calls the solver "
+                    "shares one prompt, <code>43ef7eaadb12</code>, so the comparison between rows holds. "
+                    "<b>One row is provably divergent</b>: IEEE 14's ReAct run of 2026-09-26 names commit "
+                    "<code>6a1f76b7</code>, whose agent prompt hashes <code>de3bfa18e09e</code>, while the run "
+                    "itself used <code>43ef7eaadb12</code> -- an edited prompt committed afterwards. It used the "
+                    "same prompt as every other agent row, so its numbers are comparable; what cannot be done is "
+                    "name the commit that produced it. For the rest, divergence is not shown, only undemonstrable.",
+                    "warn")]
               if n_dirty else [])))
 
     body.append(_request_section())
