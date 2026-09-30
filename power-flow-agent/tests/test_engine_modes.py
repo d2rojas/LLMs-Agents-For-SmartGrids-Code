@@ -565,3 +565,106 @@ def test_plan_act_replan_that_declines_to_plan_lets_the_model_say_so():
     assert trace["n_replans"] == 1
     assert trace["rounds"][2]["plan"] is None
     assert text == "I could not complete the request."
+
+
+# ------------------------------------------- the gate's retry inherits the architecture (2026-09-29)
+
+
+def test_plan_act_gate_retry_has_no_tools_and_says_so():
+    """Plan-and-Act answers after the plan is spent, so its retry answers with the same nothing.
+
+    Granting read-only tools here hands it the observation step the architecture is defined by not
+    having: measured on the earlier runs, 20 of 22 such retries called a tool and 18 re-solved the
+    network. The wording must change with the capability, or the model is asked for the impossible.
+    """
+    # No context is declared for the fake model, so the budget guard stays off and the retry opens
+    # on whatever condition fails; this test is about what the retry may DO once open.
+    tools = ScriptedTools()
+    plan = {"plan": [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_powerflow", "args": {}}]}
+    client = ScriptedClient([
+        _resp(content=json.dumps(plan)),
+        _resp(content='{"converged": true, "bus_voltages": [], "line_flows": [], "cannot_answer": null}'),
+        _resp(content='{"converged": false, "bus_voltages": [], "line_flows": [], "cannot_answer": "the state cannot be reported from what the plan produced"}'),
+    ])
+    engine = LLMEngine(
+        client=client, dispatcher=tools.dispatcher(),
+        config=EngineConfig(model="fake", architecture="plan_act", gate=False, final_gate=True,
+                            retry_with_tools=False, complete_state_gate=True),
+    )
+    _text, trace = engine.run_with_trace("load case14 and run pf", SessionState())
+
+    # complete_state (V10) is repairable, so the gate does spend its retry here; V7 would not, and
+    # that is the point of _retry_would_be_wasted, tested separately.
+    retry_calls = [c for c in client.calls if any(m.get("content", "").startswith("Verification failed") for m in c["messages"] if m["role"] == "user")]
+    assert retry_calls, f"the gate never retried (outcome {trace.get('verification_outcome')})"
+    for call in retry_calls:
+        assert "tools" not in call, "the retry was offered tools on an architecture that answers without them"
+    # the wording wraps in the .txt, so compare on collapsed whitespace, not on line breaks
+    msg = " ".join(trace["verification_retry_messages"][0].split())
+    assert "You have no tools in this step" in msg
+    assert "You may call tools again" not in msg
+
+
+def test_pfagent_retry_keeps_its_tools():
+    """ReAct answers with tools in hand, so the same rule leaves its retry untouched."""
+    from methods.agent.engine import _verification_retry_message
+    verdict = {"conditions": {"converged": {"passed": False, "label": "V1", "detail": "not converged"}}}
+    flat = lambda t: " ".join(t.split())
+    with_tools = flat(_verification_retry_message(verdict, with_tools=True))
+    without = flat(_verification_retry_message(verdict, with_tools=False))
+    assert "You may call tools again" in with_tools
+    assert "You have no tools in this step" in without
+    assert EngineConfig().retry_with_tools is True
+
+
+def test_a_retry_that_cannot_be_sent_escalates_instead_of_failing():
+    """Tell "the retry failed" apart from "the retry could not be sent" (2026-09-29).
+
+    On the 300-bus system the conversation reaches 74k-99k prompt tokens and a retry resends all of
+    it plus the reserved completion, past gpt-4o-mini's 128k context. The call errors and the request
+    is lost as a run_error instead of being recorded as the escalation it was heading for.
+
+    The guard is the budget, never the failed condition. V7 looked unrepairable -- 16 retries on
+    gpt-4o-mini, 16 failures -- but the same condition on gpt-5.6-sol opened one retry and it passed,
+    so hard-coding "V7 cannot be repaired" would have turned a solved request into an escalation.
+    """
+    from methods.agent.engine import _retry_fits_in_context
+
+    at = lambda pt: {"rounds": [{"llm": {"usage": {"prompt_tokens": pt}}}]}
+    assert _retry_fits_in_context(at(41_658), 128_000, 16_384) is True     # room to spare
+    assert _retry_fits_in_context(at(99_259), 128_000, 16_384) is False    # one of the real failures
+    assert _retry_fits_in_context(at(99_259), None, 16_384) is True        # context unknown: no guess
+    assert _retry_fits_in_context({"rounds": []}, 128_000, 16_384) is True  # nothing measured yet
+    assert EngineConfig().context_tokens is None                           # off unless declared
+
+
+def test_every_model_call_records_the_provider_generation_id():
+    """A table row must be traceable to the provider's own record of the call (2026-09-29).
+
+    OpenRouter returns `id` (gen-...) on every response; GET /api/v1/generation?id=<id> then gives
+    that call's spend, tokens and the model that actually served it. Without it a run reconciles in
+    totals only, and no single row can be matched to a single generation.
+    """
+    tools = ScriptedTools()
+    plan = {"plan": [{"tool": "run_powerflow", "args": {}}]}
+    client = ScriptedClient([_resp(content=json.dumps(plan)), _resp(content="done")])
+    for call in client.responses if hasattr(client, "responses") else []:
+        pass
+    engine = LLMEngine(client=client, dispatcher=tools.dispatcher(),
+                       config=EngineConfig(model="fake", architecture="plan_act"))
+    _text, trace = engine.run_with_trace("run pf", SessionState())
+    llm_rounds = [rd for rd in trace["rounds"] if isinstance(rd.get("llm"), dict) and "error" not in rd["llm"]]
+    assert llm_rounds, "no model call was recorded"
+    for rd in llm_rounds:
+        assert "generation" in rd["llm"], "a model call recorded no provider generation block"
+
+
+def test_generation_block_reads_dicts_and_sdk_objects_and_tolerates_absence():
+    from methods.agent.engine import _extract_generation
+    assert _extract_generation({"id": "gen-1", "model": "m", "provider": "p", "created": 7}) == {
+        "id": "gen-1", "model": "m", "provider": "p", "created": "7"}
+
+    class Resp:
+        id, model, created = "gen-2", "m2", 9
+    assert _extract_generation(Resp()) == {"id": "gen-2", "model": "m2", "created": "9"}
+    assert _extract_generation({}) == {}          # a provider that returns none of it is not an error

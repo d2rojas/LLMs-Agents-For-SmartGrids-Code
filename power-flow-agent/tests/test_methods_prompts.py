@@ -27,6 +27,8 @@ PINNED_TEXTS = {
     "_shared/llm_only_bus_id_note.txt": "2fe74c2cfcd8",
     "_shared/cot_system_suffix.txt": "1847f5d898fb",
     "_shared/final_answer_instruction.txt": "65a0377de7f4",
+    # New 2026-09-29: the retry wording for an architecture whose answering step has no tools.
+    "_shared/gate_retry_no_tools.txt": "37777501cf5f",
     "llm_only_cot/reasoning_section.txt": "bad7f5c07dde",
     "llm_only_nr/reasoning_section.txt": "36a6acb2c5d7",
     "llm_only_forced_structured/escape_clause_removed.txt": "728177f8847a",

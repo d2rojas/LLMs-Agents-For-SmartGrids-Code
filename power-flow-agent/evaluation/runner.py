@@ -245,6 +245,10 @@ ARCH_METHODS: dict[str, dict[str, Any]] = {
     # Ablation (2026-09-28): the same task-level gate PFAgent runs, placed on the planner instead of
     # the ReAct loop. Asks whether the gate's value depends on the architecture under it.
     "plan_act_gate": {"architecture": "plan_act", "gate": False, "memory": False, "final_gate": True},
+    # The same ablation with the agreed retry semantics: no tools, because Plan-and-Act's answering
+    # step has none once the plan is spent (2026-09-29). The sibling above keeps read-only tools and
+    # is retained only to price that observation step.
+    "plan_act_gate_notools": {"architecture": "plan_act", "gate": False, "memory": False, "final_gate": True, "retry_with_tools": False},
     # PFAgent = ReAct with no in-loop observation gate, plus the task-level final-answer
     # verification V(x,c,z,y) (methods.agent.engine.verify_final_answer). "pfagent_obsgate" keeps
     # the old (pre-V) behaviour reachable under its own name, for the already-reported
@@ -278,6 +282,9 @@ class MethodSpec:
     architecture: Optional[str] = None
     gate: bool = True
     final_gate: bool = False
+    # The gate's retry gives the model what its architecture gives it when it answers: ReAct keeps its
+    # tools, Plan-and-Act has none once the plan is spent (2026-09-29).
+    retry_with_tools: bool = True
     memory: bool = False
     preload_case: bool = False  # the case is loaded before the method runs (single_call prompting)
     uses_llm: bool = True
@@ -392,6 +399,10 @@ def _load_pricing(path: Optional[str]) -> dict[str, dict[str, float]]:
             "input": float(value["input"]),
             "output": float(value["output"]),
         }
+        # Optional, and only where the provider told us: the gate uses it to tell a retry that
+        # failed from one that could not be sent (2026-09-29).
+        if value.get("context_tokens"):
+            pricing[key]["context_tokens"] = int(value["context_tokens"])
     return pricing
 
 
@@ -1100,6 +1111,8 @@ def evaluate_item(
                 architecture=method.architecture,
                 gate=bool(method.gate),
                 final_gate=bool(method.final_gate),
+                retry_with_tools=bool(method.retry_with_tools),
+                context_tokens=(pricing.get(model_spec.key) or pricing.get(model_spec.key.split(":", 1)[-1]) or {}).get("context_tokens"),
                 memory=bool(method.memory),
                 max_rounds=int(max_rounds),
                 trace_output_chars=TRACE_OUTPUT_CHARS_FULL,

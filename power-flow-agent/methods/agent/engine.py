@@ -310,6 +310,17 @@ class EngineConfig:
     # and resumes." The code executed the whole plan blind and never revised it, so the paper
     # described an architecture the benchmark did not run. 0 restores that older behaviour.
     max_replans: int = 2
+    # What the gate's retry may do (2026-09-29, the rule the four case studies settled on): the retry
+    # gives the model exactly the capabilities its architecture gives it in its normal answering step.
+    # ReAct answers with tools in hand, so its retry keeps them. Plan-and-Act answers after the plan is
+    # spent, so its retry has none. Granting read-only tools to a Plan-and-Act retry hands it the
+    # observation step the architecture is defined by not having: measured here, 20 of 22 such retries
+    # called a tool and 18 of those re-solved the network, which is a short ReAct, not Plan-and-Act.
+    retry_with_tools: bool = True
+    # The model's own context, when known, so the gate can tell "the retry failed" from "the retry
+    # could not be sent". None means do not guess: no guard, current behaviour.
+    context_tokens: Optional[int] = None
+    reserved_completion_tokens: int = 16384
     # "v1" (default) is the original modify_load tool, byte-identical to every existing
     # run. "load_split" swaps it for set_active_load/set_load (methods.agent.tools.TOOLS_LOAD_SPLIT),
     # which drops modify_load's optional q_mvar argument -- validated offline against
@@ -443,6 +454,31 @@ def _extract_choice_message(resp: Any) -> Dict[str, Any]:
         "content": getattr(msg, "content", None),
         "tool_calls": _normalize_tool_calls(getattr(msg, "tool_calls", None)),
     }
+
+
+def _extract_generation(resp: Any) -> Dict[str, Optional[str]]:
+    """What the provider says this call was, so a table row can be traced back to its generation.
+
+    OpenRouter returns an ``id`` like ``gen-...`` on every response, and
+    ``GET /api/v1/generation?id=<id>`` then gives the spend, the tokens and the model that actually
+    served it. Without it a run reconciles with the provider's dashboard in totals but no single row
+    can be matched to a single call, which is what a reviewer doubting a number would ask for and
+    what the supplement's reproducibility section promises. ``model`` is read from the response
+    rather than from the request because routing can serve a different one (2026-09-29, Daniela).
+
+    Cannot be filled in backwards: runs made before this recorded nothing, and pairing them by
+    timestamp would be a guess dressed as provenance.
+    """
+    get = (lambda k: resp.get(k)) if isinstance(resp, dict) else (lambda k: getattr(resp, k, None))
+    out: Dict[str, Optional[str]] = {}
+    for key in ("id", "model", "provider", "created"):
+        try:
+            v = get(key)
+        except Exception:
+            v = None
+        if v is not None:
+            out[key] = str(v)
+    return out
 
 
 def _extract_usage(resp: Any) -> Dict[str, Optional[int]]:
@@ -783,12 +819,51 @@ def _condition_plain_text(name: str, cond: Dict[str, Any], verdict: Dict[str, An
     return name  # pragma: no cover - defensive, all seven names are handled above
 
 
-def _verification_retry_message(verdict: Dict[str, Any]) -> str:
+# Whether a retry is worth opening is not a property of the failed condition. V7 (the answer's claim
+# does not match the agent's own last solve) looked unrepairable: it opened 16 retries on gpt-4o-mini
+# and all 16 failed, because a model that misread a list re-reads it the same way. But the same
+# condition on gpt-5.6-sol opened one retry and that retry passed. So the rule is not "V7 cannot be
+# repaired", it is "a small model cannot repair it", and hard-coding the former would have turned a
+# solved request into an escalation to save a call (2026-09-29, caught by Daniela asking why re-run
+# what will not change).
+#
+# What IS worth refusing is a retry that cannot be sent. On the 300-bus system the conversation
+# reaches 74k-99k prompt tokens, and a retry resends all of it plus the reserved completion, past
+# gpt-4o-mini's 128k context: the call fails and the request is lost as a run_error rather than
+# recorded as the escalation it was heading for. The guard is the budget, not the condition, so a
+# model with room keeps its rescue and a model without one escalates cleanly instead of erroring.
+_RETRY_CONTEXT_HEADROOM = 0.90  # of the model's context, counting the completion it must reserve
+
+
+def _retry_fits_in_context(trace: Dict[str, Any], context_tokens: Optional[int], reserved_completion: int) -> bool:
+    """Whether another round can be sent at all, judged from the last call's own prompt size."""
+    if not context_tokens:
+        return True                      # no context declared for this model: do not guess
+    last = None
+    for rd in trace.get("rounds") or []:
+        u = (rd.get("llm") or {}).get("usage") or {}
+        if u.get("prompt_tokens"):
+            last = int(u["prompt_tokens"])
+    if last is None:
+        return True
+    return (last + reserved_completion) < context_tokens * _RETRY_CONTEXT_HEADROOM
+
+
+def _verification_retry_message(verdict: Dict[str, Any], *, with_tools: bool = True) -> str:
+    """The failed conditions, then what the model may do about them.
+
+    With tools the model may look at the current state again. Without them it may only rewrite the
+    answer, and reusing the with-tools wording would be asking for the impossible: wind found 27 of
+    60 requests coming back empty because the only other way out the model had was to declare it
+    could not answer (2026-09-29)."""
     lines = ["Verification failed before this answer could be accepted. Failed condition(s):"]
     for name, cond in verdict["conditions"].items():
         if cond["passed"]:
             continue
         lines.append(f"- {_condition_plain_text(name, cond, verdict, suggest_fix=False)}")
+    if not with_tools:
+        lines.append(GATE_RETRY_NO_TOOLS)
+        return "\n".join(lines)
     lines.append(
         "Produce a corrected final answer. You may call tools again if needed, but only to inspect the "
         "current state (e.g. re-running the power flow) -- do not undo or reverse a network change the "
@@ -864,6 +939,7 @@ def _plan_system_prompt(variant: str = "v1") -> str:
 
 PLAN_SYSTEM_PROMPT_STRUCTURED = _read_method_text("plan_act_nogate/plan_system_prompt_structured.txt")
 REPLAN_INSTRUCTION = _read_method_text("plan_act_nogate/replan_instruction.txt")
+GATE_RETRY_NO_TOOLS = _read_method_text("_shared/gate_retry_no_tools.txt")
 
 FINAL_ANSWER_INSTRUCTION = _read_method_text("_shared/final_answer_instruction.txt")
 
@@ -1073,6 +1149,7 @@ class LLMEngine:
             "content": msg.get("content"),
             "tool_calls": [{"id": tc["id"], "name": tc["name"], "arguments": tc["arguments"]} for tc in msg.get("tool_calls") or []],
             "usage": usage,
+            "generation": _extract_generation(resp),
             "with_tools": with_tools,
             "latency_s": time.perf_counter() - t0,
         }
@@ -1225,12 +1302,15 @@ class LLMEngine:
                 trace["status"] = "ok"
                 return final_text
 
-            if verify_attempts >= 2:
+            no_room = not _retry_fits_in_context(trace, self.config.context_tokens, self.config.reserved_completion_tokens)
+            if verify_attempts >= 2 or no_room:
                 trace["verification_attempts"] = verify_attempts
-                trace["verification_outcome"] = "abstained"
+                trace["verification_outcome"] = "abstained" if verify_attempts >= 2 else "abstained_no_context"
+                if no_room and verify_attempts < 2:
+                    trace["retry_skipped_no_context"] = True
                 return self._finish(_verification_abstention_text(verdict), session, trace, "verification_failed")
 
-            retry_msg = _verification_retry_message(verdict)
+            retry_msg = _verification_retry_message(verdict, with_tools=self.config.retry_with_tools)
             trace["verification_retry_messages"].append(retry_msg)
             session.conversation_history.append({"role": "user", "content": retry_msg})
             messages.append({"role": "user", "content": retry_msg})
@@ -1464,19 +1544,22 @@ class LLMEngine:
                 trace["verification_outcome"] = "pass_first" if attempts == 1 else "pass_retry"
                 trace["status"] = "ok"
                 return final_text
-            if attempts >= 2:
+            no_room = not _retry_fits_in_context(trace, self.config.context_tokens, self.config.reserved_completion_tokens)
+            if attempts >= 2 or no_room:
                 trace["verification_attempts"] = attempts
-                trace["verification_outcome"] = "abstained"
+                trace["verification_outcome"] = "abstained" if attempts >= 2 else "abstained_no_context"
+                if no_room and attempts < 2:
+                    trace["retry_skipped_no_context"] = True
                 return self._finish(_verification_abstention_text(verdict), session, trace, "verification_failed")
 
-            retry_msg = _verification_retry_message(verdict)
+            retry_msg = _verification_retry_message(verdict, with_tools=self.config.retry_with_tools)
             trace["verification_retry_messages"].append(retry_msg)
             session.conversation_history.append({"role": "user", "content": retry_msg})
             messages.append({"role": "user", "content": retry_msg})
             rec: Dict[str, Any] = {"round": next_round, "phase": "verification_retry"}
             trace["rounds"].append(rec)
             try:
-                msg = self._call_llm(messages, with_tools=True, trace=trace, round_rec=rec)
+                msg = self._call_llm(messages, with_tools=self.config.retry_with_tools, trace=trace, round_rec=rec)
             except _LLMCallError as e:
                 return self._finish(e.text, session, trace, "llm_error")
             entry = self._assistant_entry(msg)

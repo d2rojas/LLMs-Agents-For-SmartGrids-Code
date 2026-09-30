@@ -1,0 +1,26 @@
+{
+  "runner_name": "plan_act_gate_notools",
+  "group": "Multi-step agents (paper Sec. 4)",
+  "kind": "engine",
+  "architecture": "plan_act",
+  "gate": false,
+  "final_gate": true,
+  "memory": false,
+  "uses_llm": true,
+  "uses_tools": true,
+  "description": "Plan-and-Act with the task-level verification gate on the final answer, and a retry that has no tools. The agreed semantics across the four case studies: the retry gives the model exactly the capabilities its architecture gives it when it answers, and Plan-and-Act answers after the plan is spent. Ablation, not a table row: it asks whether the gate is better placed on a planner than on a ReAct loop. The sibling plan_act_gate keeps read-only tools in the retry and is kept only to measure what that extra observation step is worth.",
+  "prompt_files": [
+    "_shared/agent_system_prompt.txt",
+    "_shared/final_answer_instruction.txt",
+    "plan_act_nogate/plan_system_prompt_prefix.txt",
+    "plan_act_nogate/plan_system_prompt_structured.txt",
+    "plan_act_nogate/replan_instruction.txt",
+    "_shared/gate_retry_no_tools.txt"
+  ],
+  "dynamic_parts": [
+    "tool schemas (methods/agent/tools.py, --tool-variant v1|load_split)",
+    "tool catalogue appended to the planner prompt"
+  ],
+  "folder": "plan_act_gate_notools",
+  "code": "methods/agent/engine.py: LLMEngine._run_plan_act + _act_with_replanning + _verify_answer_with_retry; methods/agent/tools.py: ToolDispatcher"
+}
