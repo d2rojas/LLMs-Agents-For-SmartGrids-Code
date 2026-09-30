@@ -1,8 +1,8 @@
 # Results index
 
-Generated 2026-09-29 14:54 by `run.py index`. One line per run directory, newest first. Counts are runs; Form. and Trace. are percentages. Open the folder for `REPORT.md`, `summary.csv` and `traces/`.
+Generated 2026-09-29 18:14 by `run.py index`. One line per run directory, newest first. Counts are runs; Form. and Trace. are percentages. Open the folder for `REPORT.md`, `summary.csv` and `traces/`.
 
-All 42 runs were scored by the same evaluator (`evaluator_hash` 770f2f42ed6a), so every row is comparable.
+All 49 runs were scored by the same evaluator (`evaluator_hash` 770f2f42ed6a), so every row is comparable.
 
 ## ieee14
 
@@ -16,6 +16,7 @@ All 42 runs were scored by the same evaluator (`evaluator_hash` 770f2f42ed6a), s
 | 2026-09-29 | gpt-5.6-sol | llm_only_cot | normal | load_split | 20 | 0 | 17 | 3 | 100.0 | 0.0 | 8343 | 1.14 | new run | [llm_only_cot](ieee14/2026-09-29/gpt-5.6-sol/llm_only_cot/REPORT.md) |
 | 2026-09-29 | gpt-4o-mini | react_nogate | normal | load_split | 20 | 10 | 0 | 10 | 85.0 | 95.0 | 15243 | 0.07 | new run | [react_nogate](ieee14/2026-09-29/gpt-4o-mini/react_nogate/REPORT.md) |
 | 2026-09-29 | gpt-4o-mini | plan_act_nogate | normal | load_split | 20 | 12 | 0 | 8 | 95.0 | 90.0 | 6726 | 0.03 | new run | [plan_act_nogate](ieee14/2026-09-29/gpt-4o-mini/plan_act_nogate/REPORT.md) |
+| 2026-09-29 | gpt-4o-mini | plan_act_gate_notools | normal | load_split | 20 | 12 | 8 | 0 | 100.0 | 90.0 | 9704 | 0.05 | new run | [plan_act_gate_notools](ieee14/2026-09-29/gpt-4o-mini/plan_act_gate_notools/REPORT.md) |
 | 2026-09-29 | gpt-4o-mini | plan_act_gate | normal | load_split | 20 | 14 | 6 | 0 | 100.0 | 100.0 | 13109 | 0.06 | new run | [plan_act_gate](ieee14/2026-09-29/gpt-4o-mini/plan_act_gate/REPORT.md) |
 | 2026-09-29 | gpt-4o-mini | pfagent | normal | load_split | 20 | 19 | 1 | 0 | 100.0 | 100.0 | 25423 | 0.11 | new run | [pfagent](ieee14/2026-09-29/gpt-4o-mini/pfagent/REPORT.md) |
 | 2026-09-29 | gpt-4o-mini | llm_only_structured | normal | load_split | 20 | 0 | 0 | 20 | 100.0 | 0.0 | 4362 | 0.02 | new run | [llm_only_structured](ieee14/2026-09-29/gpt-4o-mini/llm_only_structured/REPORT.md) |
@@ -37,8 +38,14 @@ All 42 runs were scored by the same evaluator (`evaluator_hash` 770f2f42ed6a), s
 | date | model | method | cond. | tools | n | solved | escalated | wrong unflagged | Form. % | Trace. % | tokens/run | cost $ | in the paper | folder |
 |---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
 | 2026-09-29 | no-llm | rule_based | normal | load_split | 20 | 17 | 3 | 0 | 100.0 | 85.0 | 0 | 0.00 | new run | [rule_based](ieee57/2026-09-29/no-llm/rule_based/REPORT.md) |
+| 2026-09-29 | gpt-5.6-sol | react_nogate | normal | load_split | 20 | 15 | 5 | 0 | 95.0 | 100.0 | 36022 | 2.30 | new run | [react_nogate](ieee57/2026-09-29/gpt-5.6-sol/react_nogate/REPORT.md) |
+| 2026-09-29 | gpt-5.6-sol | plan_act_nogate | normal | load_split | 20 | 16 | 4 | 0 | 95.0 | 95.0 | 16886 | 1.33 | new run | [plan_act_nogate](ieee57/2026-09-29/gpt-5.6-sol/plan_act_nogate/REPORT.md) |
+| 2026-09-29 | gpt-5.6-sol | pfagent | normal | load_split | 20 | 15 | 5 | 0 | 95.0 | 100.0 | 38000 | 2.37 | new run | [pfagent](ieee57/2026-09-29/gpt-5.6-sol/pfagent/REPORT.md) |
+| 2026-09-29 | gpt-5.6-sol | llm_only_structured | normal | load_split | 20 | 0 | 20 | 0 | 100.0 | 0.0 | 7114 | 0.35 | new run | [llm_only_structured](ieee57/2026-09-29/gpt-5.6-sol/llm_only_structured/REPORT.md) |
+| 2026-09-29 | gpt-5.6-sol | llm_only_cot | normal | load_split | 20 | 0 | 20 | 0 | 100.0 | 0.0 | 7506 | 0.40 | new run | [llm_only_cot](ieee57/2026-09-29/gpt-5.6-sol/llm_only_cot/REPORT.md) |
 | 2026-09-29 | gpt-4o-mini | react_nogate | normal | load_split | 20 | 13 | 5 | 2 | 100.0 | 100.0 | 33819 | 0.17 | new run | [react_nogate](ieee57/2026-09-29/gpt-4o-mini/react_nogate/REPORT.md) |
 | 2026-09-29 | gpt-4o-mini | plan_act_nogate | normal | load_split | 20 | 16 | 2 | 2 | 100.0 | 100.0 | 15612 | 0.08 | new run | [plan_act_nogate](ieee57/2026-09-29/gpt-4o-mini/plan_act_nogate/REPORT.md) |
+| 2026-09-29 | gpt-4o-mini | plan_act_gate_notools | normal | load_split | 20 | 15 | 5 | 0 | 100.0 | 100.0 | 17366 | 0.09 | new run | [plan_act_gate_notools](ieee57/2026-09-29/gpt-4o-mini/plan_act_gate_notools/REPORT.md) |
 | 2026-09-29 | gpt-4o-mini | plan_act_gate | normal | load_split | 20 | 16 | 4 | 0 | 100.0 | 100.0 | 18938 | 0.09 | new run | [plan_act_gate](ieee57/2026-09-29/gpt-4o-mini/plan_act_gate/REPORT.md) |
 | 2026-09-29 | gpt-4o-mini | pfagent | normal | load_split | 20 | 15 | 5 | 0 | 100.0 | 100.0 | 41435 | 0.20 | new run | [pfagent](ieee57/2026-09-29/gpt-4o-mini/pfagent/REPORT.md) |
 | 2026-09-29 | gpt-4o-mini | llm_only_structured | normal | load_split | 20 | 0 | 0 | 20 | 95.0 | 0.0 | 9373 | 0.05 | new run | [llm_only_structured](ieee57/2026-09-29/gpt-4o-mini/llm_only_structured/REPORT.md) |

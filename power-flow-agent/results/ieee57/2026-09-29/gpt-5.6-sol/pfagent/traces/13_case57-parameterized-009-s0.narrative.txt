@@ -1,0 +1,41 @@
+RUN 13  |  case57-parameterized-009-s0  |  pfagent  |  gpt-5.6-sol  |  IEEE 57-bus  |  seed 0  |  difficulty parameterized
+Request: Load the IEEE 57-bus system and run the power flow, then list every line whose loading is above 90%.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case57")   (1076 in / 43 out tokens, 2.2 s)
+       tool load_case -> case_name="case57", n_buses=57, n_lines=80, total_load_mw=1242.374
+  2. LLM called run_powerflow()   (1171 in / 15 out tokens, 2.0 s)
+       tool run_powerflow -> case_name="case57", converged=true, total_load_mw=1242.374, total_generation_mw=1277.076, total_loss_mw=34.702, bus_voltages[57], line_flows[80], voltage_violations[40], thermal_violations[5]  [gate pass]
+  3. LLM replied without tool calls: { "summary": "IEEE 57-bus AC power flow converged. Using a strict loading threshold of greater than 90%, 14 lines qualify.", "case_name": "case57", "converged":   (10544 in / 932 out tokens, 8.0 s)
+  4. LLM wrote the final answer   (11249 in / 7574 out tokens, 50.2 s)
+  Totals: 4 LLM calls, 2 tool calls, 2 tool rounds, 24040 in / 8564 out tokens, $0.1337, 62.7 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case57") -> run_powerflow()
+  executed: load_case(case_name="case57") -> run_powerflow()
+  verdict:  EXACT
+
+VERIFICATION GATE  (task-level, on the final answer)
+  V1  converged              pass  residual 0
+  V2  balance                pass  residual 0
+  V3  no_isolated_buses      pass  residual 0
+  V4  traceability           pass  residual 0
+  V5  currency               pass  residual 0
+  V6  argument_grounding     pass  every mutating-tool argument traces to the request or a prior tool output
+  V7  claims_from_tools      pass  answer matches the agent's own last solved state
+  V8  request_applied        pass  no network change was made
+  V10 complete_state         pass  all 57 buses reported
+  V11 formulation_matches_trace pass  the declared operations are the ones the trace shows
+  V9  plausible_state        pass  voltages span 0.716 to 1.040 p.u.
+  outcome: pass_first after 1 attempt(s)
+
+REPORTING
+  numbers in the answer: 338, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 2.24e-07 p.u., flow MAE 0.0519 MW, KCL mismatch 1.62e-04 MW, power-balance error n/a
+  raw trace: case57-parameterized-009-s0_run0.json

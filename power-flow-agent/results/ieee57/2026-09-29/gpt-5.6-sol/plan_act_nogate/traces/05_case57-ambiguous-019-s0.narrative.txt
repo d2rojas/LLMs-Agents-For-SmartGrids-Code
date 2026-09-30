@@ -1,0 +1,28 @@
+RUN 05  |  case57-ambiguous-019-s0  |  plan_act_nogate  |  gpt-5.6-sol  |  IEEE 57-bus  |  seed 0  |  difficulty ambiguous
+Request: Load case57 and run the power flow, then list every line whose loading is above 100 pct of rating.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 2-step plan: load_case(case_name="case57") -> run_powerflow()
+  2. LLM replied without tool calls: {"plan":[{"tool":"load_case","args":{"case_name":"case57"}},{"tool":"run_powerflow","args":{}}]}   (689 in / 60 out tokens, 2.5 s)
+  3. parser called load_case(case_name="case57")
+       tool load_case -> case_name="case57", n_buses=57, n_lines=80, total_load_mw=1241.03
+  4. parser called run_powerflow()
+       tool run_powerflow -> case_name="case57", converged=true, total_load_mw=1241.03, total_generation_mw=1269.974, total_loss_mw=28.944, bus_voltages[57], line_flows[80], voltage_violations[40], thermal_violations[2]  [gate pass]
+  5. LLM wrote the final answer   (10472 in / 4675 out tokens, 30.5 s)
+  Totals: 2 LLM calls, 2 tool calls, 1 tool rounds, 11161 in / 4735 out tokens, $0.0697, 33.3 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case57") -> run_powerflow()
+  executed: load_case(case_name="case57") -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 322, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 2.30e-07 p.u., flow MAE 0.0534 MW, KCL mismatch 1.73e-04 MW, power-balance error n/a
+  raw trace: case57-ambiguous-019-s0_run0.json

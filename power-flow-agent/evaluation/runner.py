@@ -967,6 +967,50 @@ def _prompt_hash_of(system_prompt: Optional[str]) -> Optional[str]:
     return prompt_hash(system_prompt)
 
 
+class ProviderOutage(RuntimeError):
+    """The provider stopped serving this account: out of credit, over quota, or the key was
+    rejected. Distinct from every other failure because it says nothing about the method under
+    test and it will not get better on the next item, so the run must stop instead of filling
+    the remaining rows with the same message."""
+
+
+# Substrings of the provider's own error text, lowercased. Only failures of the ACCOUNT belong
+# here. Deliberately excluded: `context_length_exceeded` and any other 400, which are results of
+# the model's limits on this request (see the ieee300 pfagent row, where 7 of 20 requests do not
+# fit in 128k once the completion reservation is added) and must stay in the table as rows; and
+# 429 rate limits, which are transient and already retried upstream.
+_OUTAGE_MARKERS = (
+    "available credits",
+    "insufficient_quota",
+    "insufficient credits",
+    "exceed your available",
+    "quota exceeded",
+    "billing",
+    "error code: 402",
+    "error code: 401",
+    "invalid_api_key",
+    "no auth credentials",
+)
+
+
+def provider_outage(error: Optional[str]) -> Optional[str]:
+    """The marker that makes this error an account outage, or None if it is an ordinary failure.
+
+    Returns the marker rather than a bool so the abort message can name what was matched, which is
+    the difference between "the run stopped" and "the run stopped because the account is empty"."""
+    if not error:
+        return None
+    low = str(error).lower()
+    # A 400 always describes this request, never the account. Checked first so a provider that
+    # mentions billing inside a context-length message cannot be read as an outage.
+    if "error code: 400" in low or "context_length_exceeded" in low:
+        return None
+    for marker in _OUTAGE_MARKERS:
+        if marker in low:
+            return marker
+    return None
+
+
 def evaluate_item(
     *,
     method: MethodSpec,
@@ -1773,7 +1817,7 @@ def run_benchmark(
                             if verbose:
                                 tag = item.request_id or "default"
                                 print(f"{method.name} {model_spec.key} {case_name} seed={item.seed} k={k} {tag} run ID: {run_idx}")
-                            raw_rows.append(
+                            row = (
                                 evaluate_item(
                                     method=method,
                                     model_spec=model_spec,
@@ -1790,6 +1834,23 @@ def run_benchmark(
                                     plan_variant=plan_variant,
                                 )
                             )
+                            raw_rows.append(row)
+                            # An account outage poisons every row after it: the same message would
+                            # be written into each remaining item and the run would still end with a
+                            # summary of the full n, looking measured. Stop here instead. The rows
+                            # already produced keep their traces on disk; no report.json is written,
+                            # which is what marks the run as incomplete rather than a `failed`
+                            # column nobody reads.
+                            marker = provider_outage(row.get("error"))
+                            if marker is not None:
+                                raise ProviderOutage(
+                                    f"provider outage after {len(raw_rows)} completed rows "
+                                    f"({method.name} / {model_spec.key} / {case_name}): matched "
+                                    f"{marker!r}. No report written; traces for the completed rows "
+                                    f"are kept. Check the account balance before relaunching "
+                                    f"(/api/v1/credits reports the account, /api/v1/auth/key only "
+                                    f"this key). Original error: {row.get('error')}"
+                                )
 
     scoreboard_rows: list[dict[str, Any]] = []
     scoreboard_case_rows: list[dict[str, Any]] = []
@@ -1996,29 +2057,50 @@ def main(argv: Optional[list[str]] = None) -> int:
     if condition is None:
         condition = "stress" if list(args.difficulties or []) == ["stress"] else "normal"
 
-    report = run_benchmark(
-        models=models,
-        methods=methods,
-        cases=cases,
-        runs=int(args.runs),
-        temperature=float(args.temperature),
-        timeout_s=float(args.timeout_s),
-        pricing=pricing,
-        solver_config=solver_config,
-        k=int(args.k),
-        seeds=seeds,
-        requests_path=args.requests_path,
-        gen_requests=int(args.gen_requests),
-        difficulties=args.difficulties or None,
-        max_rounds=int(args.max_rounds),
-        verbose=not args.quiet,
-        full_trace_dir=None if args.no_traces else Path(args.trace_dir or (Path(args.out_dir) / "traces")),
-        condition=condition,
-        tool_variant=args.tool_variant,
-        plan_variant=args.plan_variant,
-        shard_index=args.shard_index,
-        shard_count=args.shard_count,
-    )
+    try:
+        report = run_benchmark(
+            models=models,
+            methods=methods,
+            cases=cases,
+            runs=int(args.runs),
+            temperature=float(args.temperature),
+            timeout_s=float(args.timeout_s),
+            pricing=pricing,
+            solver_config=solver_config,
+            k=int(args.k),
+            seeds=seeds,
+            requests_path=args.requests_path,
+            gen_requests=int(args.gen_requests),
+            difficulties=args.difficulties or None,
+            max_rounds=int(args.max_rounds),
+            verbose=not args.quiet,
+            full_trace_dir=None if args.no_traces else Path(args.trace_dir or (Path(args.out_dir) / "traces")),
+            condition=condition,
+            tool_variant=args.tool_variant,
+            plan_variant=args.plan_variant,
+            shard_index=args.shard_index,
+            shard_count=args.shard_count,
+        )
+    except ProviderOutage as exc:
+        # Exit code 4: the account stopped serving us. Distinct from 1 (a bug in the harness)
+        # and from 3 (the dirty-tree refusal) so a launcher can tell 'stop and top up' apart
+        # from 'fix the code'. Nothing is written: a partial report.json is worse than none,
+        # because the next reader cannot see which rows never ran.
+        # A folder with traces and no report.json is invisible to every reader that walks
+        # `*/*/*/*/summary.json`, which is most of them. Leave a marker a human sees in a
+        # directory listing, so an aborted run cannot be mistaken for one nobody has scored yet.
+        try:
+            marker_path = Path(args.out_dir) / "INCOMPLETO.txt"
+            marker_path.parent.mkdir(parents=True, exist_ok=True)
+            marker_path.write_text(
+                "This run was ABORTED and is INCOMPLETE. Do not read its traces as a measured row.\n\n"
+                f"{exc}\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            pass  # the abort message already went to stderr; a missing marker must not mask it
+        print(f"RUN ABORTED: {exc}", file=sys.stderr)
+        return 4
 
     if args.shard_count is not None:
         write_report(Path(args.out_dir), report, filename=f"report.shard{args.shard_index}of{args.shard_count}.json")

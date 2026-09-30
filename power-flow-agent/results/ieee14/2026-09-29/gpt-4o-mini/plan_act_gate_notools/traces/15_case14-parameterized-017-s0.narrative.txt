@@ -1,0 +1,44 @@
+RUN 15  |  case14-parameterized-017-s0  |  plan_act_gate_notools  |  gpt-4o-mini  |  IEEE 14-bus  |  seed 0  |  difficulty parameterized
+Request: Load case14 and run an N-1 contingency analysis ranked by max violations and report the 8 worst outages.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. planner emitted a 2-step plan: load_case(case_name="case14") -> run_n1_contingency(top_k=8, criteria="max_violations", max_candidates=0)
+  2. LLM replied without tool calls: {"plan":[{"tool":"load_case","args":{"case_name":"case14"}},{"tool":"run_n1_contingency","args":{"top_k":8,"criteria":"max_violations","max_candidates":0}}]}   (690 in / 47 out tokens, 1.3 s)
+  3. parser called load_case(case_name="case14")
+       tool load_case -> case_name="case14", n_buses=14, n_lines=20, total_load_mw=250.521
+  4. parser called run_n1_contingency(top_k=8, criteria="max_violations", max_candidates=0)
+       tool run_n1_contingency -> N-1 completed over 20 branches. Worst outage: 5-6 (trafo), V violations=9 (delta=1), thermal violations=9 (delta=9).
+  5. LLM wrote the final answer   (9632 in / 956 out tokens, 8.4 s)
+  6. LLM replied without tool calls: { "formulation": [{"tool": "load_case", "args": {"case_name": "case14"}}, {"tool": "run_n1_contingency", "args": {"top_k": 8, "criteria": "max_violations", "max   (9877 in / 233 out tokens, 3.7 s)
+  Totals: 3 LLM calls, 2 tool calls, 1 tool rounds, 20199 in / 1236 out tokens, $0.0038, 14.1 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case14") -> run_n1_contingency(top_k=8, criteria="max_violations")
+  executed: load_case(case_name="case14") -> run_n1_contingency(top_k=8, criteria="max_violations", max_candidates=0)
+  verdict:  EXACT
+
+VERIFICATION GATE  (task-level, on the final answer)
+  V1  converged              pass  residual 0
+  V2  balance                pass  
+  V3  no_isolated_buses      pass  residual 0
+  V4  traceability           pass  residual 0
+  V5  currency               pass  residual 0
+  V6  argument_grounding     pass  every mutating-tool argument traces to the request or a prior tool output
+  V7  claims_from_tools      pass  no solved state in the trace to re-derive a claim from
+  V8  request_applied        pass  no network change was made
+  V10 complete_state         pass  the answer declares it cannot complete the request
+  V11 formulation_matches_trace pass  the answer declares it cannot complete the request
+  V9  plausible_state        pass  no solved state
+  outcome: pass_retry after 2 attempt(s)
+
+REPORTING
+  numbers in the answer: 3, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: ESCALATED TO A PERSON
+  computation correct (solved): no   reason: no_state_reported
+  escalation detected via: cannot_answer
+  against the reference: voltage MAE n/a p.u., flow MAE n/a MW, KCL mismatch n/a MW, power-balance error n/a
+  raw trace: case14-parameterized-017-s0_run0.json

@@ -1,0 +1,29 @@
+RUN 14  |  case57-parameterized-013-s0  |  react_nogate  |  gpt-5.6-sol  |  IEEE 57-bus  |  seed 0  |  difficulty parameterized
+Request: Load case57 and set the active load at bus 19 to 1.9 MW.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case57")   (1070 in / 43 out tokens, 1.4 s)
+       tool load_case -> case_name="case57", n_buses=57, n_lines=80, total_load_mw=1277.379
+  2. LLM called set_active_load(bus_id=19, p_mw=1.9)   (1165 in / 28 out tokens, 1.2 s)
+       tool set_active_load -> converged=true, total_load_mw=1275.778, total_generation_mw=1307.342, total_loss_mw=31.564  [gate pass]
+  3. LLM called run_powerflow()   (1361 in / 15 out tokens, 1.1 s)
+       tool run_powerflow -> case_name="case57", converged=true, total_load_mw=1275.778, total_generation_mw=1307.342, total_loss_mw=31.564, bus_voltages[57], line_flows[80], voltage_violations[40], thermal_violations[6]  [gate pass]
+  4. LLM replied without tool calls: { "summary": "Loaded IEEE case57 and set the active load at MATPOWER bus 19 to 1.9 MW. The reactive load at bus 19 was left unchanged.", "case_name": "case57",    (10793 in / 1371 out tokens, 11.5 s)
+  5. LLM wrote the final answer   (12022 in / 4770 out tokens, 32.2 s)
+  Totals: 5 LLM calls, 3 tool calls, 3 tool rounds, 26411 in / 6227 out tokens, $0.1151, 47.8 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case57") -> modify_load(bus_id=19, p_mw=1.9)
+  executed: load_case(case_name="case57") -> set_active_load(bus_id=19, p_mw=1.9) -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 329, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 2.41e-07 p.u., flow MAE 0.056 MW, KCL mismatch 1.57e-04 MW, power-balance error n/a
+  raw trace: case57-parameterized-013-s0_run0.json

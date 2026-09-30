@@ -1,0 +1,27 @@
+RUN 13  |  case57-parameterized-009-s0  |  react_nogate  |  gpt-5.6-sol  |  IEEE 57-bus  |  seed 0  |  difficulty parameterized
+Request: Load the IEEE 57-bus system and run the power flow, then list every line whose loading is above 90%.
+Expected outcome: converged   (reference solvable: yes, reference converged: yes)
+
+WHAT THE METHOD DID
+  1. LLM called load_case(case_name="case57")   (1076 in / 37 out tokens, 2.1 s)
+       tool load_case -> case_name="case57", n_buses=57, n_lines=80, total_load_mw=1242.374
+  2. LLM called run_powerflow()   (1171 in / 15 out tokens, 1.1 s)
+       tool run_powerflow -> case_name="case57", converged=true, total_load_mw=1242.374, total_generation_mw=1277.076, total_loss_mw=34.702, bus_voltages[57], line_flows[80], voltage_violations[40], thermal_violations[5]  [gate pass]
+  3. LLM replied without tool calls: { "summary": "Loaded the IEEE 57-bus system and ran an AC power flow. The solution converged. Using a strict loading threshold greater than 90%, 14 lines qualif   (10544 in / 968 out tokens, 9.4 s)
+  4. LLM wrote the final answer   (11257 in / 6347 out tokens, 43.5 s)
+  Totals: 4 LLM calls, 2 tool calls, 2 tool rounds, 24048 in / 7367 out tokens, $0.1218, 56.5 s
+
+FORMULATION  (did the executed tool calls match the request?)
+  intended: load_case(case_name="case57") -> run_powerflow()
+  executed: load_case(case_name="case57") -> run_powerflow()
+  verdict:  EXACT
+
+REPORTING
+  numbers in the answer: 338, untraceable: 0 -> traceable answer: yes
+  stale state quoted: n/a (no network mutation in effect)
+  V-pass (all five conditions, checked offline for every method): yes
+
+OUTCOME: SOLVED AUTONOMOUSLY
+  computation correct (solved): yes   reason: state_and_answer_ok
+  against the reference: voltage MAE 2.24e-07 p.u., flow MAE 0.0519 MW, KCL mismatch 1.62e-04 MW, power-balance error n/a
+  raw trace: case57-parameterized-009-s0_run0.json
